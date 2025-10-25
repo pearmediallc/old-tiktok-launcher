@@ -246,10 +246,10 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                             </div>
                             <div class="location-method-item">
                                 <label>
-                                    <input type="radio" name="location_method" value="bulk" class="location-method-radio" onchange="toggleLocationMethod()">
-                                    <span>Target Specific States/Regions</span>
+                                    <input type="radio" name="location_method" value="states" class="location-method-radio" onchange="toggleLocationMethod()">
+                                    <span>Target Specific States</span>
                                 </label>
-                                <small>Upload Excel/CSV file with specific state names or location IDs</small>
+                                <small>Select specific US states to target (all states selected by default)</small>
                             </div>
                         </div>
                         
@@ -260,43 +260,21 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                             </div>
                         </div>
                         
-                        <div id="bulk-targeting" class="location-option" style="display: none;">
-                            <div class="bulk-upload-container">
-                                <div class="upload-section">
-                                    <label for="location-file">Upload Location File</label>
-                                    <input type="file" id="location-file" accept=".xlsx,.xls,.csv" onchange="handleLocationFileUpload(event)">
-                                    <small>Supported formats: Excel (.xlsx, .xls) and CSV (.csv) - Excel files are processed automatically</small>
+                        <div id="states-targeting" class="location-option" style="display: none;">
+                            <div class="states-selection-container">
+                                <div class="states-controls">
+                                    <button type="button" class="btn-secondary state-btn" onclick="selectAllStates()">Select All States</button>
+                                    <button type="button" class="btn-secondary state-btn" onclick="clearAllStates()">Clear All</button>
+                                    <button type="button" class="btn-secondary state-btn" onclick="selectPopularStates()">Popular States Only</button>
                                 </div>
                                 
-                                <div class="file-format-help">
-                                    <h4>File Format Requirements:</h4>
-                                    <div class="format-example">
-                                        <p><strong>Option 1: State Names</strong></p>
-                                        <div class="code-block">
-                                            State<br>
-                                            California<br>
-                                            Texas<br>
-                                            New York<br>
-                                            Florida
-                                        </div>
-                                    </div>
-                                    <div class="format-example">
-                                        <p><strong>Option 2: Location IDs</strong></p>
-                                        <div class="code-block">
-                                            location_id<br>
-                                            5332921<br>
-                                            4736286<br>
-                                            5128638<br>
-                                            4155751
-                                        </div>
-                                    </div>
-                                    <p><small>Note: Max 3,000 locations per ad group. Overlapping locations (e.g., US + California) are not allowed.</small></p>
+                                <div class="states-grid" id="states-grid">
+                                    <!-- States will be populated by JavaScript -->
                                 </div>
                                 
-                                <div id="location-preview" class="location-preview" style="display: none;">
-                                    <h4>Uploaded Locations Preview:</h4>
-                                    <div id="location-list"></div>
-                                    <button type="button" class="btn-secondary" onclick="clearLocationFile()">Clear File</button>
+                                <div class="states-summary">
+                                    <p><span id="selected-states-count">50</span> states selected</p>
+                                    <small>Select the states you want to target. All states are selected by default.</small>
                                 </div>
                             </div>
                         </div>
@@ -471,8 +449,6 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         </div>
     </div>
 
-    <!-- SheetJS library for Excel file parsing -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="assets/app.js"></script>
 </body>
 </html>

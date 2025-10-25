@@ -1984,7 +1984,63 @@ function getSelectedAgeGroups() {
 }
 
 // Location targeting functions
-let uploadedLocations = [];
+
+// US States data with location IDs
+const US_STATES = [
+    { name: 'Alabama', id: '4829764' },
+    { name: 'Alaska', id: '5879092' },
+    { name: 'Arizona', id: '5551752' },
+    { name: 'Arkansas', id: '4099753' },
+    { name: 'California', id: '5332921' },
+    { name: 'Colorado', id: '5417618' },
+    { name: 'Connecticut', id: '4831725' },
+    { name: 'Delaware', id: '4142224' },
+    { name: 'Florida', id: '4155751' },
+    { name: 'Georgia', id: '4197000' },
+    { name: 'Hawaii', id: '5855797' },
+    { name: 'Idaho', id: '5596512' },
+    { name: 'Illinois', id: '4896861' },
+    { name: 'Indiana', id: '4921868' },
+    { name: 'Iowa', id: '4862182' },
+    { name: 'Kansas', id: '4273857' },
+    { name: 'Kentucky', id: '6254925' },
+    { name: 'Louisiana', id: '4331987' },
+    { name: 'Maine', id: '4971068' },
+    { name: 'Maryland', id: '4361885' },
+    { name: 'Massachusetts', id: '6254926' },
+    { name: 'Michigan', id: '5001836' },
+    { name: 'Minnesota', id: '5037779' },
+    { name: 'Mississippi', id: '4436296' },
+    { name: 'Missouri', id: '4398678' },
+    { name: 'Montana', id: '5667009' },
+    { name: 'Nebraska', id: '5073708' },
+    { name: 'Nevada', id: '5509151' },
+    { name: 'New Hampshire', id: '5090174' },
+    { name: 'New Jersey', id: '5101760' },
+    { name: 'New Mexico', id: '5481136' },
+    { name: 'New York', id: '5128638' },
+    { name: 'North Carolina', id: '4482348' },
+    { name: 'North Dakota', id: '5690763' },
+    { name: 'Ohio', id: '4851445' },
+    { name: 'Oklahoma', id: '4544379' },
+    { name: 'Oregon', id: '5744337' },
+    { name: 'Pennsylvania', id: '6254927' },
+    { name: 'Rhode Island', id: '5224323' },
+    { name: 'South Carolina', id: '4597040' },
+    { name: 'South Dakota', id: '5769223' },
+    { name: 'Tennessee', id: '4662168' },
+    { name: 'Texas', id: '4736286' },
+    { name: 'Utah', id: '5549030' },
+    { name: 'Vermont', id: '5242283' },
+    { name: 'Virginia', id: '6254928' },
+    { name: 'Washington', id: '5815135' },
+    { name: 'West Virginia', id: '4826850' },
+    { name: 'Wisconsin', id: '5279468' },
+    { name: 'Wyoming', id: '5843591' },
+    { name: 'District of Columbia', id: '4138106' }
+];
+
+const POPULAR_STATES = ['California', 'Texas', 'New York', 'Florida', 'Illinois', 'Pennsylvania', 'Ohio', 'Georgia', 'North Carolina', 'Michigan'];
 
 function toggleLocationMethod() {
     const methodElement = document.querySelector('input[name="location_method"]:checked');
@@ -1995,9 +2051,9 @@ function toggleLocationMethod() {
     
     const method = methodElement.value;
     const countryOption = document.getElementById('country-targeting');
-    const bulkOption = document.getElementById('bulk-targeting');
+    const statesOption = document.getElementById('states-targeting');
     
-    if (!countryOption || !bulkOption) {
+    if (!countryOption || !statesOption) {
         console.error('Location targeting elements not found');
         return;
     }
@@ -2007,241 +2063,25 @@ function toggleLocationMethod() {
     if (method === 'country') {
         countryOption.style.display = 'block';
         countryOption.classList.add('active');
-        bulkOption.style.display = 'none';
-        bulkOption.classList.remove('active');
-        uploadedLocations = []; // Clear uploaded locations
-    } else {
+        statesOption.style.display = 'none';
+        statesOption.classList.remove('active');
+    } else if (method === 'states') {
         countryOption.style.display = 'none';
         countryOption.classList.remove('active');
-        bulkOption.style.display = 'block';
-        bulkOption.classList.add('active');
+        statesOption.style.display = 'block';
+        statesOption.classList.add('active');
+        
+        // Initialize states grid if not already done
+        populateStatesGrid();
     }
 }
 
-function handleLocationFileUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    const fileName = file.name.toLowerCase();
-    const validExtensions = ['.xlsx', '.xls', '.csv'];
-    const isValidFile = validExtensions.some(ext => fileName.endsWith(ext));
-    
-    if (!isValidFile) {
-        showToast('Please upload a valid Excel (.xlsx, .xls) or CSV (.csv) file', 'error');
-        event.target.value = '';
-        return;
-    }
-    
-    // For CSV files, parse directly
-    if (fileName.endsWith('.csv')) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                parseLocationCSV(e.target.result);
-            } catch (error) {
-                showToast('Error parsing CSV file: ' + error.message, 'error');
-            }
-        };
-        reader.readAsText(file);
-    } else {
-        // For Excel files, parse using FileReader and SheetJS
-        showToast('Excel file detected. Processing...', 'info');
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                parseLocationExcel(e.target.result);
-            } catch (error) {
-                showToast('Error parsing Excel file: ' + error.message, 'error');
-            }
-        };
-        reader.readAsArrayBuffer(file);
-    }
-}
 
-function parseLocationCSV(csvText) {
-    const lines = csvText.split('\n').filter(line => line.trim());
-    if (lines.length < 2) {
-        throw new Error('CSV must have at least a header and one data row');
-    }
-    
-    const header = lines[0].toLowerCase().trim();
-    const locations = [];
-    
-    // Check if it's state names or location IDs
-    const isLocationIds = header.includes('location_id') || header.includes('id');
-    const isStateNames = header.includes('state') || header.includes('name');
-    
-    if (!isLocationIds && !isStateNames) {
-        throw new Error('CSV header must contain either "State" or "location_id"');
-    }
-    
-    for (let i = 1; i < lines.length; i++) {
-        const value = lines[i].trim();
-        if (value) {
-            if (isLocationIds) {
-                // Validate that it's a number
-                if (!/^\d+$/.test(value)) {
-                    throw new Error(`Invalid location ID: ${value}. Must be numeric.`);
-                }
-                locations.push({
-                    id: value,
-                    name: `Location ID: ${value}`,
-                    type: 'id'
-                });
-            } else {
-                locations.push({
-                    id: null,
-                    name: value,
-                    type: 'state'
-                });
-            }
-        }
-    }
-    
-    if (locations.length === 0) {
-        throw new Error('No valid locations found in CSV');
-    }
-    
-    if (locations.length > 3000) {
-        throw new Error('Maximum 3,000 locations allowed per ad group');
-    }
-    
-    uploadedLocations = locations;
-    displayLocationPreview(locations);
-    showToast(`Successfully loaded ${locations.length} locations`, 'success');
-}
 
-function parseLocationExcel(arrayBuffer) {
-    // Check if SheetJS is available
-    if (typeof XLSX === 'undefined') {
-        showToast('Excel processing library not loaded. Please use CSV format instead.', 'error');
-        return;
-    }
-    
-    try {
-        // Parse the Excel file
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        
-        // Get the first worksheet
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        
-        // Convert to JSON
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-        
-        if (jsonData.length < 2) {
-            throw new Error('Excel file must have at least a header row and one data row');
-        }
-        
-        // Process Excel data directly instead of converting to CSV
-        processExcelLocationData(jsonData);
-        
-    } catch (error) {
-        console.error('Excel parsing error:', error);
-        throw new Error('Failed to parse Excel file: ' + error.message);
-    }
-}
 
-function processExcelLocationData(jsonData) {
-    if (!jsonData || jsonData.length < 2) {
-        throw new Error('Excel file must have at least a header row and one data row');
-    }
-    
-    // Get the header row and normalize it
-    const headerRow = jsonData[0];
-    if (!headerRow || headerRow.length === 0) {
-        throw new Error('Excel file header row is empty');
-    }
-    
-    // Find the header - look for 'state', 'location_id', 'id', etc.
-    const header = headerRow[0] ? headerRow[0].toString().toLowerCase().trim() : '';
-    console.log('Excel header detected:', header);
-    
-    // Check if it's state names or location IDs
-    const isLocationIds = header.includes('location_id') || header.includes('id');
-    const isStateNames = header.includes('state') || header.includes('name');
-    
-    if (!isLocationIds && !isStateNames) {
-        throw new Error(`Excel header must contain either "State" or "location_id".\nFound: "${header}"\nPlease ensure your Excel file has a header like "State" or "location_id" in the first column.`);
-    }
-    
-    const locations = [];
-    
-    // Process data rows (skip header)
-    for (let i = 1; i < jsonData.length; i++) {
-        const row = jsonData[i];
-        if (!row || row.length === 0) continue;
-        
-        const value = row[0] ? row[0].toString().trim() : '';
-        if (!value) continue; // Skip empty rows
-        
-        if (isLocationIds) {
-            // Validate that it's a number
-            if (!/^\d+$/.test(value)) {
-                throw new Error(`Invalid location ID: ${value}. Must be numeric.`);
-            }
-            locations.push({
-                id: value,
-                name: `Location ID: ${value}`,
-                type: 'id'
-            });
-        } else {
-            locations.push({
-                id: null,
-                name: value,
-                type: 'state'
-            });
-        }
-    }
-    
-    if (locations.length === 0) {
-        throw new Error('No valid locations found in Excel file');
-    }
-    
-    if (locations.length > 3000) {
-        throw new Error('Maximum 3,000 locations allowed per ad group');
-    }
-    
-    uploadedLocations = locations;
-    displayLocationPreview(locations);
-    showToast(`Successfully loaded ${locations.length} locations from Excel file`, 'success');
-}
 
-function uploadLocationFile(file) {
-    // This function is now unused since we handle Excel files directly
-    showToast('Processing file...', 'info');
-}
 
-function displayLocationPreview(locations) {
-    const preview = document.getElementById('location-preview');
-    const locationList = document.getElementById('location-list');
-    
-    locationList.innerHTML = '';
-    locations.slice(0, 50).forEach(location => { // Show first 50
-        const div = document.createElement('div');
-        div.className = 'location-item';
-        div.textContent = location.name;
-        locationList.appendChild(div);
-    });
-    
-    if (locations.length > 50) {
-        const div = document.createElement('div');
-        div.className = 'location-item';
-        div.style.fontStyle = 'italic';
-        div.style.color = '#666';
-        div.textContent = `... and ${locations.length - 50} more locations`;
-        locationList.appendChild(div);
-    }
-    
-    preview.style.display = 'block';
-}
 
-function clearLocationFile() {
-    document.getElementById('location-file').value = '';
-    document.getElementById('location-preview').style.display = 'none';
-    uploadedLocations = [];
-    showToast('Location file cleared', 'info');
-}
 
 // Initialize location targeting on page load
 function initializeLocationTargeting() {
@@ -2251,6 +2091,13 @@ function initializeLocationTargeting() {
         countryRadio.checked = true;
         toggleLocationMethod();
         console.log('Location targeting initialized - default to country');
+    }
+    
+    // Auto-populate states grid when states option is available
+    const statesRadio = document.querySelector('input[name="location_method"][value="states"]');
+    if (statesRadio) {
+        // Pre-populate the grid so it's ready when user switches to states
+        populateStatesGrid();
     }
 }
 
@@ -2268,16 +2115,103 @@ function getSelectedLocationIds() {
     
     if (method === 'country') {
         return ['6252001']; // United States
-    } else {
-        if (uploadedLocations.length === 0) {
-            console.log('Bulk method selected but no locations uploaded');
+    } else if (method === 'states') {
+        // Get selected state checkboxes
+        const selectedCheckboxes = document.querySelectorAll('input[name="state_selection"]:checked');
+        
+        if (selectedCheckboxes.length === 0) {
+            console.log('States method selected but no states selected');
             return null; // Error case - will be handled by validation
         }
         
-        // If using state names, we'll need to convert them to location IDs on backend
-        // For now, return the uploaded data
-        const locations = uploadedLocations.map(loc => loc.id || loc.name);
-        console.log('Returning uploaded locations:', locations);
+        const locations = Array.from(selectedCheckboxes).map(checkbox => checkbox.value);
+        console.log('Returning selected state location IDs:', locations);
         return locations;
     }
+    
+    return ['6252001']; // Fallback to US
+}
+
+// State selection functions
+function populateStatesGrid() {
+    const statesGrid = document.getElementById('states-grid');
+    if (!statesGrid) {
+        console.error('States grid element not found');
+        return;
+    }
+    
+    // Only populate if not already done
+    if (statesGrid.children.length > 0) {
+        return;
+    }
+    
+    console.log('Populating states grid with', US_STATES.length, 'states');
+    
+    US_STATES.forEach(state => {
+        const stateItem = document.createElement('div');
+        stateItem.className = 'state-item';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.name = 'state_selection';
+        checkbox.value = state.id;
+        checkbox.id = `state_${state.id}`;
+        checkbox.checked = true; // All states selected by default
+        checkbox.addEventListener('change', updateStatesCount);
+        
+        const label = document.createElement('label');
+        label.htmlFor = `state_${state.id}`;
+        label.textContent = state.name;
+        
+        stateItem.appendChild(checkbox);
+        stateItem.appendChild(label);
+        statesGrid.appendChild(stateItem);
+    });
+    
+    updateStatesCount();
+}
+
+function selectAllStates() {
+    const checkboxes = document.querySelectorAll('input[name="state_selection"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    updateStatesCount();
+    console.log('All states selected');
+}
+
+function clearAllStates() {
+    const checkboxes = document.querySelectorAll('input[name="state_selection"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    updateStatesCount();
+    console.log('All states cleared');
+}
+
+function selectPopularStates() {
+    // First clear all
+    clearAllStates();
+    
+    // Then select popular states
+    POPULAR_STATES.forEach(stateName => {
+        const state = US_STATES.find(s => s.name === stateName);
+        if (state) {
+            const checkbox = document.getElementById(`state_${state.id}`);
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+        }
+    });
+    updateStatesCount();
+    console.log('Popular states selected');
+}
+
+function updateStatesCount() {
+    const selectedCheckboxes = document.querySelectorAll('input[name="state_selection"]:checked');
+    const countElement = document.getElementById('selected-states-count');
+    if (countElement) {
+        countElement.textContent = selectedCheckboxes.length;
+    }
+    console.log('States count updated:', selectedCheckboxes.length);
 }

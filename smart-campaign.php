@@ -186,10 +186,10 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                         </div>
                         <div class="location-method-item">
                             <label>
-                                <input type="radio" name="smart_location_method" value="bulk" class="smart-location-method-radio" onchange="toggleSmartLocationMethod()">
-                                <span>Target Specific States/Regions</span>
+                                <input type="radio" name="smart_location_method" value="states" class="smart-location-method-radio" onchange="toggleSmartLocationMethod()">
+                                <span>Target Specific States</span>
                             </label>
-                            <small>Upload Excel/CSV file with specific state names or location IDs</small>
+                            <small>Select specific US states to target (all states selected by default)</small>
                         </div>
                     </div>
                     
@@ -200,43 +200,21 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                         </div>
                     </div>
                     
-                    <div id="smart-bulk-targeting" class="location-option" style="display: none;">
-                        <div class="bulk-upload-container">
-                            <div class="upload-section">
-                                <label for="smart-location-file">Upload Location File</label>
-                                <input type="file" id="smart-location-file" accept=".xlsx,.xls,.csv" onchange="handleSmartLocationFileUpload(event)">
-                                <small>Supported formats: Excel (.xlsx, .xls) and CSV (.csv) - Excel files are processed automatically</small>
+                    <div id="smart-states-targeting" class="location-option" style="display: none;">
+                        <div class="states-selection-container">
+                            <div class="states-controls">
+                                <button type="button" class="btn-secondary state-btn" onclick="selectAllSmartStates()">Select All States</button>
+                                <button type="button" class="btn-secondary state-btn" onclick="clearAllSmartStates()">Clear All</button>
+                                <button type="button" class="btn-secondary state-btn" onclick="selectPopularSmartStates()">Popular States Only</button>
                             </div>
                             
-                            <div class="file-format-help">
-                                <h4>File Format Requirements:</h4>
-                                <div class="format-example">
-                                    <p><strong>Option 1: State Names</strong></p>
-                                    <div class="code-block">
-                                        State<br>
-                                        California<br>
-                                        Texas<br>
-                                        New York<br>
-                                        Florida
-                                    </div>
-                                </div>
-                                <div class="format-example">
-                                    <p><strong>Option 2: Location IDs</strong></p>
-                                    <div class="code-block">
-                                        location_id<br>
-                                        5332921<br>
-                                        4736286<br>
-                                        5128638<br>
-                                        4155751
-                                    </div>
-                                </div>
-                                <p><small>Note: Max 3,000 locations per ad group. Smart+ will optimize within selected locations.</small></p>
+                            <div class="states-grid" id="smart-states-grid">
+                                <!-- States will be populated by JavaScript -->
                             </div>
                             
-                            <div id="smart-location-preview" class="location-preview" style="display: none;">
-                                <h4>Uploaded Locations Preview:</h4>
-                                <div id="smart-location-list"></div>
-                                <button type="button" class="btn-secondary" onclick="clearSmartLocationFile()">Clear File</button>
+                            <div class="states-summary">
+                                <p><span id="smart-selected-states-count">50</span> states selected</p>
+                                <small>Select the states you want Smart+ to target. All states are selected by default for maximum optimization.</small>
                             </div>
                         </div>
                     </div>
@@ -461,8 +439,6 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         🐛 Debug
     </button>
 
-    <!-- SheetJS library for Excel file parsing -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="assets/smart-campaign.js"></script>
     <script>
         // Debug console functions
