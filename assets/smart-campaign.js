@@ -19,6 +19,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     try {
         await loadAdvertiserInfo();
         await loadLeadGenForms();
+        initializeSmartLocationTargeting();
         initializeSmartAd();
         
         // Set default start date to tomorrow (exactly like manual campaign)
@@ -275,6 +276,8 @@ async function createSmartAdGroup() {
 
     // Validate location targeting
     const selectedLocationIds = getSmartSelectedLocationIds();
+    console.log('Smart+ Validation - selectedLocationIds:', selectedLocationIds);
+    
     if (!selectedLocationIds || selectedLocationIds.length === 0) {
         showToast('Please select locations for Smart+ targeting or upload a location file', 'error');
         return;
@@ -1019,9 +1022,22 @@ function getSmartSelectedAgeGroups() {
 let smartUploadedLocations = [];
 
 function toggleSmartLocationMethod() {
-    const method = document.querySelector('input[name="smart_location_method"]:checked').value;
+    const methodElement = document.querySelector('input[name="smart_location_method"]:checked');
+    if (!methodElement) {
+        console.error('No Smart+ location method radio button found');
+        return;
+    }
+    
+    const method = methodElement.value;
     const countryOption = document.getElementById('smart-country-targeting');
     const bulkOption = document.getElementById('smart-bulk-targeting');
+    
+    if (!countryOption || !bulkOption) {
+        console.error('Smart+ location targeting elements not found');
+        return;
+    }
+    
+    console.log('Toggling Smart+ location method to:', method);
     
     if (method === 'country') {
         countryOption.style.display = 'block';
@@ -1152,18 +1168,41 @@ function clearSmartLocationFile() {
     showToast('Smart+ location file cleared', 'info');
 }
 
+// Initialize Smart+ location targeting on page load
+function initializeSmartLocationTargeting() {
+    // Ensure the default country option is displayed
+    const countryRadio = document.querySelector('input[name="smart_location_method"][value="country"]');
+    if (countryRadio) {
+        countryRadio.checked = true;
+        toggleSmartLocationMethod();
+        console.log('Smart+ location targeting initialized - default to country');
+    }
+}
+
 function getSmartSelectedLocationIds() {
-    const method = document.querySelector('input[name="smart_location_method"]:checked').value;
+    const methodElement = document.querySelector('input[name="smart_location_method"]:checked');
+    
+    // If no radio button is found or checked, default to country
+    if (!methodElement) {
+        console.log('No Smart+ location method selected, defaulting to country');
+        return ['6252001']; // Default to United States
+    }
+    
+    const method = methodElement.value;
+    console.log('Selected Smart+ location method:', method);
     
     if (method === 'country') {
         return ['6252001']; // United States
     } else {
         if (smartUploadedLocations.length === 0) {
+            console.log('Smart+ bulk method selected but no locations uploaded');
             return null; // Error case - will be handled by validation
         }
         
         // If using state names, we'll need to convert them to location IDs on backend
         // For now, return the uploaded data
-        return smartUploadedLocations.map(loc => loc.id || loc.name);
+        const locations = smartUploadedLocations.map(loc => loc.id || loc.name);
+        console.log('Returning Smart+ uploaded locations:', locations);
+        return locations;
     }
 }

@@ -71,6 +71,7 @@ function toggleLogsPanel() {
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     initializeDayparting();
+    initializeLocationTargeting();
     loadIdentities();
     loadMediaLibrary();
     loadPixels();  // Load available pixels
@@ -366,6 +367,8 @@ async function createAdGroup() {
 
     // Validate location targeting
     const selectedLocationIds = getSelectedLocationIds();
+    console.log('Validation - selectedLocationIds:', selectedLocationIds);
+    
     if (!selectedLocationIds || selectedLocationIds.length === 0) {
         showToast('Please select locations for targeting or upload a location file', 'error');
         return;
@@ -1984,9 +1987,22 @@ function getSelectedAgeGroups() {
 let uploadedLocations = [];
 
 function toggleLocationMethod() {
-    const method = document.querySelector('input[name="location_method"]:checked').value;
+    const methodElement = document.querySelector('input[name="location_method"]:checked');
+    if (!methodElement) {
+        console.error('No location method radio button found');
+        return;
+    }
+    
+    const method = methodElement.value;
     const countryOption = document.getElementById('country-targeting');
     const bulkOption = document.getElementById('bulk-targeting');
+    
+    if (!countryOption || !bulkOption) {
+        console.error('Location targeting elements not found');
+        return;
+    }
+    
+    console.log('Toggling location method to:', method);
     
     if (method === 'country') {
         countryOption.style.display = 'block';
@@ -2124,18 +2140,41 @@ function clearLocationFile() {
     showToast('Location file cleared', 'info');
 }
 
+// Initialize location targeting on page load
+function initializeLocationTargeting() {
+    // Ensure the default country option is displayed
+    const countryRadio = document.querySelector('input[name="location_method"][value="country"]');
+    if (countryRadio) {
+        countryRadio.checked = true;
+        toggleLocationMethod();
+        console.log('Location targeting initialized - default to country');
+    }
+}
+
 function getSelectedLocationIds() {
-    const method = document.querySelector('input[name="location_method"]:checked').value;
+    const methodElement = document.querySelector('input[name="location_method"]:checked');
+    
+    // If no radio button is found or checked, default to country
+    if (!methodElement) {
+        console.log('No location method selected, defaulting to country');
+        return ['6252001']; // Default to United States
+    }
+    
+    const method = methodElement.value;
+    console.log('Selected location method:', method);
     
     if (method === 'country') {
         return ['6252001']; // United States
     } else {
         if (uploadedLocations.length === 0) {
+            console.log('Bulk method selected but no locations uploaded');
             return null; // Error case - will be handled by validation
         }
         
         // If using state names, we'll need to convert them to location IDs on backend
         // For now, return the uploaded data
-        return uploadedLocations.map(loc => loc.id || loc.name);
+        const locations = uploadedLocations.map(loc => loc.id || loc.name);
+        console.log('Returning uploaded locations:', locations);
+        return locations;
     }
 }
