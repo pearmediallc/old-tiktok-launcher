@@ -780,11 +780,11 @@ async function loadImageLibrary() {
                     ${image.url ? 
                         `<img src="${image.url}" alt="${image.file_name || 'Image'}" 
                               style="width: 100%; height: 100%; object-fit: cover;" 
-                              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'media-placeholder\\' style=\\'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;\\'>🖼️<div style=\\'position: absolute; bottom: 5px; right: 5px; font-size: 9px; background: rgba(0,0,0,0.5); color: white; padding: 2px 4px; border-radius: 3px;\\'>${image.image_id.substring(0, 8)}...</div></div>'">` : 
+                              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'media-placeholder\\' style=\\'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;\\'>🖼️</div>'">` : 
                         `<div class="media-placeholder" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); position: relative;">
                             <div class="media-icon">🖼️</div>
                             <div style="position: absolute; bottom: 5px; right: 5px; font-size: 9px; background: rgba(0,0,0,0.5); color: white; padding: 2px 4px; border-radius: 3px;">
-                                ${image.image_id.substring(0, 8)}...
+                                Image
                             </div>
                         </div>`
                     }
@@ -936,7 +936,6 @@ async function useVideoThumbnail(adIndex) {
                 <div class="media-selected-info">
                     <div class="media-type-badge">🎬</div>
                     <div class="media-name">Video Thumbnail</div>
-                    <div class="media-id" style="font-size: 11px;">ID: ${imageId}</div>
                 </div>`;
             
             showToast('Video thumbnail uploaded and set as cover image!', 'success');
@@ -1051,15 +1050,14 @@ function renderMediaGrid() {
                     <img src="${imgUrl}" 
                          alt="${media.file_name || 'Image'}" 
                          style="width: 100%; height: 100%; object-fit: cover;"
-                         onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'%3E%3Crect width=\'100\' height=\'100\' fill=\'%23ddd\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%23999\'%3E${media.image_id || 'Image'}%3C/text%3E%3C/svg%3E'">
+                         onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'%3E%3Crect width=\'100\' height=\'100\' fill=\'%23ddd\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%23999\'%3EImage%3C/text%3E%3C/svg%3E'">
                     <div class="media-info">
-                        <span class="media-id">${media.image_id}</span>
                         <span class="media-name">${media.file_name || 'Image'}</span>
                     </div>`;
             } else {
                 item.innerHTML = `
                     <div style="padding: 20px; text-align: center; color: #999;">
-                        <div>Image ID: ${media.image_id}</div>
+                        <div>Image</div>
                         <div>${media.file_name || 'No preview'}</div>
                     </div>`;
             }
@@ -1087,7 +1085,6 @@ function renderMediaGrid() {
                     </div>
                     <div class="media-info" style="padding: 5px; background: rgba(0,0,0,0.05);">
                         <div style="font-weight: 600; font-size: 12px;">${media.file_name || 'Video'}</div>
-                        <div style="font-size: 9px; opacity: 0.7; margin-top: 2px;">ID: ${media.video_id}</div>
                     </div>`;
             } else if (videoUrl) {
                 item.innerHTML = `
@@ -1104,7 +1101,6 @@ function renderMediaGrid() {
                         </div>
                     </div>
                     <div class="media-info">
-                        <span class="media-id" style="font-size: 9px;">${media.video_id}</span>
                         <span class="media-name">${media.file_name || 'Video'}</span>
                         ${media.duration ? `<span class="media-duration">${Math.round(media.duration)}s</span>` : ''}
                     </div>`;
@@ -1121,14 +1117,13 @@ function renderMediaGrid() {
                     </div>
                     <div class="media-info" style="padding: 5px; background: rgba(0,0,0,0.05);">
                         <div style="font-weight: 600; font-size: 12px;">${media.file_name || 'Video'}</div>
-                        <div style="font-size: 9px; opacity: 0.7; margin-top: 2px; word-break: break-all;">ID: ${media.video_id}</div>
                     </div>`;
             }
         }
 
         // Add file info as tooltip
         const dimensions = (media.width && media.height) ? ` (${media.width}x${media.height})` : '';
-        item.title = `${media.file_name || 'Media'} - ID: ${media.video_id || media.image_id}${dimensions}`;
+        item.title = `${media.file_name || 'Media'}${dimensions}`;
 
         grid.appendChild(item);
     });
@@ -1215,7 +1210,6 @@ function confirmMediaSelection() {
             <div class="media-selected-info">
                 <div class="media-type-badge">🖼️</div>
                 <div class="media-name">${selectedMedia.file_name || 'Cover Image'}</div>
-                <div class="media-id" style="font-size: 11px;">ID: ${coverImageId}</div>
             </div>`;
 
         closeMediaModal();
@@ -1268,7 +1262,6 @@ function confirmMediaSelection() {
                     <div class="media-type-badge">🎥</div>
                     <div class="media-name">${selectedMedia.file_name || 'Video'}</div>
                     ${selectedMedia.duration ? `<div style="font-size: 11px;">⏱ ${Math.round(selectedMedia.duration)}s</div>` : ''}
-                    <div class="media-id" style="font-size: 11px;">ID: ${mediaId}</div>
                 </div>`;
                 
             showToast('Video selected. Now select a cover image below.', 'info');
@@ -1288,7 +1281,6 @@ function confirmMediaSelection() {
                 <div class="media-selected-info">
                     <div class="media-type-badge">📷</div>
                     <div class="media-name">${selectedMedia.file_name || 'Image'}</div>
-                    <div class="media-id" style="font-size: 11px;">ID: ${mediaId}</div>
                 </div>`;
                 
             showToast('Image selected successfully', 'success');

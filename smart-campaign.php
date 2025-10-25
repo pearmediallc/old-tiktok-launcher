@@ -389,7 +389,6 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             <div class="modal-tabs">
                 <button class="tab-btn active" onclick="switchMediaTab('library', event)">Library</button>
                 <button class="tab-btn" onclick="switchMediaTab('upload', event)">Upload New</button>
-                <button class="btn-secondary btn-sm" onclick="refreshMediaLibrary()" style="margin-left: auto;">🔄 Refresh</button>
                 <button class="btn-secondary btn-sm" onclick="syncTikTokLibrary()">📥 Sync from TikTok</button>
             </div>
             <div class="modal-body">
