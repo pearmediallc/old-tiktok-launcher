@@ -357,6 +357,13 @@ async function createAdGroup() {
     console.log('Manual input value:', document.getElementById('pixel-manual-input').value);
     console.log('================================');
 
+    // Validate age group selection
+    const selectedAgeGroups = getSelectedAgeGroups();
+    if (selectedAgeGroups.length === 0) {
+        showToast('Please select at least one age group for targeting', 'error');
+        return;
+    }
+
     if (!adGroupName || !pixelId || !budget || !startDate) {
         showToast('Please fill in all required fields (including pixel ID)', 'error');
         console.error('Missing fields - Pixel ID:', pixelId);
@@ -407,7 +414,7 @@ async function createAdGroup() {
 
             // DEMOGRAPHICS - TARGETING
             location_ids: ['6252001'],  // United States
-            age_groups: ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100'],
+            age_groups: selectedAgeGroups,  // User-selected age groups
             gender: 'GENDER_UNLIMITED',  // All genders
 
             // BUDGET AND SCHEDULE (use campaign's budget mode if set, otherwise use ad group's)
@@ -1924,4 +1931,44 @@ function finishAndReset() {
     
     // Redirect to advertiser selection page (home)
     window.location.href = 'select-advertiser.php';
+}
+
+// Age targeting functions
+function selectAllAges() {
+    const checkboxes = document.querySelectorAll('.age-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+    });
+}
+
+function clearAllAges() {
+    const checkboxes = document.querySelectorAll('.age-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+}
+
+function selectDefaultAges() {
+    // Clear all first
+    clearAllAges();
+    
+    // Select default ages (18+ excluding 13-17)
+    const defaultAges = ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100'];
+    defaultAges.forEach(age => {
+        const checkbox = document.querySelector(`.age-checkbox[value="${age}"]`);
+        if (checkbox) {
+            checkbox.checked = true;
+        }
+    });
+}
+
+function getSelectedAgeGroups() {
+    const selectedAges = [];
+    const checkboxes = document.querySelectorAll('.age-checkbox:checked');
+    
+    checkboxes.forEach(checkbox => {
+        selectedAges.push(checkbox.value);
+    });
+    
+    return selectedAges;
 }

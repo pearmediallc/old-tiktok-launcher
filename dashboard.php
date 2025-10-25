@@ -181,6 +181,58 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 </div>
 
                 <div class="form-section">
+                    <h3>Age Targeting</h3>
+                    <div class="form-group">
+                        <label>Select Age Groups</label>
+                        <div class="age-groups-container">
+                            <div class="age-group-item">
+                                <label>
+                                    <input type="checkbox" name="age_groups" value="AGE_13_17" class="age-checkbox">
+                                    <span>13-17 years</span>
+                                    <span class="age-note">*Restricted in some regions</span>
+                                </label>
+                            </div>
+                            <div class="age-group-item">
+                                <label>
+                                    <input type="checkbox" name="age_groups" value="AGE_18_24" class="age-checkbox" checked>
+                                    <span>18-24 years</span>
+                                </label>
+                            </div>
+                            <div class="age-group-item">
+                                <label>
+                                    <input type="checkbox" name="age_groups" value="AGE_25_34" class="age-checkbox" checked>
+                                    <span>25-34 years</span>
+                                </label>
+                            </div>
+                            <div class="age-group-item">
+                                <label>
+                                    <input type="checkbox" name="age_groups" value="AGE_35_44" class="age-checkbox" checked>
+                                    <span>35-44 years</span>
+                                </label>
+                            </div>
+                            <div class="age-group-item">
+                                <label>
+                                    <input type="checkbox" name="age_groups" value="AGE_45_54" class="age-checkbox" checked>
+                                    <span>45-54 years</span>
+                                </label>
+                            </div>
+                            <div class="age-group-item">
+                                <label>
+                                    <input type="checkbox" name="age_groups" value="AGE_55_100" class="age-checkbox" checked>
+                                    <span>55+ years</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="age-controls">
+                            <button type="button" class="btn-secondary age-btn" onclick="selectAllAges()">Select All</button>
+                            <button type="button" class="btn-secondary age-btn" onclick="clearAllAges()">Clear All</button>
+                            <button type="button" class="btn-secondary age-btn" onclick="selectDefaultAges()">Default (18+)</button>
+                        </div>
+                        <small class="form-help">Select at least one age group for targeting. Default selection excludes 13-17 due to regional restrictions.</small>
+                    </div>
+                </div>
+
+                <div class="form-section">
                     <h3>Dayparting (Optional)</h3>
                     <div class="form-group">
                         <label>

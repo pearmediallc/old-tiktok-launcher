@@ -266,6 +266,13 @@ async function createSmartAdGroup() {
     const budget = parseFloat(document.getElementById('budget').value);
     const bidPrice = parseFloat(document.getElementById('bid-price').value);
 
+    // Validate age group selection
+    const selectedAgeGroups = getSmartSelectedAgeGroups();
+    if (selectedAgeGroups.length === 0) {
+        showToast('Please select at least one age group for targeting', 'error');
+        return;
+    }
+
     if (!adGroupName || !pixelId || !budget) {
         showToast('Please fill in all required fields', 'error');
         return;
@@ -298,7 +305,7 @@ async function createSmartAdGroup() {
             
             // Demographics - Smart+ will optimize these
             location_ids: ['6252001'], // United States
-            age_groups: ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100'],
+            age_groups: getSmartSelectedAgeGroups(), // User-selected age groups
             gender: 'GENDER_UNLIMITED',
             
             // Budget
@@ -959,4 +966,44 @@ async function syncTikTokLibrary() {
     } finally {
         hideLoading();
     }
+}
+
+// Smart Campaign age targeting functions
+function selectAllSmartAges() {
+    const checkboxes = document.querySelectorAll('.smart-age-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+    });
+}
+
+function clearAllSmartAges() {
+    const checkboxes = document.querySelectorAll('.smart-age-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+}
+
+function selectDefaultSmartAges() {
+    // Clear all first
+    clearAllSmartAges();
+    
+    // Select default ages (18+ excluding 13-17)
+    const defaultAges = ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100'];
+    defaultAges.forEach(age => {
+        const checkbox = document.querySelector(`.smart-age-checkbox[value="${age}"]`);
+        if (checkbox) {
+            checkbox.checked = true;
+        }
+    });
+}
+
+function getSmartSelectedAgeGroups() {
+    const selectedAges = [];
+    const checkboxes = document.querySelectorAll('.smart-age-checkbox:checked');
+    
+    checkboxes.forEach(checkbox => {
+        selectedAges.push(checkbox.value);
+    });
+    
+    return selectedAges;
 }

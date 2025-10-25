@@ -231,7 +231,7 @@ try {
                 
                 // Targeting 
                 'location_ids' => ['6252001'], // United States
-                'age_groups' => ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100'],
+                'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100'],
                 'gender' => 'GENDER_UNLIMITED',
                 
                 // Budget and scheduling
