@@ -2,6 +2,8 @@
 session_start();
 header('Content-Type: application/json');
 
+require_once __DIR__ . '/state_location_mapping.php';
+
 // Load environment variables
 if (file_exists(__DIR__ . '/.env')) {
     $lines = file(__DIR__ . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
@@ -43,6 +45,23 @@ function logToFile($message) {
         mkdir($logDir, 0777, true);
     }
     file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] " . $message . "\n", FILE_APPEND);
+}
+
+// Process location targeting data for Smart+
+function processSmartLocationTargeting($locationData) {
+    if (empty($locationData)) {
+        return ['6252001']; // Default to United States
+    }
+    
+    // Process the location data using our mapping function
+    $result = processLocationData($locationData);
+    
+    if (!empty($result['unmatched'])) {
+        logToFile("WARNING: Smart+ Unmatched locations: " . implode(', ', $result['unmatched']));
+    }
+    
+    // Return location IDs or fallback to US if none found
+    return !empty($result['location_ids']) ? $result['location_ids'] : ['6252001'];
 }
 
 // Get request data
@@ -129,7 +148,7 @@ try {
                 'automatic_placement' => true,
                 
                 // Smart targeting (broader for AI optimization)
-                'location_ids' => $data['location_ids'] ?? ['6252001'], // US
+                'location_ids' => processSmartLocationTargeting($data['location_ids'] ?? ['6252001']),
                 'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100'],
                 'gender' => 'GENDER_UNLIMITED',
                 

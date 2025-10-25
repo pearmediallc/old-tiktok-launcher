@@ -233,6 +233,77 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 </div>
 
                 <div class="form-section">
+                    <h3>Location Targeting</h3>
+                    <div class="form-group">
+                        <label>Select Targeting Method</label>
+                        <div class="location-method-container">
+                            <div class="location-method-item">
+                                <label>
+                                    <input type="radio" name="location_method" value="country" class="location-method-radio" checked onchange="toggleLocationMethod()">
+                                    <span>Target Entire United States</span>
+                                </label>
+                                <small>Target all users in the United States (default)</small>
+                            </div>
+                            <div class="location-method-item">
+                                <label>
+                                    <input type="radio" name="location_method" value="bulk" class="location-method-radio" onchange="toggleLocationMethod()">
+                                    <span>Target Specific States/Regions</span>
+                                </label>
+                                <small>Upload Excel/CSV file with specific state names or location IDs</small>
+                            </div>
+                        </div>
+                        
+                        <div id="country-targeting" class="location-option active">
+                            <div class="location-info">
+                                <p><strong>Target:</strong> United States (Location ID: 6252001)</p>
+                                <p><small>This will target all users across all 50 states and territories in the United States.</small></p>
+                            </div>
+                        </div>
+                        
+                        <div id="bulk-targeting" class="location-option" style="display: none;">
+                            <div class="bulk-upload-container">
+                                <div class="upload-section">
+                                    <label for="location-file">Upload Location File</label>
+                                    <input type="file" id="location-file" accept=".xlsx,.xls,.csv" onchange="handleLocationFileUpload(event)">
+                                    <small>Supported formats: Excel (.xlsx, .xls) and CSV (.csv)</small>
+                                </div>
+                                
+                                <div class="file-format-help">
+                                    <h4>File Format Requirements:</h4>
+                                    <div class="format-example">
+                                        <p><strong>Option 1: State Names</strong></p>
+                                        <div class="code-block">
+                                            State<br>
+                                            California<br>
+                                            Texas<br>
+                                            New York<br>
+                                            Florida
+                                        </div>
+                                    </div>
+                                    <div class="format-example">
+                                        <p><strong>Option 2: Location IDs</strong></p>
+                                        <div class="code-block">
+                                            location_id<br>
+                                            5332921<br>
+                                            4736286<br>
+                                            5128638<br>
+                                            4155751
+                                        </div>
+                                    </div>
+                                    <p><small>Note: Max 3,000 locations per ad group. Overlapping locations (e.g., US + California) are not allowed.</small></p>
+                                </div>
+                                
+                                <div id="location-preview" class="location-preview" style="display: none;">
+                                    <h4>Uploaded Locations Preview:</h4>
+                                    <div id="location-list"></div>
+                                    <button type="button" class="btn-secondary" onclick="clearLocationFile()">Clear File</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
                     <h3>Dayparting (Optional)</h3>
                     <div class="form-group">
                         <label>

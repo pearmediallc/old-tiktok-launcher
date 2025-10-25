@@ -32,6 +32,7 @@ if (file_exists(__DIR__ . '/.env')) {
 
 // Load TikTok SDK
 require_once __DIR__ . '/sdk/vendor/autoload.php';
+require_once __DIR__ . '/state_location_mapping.php';
 
 use TikTokAds\Campaign\Campaign;
 use TikTokAds\AdGroup\AdGroup;
@@ -56,6 +57,23 @@ function logToFile($message) {
     $logMessage = "[{$timestamp}] {$message}\n";
     error_log($logMessage);  // This will appear in Render logs
     file_put_contents(__DIR__ . '/api_debug.log', $logMessage, FILE_APPEND);
+}
+
+// Process location targeting data
+function processLocationTargeting($locationData) {
+    if (empty($locationData)) {
+        return ['6252001']; // Default to United States
+    }
+    
+    // Process the location data using our mapping function
+    $result = processLocationData($locationData);
+    
+    if (!empty($result['unmatched'])) {
+        logToFile("WARNING: Unmatched locations: " . implode(', ', $result['unmatched']));
+    }
+    
+    // Return location IDs or fallback to US if none found
+    return !empty($result['location_ids']) ? $result['location_ids'] : ['6252001'];
 }
 
 // Handle API requests
@@ -230,7 +248,7 @@ try {
                 'placements' => ['PLACEMENT_TIKTOK'],
                 
                 // Targeting 
-                'location_ids' => ['6252001'], // United States
+                'location_ids' => processLocationTargeting($data['location_ids'] ?? ['6252001']),
                 'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100'],
                 'gender' => 'GENDER_UNLIMITED',
                 

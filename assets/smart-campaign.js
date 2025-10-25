@@ -273,6 +273,13 @@ async function createSmartAdGroup() {
         return;
     }
 
+    // Validate location targeting
+    const selectedLocationIds = getSmartSelectedLocationIds();
+    if (!selectedLocationIds || selectedLocationIds.length === 0) {
+        showToast('Please select locations for Smart+ targeting or upload a location file', 'error');
+        return;
+    }
+
     if (!adGroupName || !pixelId || !budget) {
         showToast('Please fill in all required fields', 'error');
         return;
@@ -304,8 +311,8 @@ async function createSmartAdGroup() {
             placement_type: 'PLACEMENT_TYPE_AUTOMATIC', // Auto placement for Smart+
             
             // Demographics - Smart+ will optimize these
-            location_ids: ['6252001'], // United States
-            age_groups: getSmartSelectedAgeGroups(), // User-selected age groups
+            location_ids: selectedLocationIds, // User-selected locations
+            age_groups: selectedAgeGroups, // User-selected age groups
             gender: 'GENDER_UNLIMITED',
             
             // Budget
@@ -1006,4 +1013,157 @@ function getSmartSelectedAgeGroups() {
     });
     
     return selectedAges;
+}
+
+// Smart Campaign location targeting functions
+let smartUploadedLocations = [];
+
+function toggleSmartLocationMethod() {
+    const method = document.querySelector('input[name="smart_location_method"]:checked').value;
+    const countryOption = document.getElementById('smart-country-targeting');
+    const bulkOption = document.getElementById('smart-bulk-targeting');
+    
+    if (method === 'country') {
+        countryOption.style.display = 'block';
+        countryOption.classList.add('active');
+        bulkOption.style.display = 'none';
+        bulkOption.classList.remove('active');
+        smartUploadedLocations = []; // Clear uploaded locations
+    } else {
+        countryOption.style.display = 'none';
+        countryOption.classList.remove('active');
+        bulkOption.style.display = 'block';
+        bulkOption.classList.add('active');
+    }
+}
+
+function handleSmartLocationFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const fileName = file.name.toLowerCase();
+    const validExtensions = ['.xlsx', '.xls', '.csv'];
+    const isValidFile = validExtensions.some(ext => fileName.endsWith(ext));
+    
+    if (!isValidFile) {
+        showToast('Please upload a valid Excel (.xlsx, .xls) or CSV (.csv) file', 'error');
+        event.target.value = '';
+        return;
+    }
+    
+    // For CSV files, parse directly
+    if (fileName.endsWith('.csv')) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                parseSmartLocationCSV(e.target.result);
+            } catch (error) {
+                showToast('Error parsing CSV file: ' + error.message, 'error');
+            }
+        };
+        reader.readAsText(file);
+    } else {
+        // For Excel files, we'll need to handle on backend
+        showToast('For Excel files, please save as CSV format and re-upload', 'info');
+    }
+}
+
+function parseSmartLocationCSV(csvText) {
+    const lines = csvText.split('\n').filter(line => line.trim());
+    if (lines.length < 2) {
+        throw new Error('CSV must have at least a header and one data row');
+    }
+    
+    const header = lines[0].toLowerCase().trim();
+    const locations = [];
+    
+    // Check if it's state names or location IDs
+    const isLocationIds = header.includes('location_id') || header.includes('id');
+    const isStateNames = header.includes('state') || header.includes('name');
+    
+    if (!isLocationIds && !isStateNames) {
+        throw new Error('CSV header must contain either "State" or "location_id"');
+    }
+    
+    for (let i = 1; i < lines.length; i++) {
+        const value = lines[i].trim();
+        if (value) {
+            if (isLocationIds) {
+                // Validate that it's a number
+                if (!/^\d+$/.test(value)) {
+                    throw new Error(`Invalid location ID: ${value}. Must be numeric.`);
+                }
+                locations.push({
+                    id: value,
+                    name: `Location ID: ${value}`,
+                    type: 'id'
+                });
+            } else {
+                locations.push({
+                    id: null,
+                    name: value,
+                    type: 'state'
+                });
+            }
+        }
+    }
+    
+    if (locations.length === 0) {
+        throw new Error('No valid locations found in CSV');
+    }
+    
+    if (locations.length > 3000) {
+        throw new Error('Maximum 3,000 locations allowed per ad group');
+    }
+    
+    smartUploadedLocations = locations;
+    displaySmartLocationPreview(locations);
+    showToast(`Successfully loaded ${locations.length} locations for Smart+`, 'success');
+}
+
+function displaySmartLocationPreview(locations) {
+    const preview = document.getElementById('smart-location-preview');
+    const locationList = document.getElementById('smart-location-list');
+    
+    locationList.innerHTML = '';
+    locations.slice(0, 50).forEach(location => { // Show first 50
+        const div = document.createElement('div');
+        div.className = 'location-item';
+        div.textContent = location.name;
+        locationList.appendChild(div);
+    });
+    
+    if (locations.length > 50) {
+        const div = document.createElement('div');
+        div.className = 'location-item';
+        div.style.fontStyle = 'italic';
+        div.style.color = '#666';
+        div.textContent = `... and ${locations.length - 50} more locations`;
+        locationList.appendChild(div);
+    }
+    
+    preview.style.display = 'block';
+}
+
+function clearSmartLocationFile() {
+    document.getElementById('smart-location-file').value = '';
+    document.getElementById('smart-location-preview').style.display = 'none';
+    smartUploadedLocations = [];
+    showToast('Smart+ location file cleared', 'info');
+}
+
+function getSmartSelectedLocationIds() {
+    const method = document.querySelector('input[name="smart_location_method"]:checked').value;
+    
+    if (method === 'country') {
+        return ['6252001']; // United States
+    } else {
+        if (smartUploadedLocations.length === 0) {
+            return null; // Error case - will be handled by validation
+        }
+        
+        // If using state names, we'll need to convert them to location IDs on backend
+        // For now, return the uploaded data
+        return smartUploadedLocations.map(loc => loc.id || loc.name);
+    }
 }
