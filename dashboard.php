@@ -265,7 +265,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                                 <div class="upload-section">
                                     <label for="location-file">Upload Location File</label>
                                     <input type="file" id="location-file" accept=".xlsx,.xls,.csv" onchange="handleLocationFileUpload(event)">
-                                    <small>Supported formats: Excel (.xlsx, .xls) and CSV (.csv)</small>
+                                    <small>Supported formats: Excel (.xlsx, .xls) and CSV (.csv) - Excel files are processed automatically</small>
                                 </div>
                                 
                                 <div class="file-format-help">
@@ -471,6 +471,8 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         </div>
     </div>
 
+    <!-- SheetJS library for Excel file parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="assets/app.js"></script>
 </body>
 </html>

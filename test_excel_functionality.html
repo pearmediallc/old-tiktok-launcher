@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel File Upload Test</title>
+</head>
+<body>
+    <h1>Excel File Upload Test</h1>
+    
+    <div>
+        <label for="test-file">Upload Excel/CSV File:</label>
+        <input type="file" id="test-file" accept=".xlsx,.xls,.csv" onchange="handleTestFileUpload(event)">
+    </div>
+    
+    <div id="test-results" style="margin-top: 20px; padding: 20px; border: 1px solid #ddd;">
+        <h3>Results:</h3>
+        <div id="test-output"></div>
+    </div>
+
+    <!-- SheetJS library for Excel file parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <script>
+        function handleTestFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const fileName = file.name.toLowerCase();
+            const output = document.getElementById('test-output');
+            
+            output.innerHTML = `Processing file: ${file.name}<br>`;
+            
+            if (fileName.endsWith('.csv')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const csvText = e.target.result;
+                        const lines = csvText.split('\n').filter(line => line.trim());
+                        output.innerHTML += `CSV parsed successfully!<br>`;
+                        output.innerHTML += `Found ${lines.length} lines<br>`;
+                        output.innerHTML += `First few lines:<br>`;
+                        lines.slice(0, 5).forEach((line, i) => {
+                            output.innerHTML += `${i + 1}: ${line}<br>`;
+                        });
+                    } catch (error) {
+                        output.innerHTML += `Error: ${error.message}<br>`;
+                    }
+                };
+                reader.readAsText(file);
+            } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        // Check if SheetJS is available
+                        if (typeof XLSX === 'undefined') {
+                            output.innerHTML += 'ERROR: SheetJS library not loaded<br>';
+                            return;
+                        }
+                        
+                        // Parse the Excel file
+                        const workbook = XLSX.read(e.target.result, { type: 'array' });
+                        
+                        // Get the first worksheet
+                        const sheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[sheetName];
+                        
+                        // Convert to JSON
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                        
+                        output.innerHTML += `Excel parsed successfully!<br>`;
+                        output.innerHTML += `Sheet name: ${sheetName}<br>`;
+                        output.innerHTML += `Found ${jsonData.length} rows<br>`;
+                        output.innerHTML += `First few rows:<br>`;
+                        jsonData.slice(0, 5).forEach((row, i) => {
+                            output.innerHTML += `${i + 1}: ${row.join(', ')}<br>`;
+                        });
+                        
+                        // Convert to CSV format
+                        const csvText = jsonData.map(row => row.join(',')).join('\n');
+                        output.innerHTML += `<br>Converted to CSV format:<br>`;
+                        output.innerHTML += `<pre>${csvText.substring(0, 200)}...</pre>`;
+                        
+                    } catch (error) {
+                        output.innerHTML += `Error: ${error.message}<br>`;
+                        console.error('Excel parsing error:', error);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                output.innerHTML += 'Unsupported file type<br>';
+            }
+        }
+    </script>
+</body>
+</html>

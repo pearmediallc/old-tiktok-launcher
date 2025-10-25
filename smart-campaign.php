@@ -205,7 +205,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                             <div class="upload-section">
                                 <label for="smart-location-file">Upload Location File</label>
                                 <input type="file" id="smart-location-file" accept=".xlsx,.xls,.csv" onchange="handleSmartLocationFileUpload(event)">
-                                <small>Supported formats: Excel (.xlsx, .xls) and CSV (.csv)</small>
+                                <small>Supported formats: Excel (.xlsx, .xls) and CSV (.csv) - Excel files are processed automatically</small>
                             </div>
                             
                             <div class="file-format-help">
@@ -461,6 +461,8 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         🐛 Debug
     </button>
 
+    <!-- SheetJS library for Excel file parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="assets/smart-campaign.js"></script>
     <script>
         // Debug console functions

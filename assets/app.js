@@ -2044,9 +2044,17 @@ function handleLocationFileUpload(event) {
         };
         reader.readAsText(file);
     } else {
-        // For Excel files, we'll need to handle on backend
-        showToast('Excel file upload detected. Processing...', 'info');
-        uploadLocationFile(file);
+        // For Excel files, parse using FileReader and SheetJS
+        showToast('Excel file detected. Processing...', 'info');
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                parseLocationExcel(e.target.result);
+            } catch (error) {
+                showToast('Error parsing Excel file: ' + error.message, 'error');
+            }
+        };
+        reader.readAsArrayBuffer(file);
     }
 }
 
@@ -2103,10 +2111,43 @@ function parseLocationCSV(csvText) {
     showToast(`Successfully loaded ${locations.length} locations`, 'success');
 }
 
+function parseLocationExcel(arrayBuffer) {
+    // Check if SheetJS is available
+    if (typeof XLSX === 'undefined') {
+        showToast('Excel processing library not loaded. Please use CSV format instead.', 'error');
+        return;
+    }
+    
+    try {
+        // Parse the Excel file
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        
+        // Get the first worksheet
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        
+        // Convert to JSON
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        
+        if (jsonData.length < 2) {
+            throw new Error('Excel file must have at least a header row and one data row');
+        }
+        
+        // Convert to CSV-like format for processing
+        const csvText = jsonData.map(row => row.join(',')).join('\n');
+        
+        // Use existing CSV parsing logic
+        parseLocationCSV(csvText);
+        
+    } catch (error) {
+        console.error('Excel parsing error:', error);
+        throw new Error('Failed to parse Excel file: ' + error.message);
+    }
+}
+
 function uploadLocationFile(file) {
-    // For Excel files, we would need to process on backend
-    // For now, show instructions to convert to CSV
-    showToast('For Excel files, please save as CSV format and re-upload', 'info');
+    // This function is now unused since we handle Excel files directly
+    showToast('Processing file...', 'info');
 }
 
 function displayLocationPreview(locations) {
