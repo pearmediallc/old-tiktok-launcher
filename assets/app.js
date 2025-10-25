@@ -2133,16 +2133,78 @@ function parseLocationExcel(arrayBuffer) {
             throw new Error('Excel file must have at least a header row and one data row');
         }
         
-        // Convert to CSV-like format for processing
-        const csvText = jsonData.map(row => row.join(',')).join('\n');
-        
-        // Use existing CSV parsing logic
-        parseLocationCSV(csvText);
+        // Process Excel data directly instead of converting to CSV
+        processExcelLocationData(jsonData);
         
     } catch (error) {
         console.error('Excel parsing error:', error);
         throw new Error('Failed to parse Excel file: ' + error.message);
     }
+}
+
+function processExcelLocationData(jsonData) {
+    if (!jsonData || jsonData.length < 2) {
+        throw new Error('Excel file must have at least a header row and one data row');
+    }
+    
+    // Get the header row and normalize it
+    const headerRow = jsonData[0];
+    if (!headerRow || headerRow.length === 0) {
+        throw new Error('Excel file header row is empty');
+    }
+    
+    // Find the header - look for 'state', 'location_id', 'id', etc.
+    const header = headerRow[0] ? headerRow[0].toString().toLowerCase().trim() : '';
+    console.log('Excel header detected:', header);
+    
+    // Check if it's state names or location IDs
+    const isLocationIds = header.includes('location_id') || header.includes('id');
+    const isStateNames = header.includes('state') || header.includes('name');
+    
+    if (!isLocationIds && !isStateNames) {
+        throw new Error(`Excel header must contain either "State" or "location_id".\nFound: "${header}"\nPlease ensure your Excel file has a header like "State" or "location_id" in the first column.`);
+    }
+    
+    const locations = [];
+    
+    // Process data rows (skip header)
+    for (let i = 1; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        if (!row || row.length === 0) continue;
+        
+        const value = row[0] ? row[0].toString().trim() : '';
+        if (!value) continue; // Skip empty rows
+        
+        if (isLocationIds) {
+            // Validate that it's a number
+            if (!/^\d+$/.test(value)) {
+                throw new Error(`Invalid location ID: ${value}. Must be numeric.`);
+            }
+            locations.push({
+                id: value,
+                name: `Location ID: ${value}`,
+                type: 'id'
+            });
+        } else {
+            locations.push({
+                id: null,
+                name: value,
+                type: 'state'
+            });
+        }
+    }
+    
+    if (locations.length === 0) {
+        throw new Error('No valid locations found in Excel file');
+    }
+    
+    if (locations.length > 3000) {
+        throw new Error('Maximum 3,000 locations allowed per ad group');
+    }
+    
+    uploadedLocations = locations;
+    displayLocationPreview(locations);
+    showToast(`Successfully loaded ${locations.length} locations from Excel file`, 'success');
 }
 
 function uploadLocationFile(file) {
