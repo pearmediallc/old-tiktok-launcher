@@ -1145,7 +1145,7 @@ const SMART_US_STATES = [
     { name: 'New York', id: '5128638' },
     { name: 'North Carolina', id: '4482348' },
     { name: 'North Dakota', id: '5690763' },
-    { name: 'Ohio', id: '4851445' },
+    { name: 'Ohio', id: '5165418' },
     { name: 'Oklahoma', id: '4544379' },
     { name: 'Oregon', id: '5744337' },
     { name: 'Pennsylvania', id: '6254927' },

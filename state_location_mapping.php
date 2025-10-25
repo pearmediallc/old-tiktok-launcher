@@ -4,6 +4,7 @@
 
 function getStateLocationMapping() {
     return [
+        // Verified TikTok Location IDs for US States (50 states + DC)
         'alabama' => '4829764',
         'alaska' => '5879092',
         'arizona' => '5551752',
@@ -38,7 +39,7 @@ function getStateLocationMapping() {
         'new york' => '5128638',
         'north carolina' => '4482348',
         'north dakota' => '5690763',
-        'ohio' => '4851445',
+        'ohio' => '5165418', // Updated with verified ID
         'oklahoma' => '4544379',
         'oregon' => '5744337',
         'pennsylvania' => '6254927',
@@ -54,13 +55,8 @@ function getStateLocationMapping() {
         'west virginia' => '4826850',
         'wisconsin' => '5279468',
         'wyoming' => '5843591',
-        // Additional territories
-        'district of columbia' => '4138106',
-        'puerto rico' => '4566966',
-        'virgin islands' => '4796775',
-        'guam' => '4043988',
-        'american samoa' => '5880801',
-        'northern mariana islands' => '4041468'
+        // Washington D.C.
+        'district of columbia' => '4138106'
     ];
 }
 
