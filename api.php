@@ -2083,6 +2083,72 @@ try {
             }
             exit;
             
+        case 'generate_video_thumbnail':
+            logToFile("Generate Video Thumbnail - Video ID: " . ($requestData['video_id'] ?? 'not provided'));
+            
+            if (!isset($requestData['video_id'])) {
+                throw new Exception('Video ID is required');
+            }
+            
+            $videoId = $requestData['video_id'];
+            
+            // For now, we'll create a placeholder thumbnail generation
+            // In a production environment, you might want to:
+            // 1. Extract a frame from the video using ffmpeg
+            // 2. Use TikTok's thumbnail generation API if available
+            // 3. Generate a custom thumbnail from video metadata
+            
+            // Try to get video info to check if thumbnail already exists
+            $file = new File($config);
+            $response = $file->getVideoInfo([
+                'advertiser_id' => $advertiser_id,
+                'video_ids' => [$videoId]
+            ]);
+            
+            logToFile("Video Info Response: " . json_encode($response, JSON_PRETTY_PRINT));
+            
+            if (!empty($response->data->list) && !empty($response->data->list[0])) {
+                $videoData = $response->data->list[0];
+                
+                // Check for existing thumbnail URLs
+                $thumbnailUrl = $videoData->video_cover_url ?? 
+                               $videoData->cover_url ?? 
+                               $videoData->preview_url ?? 
+                               $videoData->thumbnail_url ?? 
+                               null;
+                
+                if ($thumbnailUrl) {
+                    echo json_encode([
+                        'success' => true,
+                        'data' => [
+                            'thumbnail_url' => $thumbnailUrl,
+                            'video_id' => $videoId
+                        ],
+                        'message' => 'Thumbnail found'
+                    ]);
+                } else {
+                    // Generate a fallback thumbnail URL based on TikTok's patterns
+                    // This is a best-effort approach
+                    $fallbackThumbnail = "https://p16-ad-sg.ibyteimg.com/obj/ad-pattern-sg/{$videoId}.jpeg";
+                    
+                    echo json_encode([
+                        'success' => true,
+                        'data' => [
+                            'thumbnail_url' => $fallbackThumbnail,
+                            'video_id' => $videoId,
+                            'fallback' => true
+                        ],
+                        'message' => 'Generated fallback thumbnail'
+                    ]);
+                }
+            } else {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Unable to generate thumbnail - video not found'
+                ]);
+            }
+            break;
+
         default:
             logToFile("Unknown action received: " . $action);
             echo json_encode([

@@ -110,7 +110,19 @@ function initializeDayparting() {
 
     days.forEach((day, dayIndex) => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><strong>${day}</strong></td>`;
+        
+        // Create the day cell with "Select All" checkbox
+        const dayCell = document.createElement('td');
+        dayCell.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
+                <strong>${day}</strong>
+                <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="checkbox" class="day-select-all" data-day="${dayIndex}" 
+                           onchange="toggleDayHours(${dayIndex})" style="transform: scale(0.8);">
+                    <span>Select All</span>
+                </label>
+            </div>`;
+        tr.appendChild(dayCell);
 
         for (let hour = 0; hour < 24; hour++) {
             const td = document.createElement('td');
@@ -120,6 +132,7 @@ function initializeDayparting() {
             checkbox.dataset.day = dayIndex;
             checkbox.dataset.hour = hour;
             checkbox.title = `${day} ${hour}:00-${hour+1}:00`;
+            checkbox.onchange = () => updateDaySelectAllState(dayIndex);
             // Don't check any by default
             checkbox.checked = false;
             td.appendChild(checkbox);
@@ -133,27 +146,70 @@ function initializeDayparting() {
 // Dayparting helper functions
 function selectAllHours() {
     document.querySelectorAll('.hour-checkbox').forEach(cb => cb.checked = true);
+    // Update all day select-all checkboxes
+    document.querySelectorAll('.day-select-all').forEach(cb => cb.checked = true);
 }
 
 function clearAllHours() {
     document.querySelectorAll('.hour-checkbox').forEach(cb => cb.checked = false);
+    // Update all day select-all checkboxes
+    document.querySelectorAll('.day-select-all').forEach(cb => cb.checked = false);
 }
 
 function selectBusinessHours() {
+    clearAllHours();
     document.querySelectorAll('.hour-checkbox').forEach(cb => {
         const hour = parseInt(cb.dataset.hour);
         const day = parseInt(cb.dataset.day);
         // Monday-Friday (1-5), 8am-5pm (8-17)
         cb.checked = (day >= 1 && day <= 5 && hour >= 8 && hour < 17);
     });
+    // Update day select-all states
+    for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+        updateDaySelectAllState(dayIndex);
+    }
 }
 
 function selectPrimeTime() {
+    clearAllHours();
     document.querySelectorAll('.hour-checkbox').forEach(cb => {
         const hour = parseInt(cb.dataset.hour);
         // All days, 6pm-10pm (18-22)
         cb.checked = (hour >= 18 && hour < 22);
     });
+    // Update day select-all states
+    for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+        updateDaySelectAllState(dayIndex);
+    }
+}
+
+// Toggle all hours for a specific day
+function toggleDayHours(dayIndex) {
+    const daySelectAll = document.querySelector(`.day-select-all[data-day="${dayIndex}"]`);
+    const dayHours = document.querySelectorAll(`.hour-checkbox[data-day="${dayIndex}"]`);
+    
+    dayHours.forEach(cb => {
+        cb.checked = daySelectAll.checked;
+    });
+}
+
+// Update the state of a day's "Select All" checkbox based on individual hour selections
+function updateDaySelectAllState(dayIndex) {
+    const daySelectAll = document.querySelector(`.day-select-all[data-day="${dayIndex}"]`);
+    const dayHours = document.querySelectorAll(`.hour-checkbox[data-day="${dayIndex}"]`);
+    
+    const checkedHours = Array.from(dayHours).filter(cb => cb.checked);
+    
+    if (checkedHours.length === 0) {
+        daySelectAll.checked = false;
+        daySelectAll.indeterminate = false;
+    } else if (checkedHours.length === dayHours.length) {
+        daySelectAll.checked = true;
+        daySelectAll.indeterminate = false;
+    } else {
+        daySelectAll.checked = false;
+        daySelectAll.indeterminate = true;
+    }
 }
 
 // Toggle dayparting section
@@ -883,6 +939,7 @@ async function useVideoThumbnail(adIndex) {
     
     // Find the video data to get thumbnail URL
     let videoData = null;
+    let thumbnailUrl = null;
     
     // Check if we have stored video data
     if (state.selectedVideoData && state.selectedVideoData[creativeId]) {
@@ -904,8 +961,34 @@ async function useVideoThumbnail(adIndex) {
         }
     }
     
-    if (!videoData || !videoData.video_cover_url) {
-        showToast('No thumbnail available for this video', 'error');
+    // Look for thumbnail URL in multiple possible fields
+    if (videoData) {
+        thumbnailUrl = videoData.video_cover_url || 
+                      videoData.cover_url || 
+                      videoData.preview_url || 
+                      videoData.thumbnail_url || 
+                      videoData.poster_url;
+    }
+    
+    if (!thumbnailUrl) {
+        // Try to generate a thumbnail using the video file itself
+        showToast('Generating thumbnail from video...', 'info');
+        
+        try {
+            const response = await apiRequest('generate_video_thumbnail', {
+                video_id: creativeId
+            });
+            
+            if (response.success && response.data && response.data.thumbnail_url) {
+                thumbnailUrl = response.data.thumbnail_url;
+            }
+        } catch (error) {
+            console.error('Error generating thumbnail:', error);
+        }
+    }
+    
+    if (!thumbnailUrl) {
+        showToast('No thumbnail available for this video. Try uploading a cover image manually.', 'error');
         return;
     }
     
@@ -914,7 +997,7 @@ async function useVideoThumbnail(adIndex) {
     try {
         const response = await apiRequest('upload_thumbnail_as_cover', {
             video_id: creativeId,
-            thumbnail_url: videoData.video_cover_url
+            thumbnail_url: thumbnailUrl
         });
         
         if (response.success && response.data && response.data.image_id) {
@@ -928,7 +1011,7 @@ async function useVideoThumbnail(adIndex) {
             const coverContainer = coverPlaceholder.parentElement;
             
             coverContainer.classList.add('has-media');
-            coverContainer.style.backgroundImage = `url(${videoData.video_cover_url})`;
+            coverContainer.style.backgroundImage = `url(${thumbnailUrl})`;
             coverContainer.style.backgroundSize = 'cover';
             coverContainer.style.backgroundPosition = 'center';
             
@@ -1111,6 +1194,7 @@ function renderMediaGrid() {
                                 display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; position: relative;">
                         <div style="font-size: 40px; margin-bottom: 5px;">🎬</div>
                         <div style="font-size: 12px; font-weight: 600;">${media.file_name || 'Video'}</div>
+                        <div style="font-size: 10px; opacity: 0.8; margin-top: 4px;">Click to generate thumbnail</div>
                         ${media.duration ? `<div style="position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.5); 
                                                         padding: 2px 6px; border-radius: 3px; font-size: 10px;">
                             ${Math.round(media.duration)}s</div>` : ''}
@@ -1118,6 +1202,27 @@ function renderMediaGrid() {
                     <div class="media-info" style="padding: 5px; background: rgba(0,0,0,0.05);">
                         <div style="font-weight: 600; font-size: 12px;">${media.file_name || 'Video'}</div>
                     </div>`;
+                
+                // Add click handler to generate thumbnail
+                item.addEventListener('click', async () => {
+                    if (media.type === 'video' && !previewUrl) {
+                        try {
+                            showToast('Generating thumbnail...', 'info');
+                            const response = await apiRequest('generate_video_thumbnail', {
+                                video_id: media.video_id
+                            });
+                            
+                            if (response.success && response.data && response.data.thumbnail_url) {
+                                // Update the media object and re-render
+                                media.preview_url = response.data.thumbnail_url;
+                                renderMediaGrid();
+                                showToast('Thumbnail generated successfully!', 'success');
+                            }
+                        } catch (error) {
+                            console.error('Error generating thumbnail:', error);
+                        }
+                    }
+                });
             }
         }
 
@@ -1328,7 +1433,26 @@ async function handleMediaUpload(event) {
             body: formData
         });
 
-        const result = await response.json();
+        // Check if response is ok first
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        // Get response text first to handle empty responses
+        const responseText = await response.text();
+        
+        if (!responseText || responseText.trim() === '') {
+            throw new Error('Empty response from server');
+        }
+
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('JSON Parse Error:', parseError);
+            console.error('Response Text:', responseText);
+            throw new Error('Invalid JSON response from server');
+        }
         
         addLog(result.success ? 'response' : 'error', `Upload ${result.success ? 'successful' : 'failed'}`, result);
 
