@@ -1064,28 +1064,38 @@ try {
             break;
 
         case 'upload_video':
-            $file = new File($config);
+            try {
+                // Add memory and execution time limits for large video uploads
+                ini_set('memory_limit', '512M');
+                ini_set('max_execution_time', '300'); // 5 minutes
+                
+                $file = new File($config);
 
-            logToFile("============ VIDEO UPLOAD REQUEST ============");
-            logToFile("Upload Video Request - FILES: " . json_encode($_FILES, JSON_PRETTY_PRINT));
+                logToFile("============ VIDEO UPLOAD REQUEST ============");
+                logToFile("Upload Video Request - FILES: " . json_encode($_FILES, JSON_PRETTY_PRINT));
+                logToFile("PHP Memory Limit: " . ini_get('memory_limit'));
+                logToFile("PHP Max Execution Time: " . ini_get('max_execution_time'));
+                logToFile("PHP Upload Max Filesize: " . ini_get('upload_max_filesize'));
+                logToFile("PHP Post Max Size: " . ini_get('post_max_size'));
 
-            if (!isset($_FILES['video'])) {
-                throw new Exception('No video file provided');
-            }
+                if (!isset($_FILES['video'])) {
+                    throw new Exception('No video file provided');
+                }
 
-            if ($_FILES['video']['error'] !== UPLOAD_ERR_OK) {
-                $uploadErrors = [
-                    UPLOAD_ERR_INI_SIZE => 'File exceeds upload_max_filesize',
-                    UPLOAD_ERR_FORM_SIZE => 'File exceeds MAX_FILE_SIZE',
-                    UPLOAD_ERR_PARTIAL => 'File was only partially uploaded',
-                    UPLOAD_ERR_NO_FILE => 'No file was uploaded',
-                    UPLOAD_ERR_NO_TMP_DIR => 'Missing temporary folder',
-                    UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk',
-                    UPLOAD_ERR_EXTENSION => 'PHP extension stopped upload'
-                ];
-                $errorMsg = $uploadErrors[$_FILES['video']['error']] ?? 'Unknown error: ' . $_FILES['video']['error'];
-                throw new Exception($errorMsg);
-            }
+                if ($_FILES['video']['error'] !== UPLOAD_ERR_OK) {
+                    $uploadErrors = [
+                        UPLOAD_ERR_INI_SIZE => 'File exceeds upload_max_filesize (' . ini_get('upload_max_filesize') . ')',
+                        UPLOAD_ERR_FORM_SIZE => 'File exceeds MAX_FILE_SIZE',
+                        UPLOAD_ERR_PARTIAL => 'File was only partially uploaded',
+                        UPLOAD_ERR_NO_FILE => 'No file was uploaded',
+                        UPLOAD_ERR_NO_TMP_DIR => 'Missing temporary folder',
+                        UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk',
+                        UPLOAD_ERR_EXTENSION => 'PHP extension stopped upload'
+                    ];
+                    $errorMsg = $uploadErrors[$_FILES['video']['error']] ?? 'Unknown error: ' . $_FILES['video']['error'];
+                    logToFile("Upload Error: " . $errorMsg);
+                    throw new Exception($errorMsg);
+                }
 
             $fileName = $_FILES['video']['name'];
             $tmpPath = $_FILES['video']['tmp_name'];
@@ -1169,12 +1179,23 @@ try {
                 logToFile("Video uploaded successfully with ID: " . $response->data->video_id);
             }
             
-            echo json_encode([
-                'success' => $success,
-                'data' => $response->data ?? null,
-                'message' => $response->message ?? 'Video uploaded successfully',
-                'code' => $response->code ?? null
-            ]);
+                echo json_encode([
+                    'success' => $success,
+                    'data' => $response->data ?? null,
+                    'message' => $response->message ?? 'Video uploaded successfully',
+                    'code' => $response->code ?? null
+                ]);
+                
+            } catch (Exception $videoError) {
+                logToFile("Video Upload Exception: " . $videoError->getMessage());
+                logToFile("Video Upload Stack Trace: " . $videoError->getTraceAsString());
+                
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Video upload failed: ' . $videoError->getMessage(),
+                    'error' => $videoError->getMessage()
+                ]);
+            }
             break;
 
        

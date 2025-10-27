@@ -82,11 +82,11 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     <h3>Schedule</h3>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Start Date & Time (UTC)</label>
+                            <label>Start Date & Time (Colombia Time UTC-05:00)</label>
                             <input type="datetime-local" id="campaign-start-date" required>
                         </div>
                         <div class="form-group">
-                            <label>End Date & Time (UTC)</label>
+                            <label>End Date & Time (Colombia Time UTC-05:00)</label>
                             <input type="datetime-local" id="campaign-end-date">
                         </div>
                     </div>
@@ -159,7 +159,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Start Date & Time (UTC)</label>
+                            <label>Start Date & Time (Colombia Time UTC-05:00)</label>
                             <input type="datetime-local" id="start-date" required>
                         </div>
                         <div class="form-group">
@@ -302,7 +302,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                                 <thead>
                                     <tr>
                                         <th>Day</th>
-                                        <th colspan="24">Hours (0-23)</th>
+                                        <th colspan="25">Hours (0-24)</th>
                                     </tr>
                                 </thead>
                                 <tbody id="dayparting-body">
@@ -312,7 +312,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                         </div>
                         <div style="margin-top: 10px; font-size: 12px; color: #666;">
                             <p><strong>Note:</strong> Each hour checkbox controls both 30-minute slots within that hour (e.g., selecting 9am enables both 9:00-9:30 and 9:30-10:00).</p>
-                            <p>Selected hours will show ads in your advertiser's timezone. TikTok uses UTC for scheduling.</p>
+                            <p><strong>Timezone:</strong> Colombia Time (UTC-05:00). Selected hours will be converted to UTC for TikTok scheduling.</p>
                         </div>
                     </div>
                 </div>

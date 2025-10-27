@@ -93,14 +93,30 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Format date for datetime-local input
+// Format date for datetime-local input (Colombia Time UTC-05:00)
 function formatDateTimeLocal(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
+    // Convert to Colombia Time (UTC-05:00)
+    const colombiaDate = new Date(date.getTime() - (5 * 60 * 60 * 1000));
+    const year = colombiaDate.getFullYear();
+    const month = String(colombiaDate.getMonth() + 1).padStart(2, '0');
+    const day = String(colombiaDate.getDate()).padStart(2, '0');
+    const hours = String(colombiaDate.getHours()).padStart(2, '0');
+    const minutes = String(colombiaDate.getMinutes()).padStart(2, '0');
     return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+// Convert Colombia Time to UTC for TikTok API
+function convertColombiaToUTC(colombiaDateTimeString) {
+    if (!colombiaDateTimeString) return null;
+    
+    // Parse the datetime-local input (which is in Colombia time)
+    const colombiaDate = new Date(colombiaDateTimeString);
+    
+    // Add 5 hours to convert Colombia Time (UTC-05:00) to UTC
+    const utcDate = new Date(colombiaDate.getTime() + (5 * 60 * 60 * 1000));
+    
+    // Return in ISO format for TikTok API
+    return utcDate.toISOString().replace('T', ' ').substring(0, 19);
 }
 
 // Initialize dayparting grid
@@ -124,14 +140,14 @@ function initializeDayparting() {
             </div>`;
         tr.appendChild(dayCell);
 
-        for (let hour = 0; hour < 24; hour++) {
+        for (let hour = 0; hour <= 24; hour++) {
             const td = document.createElement('td');
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.className = 'hour-checkbox';
             checkbox.dataset.day = dayIndex;
             checkbox.dataset.hour = hour;
-            checkbox.title = `${day} ${hour}:00-${hour+1}:00`;
+            checkbox.title = hour === 24 ? `${day} 24:00 (next day)` : `${day} ${hour}:00-${hour+1}:00`;
             checkbox.onchange = () => updateDaySelectAllState(dayIndex);
             // Don't check any by default
             checkbox.checked = false;
@@ -251,7 +267,25 @@ function getDaypartingData() {
     
     for (let tikTokDay = 0; tikTokDay < 7; tikTokDay++) {
         const uiDay = tikTokDayOrder[tikTokDay];
-        for (let hour = 0; hour < 24; hour++) {
+        for (let hour = 0; hour <= 24; hour++) {
+            // Convert Colombia Time (UTC-05:00) to UTC for TikTok
+            let utcHour = hour + 5; // Colombia is UTC-05:00, so add 5 to get UTC
+            let targetDay = uiDay;
+            
+            // Handle day overflow/underflow
+            if (utcHour >= 24) {
+                utcHour -= 24;
+                targetDay = (uiDay + 1) % 7; // Next day
+            } else if (utcHour < 0) {
+                utcHour += 24;
+                targetDay = (uiDay - 1 + 7) % 7; // Previous day
+            }
+            
+            // Skip hour 24 for TikTok format (only 0-23)
+            if (hour === 24) {
+                continue;
+            }
+            
             const checkbox = document.querySelector(`.hour-checkbox[data-day="${uiDay}"][data-hour="${hour}"]`);
             const isChecked = checkbox && checkbox.checked;
             // Each hour creates two 30-minute slots
@@ -345,19 +379,17 @@ async function createCampaign() {
             params.budget_optimize_on = false;
         }
         
-        // Add schedule times if provided
+        // Add schedule times if provided (convert from Colombia Time to UTC)
         if (startDate) {
-            const startDateTime = new Date(startDate);
-            params.schedule_start_time = formatToTikTokDateTime(startDateTime);
+            params.schedule_start_time = convertColombiaToUTC(startDate);
         }
 
         // Store budget mode for ad group to use
         state.campaignBudgetMode = 'BUDGET_MODE_DAY';
 
-        // Add end time if provided
+        // Add end time if provided (convert from Colombia Time to UTC)
         if (endDate) {
-            const endDateTime = new Date(endDate);
-            params.schedule_end_time = formatToTikTokDateTime(endDateTime);
+            params.schedule_end_time = convertColombiaToUTC(endDate);
         }
 
         const response = await apiRequest('create_campaign', params);
@@ -451,9 +483,8 @@ async function createAdGroup() {
     showLoading();
 
     try {
-        // Convert datetime to TikTok format: "YYYY-MM-DD HH:MM:SS" in UTC
-        const startDateTime = new Date(startDate);
-        const scheduleStartTime = formatToTikTokDateTime(startDateTime);
+        // Convert Colombia Time to UTC for TikTok API
+        const scheduleStartTime = convertColombiaToUTC(startDate);
 
         // Based on TikTok screenshots: Complete ad group configuration
         const params = {
