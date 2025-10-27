@@ -951,12 +951,18 @@ async function loadMediaLibrary() {
             console.log('Videos response failed or empty:', videosResponse);
         }
 
+        console.log('Final media library array:', state.mediaLibrary);
+        console.log('Images in library:', state.mediaLibrary.filter(m => m.type === 'image').length);
+        console.log('Videos in library:', state.mediaLibrary.filter(m => m.type === 'video').length);
+        
         renderMediaGrid();
         
         if (state.mediaLibrary.length === 0) {
             showToast('No media found. Upload files to add to library.', 'info');
         } else {
-            showToast(`Loaded ${state.mediaLibrary.length} media file(s)`, 'success');
+            const imageCount = state.mediaLibrary.filter(m => m.type === 'image').length;
+            const videoCount = state.mediaLibrary.filter(m => m.type === 'video').length;
+            showToast(`Loaded ${state.mediaLibrary.length} media file(s) (${imageCount} images, ${videoCount} videos)`, 'success');
         }
     } catch (error) {
         console.error('Error loading media library:', error);
@@ -1150,12 +1156,15 @@ function renderMediaGrid() {
     const grid = document.getElementById('media-grid');
     grid.innerHTML = '';
 
+    console.log('Rendering media grid with', state.mediaLibrary.length, 'items');
+
     if (state.mediaLibrary.length === 0) {
         grid.innerHTML = '<p style="text-align: center; color: #999;">No media in library. Upload some files to get started.</p>';
         return;
     }
 
-    state.mediaLibrary.forEach(media => {
+    state.mediaLibrary.forEach((media, index) => {
+        console.log(`Rendering media ${index}:`, media.type, media.file_name || 'unnamed');
         const item = document.createElement('div');
         item.className = 'media-item';
         item.dataset.id = media.video_id || media.image_id || media.id;

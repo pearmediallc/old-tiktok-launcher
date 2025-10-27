@@ -1034,7 +1034,9 @@ try {
 
             logToFile("Image Upload Response: " . json_encode($response, JSON_PRETTY_PRINT));
 
-            $success = empty($response->code) || $response->code == 0;
+            // Consider success if we got an image_id OR if code is 0/empty
+            $success = (empty($response->code) || $response->code == 0) || 
+                      (isset($response->data->image_id) && !empty($response->data->image_id));
             
             // If upload successful, store the image ID for later retrieval
             if ($success && isset($response->data->image_id)) {
@@ -1163,7 +1165,9 @@ try {
                 $response = json_decode($directResponse);
             }
 
-            $success = empty($response->code) || $response->code == 0;
+            // Consider success if we got a video_id OR if code is 0/empty
+            $success = (empty($response->code) || $response->code == 0) || 
+                      (isset($response->data->video_id) && !empty($response->data->video_id));
             
             // If upload successful, store the video ID for later retrieval
             if ($success && isset($response->data->video_id)) {
@@ -2108,6 +2112,37 @@ try {
             }
             exit;
             
+        case 'debug_storage':
+            // Debug endpoint to check media storage
+            $storageFile = __DIR__ . '/media_storage.json';
+            if (file_exists($storageFile)) {
+                $storage = json_decode(file_get_contents($storageFile), true) ?? ['images' => [], 'videos' => []];
+                
+                echo json_encode([
+                    'success' => true,
+                    'data' => [
+                        'storage_file_exists' => true,
+                        'total_images' => count($storage['images'] ?? []),
+                        'total_videos' => count($storage['videos'] ?? []),
+                        'advertiser_images' => count(array_filter($storage['images'] ?? [], function($img) use ($advertiser_id) {
+                            return $img['advertiser_id'] === $advertiser_id;
+                        })),
+                        'advertiser_videos' => count(array_filter($storage['videos'] ?? [], function($vid) use ($advertiser_id) {
+                            return $vid['advertiser_id'] === $advertiser_id;
+                        })),
+                        'recent_images' => array_slice($storage['images'] ?? [], -5),
+                        'recent_videos' => array_slice($storage['videos'] ?? [], -5)
+                    ]
+                ]);
+            } else {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Storage file does not exist',
+                    'data' => ['storage_file_exists' => false]
+                ]);
+            }
+            break;
+
         case 'generate_video_thumbnail':
             logToFile("Generate Video Thumbnail - Video ID: " . ($requestData['video_id'] ?? 'not provided'));
             
