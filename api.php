@@ -1118,12 +1118,16 @@ try {
             logToFile("Video Upload - Advertiser ID: " . $advertiser_id);
             logToFile("Video Upload - Signature: " . $videoSignature);
 
-            // Try SDK upload first
+            // Try SDK upload first with all required parameters
             $params = [
                 'advertiser_id' => $advertiser_id,
+                'file_name' => $fileName,
                 'upload_type' => 'UPLOAD_BY_FILE',
                 'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
-                'video_signature' => $videoSignature
+                'video_signature' => $videoSignature,
+                'flaw_detect' => 'true',
+                'auto_fix_enabled' => 'true',
+                'auto_bind_enabled' => 'true'
             ];
 
             $response = $file->uploadVideo($params);

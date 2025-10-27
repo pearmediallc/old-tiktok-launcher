@@ -932,17 +932,23 @@ async function loadMediaLibrary() {
         state.mediaLibrary = [];
 
         if (imagesResponse.success && imagesResponse.data && imagesResponse.data.list) {
+            console.log('Images loaded:', imagesResponse.data.list.length, imagesResponse.data.list);
             state.mediaLibrary.push(...imagesResponse.data.list.map(img => ({
                 ...img,
                 type: 'image'
             })));
+        } else {
+            console.log('Images response failed or empty:', imagesResponse);
         }
 
         if (videosResponse.success && videosResponse.data && videosResponse.data.list) {
+            console.log('Videos loaded:', videosResponse.data.list.length, videosResponse.data.list);
             state.mediaLibrary.push(...videosResponse.data.list.map(vid => ({
                 ...vid,
                 type: 'video'
             })));
+        } else {
+            console.log('Videos response failed or empty:', videosResponse);
         }
 
         renderMediaGrid();
@@ -1157,22 +1163,36 @@ function renderMediaGrid() {
         item.onclick = () => selectMedia(media);
 
         if (media.type === 'image') {
-            // For images, use the URL provided by TikTok
-            const imgUrl = media.url || media.image_url;
-            if (imgUrl) {
+            // For images, use the URL provided by TikTok (try multiple field names)
+            const imgUrl = media.url || media.image_url || media.preview_url || media.thumbnail_url;
+            
+            console.log('Image media object:', media); // Debug logging
+            
+            if (imgUrl && imgUrl !== '') {
                 item.innerHTML = `
-                    <img src="${imgUrl}" 
-                         alt="${media.file_name || 'Image'}" 
-                         style="width: 100%; height: 100%; object-fit: cover;"
-                         onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'%3E%3Crect width=\'100\' height=\'100\' fill=\'%23ddd\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%23999\'%3EImage%3C/text%3E%3C/svg%3E'">
-                    <div class="media-info">
-                        <span class="media-name">${media.file_name || 'Image'}</span>
+                    <div style="position: relative; width: 100%; height: 150px;">
+                        <img src="${imgUrl}" 
+                             alt="${media.file_name || 'Image'}" 
+                             style="width: 100%; height: 100%; object-fit: cover;"
+                             onerror="this.onerror=null; this.parentElement.innerHTML='<div style=\\'background: linear-gradient(135deg, #4fc3f7, #29b6f6); width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;\\'>🖼️<br><small>Image</small></div>'">
+                        <div style="position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.7); 
+                                    padding: 2px 6px; border-radius: 3px; font-size: 10px; color: white;">
+                            IMAGE
+                        </div>
+                    </div>
+                    <div class="media-info" style="padding: 5px; background: rgba(0,0,0,0.05);">
+                        <div style="font-weight: 600; font-size: 12px;">${media.file_name || 'Image'}</div>
                     </div>`;
             } else {
                 item.innerHTML = `
-                    <div style="padding: 20px; text-align: center; color: #999;">
-                        <div>Image</div>
-                        <div>${media.file_name || 'No preview'}</div>
+                    <div style="width: 100%; height: 150px; background: linear-gradient(135deg, #4fc3f7, #29b6f6); 
+                                display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; position: relative;">
+                        <div style="font-size: 40px; margin-bottom: 5px;">🖼️</div>
+                        <div style="font-size: 12px; font-weight: 600;">${media.file_name || 'Image'}</div>
+                        <div style="font-size: 10px; opacity: 0.8; margin-top: 4px;">No preview available</div>
+                    </div>
+                    <div class="media-info" style="padding: 5px; background: rgba(0,0,0,0.05);">
+                        <div style="font-weight: 600; font-size: 12px;">${media.file_name || 'Image'}</div>
                     </div>`;
             }
         } else {
