@@ -1479,21 +1479,33 @@ try {
                     } else {
                         logToFile("Failed to search images: HTTP {$httpCode}, Response: " . $result);
                         
+                        // Try to decode response to get error details
+                        $errorResponse = json_decode($result);
+                        if ($errorResponse && isset($errorResponse->message)) {
+                            logToFile("TikTok API Error: " . $errorResponse->message);
+                        }
+                        
                         // If search fails, try local storage as fallback
                         $storageFile = __DIR__ . '/media_storage.json';
-                        $storage = json_decode(file_get_contents($storageFile), true) ?? ['images' => [], 'videos' => []];
-                        
-                        $advertiserImages = array_filter($storage['images'] ?? [], function($img) use ($advertiser_id) {
-                            return $img['advertiser_id'] === $advertiser_id;
-                        });
-                        
-                        foreach ($advertiserImages as $img) {
-                            $images[] = [
-                                'image_id' => $img['image_id'],
-                                'url' => $img['url'] ?? '',
-                                'file_name' => $img['file_name'] ?? 'Image',
-                                'type' => 'image'
-                            ];
+                        if (file_exists($storageFile)) {
+                            $storage = json_decode(file_get_contents($storageFile), true) ?? ['images' => [], 'videos' => []];
+                            
+                            $advertiserImages = array_filter($storage['images'] ?? [], function($img) use ($advertiser_id) {
+                                return $img['advertiser_id'] === $advertiser_id;
+                            });
+                            
+                            logToFile("Using storage fallback, found " . count($advertiserImages) . " images for advertiser");
+                            
+                            foreach ($advertiserImages as $img) {
+                                $images[] = [
+                                    'image_id' => $img['image_id'],
+                                    'url' => $img['url'] ?? '',
+                                    'file_name' => $img['file_name'] ?? 'Image',
+                                    'type' => 'image'
+                                ];
+                            }
+                        } else {
+                            logToFile("Storage file does not exist, no fallback available");
                         }
                         
                         $hasMore = false;
@@ -1526,7 +1538,12 @@ try {
             echo json_encode([
                 'success' => true,
                 'data' => ['list' => $images],
-                'message' => count($images) > 0 ? null : 'No images found in TikTok library. Please upload images first.'
+                'message' => count($images) > 0 ? null : 'No images found in TikTok library. Please upload images first.',
+                'debug_info' => [
+                    'total_images_found' => count($images),
+                    'api_calls_made' => $page - 1,
+                    'storage_fallback_used' => false
+                ]
             ]);
             break;
 
@@ -2124,14 +2141,23 @@ try {
                 throw new Exception('Display name is required');
             }
             
-            // Use default TikTok avatar image URI if not provided (without http/https prefix)
-            $defaultImageUri = 'sf16-sg.tiktokcdn.com/obj/eden-sg/lm_zkh_rvarpa/ljhwZthlaukjlkulzlp/ads_manager_creation/default-avatar.png';
+            // For identity creation, we need to either:
+            // 1. Use an image_id if provided
+            // 2. Upload a default avatar and get its image_id
+            // 3. Or create without image_uri (TikTok will use default)
             
             $params = [
                 'advertiser_id' => $advertiser_id,
-                'display_name' => $data['display_name'],
-                'image_uri' => $data['image_uri'] ?? $defaultImageUri
+                'display_name' => $data['display_name']
             ];
+            
+            // Only add image_uri if we have a valid image_id
+            if (!empty($data['image_id'])) {
+                $params['image_uri'] = $data['image_id'];
+                logToFile("Using provided image_id: " . $data['image_id']);
+            } else {
+                logToFile("No image_id provided, TikTok will use default avatar");
+            }
             
             logToFile("Identity Creation Params: " . json_encode($params, JSON_PRETTY_PRINT));
             
@@ -2147,6 +2173,47 @@ try {
                 'message' => $success ? 'Identity created successfully' : ($response->message ?? 'Failed to create identity'),
                 'code' => $response->code ?? null
             ]);
+            break;
+
+        case 'test_image_api':
+            // Test endpoint to check image API functionality
+            $file = new File($config);
+            
+            try {
+                // Test basic image search
+                $url = "https://business-api.tiktok.com/open_api/v1.3/file/image/ad/search/?" . 
+                       "advertiser_id={$advertiser_id}&" .
+                       "page=1&" .
+                       "page_size=1";
+                
+                $ch = curl_init();
+                curl_setopt_array($ch, [
+                    CURLOPT_URL => $url,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT => 30,
+                    CURLOPT_HTTPHEADER => [
+                        "Access-Token: " . $accessToken
+                    ]
+                ]);
+                
+                $result = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+                
+                echo json_encode([
+                    'success' => $httpCode === 200,
+                    'http_code' => $httpCode,
+                    'api_response' => json_decode($result),
+                    'message' => $httpCode === 200 ? 'Image API working' : 'Image API failed'
+                ]);
+                
+            } catch (Exception $e) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Test failed: ' . $e->getMessage(),
+                    'error' => $e->getMessage()
+                ]);
+            }
             break;
 
         case 'debug_storage':
@@ -2197,12 +2264,24 @@ try {
             
             // Try to get video info to check if thumbnail already exists
             $file = new File($config);
-            $response = $file->getVideoInfo([
-                'advertiser_id' => $advertiser_id,
-                'video_ids' => [$videoId]
-            ]);
             
-            logToFile("Video Info Response: " . json_encode($response, JSON_PRETTY_PRINT));
+            try {
+                $response = $file->getVideoInfo([
+                    'advertiser_id' => $advertiser_id,
+                    'video_ids' => [$videoId]
+                ]);
+                
+                logToFile("Video Info Response: " . json_encode($response, JSON_PRETTY_PRINT));
+            } catch (Exception $videoInfoError) {
+                logToFile("Get video info failed: " . $videoInfoError->getMessage());
+                
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Get video info failed: ' . $videoInfoError->getMessage(),
+                    'error' => 'VIDEO_INFO_FAILED'
+                ]);
+                break;
+            }
             
             if (!empty($response->data->list) && !empty($response->data->list[0])) {
                 $videoData = $response->data->list[0];
