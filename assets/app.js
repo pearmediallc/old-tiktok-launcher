@@ -1633,11 +1633,27 @@ function populateIdentitiesForAd(adIndex) {
             select.appendChild(option);
         });
         
+        // Add "Create new custom identity" option
+        const createOption = document.createElement('option');
+        createOption.value = 'CREATE_NEW';
+        createOption.textContent = '+ Create new custom identity';
+        createOption.style.fontWeight = 'bold';
+        createOption.style.color = '#667eea';
+        select.appendChild(createOption);
+        
         // Select first identity by default if available
-        if (state.identities.length > 0 && select.options.length > 1) {
+        if (state.identities.length > 0 && select.options.length > 2) {
             select.selectedIndex = 1;
         }
     } else {
+        // Add "Create new custom identity" option even when no identities
+        const createOption = document.createElement('option');
+        createOption.value = 'CREATE_NEW';
+        createOption.textContent = '+ Create new custom identity';
+        createOption.style.fontWeight = 'bold';
+        createOption.style.color = '#667eea';
+        select.appendChild(createOption);
+        
         // Add helpful messages for no identities
         const option1 = document.createElement('option');
         option1.value = '';
@@ -1647,7 +1663,7 @@ function populateIdentitiesForAd(adIndex) {
         
         const option2 = document.createElement('option');
         option2.value = '';
-        option2.textContent = '→ Create one in TikTok Ads Manager';
+        option2.textContent = '→ Create one above or in TikTok Ads Manager';
         option2.disabled = true;
         select.appendChild(option2);
         
@@ -1656,6 +1672,117 @@ function populateIdentitiesForAd(adIndex) {
         option3.textContent = '→ Or link a TikTok account';
         option3.disabled = true;
         select.appendChild(option3);
+    }
+    
+    // Add event listener for identity selection change
+    select.onchange = function() {
+        if (this.value === 'CREATE_NEW') {
+            openCreateIdentityModal(adIndex);
+        }
+    };
+}
+
+// Create Identity Modal Functions
+let currentIdentityAdIndex = null;
+
+function openCreateIdentityModal(adIndex) {
+    currentIdentityAdIndex = adIndex;
+    const modal = document.getElementById('create-identity-modal');
+    const input = document.getElementById('identity-display-name');
+    const charCount = document.getElementById('identity-char-count');
+    
+    // Reset form
+    input.value = '';
+    charCount.textContent = '0';
+    
+    // Add character counter
+    input.oninput = function() {
+        charCount.textContent = this.value.length;
+    };
+    
+    modal.style.display = 'block';
+    input.focus();
+    
+    // Reset dropdown to first option to avoid confusion
+    const select = document.getElementById(`identity-${adIndex}`);
+    if (select.options.length > 1) {
+        select.selectedIndex = 0;
+    }
+}
+
+function closeCreateIdentityModal() {
+    const modal = document.getElementById('create-identity-modal');
+    modal.style.display = 'none';
+    currentIdentityAdIndex = null;
+}
+
+async function createCustomIdentity() {
+    const displayName = document.getElementById('identity-display-name').value.trim();
+    const createBtn = document.getElementById('create-identity-btn');
+    
+    if (!displayName) {
+        showToast('Please enter a display name', 'error');
+        return;
+    }
+    
+    if (displayName.length > 40) {
+        showToast('Display name must be 40 characters or less', 'error');
+        return;
+    }
+    
+    createBtn.disabled = true;
+    createBtn.textContent = 'Creating...';
+    
+    try {
+        const response = await apiRequest('create_identity', {
+            display_name: displayName
+        });
+        
+        if (response.success && response.data && response.data.identity_id) {
+            showToast('Custom identity created successfully!', 'success');
+            
+            // Add new identity to state
+            const newIdentity = {
+                identity_id: response.data.identity_id,
+                display_name: displayName,
+                identity_name: displayName,
+                identity_type: 'CUSTOMIZED_USER'
+            };
+            
+            if (!state.identities) {
+                state.identities = [];
+            }
+            state.identities.push(newIdentity);
+            
+            // Refresh the identity dropdown for the current ad
+            if (currentIdentityAdIndex !== null) {
+                populateIdentitiesForAd(currentIdentityAdIndex);
+                
+                // Select the newly created identity
+                const select = document.getElementById(`identity-${currentIdentityAdIndex}`);
+                const newOption = Array.from(select.options).find(option => option.value === newIdentity.identity_id);
+                if (newOption) {
+                    select.value = newIdentity.identity_id;
+                }
+            }
+            
+            // Refresh all other ad identity dropdowns too
+            state.ads.forEach(ad => {
+                if (ad.index !== currentIdentityAdIndex) {
+                    populateIdentitiesForAd(ad.index);
+                }
+            });
+            
+            closeCreateIdentityModal();
+        } else {
+            showToast(response.message || 'Failed to create identity', 'error');
+        }
+    } catch (error) {
+        console.error('Error creating identity:', error);
+        showToast('Error creating identity: ' + error.message, 'error');
+    } finally {
+        createBtn.disabled = false;
+        createBtn.textContent = 'Create';
     }
 }
 

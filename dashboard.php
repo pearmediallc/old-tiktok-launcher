@@ -430,6 +430,44 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         <!-- Toast Notification -->
         <div id="toast" class="toast"></div>
 
+        <!-- Create Identity Modal -->
+        <div id="create-identity-modal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>Create new custom identity</h3>
+                    <span class="modal-close" onclick="closeCreateIdentityModal()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px;">
+                        <div style="flex-shrink: 0;">
+                            <div style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; font-weight: bold;">
+                                @
+                            </div>
+                        </div>
+                        <div style="flex: 1;">
+                            <div class="form-group">
+                                <label>@ Enter a display name</label>
+                                <input type="text" id="identity-display-name" placeholder="Enter a display name" maxlength="40" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                                <div style="text-align: right; font-size: 12px; color: #666; margin-top: 5px;">
+                                    <span id="identity-char-count">0</span>/40
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="background: #f9f9f9; padding: 15px; border-radius: 6px; border-left: 4px solid #667eea;">
+                        <h4 style="margin: 0 0 8px 0; color: #333;">About Custom Identities</h4>
+                        <p style="margin: 0; font-size: 13px; color: #666; line-height: 1.4;">
+                            A custom identity represents your brand on TikTok ads. Once created, it can be used across all your campaigns. You can also link existing TikTok accounts later.
+                        </p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="closeCreateIdentityModal()">Cancel</button>
+                    <button class="btn-primary" onclick="createCustomIdentity()" id="create-identity-btn">Create</button>
+                </div>
+            </div>
+        </div>
+
         <!-- API Logs Panel -->
         <div id="logs-panel" class="logs-panel collapsed">
             <div class="logs-header" onclick="toggleLogsPanel()" style="cursor: pointer;">

@@ -2112,6 +2112,43 @@ try {
             }
             exit;
             
+        case 'create_identity':
+            $identity = new Identity($config);
+            $data = $requestData;
+            
+            logToFile("============ CREATE IDENTITY REQUEST ============");
+            logToFile("Create Identity Request: " . json_encode($data, JSON_PRETTY_PRINT));
+            
+            // Validate required fields
+            if (empty($data['display_name'])) {
+                throw new Exception('Display name is required');
+            }
+            
+            // Use default TikTok avatar image URI if not provided
+            $defaultImageUri = 'https://p16-va-default.ibyteimg.com/obj/musically-maliva-obj/7235042482344222997.png';
+            
+            $params = [
+                'advertiser_id' => $advertiser_id,
+                'display_name' => $data['display_name'],
+                'image_uri' => $data['image_uri'] ?? $defaultImageUri
+            ];
+            
+            logToFile("Identity Creation Params: " . json_encode($params, JSON_PRETTY_PRINT));
+            
+            $response = $identity->create($params);
+            
+            logToFile("Identity Creation Response: " . json_encode($response, JSON_PRETTY_PRINT));
+            
+            $success = empty($response->code) || $response->code == 0;
+            
+            echo json_encode([
+                'success' => $success,
+                'data' => $response->data ?? null,
+                'message' => $success ? 'Identity created successfully' : ($response->message ?? 'Failed to create identity'),
+                'code' => $response->code ?? null
+            ]);
+            break;
+
         case 'debug_storage':
             // Debug endpoint to check media storage
             $storageFile = __DIR__ . '/media_storage.json';
