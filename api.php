@@ -2124,8 +2124,8 @@ try {
                 throw new Exception('Display name is required');
             }
             
-            // Use default TikTok avatar image URI if not provided
-            $defaultImageUri = 'https://p16-va-default.ibyteimg.com/obj/musically-maliva-obj/7235042482344222997.png';
+            // Use default TikTok avatar image URI if not provided (without http/https prefix)
+            $defaultImageUri = 'sf16-sg.tiktokcdn.com/obj/eden-sg/lm_zkh_rvarpa/ljhwZthlaukjlkulzlp/ads_manager_creation/default-avatar.png';
             
             $params = [
                 'advertiser_id' => $advertiser_id,

@@ -432,8 +432,11 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             <div class="modal-body">
                 <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px;">
                     <div style="flex-shrink: 0;">
-                        <div style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; font-weight: bold;">
-                            @
+                        <div style="width: 80px; height: 80px; border-radius: 50%; background: #f0f0f0; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                            <img src="https://sf16-sg.tiktokcdn.com/obj/eden-sg/lm_zkh_rvarpa/ljhwZthlaukjlkulzlp/ads_manager_creation/default-avatar.png" 
+                                 alt="Default Avatar" 
+                                 style="width: 100%; height: 100%; object-fit: cover;"
+                                 onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\'background: linear-gradient(135deg, #667eea, #764ba2); width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; font-weight: bold; border-radius: 50%;\'>@</div>'">
                         </div>
                     </div>
                     <div style="flex: 1;">
