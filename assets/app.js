@@ -629,30 +629,8 @@ function addAdForm(index, duplicateFrom = null) {
         </div>
 
         <div class="form-group">
-            <label>Ad Copy Texts (TikTok will automatically rotate these for audience optimization)</label>
-            <div class="ad-texts-container">
-                <div class="ad-text-item">
-                    <label>Ad Text 1 (Required)</label>
-                    <textarea id="ad-text-1-${index}" placeholder="Enter your primary ad copy" rows="2" required></textarea>
-                </div>
-                <div class="ad-text-item">
-                    <label>Ad Text 2 (Optional)</label>
-                    <textarea id="ad-text-2-${index}" placeholder="Enter alternative ad copy" rows="2"></textarea>
-                </div>
-                <div class="ad-text-item">
-                    <label>Ad Text 3 (Optional)</label>
-                    <textarea id="ad-text-3-${index}" placeholder="Enter alternative ad copy" rows="2"></textarea>
-                </div>
-                <div class="ad-text-item">
-                    <label>Ad Text 4 (Optional)</label>
-                    <textarea id="ad-text-4-${index}" placeholder="Enter alternative ad copy" rows="2"></textarea>
-                </div>
-                <div class="ad-text-item">
-                    <label>Ad Text 5 (Optional)</label>
-                    <textarea id="ad-text-5-${index}" placeholder="Enter alternative ad copy" rows="2"></textarea>
-                </div>
-            </div>
-            <small style="color: #666; font-size: 12px;">TikTok will automatically test different text combinations to find the best performing ones for your audience. Provide multiple variations for better optimization.</small>
+            <label>Ad Copy (Text)</label>
+            <textarea id="ad-text-${index}" placeholder="Enter your ad copy" rows="3" required></textarea>
         </div>
 
         <div class="form-group">
@@ -693,14 +671,8 @@ function addAdForm(index, duplicateFrom = null) {
         setTimeout(() => {
             document.getElementById(`ad-name-${index}`).value =
                 document.getElementById(`ad-name-${duplicateFrom}`).value + ' (Copy)';
-            // Copy all ad texts
-            for (let i = 1; i <= 5; i++) {
-                const sourceEl = document.getElementById(`ad-text-${i}-${duplicateFrom}`);
-                const targetEl = document.getElementById(`ad-text-${i}-${index}`);
-                if (sourceEl && targetEl && sourceEl.value) {
-                    targetEl.value = sourceEl.value;
-                }
-            }
+            document.getElementById(`ad-text-${index}`).value =
+                document.getElementById(`ad-text-${duplicateFrom}`).value;
             document.getElementById(`destination-url-${index}`).value =
                 document.getElementById(`destination-url-${duplicateFrom}`).value;
             document.getElementById(`identity-${index}`).value =
@@ -1859,12 +1831,12 @@ function reviewAds() {
         console.log(`Validating ad index ${adIndex}`);
 
         const adNameEl = document.getElementById(`ad-name-${adIndex}`);
-        const adText1El = document.getElementById(`ad-text-1-${adIndex}`);
+        const adTextEl = document.getElementById(`ad-text-${adIndex}`);
         const creativeIdEl = document.getElementById(`creative-id-${adIndex}`);
         const identityEl = document.getElementById(`identity-${adIndex}`);
         const destinationUrlEl = document.getElementById(`destination-url-${adIndex}`);
         
-        if (!adNameEl || !adText1El || !creativeIdEl || !destinationUrlEl) {
+        if (!adNameEl || !adTextEl || !creativeIdEl || !destinationUrlEl) {
             console.error(`Missing form elements for ad ${adIndex}`);
             showToast(`Error: Missing form elements for Ad #${adIndex + 1}`, 'error');
             allValid = false;
@@ -1872,7 +1844,7 @@ function reviewAds() {
         }
         
         const adName = adNameEl.value.trim();
-        const adText = adText1El.value.trim();
+        const adText = adTextEl.value.trim();
         const creativeId = creativeIdEl.value;
         const creativeType = document.getElementById(`creative-type-${adIndex}`).value;
         const coverImageId = document.getElementById(`cover-image-id-${adIndex}`).value;
@@ -1949,15 +1921,7 @@ function generateReviewSummary() {
     state.ads.forEach(ad => {
         const adIndex = ad.index;
         const adName = document.getElementById(`ad-name-${adIndex}`).value;
-        // Collect all ad texts
-        const adTexts = [];
-        for (let i = 1; i <= 5; i++) {
-            const textEl = document.getElementById(`ad-text-${i}-${adIndex}`);
-            if (textEl && textEl.value.trim()) {
-                adTexts.push(textEl.value.trim());
-            }
-        }
-        const adText = adTexts.length > 0 ? adTexts.join(' | ') : 'No text provided';
+        const adText = document.getElementById(`ad-text-${adIndex}`).value;
         const cta = document.getElementById(`cta-${adIndex}`).value;
         const destinationUrl = document.getElementById(`destination-url-${adIndex}`).value;
 
@@ -2004,16 +1968,7 @@ async function publishAll() {
             const adData = {
                 adgroup_id: state.adGroupId,
                 ad_name: document.getElementById(`ad-name-${adIndex}`).value,
-                ad_texts: (() => {
-                    const texts = [];
-                    for (let i = 1; i <= 5; i++) {
-                        const textEl = document.getElementById(`ad-text-${i}-${adIndex}`);
-                        if (textEl && textEl.value.trim()) {
-                            texts.push(textEl.value.trim());
-                        }
-                    }
-                    return texts;
-                })(),
+                ad_text: document.getElementById(`ad-text-${adIndex}`).value,
                 call_to_action: document.getElementById(`cta-${adIndex}`).value,
                 landing_page_url: document.getElementById(`destination-url-${adIndex}`).value,
                 identity_id: selectedIdentity,

@@ -788,15 +788,11 @@ try {
             // Check if this is a Lead Generation campaign
             $isLeadGen = isset($data['is_lead_gen']) && $data['is_lead_gen'];
             
-            // Handle multiple ad texts - use first one for primary ad creation
-            $adTexts = $data['ad_texts'] ?? [$data['ad_text'] ?? ''];
-            $primaryAdText = $adTexts[0] ?? $data['ad_text'] ?? '';
-            
             // Build creative object according to TikTok documentation
             $creative = [
                 'ad_name' => $data['ad_name'],
                 'ad_format' => $data['ad_format'] ?? 'SINGLE_VIDEO',
-                'ad_text' => $primaryAdText,
+                'ad_text' => $data['ad_text'],
                 'identity_type' => $data['identity_type'] ?? 'CUSTOMIZED_USER',
                 'identity_id' => $data['identity_id']
             ];
