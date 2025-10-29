@@ -788,11 +788,15 @@ try {
             // Check if this is a Lead Generation campaign
             $isLeadGen = isset($data['is_lead_gen']) && $data['is_lead_gen'];
             
+            // Handle multiple ad texts - use first one for primary ad creation
+            $adTexts = $data['ad_texts'] ?? [$data['ad_text'] ?? ''];
+            $primaryAdText = $adTexts[0] ?? $data['ad_text'] ?? '';
+            
             // Build creative object according to TikTok documentation
             $creative = [
                 'ad_name' => $data['ad_name'],
                 'ad_format' => $data['ad_format'] ?? 'SINGLE_VIDEO',
-                'ad_text' => $data['ad_text'],
+                'ad_text' => $primaryAdText,
                 'identity_type' => $data['identity_type'] ?? 'CUSTOMIZED_USER',
                 'identity_id' => $data['identity_id']
             ];
@@ -1983,13 +1987,68 @@ try {
                 }
             }
             
+            // Now search for images using TikTok's image search endpoint
+            $imageUrl = 'https://business-api.tiktok.com/open_api/v1.3/file/image/ad/search/';
+            $imageParams = http_build_query([
+                'advertiser_id' => $advertiser_id,
+                'page' => 1,
+                'page_size' => 100
+            ]);
+            
+            $ch = curl_init($imageUrl . '?' . $imageParams);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER => [
+                    'Access-Token: ' . $config['access_token']
+                ]
+            ]);
+            
+            $imageResponse = curl_exec($ch);
+            $imageHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            $imageResult = json_decode($imageResponse, true);
+            $imageCount = 0;
+            
+            logToFile("Image search HTTP code: " . $imageHttpCode);
+            logToFile("Image search response: " . $imageResponse);
+            
+            if ($imageHttpCode == 200 && isset($imageResult['data']['list'])) {
+                foreach ($imageResult['data']['list'] as $image) {
+                    // Check if already exists
+                    $exists = false;
+                    foreach ($storage['images'] as $stored) {
+                        if ($stored['image_id'] === $image['image_id'] && $stored['advertiser_id'] === $advertiser_id) {
+                            $exists = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!$exists) {
+                        $storage['images'][] = [
+                            'image_id' => $image['image_id'],
+                            'file_name' => $image['image_name'] ?? $image['file_name'] ?? 'Image',
+                            'width' => $image['width'] ?? null,
+                            'height' => $image['height'] ?? null,
+                            'size' => $image['size'] ?? null,
+                            'upload_time' => time(),
+                            'advertiser_id' => $advertiser_id
+                        ];
+                        $imageCount++;
+                    }
+                }
+            }
+            
             file_put_contents($storageFile, json_encode($storage, JSON_PRETTY_PRINT));
             
             echo json_encode([
                 'success' => true,
-                'message' => "Synced $videoCount new videos from TikTok",
+                'message' => "Synced $videoCount new videos and $imageCount new images from TikTok",
                 'total_videos' => count(array_filter($storage['videos'], function($v) use ($advertiser_id) {
                     return $v['advertiser_id'] === $advertiser_id;
+                })),
+                'total_images' => count(array_filter($storage['images'], function($i) use ($advertiser_id) {
+                    return $i['advertiser_id'] === $advertiser_id;
                 }))
             ]);
             break;

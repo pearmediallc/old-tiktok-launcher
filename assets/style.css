@@ -303,6 +303,43 @@ h3 {
     position: relative;
 }
 
+/* Ad Texts Container */
+.ad-texts-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.ad-text-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.ad-text-item label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #555;
+}
+
+.ad-text-item textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+    min-height: 50px;
+}
+
+.ad-text-item textarea:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
 .ad-card-header {
     display: flex;
     justify-content: space-between;

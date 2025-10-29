@@ -590,9 +590,16 @@ async function createCustomIdentity() {
     createBtn.textContent = 'Creating...';
     
     try {
-        const response = await apiRequest('create_identity', {
+        const params = {
             display_name: displayName
-        });
+        };
+        
+        // Add image_id if an avatar was selected
+        if (window.selectedAvatarImageId) {
+            params.image_id = window.selectedAvatarImageId;
+        }
+        
+        const response = await apiRequest('create_identity', params);
         
         if (response.success && response.data && response.data.identity_id) {
             showToast('Custom identity created successfully!', 'success');
@@ -1364,4 +1371,177 @@ function updateSmartStatesCount() {
         countElement.textContent = selectedCheckboxes.length;
     }
     console.log('Smart+ states count updated:', selectedCheckboxes.length);
+}
+
+// Avatar Selection Functions (duplicate for Smart+ Campaign)
+let selectedAvatarImageId = null;
+
+function selectIdentityAvatar() {
+    const modal = document.getElementById('avatar-selection-modal');
+    modal.style.display = 'block';
+    
+    // Load TikTok library images
+    loadAvatarLibrary();
+}
+
+function closeAvatarSelectionModal() {
+    const modal = document.getElementById('avatar-selection-modal');
+    modal.style.display = 'none';
+    selectedAvatarImageId = null;
+}
+
+function switchAvatarTab(tab, event) {
+    // Remove active class from all tabs
+    document.querySelectorAll('#avatar-selection-modal .tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Hide all tab contents
+    document.querySelectorAll('#avatar-selection-modal .media-tab').forEach(content => {
+        content.style.display = 'none';
+    });
+    
+    // Activate clicked tab
+    event.target.classList.add('active');
+    
+    // Show corresponding content
+    if (tab === 'library') {
+        document.getElementById('avatar-library-tab').style.display = 'block';
+    } else if (tab === 'upload') {
+        document.getElementById('avatar-upload-tab').style.display = 'block';
+    }
+}
+
+async function loadAvatarLibrary() {
+    try {
+        const response = await smartApiRequest('get_images', {}, 'GET');
+        const grid = document.getElementById('avatar-library-grid');
+        grid.innerHTML = '';
+        
+        if (response.success && response.data && response.data.list && response.data.list.length > 0) {
+            response.data.list.forEach(image => {
+                const item = document.createElement('div');
+                item.className = 'media-item avatar-item';
+                item.style.cursor = 'pointer';
+                item.onclick = () => selectAvatarImage(image);
+                
+                // Create image preview
+                item.innerHTML = `
+                    <div style="position: relative; width: 100%; height: 120px;">
+                        <div style="width: 100%; height: 100%; background: linear-gradient(135deg, #4fc3f7, #29b6f6); 
+                                    display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;">
+                            <div style="font-size: 30px; margin-bottom: 5px;">🖼️</div>
+                            <div style="font-size: 10px; text-align: center; padding: 0 5px;">${image.file_name || 'Image'}</div>
+                        </div>
+                    </div>
+                `;
+                
+                grid.appendChild(item);
+            });
+        } else {
+            grid.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No images in TikTok library. Upload some images first or sync from TikTok.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading avatar library:', error);
+        document.getElementById('avatar-library-grid').innerHTML = '<p style="text-align: center; color: #f00; padding: 20px;">Error loading images.</p>';
+    }
+}
+
+function selectAvatarImage(image) {
+    selectedAvatarImageId = image.image_id;
+    
+    // Remove selection from other items
+    document.querySelectorAll('.avatar-item').forEach(item => {
+        item.style.border = 'none';
+        item.style.boxShadow = 'none';
+    });
+    
+    // Highlight selected item
+    event.target.closest('.avatar-item').style.border = '3px solid #667eea';
+    event.target.closest('.avatar-item').style.boxShadow = '0 0 10px rgba(102, 126, 234, 0.3)';
+    
+    // Enable confirm button
+    document.getElementById('confirm-avatar-btn').disabled = false;
+}
+
+function handleAvatarUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        showSmartToast('Please select an image file', 'error');
+        return;
+    }
+    
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('avatar-preview-img').src = e.target.result;
+        document.getElementById('avatar-upload-preview').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
+async function uploadAvatarImage() {
+    const fileInput = document.getElementById('avatar-file-input');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showSmartToast('Please select an image file', 'error');
+        return;
+    }
+    
+    try {
+        showSmartToast('Uploading avatar image...', 'info');
+        
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('action', 'upload_image');
+        
+        const response = await fetch('api.php', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.data && result.data.image_id) {
+            selectedAvatarImageId = result.data.image_id;
+            showSmartToast('Avatar image uploaded successfully', 'success');
+            
+            // Enable confirm button
+            document.getElementById('confirm-avatar-btn').disabled = false;
+        } else {
+            showSmartToast('Failed to upload avatar image: ' + (result.message || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        console.error('Error uploading avatar:', error);
+        showSmartToast('Error uploading avatar image', 'error');
+    }
+}
+
+function confirmAvatarSelection() {
+    if (!selectedAvatarImageId) {
+        showSmartToast('Please select or upload an avatar image', 'error');
+        return;
+    }
+    
+    // Update the preview in the identity modal
+    const previewImg = document.getElementById('identity-avatar-img');
+    if (previewImg) {
+        // For now, just show a placeholder since we have the image_id
+        previewImg.style.display = 'none';
+        previewImg.parentElement.innerHTML = `
+            <div style="background: linear-gradient(135deg, #667eea, #764ba2); width: 100%; height: 100%; 
+                        display: flex; align-items: center; justify-content: center; color: white; 
+                        font-size: 24px; font-weight: bold; border-radius: 50%;">✓</div>
+        `;
+    }
+    
+    // Store the selected image ID for identity creation
+    window.selectedAvatarImageId = selectedAvatarImageId;
+    
+    closeAvatarSelectionModal();
+    showSmartToast('Avatar image selected', 'success');
 }

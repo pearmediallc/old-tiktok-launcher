@@ -432,12 +432,13 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             <div class="modal-body">
                 <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px;">
                     <div style="flex-shrink: 0;">
-                        <div style="width: 80px; height: 80px; border-radius: 50%; background: #f0f0f0; overflow: hidden; display: flex; align-items: center; justify-content: center;">
-                            <img src="https://sf16-sg.tiktokcdn.com/obj/eden-sg/lm_zkh_rvarpa/ljhwZthlaukjlkulzlp/ads_manager_creation/default-avatar.png" 
+                        <div id="identity-avatar-preview" style="width: 80px; height: 80px; border-radius: 50%; background: #f0f0f0; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid #ddd;" onclick="selectIdentityAvatar()">
+                            <img id="identity-avatar-img" src="https://sf16-sg.tiktokcdn.com/obj/eden-sg/lm_zkh_rvarpa/ljhwZthlaukjlkulzlp/ads_manager_creation/default-avatar.png" 
                                  alt="Default Avatar" 
                                  style="width: 100%; height: 100%; object-fit: cover;"
                                  onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\'background: linear-gradient(135deg, #667eea, #764ba2); width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; font-weight: bold; border-radius: 50%;\'>@</div>'">
                         </div>
+                        <button type="button" onclick="selectIdentityAvatar()" style="margin-top: 8px; padding: 4px 8px; font-size: 11px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">Change Avatar</button>
                     </div>
                     <div style="flex: 1;">
                         <div class="form-group">
@@ -459,6 +460,47 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="closeCreateIdentityModal()">Cancel</button>
                 <button class="btn-primary" onclick="createCustomIdentity()" id="create-identity-btn">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Avatar Selection Modal -->
+    <div id="avatar-selection-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3>Select Avatar Image</h3>
+                <span class="modal-close" onclick="closeAvatarSelectionModal()">&times;</span>
+            </div>
+            <div class="modal-tabs">
+                <button class="tab-btn active" onclick="switchAvatarTab('library', event)">TikTok Library</button>
+                <button class="tab-btn" onclick="switchAvatarTab('upload', event)">Upload New</button>
+            </div>
+            <div class="modal-body">
+                <div id="avatar-library-tab" class="media-tab active">
+                    <div class="media-grid" id="avatar-library-grid">
+                        <!-- Avatar images will be loaded here -->
+                    </div>
+                </div>
+                <div id="avatar-upload-tab" class="media-tab" style="display: none;">
+                    <div class="upload-area" style="text-align: center; padding: 40px; border: 2px dashed #ddd; border-radius: 8px;">
+                        <input type="file" id="avatar-file-input" accept="image/*" style="display: none;" onchange="handleAvatarUpload(event)">
+                        <div onclick="document.getElementById('avatar-file-input').click()" style="cursor: pointer;">
+                            <div style="font-size: 40px; margin-bottom: 10px;">📷</div>
+                            <p>Click to upload avatar image</p>
+                            <p style="font-size: 12px; color: #666;">JPG/PNG, 1:1 aspect ratio recommended</p>
+                        </div>
+                    </div>
+                    <div id="avatar-upload-preview" style="margin-top: 20px; text-align: center; display: none;">
+                        <img id="avatar-preview-img" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 2px solid #ddd;">
+                        <p style="margin-top: 10px;">
+                            <button class="btn-primary" onclick="uploadAvatarImage()">Upload Avatar</button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeAvatarSelectionModal()">Cancel</button>
+                <button class="btn-primary" onclick="confirmAvatarSelection()" id="confirm-avatar-btn" disabled>Select Avatar</button>
             </div>
         </div>
     </div>
