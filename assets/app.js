@@ -95,13 +95,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Format date for datetime-local input (Colombia Time UTC-05:00)
 function formatDateTimeLocal(date) {
-    // Convert to Colombia Time (UTC-05:00)
-    const colombiaDate = new Date(date.getTime() - (5 * 60 * 60 * 1000));
-    const year = colombiaDate.getFullYear();
-    const month = String(colombiaDate.getMonth() + 1).padStart(2, '0');
-    const day = String(colombiaDate.getDate()).padStart(2, '0');
-    const hours = String(colombiaDate.getHours()).padStart(2, '0');
-    const minutes = String(colombiaDate.getMinutes()).padStart(2, '0');
+    // For datetime-local inputs, we want to display Colombia time
+    // The user sees Colombia time, and we convert to UTC when sending to API
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
     return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
@@ -109,14 +109,26 @@ function formatDateTimeLocal(date) {
 function convertColombiaToUTC(colombiaDateTimeString) {
     if (!colombiaDateTimeString) return null;
     
-    // Parse the datetime-local input (which is in Colombia time)
-    const colombiaDate = new Date(colombiaDateTimeString);
+    // The datetime-local input gives us a local time string (what user sees as Colombia time)
+    // We need to treat this as Colombia time and convert to UTC
     
-    // Add 5 hours to convert Colombia Time (UTC-05:00) to UTC
-    const utcDate = new Date(colombiaDate.getTime() + (5 * 60 * 60 * 1000));
+    // Parse the input as if it's Colombia time
+    const [datePart, timePart] = colombiaDateTimeString.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hours, minutes] = timePart.split(':').map(Number);
     
-    // Return in ISO format for TikTok API
-    return utcDate.toISOString().replace('T', ' ').substring(0, 19);
+    // Create date object in Colombia timezone (UTC-5)
+    const colombiaTime = new Date();
+    colombiaTime.setUTCFullYear(year);
+    colombiaTime.setUTCMonth(month - 1); // Month is 0-indexed
+    colombiaTime.setUTCDate(day);
+    colombiaTime.setUTCHours(hours + 5); // Add 5 hours to convert Colombia to UTC
+    colombiaTime.setUTCMinutes(minutes);
+    colombiaTime.setUTCSeconds(0);
+    colombiaTime.setUTCMilliseconds(0);
+    
+    // Return in format expected by TikTok API
+    return colombiaTime.toISOString().replace('T', ' ').substring(0, 19);
 }
 
 // Initialize dayparting grid
@@ -1139,7 +1151,9 @@ async function syncTikTokLibrary() {
         const response = await apiRequest('sync_tiktok_library', {}, 'POST');
         
         if (response.success) {
-            showToast(response.message + ` (Total: ${response.total_videos} videos)`, 'success');
+            const videoMsg = response.total_videos ? ` (${response.total_videos} videos` : ' (0 videos';
+            const imageMsg = response.total_images ? `, ${response.total_images} images)` : ', 0 images)';
+            showToast(response.message + videoMsg + imageMsg, 'success');
             // Reload the media library to show new items
             await loadMediaLibrary();
         } else {
