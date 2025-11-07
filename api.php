@@ -48,8 +48,16 @@ $config = [
     'api_version'  => 'v1.3'
 ];
 
-// Get advertiser ID from session or environment variable
+// Get advertiser ID from session or environment variable  
 $advertiser_id = $_SESSION['selected_advertiser_id'] ?? $_ENV['TIKTOK_ADVERTISER_ID'] ?? '';
+
+// Additional safety check - if still empty, log warning
+if (empty($advertiser_id)) {
+    logToFile("WARNING: No advertiser_id available. Session: " . json_encode($_SESSION) . ", ENV: " . ($_ENV['TIKTOK_ADVERTISER_ID'] ?? 'NOT SET'));
+}
+
+// Debug: Log the exact advertiser ID being used for all API calls
+logToFile("Using advertiser_id for API calls: " . $advertiser_id);
 
 // Logging function
 function logToFile($message) {
