@@ -1472,36 +1472,36 @@ try {
             $images = [];
             
             // Always try TikTok API first for fresh images
-            logToFile("Fetching images from TikTok API using file/list endpoint...");
-                // Use the better file/list endpoint with POST method like your example
+            logToFile("Fetching images from TikTok API using correct endpoint...");
+                // Use the CORRECT endpoint: /file/image/ad/search/ with GET method
                 try {
                 $page = 1;
                 $pageSize = 50;
                 $hasMore = true;
                 
                 while ($hasMore && $page <= 10) { // Limit to 10 pages for safety
-                    // Use the better file/list endpoint with POST method
-                    $url = "https://business-api.tiktok.com/open_api/v1.3/file/list/";
-                    $payload = [
+                    // CORRECTED: Use the working file/image/ad/search endpoint with GET method
+                    $url = "https://business-api.tiktok.com/open_api/v1.3/file/image/ad/search/";
+                    $queryParams = [
                         "advertiser_id" => $advertiser_id,
                         "file_type" => "IMAGE",
                         "page" => $page,
                         "page_size" => $pageSize
                     ];
                     
-                    logToFile("Fetching images from: " . $url);
-                    logToFile("Payload: " . json_encode($payload));
+                    $queryString = http_build_query($queryParams);
+                    $getUrl = $url . '?' . $queryString;
+                    
+                    logToFile("Fetching images from: " . $getUrl);
+                    logToFile("Query params: " . json_encode($queryParams));
                     
                     $ch = curl_init();
                     curl_setopt_array($ch, [
-                        CURLOPT_URL => $url,
-                        CURLOPT_POST => true,
-                        CURLOPT_POSTFIELDS => json_encode($payload),
+                        CURLOPT_URL => $getUrl,
                         CURLOPT_RETURNTRANSFER => true,
                         CURLOPT_TIMEOUT => 30,
                         CURLOPT_HTTPHEADER => [
-                            "Access-Token: " . $accessToken,
-                            "Content-Type: application/json"
+                            "Access-Token: " . $accessToken
                         ]
                     ]);
                     
