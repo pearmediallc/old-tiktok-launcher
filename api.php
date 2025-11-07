@@ -1442,32 +1442,33 @@ try {
             
             // Only search TikTok API if no local images found
             if (empty($images)) {
-                logToFile("Searching TikTok API for images...");
-                // Use the image search endpoint to get ALL images - matching TikTok's exact format
+                logToFile("Fetching images from TikTok API using file/list endpoint...");
+                // Use the better file/list endpoint with POST method like your example
                 try {
                 $page = 1;
-                $pageSize = 100;
+                $pageSize = 50;
                 $hasMore = true;
                 
                 while ($hasMore && $page <= 10) { // Limit to 10 pages for safety
-                    // Build URL exactly as TikTok documentation shows
-                    $url = "https://business-api.tiktok.com/open_api/v1.3/file/image/ad/search/?" . 
-                           "advertiser_id={$advertiser_id}&" .
-                           "page={$page}&" .
-                           "page_size={$pageSize}";
+                    // Use the better file/list endpoint with POST method
+                    $url = "https://business-api.tiktok.com/open_api/v1.3/file/list/";
+                    $payload = [
+                        "advertiser_id" => $advertiser_id,
+                        "file_type" => "IMAGE",
+                        "page" => $page,
+                        "page_size" => $pageSize
+                    ];
                     
-                    logToFile("Searching images with URL: " . $url);
+                    logToFile("Fetching images from: " . $url);
+                    logToFile("Payload: " . json_encode($payload));
                     
                     $ch = curl_init();
                     curl_setopt_array($ch, [
                         CURLOPT_URL => $url,
+                        CURLOPT_POST => true,
+                        CURLOPT_POSTFIELDS => json_encode($payload),
                         CURLOPT_RETURNTRANSFER => true,
-                        CURLOPT_ENCODING => "",
-                        CURLOPT_MAXREDIRS => 10,
                         CURLOPT_TIMEOUT => 30,
-                        CURLOPT_FOLLOWLOCATION => true,
-                        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                        CURLOPT_CUSTOMREQUEST => "GET",
                         CURLOPT_HTTPHEADER => [
                             "Access-Token: " . $accessToken,
                             "Content-Type: application/json"
@@ -1484,38 +1485,43 @@ try {
                         logToFile("CURL Error: " . $curlError);
                     }
                     
-                    logToFile("Image search HTTP response code: " . $httpCode);
+                    logToFile("Image list HTTP response code: " . $httpCode);
                     logToFile("Raw response (first 500 chars): " . substr($result, 0, 500));
                     
                     if ($httpCode == 200) {
                         $response = json_decode($result);
-                        logToFile("Image search response page {$page}: " . json_encode($response, JSON_PRETTY_PRINT));
+                        logToFile("Image list response page {$page}: " . json_encode($response, JSON_PRETTY_PRINT));
                         
                         if (isset($response->data->list) && is_array($response->data->list)) {
                             logToFile("Found " . count($response->data->list) . " images in API response");
+                            
                             foreach ($response->data->list as $index => $image) {
-                                logToFile("Processing image {$index}: " . json_encode($image, JSON_PRETTY_PRINT));
-                                
-                                // Try multiple possible URL fields from TikTok API
-                                $imageUrl = $image->image_url ?? $image->url ?? $image->preview_url ?? '';
-                                
-                                logToFile("Image URL extracted: " . $imageUrl);
-                                
-                                // Based on the Postman response, the structure is correct
-                                $images[] = [
-                                    'image_id' => $image->image_id,
-                                    'url' => $imageUrl,
-                                    'image_url' => $imageUrl, // Add explicit image_url field
-                                    'file_name' => $image->file_name ?? $image->material_name ?? 'Image',
-                                    'width' => $image->width ?? null,
-                                    'height' => $image->height ?? null,
-                                    'format' => $image->format ?? null,
-                                    'size' => $image->size ?? null,
-                                    'create_time' => $image->create_time ?? null,
-                                    'modify_time' => $image->modify_time ?? null,
-                                    'displayable' => $image->displayable ?? true,
-                                    'type' => 'image'
-                                ];
+                                // Only process displayable images (following your example)
+                                if ($image->displayable ?? true) {
+                                    logToFile("Processing displayable image {$index}: " . $image->file_name);
+                                    
+                                    // Extract image URL from the response
+                                    $imageUrl = $image->image_url ?? $image->url ?? '';
+                                    
+                                    logToFile("Image URL extracted: " . $imageUrl);
+                                    
+                                    $images[] = [
+                                        'image_id' => $image->image_id ?? $image->id,
+                                        'url' => $imageUrl,
+                                        'image_url' => $imageUrl,
+                                        'file_name' => $image->file_name ?? 'Image',
+                                        'width' => $image->width ?? null,
+                                        'height' => $image->height ?? null,
+                                        'format' => $image->format ?? null,
+                                        'size' => $image->size ?? null,
+                                        'create_time' => $image->create_time ?? null,
+                                        'modify_time' => $image->modify_time ?? null,
+                                        'displayable' => $image->displayable ?? true,
+                                        'type' => 'image'
+                                    ];
+                                } else {
+                                    logToFile("Skipping non-displayable image: " . ($image->file_name ?? 'unnamed'));
+                                }
                             }
                             
                             // Check if there are more pages
@@ -1537,7 +1543,7 @@ try {
                             $hasMore = false;
                         }
                     } else {
-                        logToFile("Failed to search images: HTTP {$httpCode}, Response: " . $result);
+                        logToFile("Failed to fetch images: HTTP {$httpCode}, Response: " . $result);
                         
                         // Try to decode response to get error details
                         $errorResponse = json_decode($result);
