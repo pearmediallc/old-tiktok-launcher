@@ -77,10 +77,12 @@ document.addEventListener('DOMContentLoaded', function() {
     loadPixels();  // Load available pixels
     addFirstAd();
 
-    // Set default start date to tomorrow for both campaign and ad group
-    const tomorrow = new Date();
+    // Set default start date to tomorrow for both campaign and ad group (Colombia Time)
+    const now = new Date();
+    const colombiaTime = new Date(now.getTime() - (5 * 60 * 60 * 1000)); // UTC-5 for Colombia
+    const tomorrow = new Date(colombiaTime);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
+    tomorrow.setHours(9, 0, 0, 0); // Set to 9:00 AM Colombia time
 
     // Campaign start date
     if (document.getElementById('campaign-start-date')) {
@@ -95,13 +97,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Format date for datetime-local input (Colombia Time UTC-05:00)
 function formatDateTimeLocal(date) {
-    // For datetime-local inputs, we want to display Colombia time
-    // The user sees Colombia time, and we convert to UTC when sending to API
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
+    // Convert to Colombia time (UTC-5) for display in datetime-local inputs
+    const colombiaDate = new Date(date.getTime() - (5 * 60 * 60 * 1000));
+    
+    const year = colombiaDate.getUTCFullYear();
+    const month = String(colombiaDate.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(colombiaDate.getUTCDate()).padStart(2, '0');
+    const hours = String(colombiaDate.getUTCHours()).padStart(2, '0');
+    const minutes = String(colombiaDate.getUTCMinutes()).padStart(2, '0');
     return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
@@ -117,18 +120,19 @@ function convertColombiaToUTC(colombiaDateTimeString) {
     const [year, month, day] = datePart.split('-').map(Number);
     const [hours, minutes] = timePart.split(':').map(Number);
     
-    // Create date object in Colombia timezone (UTC-5)
-    const colombiaTime = new Date();
-    colombiaTime.setUTCFullYear(year);
-    colombiaTime.setUTCMonth(month - 1); // Month is 0-indexed
-    colombiaTime.setUTCDate(day);
-    colombiaTime.setUTCHours(hours + 5); // Add 5 hours to convert Colombia to UTC
-    colombiaTime.setUTCMinutes(minutes);
-    colombiaTime.setUTCSeconds(0);
-    colombiaTime.setUTCMilliseconds(0);
+    // Create UTC date object from Colombia time components
+    // Add 5 hours to convert Colombia (UTC-5) to UTC
+    const utcTime = new Date();
+    utcTime.setUTCFullYear(year);
+    utcTime.setUTCMonth(month - 1); // Month is 0-indexed
+    utcTime.setUTCDate(day);
+    utcTime.setUTCHours(hours + 5); // Colombia is UTC-5, so add 5 hours
+    utcTime.setUTCMinutes(minutes);
+    utcTime.setUTCSeconds(0);
+    utcTime.setUTCMilliseconds(0);
     
     // Return in format expected by TikTok API
-    return colombiaTime.toISOString().replace('T', ' ').substring(0, 19);
+    return utcTime.toISOString().replace('T', ' ').substring(0, 19);
 }
 
 // Initialize dayparting grid
