@@ -1394,6 +1394,8 @@ try {
             logToFile("============ GET IMAGES REQUEST ============");
             logToFile("Get Images - Advertiser ID: " . $advertiser_id);
             logToFile("Access Token: " . (!empty($accessToken) ? "Present (length: " . strlen($accessToken) . ")" : "MISSING"));
+            logToFile("Session advertiser_id: " . ($_SESSION['selected_advertiser_id'] ?? 'NOT SET'));
+            logToFile("Environment advertiser_id: " . ($_ENV['TIKTOK_ADVERTISER_ID'] ?? 'NOT SET'));
             
             $images = [];
             
@@ -1423,8 +1425,8 @@ try {
                         CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
                         CURLOPT_CUSTOMREQUEST => "GET",
                         CURLOPT_HTTPHEADER => [
-                            "Access-Token: " . $accessToken
-                            // NO Content-Type header for GET requests per TikTok docs
+                            "Access-Token: " . $accessToken,
+                            "Content-Type: application/json"
                         ]
                     ]);
                     
