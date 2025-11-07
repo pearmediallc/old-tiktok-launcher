@@ -393,6 +393,13 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 </div>
                 <div class="modal-body">
                     <div id="media-library-tab" class="media-tab active">
+                        <div style="margin-bottom: 15px; padding: 10px; background: #f5f5f5; border-radius: 5px;">
+                            <label style="font-weight: 600; margin-right: 10px;">Filter by type:</label>
+                            <button class="btn-secondary btn-sm media-filter active" data-filter="all" onclick="filterMedia('all')">All</button>
+                            <button class="btn-secondary btn-sm media-filter" data-filter="image" onclick="filterMedia('image')">Images</button>
+                            <button class="btn-secondary btn-sm media-filter" data-filter="video" onclick="filterMedia('video')">Videos</button>
+                            <span id="media-count" style="margin-left: 15px; font-size: 12px; color: #666;"></span>
+                        </div>
                         <div class="media-grid" id="media-grid">
                             <!-- Media items will be loaded here -->
                         </div>

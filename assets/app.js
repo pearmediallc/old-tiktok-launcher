@@ -968,6 +968,7 @@ async function loadMediaLibrary() {
         console.log('Videos in library:', state.mediaLibrary.filter(m => m.type === 'video').length);
         
         renderMediaGrid();
+        updateMediaCount();
         
         if (state.mediaLibrary.length === 0) {
             showToast('No media found. Upload files to add to library.', 'info');
@@ -1170,14 +1171,20 @@ function renderMediaGrid() {
     const grid = document.getElementById('media-grid');
     grid.innerHTML = '';
 
-    console.log('Rendering media grid with', state.mediaLibrary.length, 'items');
+    const filteredMedia = getFilteredMedia();
+    console.log('Rendering media grid with', filteredMedia.length, 'filtered items (', state.mediaLibrary.length, 'total)');
 
     if (state.mediaLibrary.length === 0) {
         grid.innerHTML = '<p style="text-align: center; color: #999;">No media in library. Upload some files to get started.</p>';
         return;
     }
 
-    state.mediaLibrary.forEach((media, index) => {
+    if (filteredMedia.length === 0) {
+        grid.innerHTML = '<p style="text-align: center; color: #999;">No media matches the current filter.</p>';
+        return;
+    }
+
+    filteredMedia.forEach((media, index) => {
         console.log(`Rendering media ${index}:`, media.type, media.file_name || 'unnamed');
         const item = document.createElement('div');
         item.className = 'media-item';
@@ -1193,18 +1200,19 @@ function renderMediaGrid() {
             
             if (imgUrl && imgUrl !== '') {
                 item.innerHTML = `
-                    <div style="position: relative; width: 100%; height: 150px;">
+                    <div style="position: relative; width: 100%; height: 150px; border: 2px solid #4fc3f7; border-radius: 8px; overflow: hidden;">
                         <img src="${imgUrl}" 
                              alt="${media.file_name || 'Image'}" 
                              style="width: 100%; height: 100%; object-fit: cover;"
                              onerror="this.onerror=null; this.parentElement.innerHTML='<div style=\\'background: linear-gradient(135deg, #4fc3f7, #29b6f6); width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;\\'>🖼️<br><small>Image</small></div>'">
-                        <div style="position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.7); 
-                                    padding: 2px 6px; border-radius: 3px; font-size: 10px; color: white;">
-                            IMAGE
+                        <div style="position: absolute; top: 5px; right: 5px; background: #4fc3f7; 
+                                    padding: 2px 6px; border-radius: 3px; font-size: 10px; color: white; font-weight: bold;">
+                            📷 IMAGE
                         </div>
                     </div>
-                    <div class="media-info" style="padding: 5px; background: rgba(0,0,0,0.05);">
-                        <div style="font-weight: 600; font-size: 12px;">${media.file_name || 'Image'}</div>
+                    <div class="media-info" style="padding: 5px; background: rgba(79, 195, 247, 0.1); border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
+                        <div style="font-weight: 600; font-size: 12px; color: #0277bd;">${media.file_name || 'Image'}</div>
+                        <div style="font-size: 10px; color: #0288d1;">${media.width && media.height ? `${media.width}×${media.height}px` : 'Image file'}</div>
                     </div>`;
             } else {
                 item.innerHTML = `
@@ -1225,7 +1233,7 @@ function renderMediaGrid() {
             
             if (previewUrl && previewUrl !== '') {
                 item.innerHTML = `
-                    <div style="position: relative; width: 100%; height: 150px; background: linear-gradient(135deg, #667eea, #764ba2);">
+                    <div style="position: relative; width: 100%; height: 150px; border: 2px solid #667eea; border-radius: 8px; overflow: hidden;">
                         <img src="${previewUrl}" 
                              alt="Video: ${media.file_name || media.video_id}" 
                              style="width: 100%; height: 100%; object-fit: cover;"
@@ -1235,13 +1243,18 @@ function renderMediaGrid() {
                                     display: flex; align-items: center; justify-content: center;">
                             <span style="color: white; font-size: 18px; margin-left: 2px;">▶</span>
                         </div>
+                        <div style="position: absolute; top: 5px; right: 5px; background: #667eea; 
+                                    padding: 2px 6px; border-radius: 3px; font-size: 10px; color: white; font-weight: bold;">
+                            🎬 VIDEO
+                        </div>
                         <div style="position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.7); 
                                     padding: 2px 6px; border-radius: 3px; font-size: 10px; color: white;">
                             ${media.duration ? `${Math.round(media.duration)}s` : 'Video'}
                         </div>
                     </div>
-                    <div class="media-info" style="padding: 5px; background: rgba(0,0,0,0.05);">
-                        <div style="font-weight: 600; font-size: 12px;">${media.file_name || 'Video'}</div>
+                    <div class="media-info" style="padding: 5px; background: rgba(102, 126, 234, 0.1); border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
+                        <div style="font-weight: 600; font-size: 12px; color: #3f51b5;">${media.file_name || 'Video'}</div>
+                        <div style="font-size: 10px; color: #5c6bc0;">${media.width && media.height ? `${media.width}×${media.height}px` : 'Video file'} ${media.duration ? `• ${Math.round(media.duration)}s` : ''}</div>
                     </div>`;
             } else if (videoUrl) {
                 item.innerHTML = `
@@ -1306,6 +1319,52 @@ function renderMediaGrid() {
 
         grid.appendChild(item);
     });
+}
+
+// Media filtering functionality
+let currentMediaFilter = 'all';
+
+function filterMedia(filterType) {
+    currentMediaFilter = filterType;
+    
+    // Update filter button states
+    document.querySelectorAll('.media-filter').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.filter === filterType) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Filter and render media
+    renderMediaGrid();
+    updateMediaCount();
+}
+
+function updateMediaCount() {
+    const countElement = document.getElementById('media-count');
+    if (!countElement) return;
+    
+    const totalImages = state.mediaLibrary.filter(m => m.type === 'image').length;
+    const totalVideos = state.mediaLibrary.filter(m => m.type === 'video').length;
+    const visibleItems = getFilteredMedia().length;
+    
+    let countText = '';
+    if (currentMediaFilter === 'all') {
+        countText = `Showing ${visibleItems} items (${totalImages} images, ${totalVideos} videos)`;
+    } else if (currentMediaFilter === 'image') {
+        countText = `Showing ${visibleItems} images`;
+    } else if (currentMediaFilter === 'video') {
+        countText = `Showing ${visibleItems} videos`;
+    }
+    
+    countElement.textContent = countText;
+}
+
+function getFilteredMedia() {
+    if (currentMediaFilter === 'all') {
+        return state.mediaLibrary;
+    }
+    return state.mediaLibrary.filter(media => media.type === currentMediaFilter);
 }
 
 // Select media from library

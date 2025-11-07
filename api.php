@@ -1441,11 +1441,20 @@ try {
                         logToFile("Image search response page {$page}: " . json_encode($response, JSON_PRETTY_PRINT));
                         
                         if (isset($response->data->list) && is_array($response->data->list)) {
-                            foreach ($response->data->list as $image) {
+                            logToFile("Found " . count($response->data->list) . " images in API response");
+                            foreach ($response->data->list as $index => $image) {
+                                logToFile("Processing image {$index}: " . json_encode($image, JSON_PRETTY_PRINT));
+                                
+                                // Try multiple possible URL fields from TikTok API
+                                $imageUrl = $image->image_url ?? $image->url ?? $image->preview_url ?? '';
+                                
+                                logToFile("Image URL extracted: " . $imageUrl);
+                                
                                 // Based on the Postman response, the structure is correct
                                 $images[] = [
                                     'image_id' => $image->image_id,
-                                    'url' => $image->image_url ?? '',  // image_url is the correct field
+                                    'url' => $imageUrl,
+                                    'image_url' => $imageUrl, // Add explicit image_url field
                                     'file_name' => $image->file_name ?? $image->material_name ?? 'Image',
                                     'width' => $image->width ?? null,
                                     'height' => $image->height ?? null,

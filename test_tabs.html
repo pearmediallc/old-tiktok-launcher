@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Media Tabs</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Media Library Tab Test</h1>
+        
+        <div class="modal-tabs">
+            <button class="tab-btn active" onclick="switchMediaTab('all', event)">All Media</button>
+            <button class="tab-btn" onclick="switchMediaTab('images', event)">📷 Images</button>
+            <button class="tab-btn" onclick="switchMediaTab('videos', event)">🎥 Videos</button>
+            <button class="btn-secondary btn-sm" onclick="addTestImage()">🧪 Add Test Image</button>
+        </div>
+        
+        <div class="modal-body" style="border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-top: 20px;">
+            <div id="media-all-tab" class="media-tab active">
+                <h4>All Media</h4>
+                <div class="media-grid" id="media-grid-all">
+                    <p style="text-align: center; color: #999; padding: 20px;">No media available. Click "Add Test Image" to test.</p>
+                </div>
+            </div>
+            <div id="media-images-tab" class="media-tab" style="display: none;">
+                <h4>Images Only</h4>
+                <div class="media-grid" id="media-grid-images">
+                    <p style="text-align: center; color: #999; padding: 20px;">No images available.</p>
+                </div>
+            </div>
+            <div id="media-videos-tab" class="media-tab" style="display: none;">
+                <h4>Videos Only</h4>
+                <div class="media-grid" id="media-grid-videos">
+                    <p style="text-align: center; color: #999; padding: 20px;">No videos available.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notification -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // Simple state for testing
+        const state = {
+            mediaLibrary: []
+        };
+
+        // Toast function
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast show ${type}`;
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // Tab switching function
+        function switchMediaTab(tab, evt) {
+            const clickEvent = evt;
+            
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.media-tab').forEach(tabContent => {
+                tabContent.classList.remove('active');
+                tabContent.style.display = 'none';
+            });
+
+            if (clickEvent && clickEvent.target) {
+                clickEvent.target.classList.add('active');
+            }
+            
+            const tabElement = document.getElementById(`media-${tab}-tab`);
+            if (tabElement) {
+                tabElement.classList.add('active');
+                tabElement.style.display = 'block';
+            }
+            
+            renderMediaGridForTab(tab);
+        }
+
+        // Render media grid for tab
+        function renderMediaGridForTab(activeTab = 'all') {
+            console.log('Rendering media grid for tab:', activeTab, 'with', state.mediaLibrary.length, 'total items');
+
+            let gridId = 'media-grid-all';
+            if (activeTab === 'images') {
+                gridId = 'media-grid-images';
+            } else if (activeTab === 'videos') {
+                gridId = 'media-grid-videos';
+            }
+
+            const grid = document.getElementById(gridId);
+            if (!grid) {
+                console.error('Grid not found for tab:', activeTab);
+                return;
+            }
+
+            grid.innerHTML = '';
+
+            let filteredMedia = state.mediaLibrary;
+            if (activeTab === 'images') {
+                filteredMedia = state.mediaLibrary.filter(media => media.type === 'image');
+            } else if (activeTab === 'videos') {
+                filteredMedia = state.mediaLibrary.filter(media => media.type === 'video');
+            }
+
+            console.log(`Filtered ${filteredMedia.length} items for ${activeTab} tab`);
+
+            if (filteredMedia.length === 0) {
+                const emptyMessage = activeTab === 'images' 
+                    ? 'No images in library. Click "Add Test Image" to test.'
+                    : activeTab === 'videos'
+                    ? 'No videos in library.'
+                    : 'No media in library. Click "Add Test Image" to test.';
+                
+                grid.innerHTML = `<p style="text-align: center; color: #999; padding: 20px;">${emptyMessage}</p>`;
+                return;
+            }
+
+            filteredMedia.forEach((media, index) => {
+                const item = document.createElement('div');
+                item.className = 'media-item';
+                item.style.cursor = 'pointer';
+                
+                item.innerHTML = `
+                    <div style="position: relative; width: 100%; height: 150px;">
+                        <img src="${media.url}" 
+                             alt="${media.file_name || 'Image'}" 
+                             style="width: 100%; height: 100%; object-fit: cover;"
+                             onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\\'background: linear-gradient(135deg, #4fc3f7, #29b6f6); width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;\\'>📷<br><small>Image</small></div>'">
+                        <div style="position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.7); 
+                                    padding: 2px 6px; border-radius: 3px; font-size: 10px; color: white;">
+                            ${media.type.toUpperCase()}
+                        </div>
+                    </div>
+                    <div class="media-info" style="padding: 5px; background: rgba(0,0,0,0.05);">
+                        <div style="font-weight: 600; font-size: 12px;">${media.file_name || 'Test Media'}</div>
+                    </div>`;
+
+                grid.appendChild(item);
+            });
+        }
+
+        // Add test image function
+        function addTestImage() {
+            const testImage = {
+                image_id: `test_image_${Date.now()}`,
+                url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjNDBhOWZmIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPvCfk5ggVGVzdCBJbWFnZTwvdGV4dD48L3N2Zz4=',
+                file_name: `Test Image ${state.mediaLibrary.length + 1}`,
+                type: 'image',
+                width: 200,
+                height: 150
+            };
+            
+            state.mediaLibrary.push(testImage);
+            
+            // Get current active tab
+            const activeTab = document.querySelector('.tab-btn.active');
+            let currentTab = 'all';
+            if (activeTab && activeTab.textContent.includes('Images')) {
+                currentTab = 'images';
+            } else if (activeTab && activeTab.textContent.includes('Videos')) {
+                currentTab = 'videos';
+            }
+            
+            renderMediaGridForTab(currentTab);
+            showToast('Test image added! Check different tabs to see filtering in action.', 'success');
+        }
+
+        // Initialize
+        console.log('Tab test page loaded');
+    </script>
+</body>
+</html>
