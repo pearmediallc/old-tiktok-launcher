@@ -158,6 +158,16 @@ header('Content-Type: application/json');
 
 try {
     switch ($action) {
+        case 'test_auth':
+            echo json_encode([
+                'success' => true,
+                'authenticated' => isset($_SESSION['authenticated']) && $_SESSION['authenticated'],
+                'session_id' => session_id(),
+                'advertiser_id' => $advertiser_id ?? 'NOT_SET',
+                'timestamp' => date('Y-m-d H:i:s')
+            ]);
+            break;
+            
         // Smart+ Campaign actions
         case 'create_smart_campaign':
             logToFile("Processing Smart+ Campaign Creation...");
@@ -1510,42 +1520,131 @@ try {
                     
                     if ($httpCode == 200) {
                         $response = json_decode($result);
-                        logToFile("Image list response page {$page}: " . json_encode($response, JSON_PRETTY_PRINT));
+                        logToFile("============ DEEP DEBUGGING: RAW TIKTOK RESPONSE ============");
+                        logToFile("Raw JSON response structure: " . json_encode($response, JSON_PRETTY_PRINT));
+                        
+                        // Check response structure step by step
+                        logToFile("Response object type: " . gettype($response));
+                        if ($response) {
+                            logToFile("Response->data exists: " . (isset($response->data) ? 'YES' : 'NO'));
+                            if (isset($response->data)) {
+                                logToFile("Response->data->list exists: " . (isset($response->data->list) ? 'YES' : 'NO'));
+                                logToFile("Response->data->list type: " . (isset($response->data->list) ? gettype($response->data->list) : 'N/A'));
+                                logToFile("Response->data->list is_array: " . (isset($response->data->list) && is_array($response->data->list) ? 'YES' : 'NO'));
+                            }
+                        }
                         
                         if (isset($response->data->list) && is_array($response->data->list)) {
+                            logToFile("============ PROCESSING IMAGES FROM TIKTOK ============");
                             logToFile("Found " . count($response->data->list) . " images in API response");
                             
                             foreach ($response->data->list as $index => $image) {
-                                // Only process displayable images (following your example)
-                                if ($image->displayable ?? true) {
-                                    logToFile("Processing displayable image {$index}: " . $image->file_name);
+                                logToFile("--- PROCESSING IMAGE INDEX {$index} ---");
+                                
+                                // Log complete image object structure
+                                logToFile("Complete image object: " . json_encode($image, JSON_PRETTY_PRINT));
+                                logToFile("Image object type: " . gettype($image));
+                                
+                                // Check all possible URL fields that TikTok might provide
+                                $possibleUrlFields = ['image_url', 'url', 'preview_url', 'thumbnail_url', 'download_url', 'display_url', 'src', 'link'];
+                                logToFile("Checking all possible URL fields:");
+                                foreach ($possibleUrlFields as $field) {
+                                    $value = isset($image->$field) ? $image->$field : 'NOT_SET';
+                                    logToFile("  {$field}: " . ($value !== 'NOT_SET' ? $value : 'NOT_SET'));
+                                }
+                                
+                                // Check all object properties
+                                logToFile("All object properties:");
+                                if (is_object($image)) {
+                                    $properties = get_object_vars($image);
+                                    foreach ($properties as $prop => $value) {
+                                        logToFile("  Property '{$prop}': " . (is_string($value) || is_numeric($value) ? $value : gettype($value)));
+                                    }
+                                } else {
+                                    logToFile("  Image is not an object! Type: " . gettype($image));
+                                }
+                                
+                                // Check displayable flag
+                                $displayable = $image->displayable ?? true;
+                                logToFile("Displayable flag: " . ($displayable ? 'TRUE' : 'FALSE'));
+                                
+                                if ($displayable) {
+                                    logToFile("Processing displayable image {$index}: " . ($image->file_name ?? 'NO_FILENAME'));
                                     
-                                    // Extract image URL from the response
-                                    $originalImageUrl = $image->image_url ?? $image->url ?? '';
+                                    // Try multiple extraction methods for URL
+                                    $originalImageUrl = '';
                                     
-                                    logToFile("Original TikTok image URL: " . $originalImageUrl);
+                                    // Method 1: Check image_url field
+                                    if (isset($image->image_url) && !empty($image->image_url)) {
+                                        $originalImageUrl = $image->image_url;
+                                        logToFile("✅ Found URL via image_url field: " . $originalImageUrl);
+                                    }
+                                    // Method 2: Check url field
+                                    elseif (isset($image->url) && !empty($image->url)) {
+                                        $originalImageUrl = $image->url;
+                                        logToFile("✅ Found URL via url field: " . $originalImageUrl);
+                                    }
+                                    // Method 3: Check preview_url field
+                                    elseif (isset($image->preview_url) && !empty($image->preview_url)) {
+                                        $originalImageUrl = $image->preview_url;
+                                        logToFile("✅ Found URL via preview_url field: " . $originalImageUrl);
+                                    }
+                                    // Method 4: Check thumbnail_url field  
+                                    elseif (isset($image->thumbnail_url) && !empty($image->thumbnail_url)) {
+                                        $originalImageUrl = $image->thumbnail_url;
+                                        logToFile("✅ Found URL via thumbnail_url field: " . $originalImageUrl);
+                                    }
+                                    else {
+                                        logToFile("❌ NO URL FOUND! Checking if any field contains URL-like string:");
+                                        foreach ($properties as $prop => $value) {
+                                            if (is_string($value) && (strpos($value, 'http') === 0 || strpos($value, '//') !== false)) {
+                                                logToFile("  Potential URL in '{$prop}': " . $value);
+                                                if (empty($originalImageUrl)) {
+                                                    $originalImageUrl = $value;
+                                                    logToFile("  ⚠️  Using this as fallback URL");
+                                                }
+                                            }
+                                        }
+                                    }
                                     
-                                    logToFile("Using TikTok image URL directly: " . $originalImageUrl);
+                                    logToFile("FINAL SELECTED URL: " . ($originalImageUrl ?: 'EMPTY/NULL'));
                                     
-                                    $images[] = [
-                                        'image_id' => $image->image_id ?? $image->id,
-                                        'url' => $originalImageUrl, // Use TikTok URL directly
-                                        'image_url' => $originalImageUrl, // TikTok image URL (valid for ~1 hour)
-                                        'preview_url' => $originalImageUrl, // Same URL for preview
-                                        'thumbnail_url' => $originalImageUrl, // Same URL for thumbnail
-                                        'file_name' => $image->file_name ?? 'Image',
+                                    // Test URL validity if found
+                                    if (!empty($originalImageUrl)) {
+                                        logToFile("Testing URL validity...");
+                                        if (filter_var($originalImageUrl, FILTER_VALIDATE_URL)) {
+                                            logToFile("✅ URL is valid format");
+                                        } else {
+                                            logToFile("❌ URL failed validation: " . $originalImageUrl);
+                                        }
+                                    }
+                                    
+                                    // Build final image array
+                                    $finalImageArray = [
+                                        'image_id' => $image->image_id ?? $image->id ?? 'NO_ID',
+                                        'url' => $originalImageUrl,
+                                        'image_url' => $originalImageUrl,
+                                        'preview_url' => $originalImageUrl,
+                                        'thumbnail_url' => $originalImageUrl,
+                                        'file_name' => $image->file_name ?? 'NO_FILENAME',
                                         'width' => $image->width ?? null,
                                         'height' => $image->height ?? null,
                                         'format' => $image->format ?? null,
                                         'size' => $image->size ?? null,
                                         'create_time' => $image->create_time ?? null,
                                         'modify_time' => $image->modify_time ?? null,
-                                        'displayable' => $image->displayable ?? true,
+                                        'displayable' => $displayable,
                                         'type' => 'image'
                                     ];
+                                    
+                                    logToFile("FINAL IMAGE ARRAY TO BE ADDED: " . json_encode($finalImageArray, JSON_PRETTY_PRINT));
+                                    
+                                    $images[] = $finalImageArray;
                                 } else {
-                                    logToFile("Skipping non-displayable image: " . ($image->file_name ?? 'unnamed'));
+                                    logToFile("❌ Skipping non-displayable image: " . ($image->file_name ?? 'unnamed'));
                                 }
+                                
+                                logToFile("--- END PROCESSING IMAGE INDEX {$index} ---");
                             }
                             
                             // Check if there are more pages
@@ -1660,18 +1759,48 @@ try {
                 }
             }
             
+            logToFile("============ FINAL RESPONSE PREPARATION ============");
             logToFile("Total images found: " . count($images));
             
-            echo json_encode([
+            // Log details of each image being returned to frontend
+            if (!empty($images)) {
+                logToFile("IMAGES TO BE RETURNED TO FRONTEND:");
+                foreach ($images as $index => $img) {
+                    logToFile("Image {$index}: " . json_encode($img, JSON_PRETTY_PRINT));
+                    // Check if URL fields are populated
+                    $urlsCheck = [
+                        'url' => $img['url'] ?? 'MISSING',
+                        'image_url' => $img['image_url'] ?? 'MISSING',
+                        'preview_url' => $img['preview_url'] ?? 'MISSING', 
+                        'thumbnail_url' => $img['thumbnail_url'] ?? 'MISSING'
+                    ];
+                    logToFile("  URL fields check: " . json_encode($urlsCheck));
+                    
+                    // Warn about empty URLs
+                    if (empty($img['url']) && empty($img['image_url'])) {
+                        logToFile("  ⚠️  WARNING: Image has no usable URLs!");
+                    }
+                }
+            } else {
+                logToFile("❌ NO IMAGES TO RETURN - EMPTY ARRAY");
+            }
+            
+            $finalResponse = [
                 'success' => true,
                 'data' => ['list' => $images],
                 'message' => count($images) > 0 ? null : 'No images found in TikTok library. Please upload images first.',
                 'debug_info' => [
                     'total_images_found' => count($images),
                     'api_calls_made' => $page - 1,
-                    'storage_fallback_used' => false
+                    'storage_fallback_used' => false,
+                    'timestamp' => date('Y-m-d H:i:s')
                 ]
-            ]);
+            ];
+            
+            logToFile("COMPLETE FINAL RESPONSE: " . json_encode($finalResponse, JSON_PRETTY_PRINT));
+            logToFile("============ END GET_IMAGES REQUEST ============");
+            
+            echo json_encode($finalResponse);
             break;
 
         case 'get_videos':

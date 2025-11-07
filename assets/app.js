@@ -834,10 +834,30 @@ async function loadImageLibrary() {
     mediaGrid.innerHTML = '<div class="loading">Loading images from TikTok...</div>';
 
     try {
+        console.log('🚀 STARTING API REQUEST for get_images...');
         const response = await apiRequest('get_images', {}, 'GET');
+        
+        console.log('============ API RESPONSE DEBUG ============');
+        console.log('📥 Complete API Response:', response);
+        console.log('📥 Response type:', typeof response);
+        console.log('📥 Response.success:', response.success);
+        console.log('📥 Response.data:', response.data);
+        console.log('📥 Response.data type:', typeof response.data);
+        
+        if (response.data) {
+            console.log('📥 Response.data.list:', response.data.list);
+            console.log('📥 Response.data.list type:', typeof response.data.list);
+            console.log('📥 Response.data.list is array:', Array.isArray(response.data.list));
+            if (response.data.list) {
+                console.log('📥 Response.data.list length:', response.data.list.length);
+            }
+        }
+        console.log('============ END API RESPONSE DEBUG ============');
         
         if (response.success && response.data && response.data.list) {
             const images = response.data.list;
+            
+            console.log('✅ Processing images array with', images.length, 'items');
             
             if (images.length === 0) {
                 mediaGrid.innerHTML = `
@@ -1202,11 +1222,39 @@ function renderMediaGrid() {
         item.onclick = () => selectMedia(media);
 
         if (media.type === 'image') {
-            // For images, use the URL provided by TikTok (try multiple field names)
-            const imgUrl = media.url || media.image_url || media.preview_url || media.thumbnail_url;
+            // Prioritize TikTok's image_url field first, then fallback to other fields
+            const imgUrl = media.image_url || media.url || media.preview_url || media.thumbnail_url;
             
-            console.log('Image media object:', media); // Debug logging
-            console.log('Image URL being used:', imgUrl); // Debug the actual URL
+            console.log('============ FRONTEND IMAGE DEBUG ============');
+            console.log('📷 Processing image media object:', media);
+            console.log('🔍 Complete media object structure:', JSON.stringify(media, null, 2));
+            
+            // Check each URL field individually
+            console.log('🌐 URL Fields Analysis:');
+            console.log('  media.image_url:', typeof media.image_url, '=', media.image_url);
+            console.log('  media.url:', typeof media.url, '=', media.url);
+            console.log('  media.preview_url:', typeof media.preview_url, '=', media.preview_url);
+            console.log('  media.thumbnail_url:', typeof media.thumbnail_url, '=', media.thumbnail_url);
+            
+            // Check what imgUrl was selected
+            console.log('🎯 URL Selection Logic:');
+            if (media.image_url) {
+                console.log('  ✅ Using media.image_url:', media.image_url);
+            } else if (media.url) {
+                console.log('  ⚠️  Falling back to media.url:', media.url);
+            } else if (media.preview_url) {
+                console.log('  ⚠️  Falling back to media.preview_url:', media.preview_url);
+            } else if (media.thumbnail_url) {
+                console.log('  ⚠️  Falling back to media.thumbnail_url:', media.thumbnail_url);
+            } else {
+                console.log('  ❌ NO URL AVAILABLE!');
+            }
+            
+            console.log('🏆 FINAL SELECTED imgUrl:', imgUrl);
+            console.log('🏆 imgUrl type:', typeof imgUrl);
+            console.log('🏆 imgUrl length:', imgUrl ? imgUrl.length : 'NULL/UNDEFINED');
+            console.log('🏆 imgUrl empty check:', imgUrl === '' ? 'EMPTY STRING' : 'NOT EMPTY');
+            console.log('============ END FRONTEND IMAGE DEBUG ============');
             
             if (imgUrl && imgUrl !== '') {
                 item.innerHTML = `
@@ -1214,8 +1262,8 @@ function renderMediaGrid() {
                         <img src="${imgUrl}" 
                              alt="${media.file_name || 'Image'}" 
                              style="width: 100%; height: 100%; object-fit: cover;"
-                             onload="console.log('Image loaded successfully:', '${imgUrl}')"
-                             onerror="console.log('Image failed to load:', '${imgUrl}'); this.onerror=null; this.parentElement.innerHTML='<div style=\\'background: linear-gradient(135deg, #4fc3f7, #29b6f6); width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;\\'>🖼️<br><small>Image Load Failed</small><br><tiny>${media.file_name || 'Unknown'}</tiny></div>'">
+                             onload="console.log('✅ Image loaded successfully:', '${media.file_name}', 'URL:', '${imgUrl.substring(0, 50)}...')"
+                             onerror="console.error('❌ Image failed to load:', '${media.file_name}', 'URL:', '${imgUrl.substring(0, 50)}...'); this.style.display='none'; this.parentElement.innerHTML='<div style=&quot;background: linear-gradient(135deg, #ff5722, #f44336); width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;&quot;><div style=&quot;font-size: 30px;&quot;>❌</div><small>Image Failed</small><br><tiny>${media.file_name || 'Unknown'}</tiny></div>'">
                         <div style="position: absolute; top: 5px; right: 5px; background: #4fc3f7; 
                                     padding: 2px 6px; border-radius: 3px; font-size: 10px; color: white; font-weight: bold;">
                             📷 IMAGE
