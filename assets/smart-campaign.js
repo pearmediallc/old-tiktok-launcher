@@ -1419,25 +1419,49 @@ async function loadAvatarLibrary() {
         grid.innerHTML = '';
         
         if (response.success && response.data && response.data.list && response.data.list.length > 0) {
-            response.data.list.forEach(image => {
-                const item = document.createElement('div');
-                item.className = 'media-item avatar-item';
-                item.style.cursor = 'pointer';
-                item.onclick = () => selectAvatarImage(image);
-                
-                // Create image preview
-                item.innerHTML = `
-                    <div style="position: relative; width: 100%; height: 120px;">
-                        <div style="width: 100%; height: 100%; background: linear-gradient(135deg, #4fc3f7, #29b6f6); 
-                                    display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;">
-                            <div style="font-size: 30px; margin-bottom: 5px;">🖼️</div>
-                            <div style="font-size: 10px; text-align: center; padding: 0 5px;">${image.file_name || 'Image'}</div>
-                        </div>
-                    </div>
-                `;
-                
-                grid.appendChild(item);
+            // Filter for square images only (for avatar use)
+            const squareImages = response.data.list.filter(image => {
+                return image.width && image.height && image.width === image.height;
             });
+            
+            if (squareImages.length > 0) {
+                squareImages.forEach(image => {
+                    const item = document.createElement('div');
+                    item.className = 'media-item avatar-item';
+                    item.style.cursor = 'pointer';
+                    item.onclick = () => selectAvatarImage(image);
+                    
+                    // Create image preview
+                    const imgUrl = image.url || image.image_url || image.preview_url || image.thumbnail_url;
+                    if (imgUrl && imgUrl !== '') {
+                        item.innerHTML = `
+                            <div style="position: relative; width: 100%; height: 120px;">
+                                <img src="${imgUrl}" alt="${image.file_name || 'Image'}" 
+                                     style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;"
+                                     onload="console.log('Avatar image loaded:', '${imgUrl}')"
+                                     onerror="this.parentNode.innerHTML='<div style=&quot;width: 100%; height: 100%; background: linear-gradient(135deg, #4fc3f7, #29b6f6); display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;&quot;><div style=&quot;font-size: 30px; margin-bottom: 5px;&quot;>🖼️</div><div style=&quot;font-size: 10px; text-align: center; padding: 0 5px;&quot;>${image.file_name || 'Image'}</div></div>'">
+                                <div style="position: absolute; bottom: 2px; left: 2px; background: rgba(0,0,0,0.7); color: white; padding: 2px 4px; font-size: 10px; border-radius: 2px;">
+                                    ${image.width}x${image.height}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        item.innerHTML = `
+                            <div style="position: relative; width: 100%; height: 120px;">
+                                <div style="width: 100%; height: 100%; background: linear-gradient(135deg, #4fc3f7, #29b6f6); 
+                                            display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;">
+                                    <div style="font-size: 30px; margin-bottom: 5px;">🖼️</div>
+                                    <div style="font-size: 10px; text-align: center; padding: 0 5px;">${image.file_name || 'Image'}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    grid.appendChild(item);
+                });
+            } else {
+                grid.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No square images available for avatars. Upload square images (equal width and height) or crop existing images.</p>';
+            }
         } else {
             grid.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No images in TikTok library. Upload some images first or sync from TikTok.</p>';
         }
@@ -1474,11 +1498,23 @@ function handleAvatarUpload(event) {
         return;
     }
     
-    // Show preview
+    // Validate image dimensions (TikTok requires square avatars)
+    const img = new Image();
     const reader = new FileReader();
+    
     reader.onload = function(e) {
-        document.getElementById('avatar-preview-img').src = e.target.result;
-        document.getElementById('avatar-upload-preview').style.display = 'block';
+        img.onload = function() {
+            if (img.width !== img.height) {
+                showSmartToast('Avatar images must be square (equal width and height). Please use an image editor to crop your image to square dimensions.', 'error');
+                event.target.value = ''; // Clear the file input
+                return;
+            }
+            
+            // Show preview if dimensions are valid
+            document.getElementById('avatar-preview-img').src = e.target.result;
+            document.getElementById('avatar-upload-preview').style.display = 'block';
+        };
+        img.src = e.target.result;
     };
     reader.readAsDataURL(file);
 }
