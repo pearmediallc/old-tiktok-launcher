@@ -1202,6 +1202,7 @@ function renderMediaGrid() {
             const imgUrl = media.url || media.image_url || media.preview_url || media.thumbnail_url;
             
             console.log('Image media object:', media); // Debug logging
+            console.log('Image URL being used:', imgUrl); // Debug the actual URL
             
             if (imgUrl && imgUrl !== '') {
                 item.innerHTML = `
@@ -1209,7 +1210,8 @@ function renderMediaGrid() {
                         <img src="${imgUrl}" 
                              alt="${media.file_name || 'Image'}" 
                              style="width: 100%; height: 100%; object-fit: cover;"
-                             onerror="this.onerror=null; this.parentElement.innerHTML='<div style=\\'background: linear-gradient(135deg, #4fc3f7, #29b6f6); width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;\\'>🖼️<br><small>Image</small></div>'">
+                             onload="console.log('Image loaded successfully:', '${imgUrl}')"
+                             onerror="console.log('Image failed to load:', '${imgUrl}'); this.onerror=null; this.parentElement.innerHTML='<div style=\\'background: linear-gradient(135deg, #4fc3f7, #29b6f6); width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;\\'>🖼️<br><small>Image Load Failed</small><br><tiny>${media.file_name || 'Unknown'}</tiny></div>'">
                         <div style="position: absolute; top: 5px; right: 5px; background: #4fc3f7; 
                                     padding: 2px 6px; border-radius: 3px; font-size: 10px; color: white; font-weight: bold;">
                             📷 IMAGE

@@ -88,7 +88,7 @@ function downloadAndStoreImage($imageUrl, $imageId, $fileName) {
     // Check if file already exists
     if (file_exists($localFilePath)) {
         logToFile("Image already exists locally: " . $localFileName);
-        return 'uploads/images/' . $localFileName;
+        return 'serve-image.php?path=' . urlencode($localFileName);
     }
     
     try {
@@ -110,7 +110,7 @@ function downloadAndStoreImage($imageUrl, $imageId, $fileName) {
             // Save the image locally
             file_put_contents($localFilePath, $imageData);
             logToFile("Image downloaded successfully: " . $localFileName);
-            return 'uploads/images/' . $localFileName;
+            return 'serve-image.php?path=' . urlencode($localFileName);
         } else {
             logToFile("Failed to download image: HTTP " . $httpCode);
             return $imageUrl; // Return original URL as fallback
