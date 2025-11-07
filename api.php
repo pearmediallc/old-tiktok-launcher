@@ -1461,42 +1461,8 @@ try {
             
             $images = [];
             
-            // First check local storage like videos do
-            $storageFile = __DIR__ . '/media_storage.json';
-            if (file_exists($storageFile)) {
-                $storage = json_decode(file_get_contents($storageFile), true) ?? ['images' => [], 'videos' => []];
-                
-                // Filter images for current advertiser
-                $advertiserImages = array_filter($storage['images'] ?? [], function($img) use ($advertiser_id) {
-                    return $img['advertiser_id'] === $advertiser_id;
-                });
-                
-                logToFile("Found " . count($advertiserImages) . " stored images for advertiser: " . $advertiser_id);
-                
-                if (!empty($advertiserImages)) {
-                    // Use stored images with their URLs (like test images)
-                    foreach ($advertiserImages as $img) {
-                        $images[] = [
-                            'image_id' => $img['image_id'],
-                            'url' => $img['url'] ?? '',
-                            'image_url' => $img['url'] ?? '', // Add explicit image_url field
-                            'file_name' => $img['file_name'] ?? 'Image',
-                            'width' => $img['width'] ?? null,
-                            'height' => $img['height'] ?? null,
-                            'format' => $img['format'] ?? null,
-                            'type' => 'image'
-                        ];
-                    }
-                    
-                    logToFile("Using " . count($images) . " images from local storage");
-                } else {
-                    logToFile("No stored images found for advertiser, trying TikTok API search...");
-                }
-            }
-            
-            // Only search TikTok API if no local images found
-            if (empty($images)) {
-                logToFile("Fetching images from TikTok API using file/list endpoint...");
+            // Always try TikTok API first for fresh images
+            logToFile("Fetching images from TikTok API using file/list endpoint...");
                 // Use the better file/list endpoint with POST method like your example
                 try {
                 $page = 1;
@@ -1559,18 +1525,14 @@ try {
                                     
                                     logToFile("Original TikTok image URL: " . $originalImageUrl);
                                     
-                                    // Download and store the image locally (like video thumbnails)
-                                    $localImageUrl = downloadAndStoreImage($originalImageUrl, $image->image_id ?? $image->id, $image->file_name ?? 'image');
-                                    
-                                    logToFile("Local image URL: " . $localImageUrl);
+                                    logToFile("Using TikTok image URL directly: " . $originalImageUrl);
                                     
                                     $images[] = [
                                         'image_id' => $image->image_id ?? $image->id,
-                                        'url' => $localImageUrl, // Use local URL instead of temporary TikTok URL
-                                        'image_url' => $localImageUrl,
-                                        'preview_url' => $localImageUrl, // Add preview_url like videos have
-                                        'thumbnail_url' => $localImageUrl, // Add thumbnail_url like videos have
-                                        'original_url' => $originalImageUrl, // Keep original for reference
+                                        'url' => $originalImageUrl, // Use TikTok URL directly
+                                        'image_url' => $originalImageUrl, // TikTok image URL (valid for ~1 hour)
+                                        'preview_url' => $originalImageUrl, // Same URL for preview
+                                        'thumbnail_url' => $originalImageUrl, // Same URL for thumbnail
                                         'file_name' => $image->file_name ?? 'Image',
                                         'width' => $image->width ?? null,
                                         'height' => $image->height ?? null,
@@ -1666,34 +1628,37 @@ try {
                 } else {
                     logToFile("Storage file does not exist: " . $storageFile);
                 }
-                } catch (Exception $e) {
-                    logToFile("Exception searching images: " . $e->getMessage());
-                    logToFile("Exception stack trace: " . $e->getTraceAsString());
+            }
+            
+            // If no images from TikTok API, fallback to local storage
+            if (empty($images)) {
+                logToFile("No images from TikTok API, falling back to local storage...");
+                $storageFile = __DIR__ . '/media_storage.json';
+                if (file_exists($storageFile)) {
+                    $storage = json_decode(file_get_contents($storageFile), true) ?? ['images' => [], 'videos' => []];
                     
-                    // Fallback to local storage
-                    $storageFile = __DIR__ . '/media_storage.json';
-                    if (file_exists($storageFile)) {
-                        $storage = json_decode(file_get_contents($storageFile), true) ?? ['images' => [], 'videos' => []];
-                        
-                        $advertiserImages = array_filter($storage['images'] ?? [], function($img) use ($advertiser_id) {
-                            return $img['advertiser_id'] === $advertiser_id;
-                        });
-                        
-                        logToFile("Using storage fallback, found " . count($advertiserImages) . " images for advertiser: " . $advertiser_id);
-                        
-                        foreach ($advertiserImages as $img) {
-                            $images[] = [
-                                'image_id' => $img['image_id'],
-                                'url' => $img['url'] ?? '',
-                                'file_name' => $img['file_name'] ?? 'Image',
-                                'type' => 'image'
-                            ];
-                        }
-                    } else {
-                        logToFile("Storage file does not exist: " . $storageFile);
+                    $advertiserImages = array_filter($storage['images'] ?? [], function($img) use ($advertiser_id) {
+                        return $img['advertiser_id'] === $advertiser_id;
+                    });
+                    
+                    logToFile("Using storage fallback, found " . count($advertiserImages) . " images for advertiser: " . $advertiser_id);
+                    
+                    foreach ($advertiserImages as $img) {
+                        $images[] = [
+                            'image_id' => $img['image_id'],
+                            'url' => $img['url'] ?? '',
+                            'image_url' => $img['url'] ?? '', // Add explicit image_url field
+                            'file_name' => $img['file_name'] ?? 'Image',
+                            'width' => $img['width'] ?? null,
+                            'height' => $img['height'] ?? null,
+                            'format' => $img['format'] ?? null,
+                            'type' => 'image'
+                        ];
                     }
+                } else {
+                    logToFile("Storage file does not exist: " . $storageFile);
                 }
-            } // End of TikTok API search (only if no storage images found)
+            }
             
             logToFile("Total images found: " . count($images));
             
