@@ -1391,7 +1391,9 @@ try {
             break;
 
         case 'get_images':
+            logToFile("============ GET IMAGES REQUEST ============");
             logToFile("Get Images - Advertiser ID: " . $advertiser_id);
+            logToFile("Access Token: " . (!empty($accessToken) ? "Present (length: " . strlen($accessToken) . ")" : "MISSING"));
             
             $images = [];
             
@@ -1435,6 +1437,9 @@ try {
                     if ($curlError) {
                         logToFile("CURL Error: " . $curlError);
                     }
+                    
+                    logToFile("Image search HTTP response code: " . $httpCode);
+                    logToFile("Raw response (first 500 chars): " . substr($result, 0, 500));
                     
                     if ($httpCode == 200) {
                         $response = json_decode($result);

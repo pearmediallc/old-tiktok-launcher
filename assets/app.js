@@ -943,14 +943,19 @@ async function loadMediaLibrary() {
 
         state.mediaLibrary = [];
 
+        console.log('GET IMAGES API Response:', imagesResponse);
+        
         if (imagesResponse.success && imagesResponse.data && imagesResponse.data.list) {
-            console.log('Images loaded:', imagesResponse.data.list.length, imagesResponse.data.list);
+            console.log('✅ Images loaded:', imagesResponse.data.list.length, imagesResponse.data.list);
             state.mediaLibrary.push(...imagesResponse.data.list.map(img => ({
                 ...img,
                 type: 'image'
             })));
         } else {
-            console.log('Images response failed or empty:', imagesResponse);
+            console.log('❌ Images response failed or empty:', imagesResponse);
+            console.log('Images response success:', imagesResponse.success);
+            console.log('Images response data:', imagesResponse.data);
+            console.log('Images response message:', imagesResponse.message);
         }
 
         if (videosResponse.success && videosResponse.data && videosResponse.data.list) {
