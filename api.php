@@ -67,6 +67,60 @@ function logToFile($message) {
     file_put_contents(__DIR__ . '/api_debug.log', $logMessage, FILE_APPEND);
 }
 
+// Download and store TikTok images locally (like video thumbnails)
+function downloadAndStoreImage($imageUrl, $imageId, $fileName) {
+    if (empty($imageUrl)) {
+        return '';
+    }
+    
+    // Create uploads directory if it doesn't exist
+    $uploadsDir = __DIR__ . '/uploads/images/';
+    if (!is_dir($uploadsDir)) {
+        mkdir($uploadsDir, 0755, true);
+    }
+    
+    // Clean filename and create local filename
+    $cleanFileName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $fileName);
+    $extension = pathinfo(parse_url($imageUrl, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'jpg';
+    $localFileName = $imageId . '_' . $cleanFileName . '.' . $extension;
+    $localFilePath = $uploadsDir . $localFileName;
+    
+    // Check if file already exists
+    if (file_exists($localFilePath)) {
+        logToFile("Image already exists locally: " . $localFileName);
+        return 'uploads/images/' . $localFileName;
+    }
+    
+    try {
+        logToFile("Downloading image from: " . $imageUrl);
+        
+        // Download the image
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $imageUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        
+        $imageData = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($httpCode == 200 && $imageData !== false) {
+            // Save the image locally
+            file_put_contents($localFilePath, $imageData);
+            logToFile("Image downloaded successfully: " . $localFileName);
+            return 'uploads/images/' . $localFileName;
+        } else {
+            logToFile("Failed to download image: HTTP " . $httpCode);
+            return $imageUrl; // Return original URL as fallback
+        }
+    } catch (Exception $e) {
+        logToFile("Exception downloading image: " . $e->getMessage());
+        return $imageUrl; // Return original URL as fallback
+    }
+}
+
 // Process location targeting data
 function processLocationTargeting($locationData) {
     if (empty($locationData)) {
@@ -1501,14 +1555,22 @@ try {
                                     logToFile("Processing displayable image {$index}: " . $image->file_name);
                                     
                                     // Extract image URL from the response
-                                    $imageUrl = $image->image_url ?? $image->url ?? '';
+                                    $originalImageUrl = $image->image_url ?? $image->url ?? '';
                                     
-                                    logToFile("Image URL extracted: " . $imageUrl);
+                                    logToFile("Original TikTok image URL: " . $originalImageUrl);
+                                    
+                                    // Download and store the image locally (like video thumbnails)
+                                    $localImageUrl = downloadAndStoreImage($originalImageUrl, $image->image_id ?? $image->id, $image->file_name ?? 'image');
+                                    
+                                    logToFile("Local image URL: " . $localImageUrl);
                                     
                                     $images[] = [
                                         'image_id' => $image->image_id ?? $image->id,
-                                        'url' => $imageUrl,
-                                        'image_url' => $imageUrl,
+                                        'url' => $localImageUrl, // Use local URL instead of temporary TikTok URL
+                                        'image_url' => $localImageUrl,
+                                        'preview_url' => $localImageUrl, // Add preview_url like videos have
+                                        'thumbnail_url' => $localImageUrl, // Add thumbnail_url like videos have
+                                        'original_url' => $originalImageUrl, // Keep original for reference
                                         'file_name' => $image->file_name ?? 'Image',
                                         'width' => $image->width ?? null,
                                         'height' => $image->height ?? null,
