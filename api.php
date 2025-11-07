@@ -1444,7 +1444,7 @@ try {
             if (empty($images)) {
                 logToFile("Searching TikTok API for images...");
                 // Use the image search endpoint to get ALL images - matching TikTok's exact format
-            try {
+                try {
                 $page = 1;
                 $pageSize = 100;
                 $hasMore = true;
@@ -1597,6 +1597,33 @@ try {
                     }
                 } else {
                     logToFile("Storage file does not exist: " . $storageFile);
+                }
+                } catch (Exception $e) {
+                    logToFile("Exception searching images: " . $e->getMessage());
+                    logToFile("Exception stack trace: " . $e->getTraceAsString());
+                    
+                    // Fallback to local storage
+                    $storageFile = __DIR__ . '/media_storage.json';
+                    if (file_exists($storageFile)) {
+                        $storage = json_decode(file_get_contents($storageFile), true) ?? ['images' => [], 'videos' => []];
+                        
+                        $advertiserImages = array_filter($storage['images'] ?? [], function($img) use ($advertiser_id) {
+                            return $img['advertiser_id'] === $advertiser_id;
+                        });
+                        
+                        logToFile("Using storage fallback, found " . count($advertiserImages) . " images for advertiser: " . $advertiser_id);
+                        
+                        foreach ($advertiserImages as $img) {
+                            $images[] = [
+                                'image_id' => $img['image_id'],
+                                'url' => $img['url'] ?? '',
+                                'file_name' => $img['file_name'] ?? 'Image',
+                                'type' => 'image'
+                            ];
+                        }
+                    } else {
+                        logToFile("Storage file does not exist: " . $storageFile);
+                    }
                 }
             } // End of TikTok API search (only if no storage images found)
             
