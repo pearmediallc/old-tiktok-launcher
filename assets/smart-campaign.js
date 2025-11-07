@@ -1419,13 +1419,8 @@ async function loadAvatarLibrary() {
         grid.innerHTML = '';
         
         if (response.success && response.data && response.data.list && response.data.list.length > 0) {
-            // Filter for square images only (for avatar use)
-            const squareImages = response.data.list.filter(image => {
-                return image.width && image.height && image.width === image.height;
-            });
-            
-            if (squareImages.length > 0) {
-                squareImages.forEach(image => {
+            // Show all images for avatar selection (will be auto-cropped if not square)
+            response.data.list.forEach(image => {
                     const item = document.createElement('div');
                     item.className = 'media-item avatar-item';
                     item.style.cursor = 'pointer';
@@ -1459,9 +1454,6 @@ async function loadAvatarLibrary() {
                     
                     grid.appendChild(item);
                 });
-            } else {
-                grid.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No square images available for avatars. Upload square images (equal width and height) or crop existing images.</p>';
-            }
         } else {
             grid.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No images in TikTok library. Upload some images first or sync from TikTok.</p>';
         }
@@ -1484,6 +1476,13 @@ function selectAvatarImage(image) {
     event.target.closest('.avatar-item').style.border = '3px solid #667eea';
     event.target.closest('.avatar-item').style.boxShadow = '0 0 10px rgba(102, 126, 234, 0.3)';
     
+    // Check if image needs cropping for avatar use
+    if (image.width && image.height && image.width !== image.height) {
+        showSmartToast(`Selected image (${image.width}x${image.height}) will be auto-cropped to square for avatar use`, 'info');
+    } else if (image.width && image.height) {
+        showSmartToast(`Perfect! Selected square image (${image.width}x${image.height}) ready for avatar use`, 'success');
+    }
+    
     // Enable confirm button
     document.getElementById('confirm-avatar-btn').disabled = false;
 }
@@ -1498,21 +1497,43 @@ function handleAvatarUpload(event) {
         return;
     }
     
-    // Validate image dimensions (TikTok requires square avatars)
+    // Automatically crop image to square for avatar use
     const img = new Image();
     const reader = new FileReader();
     
     reader.onload = function(e) {
         img.onload = function() {
-            if (img.width !== img.height) {
-                showSmartToast('Avatar images must be square (equal width and height). Please use an image editor to crop your image to square dimensions.', 'error');
-                event.target.value = ''; // Clear the file input
-                return;
-            }
+            // Create canvas to crop image to square
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
             
-            // Show preview if dimensions are valid
-            document.getElementById('avatar-preview-img').src = e.target.result;
-            document.getElementById('avatar-upload-preview').style.display = 'block';
+            // Determine the crop size (use the smaller dimension)
+            const cropSize = Math.min(img.width, img.height);
+            canvas.width = cropSize;
+            canvas.height = cropSize;
+            
+            // Calculate crop position (center crop)
+            const offsetX = (img.width - cropSize) / 2;
+            const offsetY = (img.height - cropSize) / 2;
+            
+            // Draw the cropped image
+            ctx.drawImage(img, offsetX, offsetY, cropSize, cropSize, 0, 0, cropSize, cropSize);
+            
+            // Convert canvas to blob and show preview
+            canvas.toBlob(function(blob) {
+                const croppedUrl = URL.createObjectURL(blob);
+                document.getElementById('avatar-preview-img').src = croppedUrl;
+                document.getElementById('avatar-upload-preview').style.display = 'block';
+                
+                // Store the cropped blob for upload
+                window.croppedAvatarBlob = blob;
+                
+                if (img.width !== img.height) {
+                    showSmartToast(`Image automatically cropped to square (${cropSize}x${cropSize}) for avatar use`, 'info');
+                } else {
+                    showSmartToast('Avatar image ready for upload', 'success');
+                }
+            }, file.type, 0.9);
         };
         img.src = e.target.result;
     };
@@ -1521,18 +1542,22 @@ function handleAvatarUpload(event) {
 
 async function uploadAvatarImage() {
     const fileInput = document.getElementById('avatar-file-input');
-    const file = fileInput.files[0];
+    const originalFile = fileInput.files[0];
     
-    if (!file) {
+    if (!originalFile) {
         showSmartToast('Please select an image file', 'error');
         return;
     }
+    
+    // Use cropped blob if available, otherwise use original file
+    const fileToUpload = window.croppedAvatarBlob || originalFile;
+    const fileName = originalFile.name.replace(/\.[^/.]+$/, '') + '_avatar.jpg'; // Add avatar suffix
     
     try {
         showSmartToast('Uploading avatar image...', 'info');
         
         const formData = new FormData();
-        formData.append('image', file);
+        formData.append('image', fileToUpload, fileName);
         formData.append('action', 'upload_image');
         
         const response = await fetch('api.php', {
