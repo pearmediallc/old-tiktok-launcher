@@ -1407,7 +1407,43 @@ try {
             
             $images = [];
             
-            // Use the image search endpoint to get ALL images - matching TikTok's exact format
+            // First check local storage like videos do
+            $storageFile = __DIR__ . '/media_storage.json';
+            if (file_exists($storageFile)) {
+                $storage = json_decode(file_get_contents($storageFile), true) ?? ['images' => [], 'videos' => []];
+                
+                // Filter images for current advertiser
+                $advertiserImages = array_filter($storage['images'] ?? [], function($img) use ($advertiser_id) {
+                    return $img['advertiser_id'] === $advertiser_id;
+                });
+                
+                logToFile("Found " . count($advertiserImages) . " stored images for advertiser: " . $advertiser_id);
+                
+                if (!empty($advertiserImages)) {
+                    // Use stored images with their URLs (like test images)
+                    foreach ($advertiserImages as $img) {
+                        $images[] = [
+                            'image_id' => $img['image_id'],
+                            'url' => $img['url'] ?? '',
+                            'image_url' => $img['url'] ?? '', // Add explicit image_url field
+                            'file_name' => $img['file_name'] ?? 'Image',
+                            'width' => $img['width'] ?? null,
+                            'height' => $img['height'] ?? null,
+                            'format' => $img['format'] ?? null,
+                            'type' => 'image'
+                        ];
+                    }
+                    
+                    logToFile("Using " . count($images) . " images from local storage");
+                } else {
+                    logToFile("No stored images found for advertiser, trying TikTok API search...");
+                }
+            }
+            
+            // Only search TikTok API if no local images found
+            if (empty($images)) {
+                logToFile("Searching TikTok API for images...");
+                // Use the image search endpoint to get ALL images - matching TikTok's exact format
             try {
                 $page = 1;
                 $pageSize = 100;
@@ -1562,7 +1598,7 @@ try {
                 } else {
                     logToFile("Storage file does not exist: " . $storageFile);
                 }
-            }
+            } // End of TikTok API search (only if no storage images found)
             
             logToFile("Total images found: " . count($images));
             
