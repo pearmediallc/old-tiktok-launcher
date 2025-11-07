@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Fix - TikTok Images</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .image-item {
+            border: 2px solid #4fc3f7;
+            border-radius: 8px;
+            overflow: hidden;
+            background: white;
+        }
+        .image-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+        }
+        .image-info {
+            padding: 10px;
+            background: #f0f8ff;
+        }
+        .btn {
+            background: #4fc3f7;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Fix - TikTok Images Should Now Display</h1>
+    
+    <div class="test-container">
+        <h2>Image Display Test</h2>
+        <button class="btn" onclick="testImages()">Test Images After Fix</button>
+        <div id="status" class="status info">Click button to test...</div>
+        <div id="image-grid" class="image-grid"></div>
+    </div>
+
+    <script>
+        async function testImages() {
+            const statusEl = document.getElementById('status');
+            const gridEl = document.getElementById('image-grid');
+            
+            statusEl.className = 'status info';
+            statusEl.textContent = 'Loading images...';
+            gridEl.innerHTML = '';
+            
+            try {
+                console.log('🚀 Testing images after displayable filter fix...');
+                
+                const response = await fetch('api.php?action=get_images');
+                const data = await response.json();
+                
+                console.log('📥 API Response:', data);
+                
+                if (data.success && data.data && data.data.list && data.data.list.length > 0) {
+                    statusEl.className = 'status success';
+                    statusEl.textContent = `✅ SUCCESS! Found ${data.data.list.length} images with URLs`;
+                    
+                    data.data.list.forEach((image, index) => {
+                        console.log(`🖼️ Image ${index}:`, image);
+                        
+                        const imageUrl = image.image_url || image.url;
+                        const hasUrl = !!imageUrl;
+                        
+                        const imageEl = document.createElement('div');
+                        imageEl.className = 'image-item';
+                        
+                        if (hasUrl) {
+                            imageEl.innerHTML = `
+                                <img src="${imageUrl}" 
+                                     alt="${image.file_name}" 
+                                     onload="console.log('✅ Image loaded:', '${image.file_name}')"
+                                     onerror="console.error('❌ Image failed:', '${image.file_name}'); this.style.background='#ffebee'; this.style.color='#c62828'; this.textContent='Failed to load'">
+                                <div class="image-info">
+                                    <strong>${image.file_name}</strong><br>
+                                    <small>ID: ${image.image_id}</small><br>
+                                    <small>Size: ${image.width}×${image.height}</small><br>
+                                    <small>Displayable: ${image.displayable}</small>
+                                </div>
+                            `;
+                        } else {
+                            imageEl.innerHTML = `
+                                <div style="height: 150px; background: #ffebee; display: flex; align-items: center; justify-content: center; color: #c62828;">
+                                    ❌ No URL
+                                </div>
+                                <div class="image-info">
+                                    <strong>${image.file_name}</strong><br>
+                                    <small>ID: ${image.image_id}</small><br>
+                                    <small>⚠️ Missing URL</small>
+                                </div>
+                            `;
+                        }
+                        
+                        gridEl.appendChild(imageEl);
+                    });
+                    
+                } else {
+                    statusEl.className = 'status error';
+                    statusEl.textContent = '❌ No images found or API error';
+                    console.error('❌ No images in response');
+                }
+                
+            } catch (error) {
+                statusEl.className = 'status error';
+                statusEl.textContent = '❌ Error: ' + error.message;
+                console.error('💥 Test error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

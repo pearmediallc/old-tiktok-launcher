@@ -1568,7 +1568,10 @@ try {
                                 $displayable = $image->displayable ?? true;
                                 logToFile("Displayable flag: " . ($displayable ? 'TRUE' : 'FALSE'));
                                 
-                                if ($displayable) {
+                                // IMPORTANT: Process ALL images regardless of displayable flag
+                                // TikTok seems to return displayable=false for all images, but they still have valid URLs
+                                logToFile("🔧 PROCESSING IMAGE REGARDLESS OF DISPLAYABLE FLAG");
+                                if (true) { // Always process images
                                     logToFile("Processing displayable image {$index}: " . ($image->file_name ?? 'NO_FILENAME'));
                                     
                                     // Try multiple extraction methods for URL
@@ -1640,9 +1643,8 @@ try {
                                     logToFile("FINAL IMAGE ARRAY TO BE ADDED: " . json_encode($finalImageArray, JSON_PRETTY_PRINT));
                                     
                                     $images[] = $finalImageArray;
-                                } else {
-                                    logToFile("❌ Skipping non-displayable image: " . ($image->file_name ?? 'unnamed'));
                                 }
+                                // Note: We process ALL images now, regardless of displayable flag
                                 
                                 logToFile("--- END PROCESSING IMAGE INDEX {$index} ---");
                             }
