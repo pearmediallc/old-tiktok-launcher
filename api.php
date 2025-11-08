@@ -1484,7 +1484,6 @@ try {
                     $url = "https://business-api.tiktok.com/open_api/v1.3/file/image/ad/search/";
                     $queryParams = [
                         "advertiser_id" => $advertiser_id,
-                        "file_type" => "IMAGE",
                         "page" => $page,
                         "page_size" => $pageSize
                     ];
