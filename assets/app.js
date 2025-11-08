@@ -2748,9 +2748,7 @@ async function loadAvatarLibrary() {
     }
 }
 
-function selectAvatarImage(image) {
-    selectedAvatarImageId = image.image_id;
-    
+async function selectAvatarImage(image) {
     // Remove selection from other items
     document.querySelectorAll('.avatar-item').forEach(item => {
         item.style.border = 'none';
@@ -2761,15 +2759,57 @@ function selectAvatarImage(image) {
     event.target.closest('.avatar-item').style.border = '3px solid #667eea';
     event.target.closest('.avatar-item').style.boxShadow = '0 0 10px rgba(102, 126, 234, 0.3)';
     
+    console.log('🖼️ Image selected:', image.image_id, 'Dimensions:', image.width + 'x' + image.height);
+    
     // Check if image needs cropping for avatar use
     if (image.width && image.height && image.width !== image.height) {
-        showToast(`Selected image (${image.width}x${image.height}) will be auto-cropped to square for avatar use`, 'info');
+        showToast(`Creating square version of ${image.width}x${image.height} image...`, 'info');
+        console.log('🔄 Non-square image detected, creating cropped version...');
+        
+        try {
+            // Auto-crop and upload the image
+            const cropResponse = await apiRequest('auto_crop_and_upload', {
+                image_id: image.image_id,
+                image_url: image.image_url || image.url || image.preview_url || image.thumbnail_url,
+                file_name: image.file_name || 'avatar_image'
+            });
+            
+            if (cropResponse.success) {
+                showToast(`✅ Square version (220x220) created and uploaded to TikTok!`, 'success');
+                console.log('✅ Cropped image uploaded:', cropResponse.image_id);
+                
+                // Use the cropped image ID
+                selectedAvatarImageId = cropResponse.image_id;
+                
+                // Reload the avatar library to show the new cropped image
+                setTimeout(() => {
+                    loadAvatarLibrary();
+                }, 1500);
+                
+                // Enable confirm button
+                document.getElementById('confirm-avatar-btn').disabled = false;
+            } else {
+                throw new Error(cropResponse.message || 'Failed to create cropped version');
+            }
+        } catch (error) {
+            console.error('❌ Error creating cropped version:', error);
+            showToast('Failed to create square version. You can still use the original image.', 'warning');
+            
+            // Allow user to continue with original image
+            selectedAvatarImageId = image.image_id;
+            document.getElementById('confirm-avatar-btn').disabled = false;
+        }
     } else if (image.width && image.height) {
         showToast(`Perfect! Selected square image (${image.width}x${image.height}) ready for avatar use`, 'success');
+        selectedAvatarImageId = image.image_id;
+        console.log('✅ Square image ready. ID:', image.image_id);
+        document.getElementById('confirm-avatar-btn').disabled = false;
+    } else {
+        // Unknown dimensions, assume it's safe to use
+        console.log('⚠️ Unknown dimensions, using original image ID:', image.image_id);
+        selectedAvatarImageId = image.image_id;
+        document.getElementById('confirm-avatar-btn').disabled = false;
     }
-    
-    // Enable confirm button
-    document.getElementById('confirm-avatar-btn').disabled = false;
 }
 
 function handleAvatarUpload(event) {

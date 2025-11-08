@@ -2641,6 +2641,109 @@ try {
             }
             break;
 
+        case 'auto_crop_and_upload':
+            logToFile("============ AUTO CROP AND UPLOAD REQUEST ============");
+            
+            // Get image details from request
+            $imageId = $requestData['image_id'] ?? '';
+            $imageUrl = $requestData['image_url'] ?? '';
+            $fileName = $requestData['file_name'] ?? 'cropped_image';
+            
+            logToFile("Processing image: ID={$imageId}, URL={$imageUrl}, FileName={$fileName}");
+            
+            if (empty($imageUrl)) {
+                throw new Exception('Image URL is required');
+            }
+            
+            // Create uploads directory if it doesn't exist
+            $uploadsDir = __DIR__ . '/uploads';
+            if (!is_dir($uploadsDir)) {
+                mkdir($uploadsDir, 0755, true);
+            }
+            
+            // Download the original image
+            $imageContent = file_get_contents($imageUrl);
+            if ($imageContent === false) {
+                throw new Exception('Failed to download image from URL');
+            }
+            
+            // Create image from downloaded content
+            $src = imagecreatefromstring($imageContent);
+            if ($src === false) {
+                throw new Exception('Failed to create image from downloaded content');
+            }
+            
+            $width = imagesx($src);
+            $height = imagesy($src);
+            logToFile("Original image dimensions: {$width}x{$height}");
+            
+            // Crop to square (center crop)
+            $minSide = min($width, $height);
+            $x = ($width - $minSide) / 2;
+            $y = ($height - $minSide) / 2;
+            
+            logToFile("Cropping to square: {$minSide}x{$minSide} from position ({$x}, {$y})");
+            
+            $square = imagecrop($src, ['x' => $x, 'y' => $y, 'width' => $minSide, 'height' => $minSide]);
+            if ($square === false) {
+                imagedestroy($src);
+                throw new Exception('Failed to crop image to square');
+            }
+            
+            // Resize to 220x220 for avatar use
+            $final = imagecreatetruecolor(220, 220);
+            imagecopyresampled($final, $square, 0, 0, 0, 0, 220, 220, $minSide, $minSide);
+            
+            // Save the cropped image temporarily
+            $tempFile = $uploadsDir . '/' . time() . '_cropped_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $fileName);
+            if (!imagejpeg($final, $tempFile, 90)) {
+                imagedestroy($src);
+                imagedestroy($square);
+                imagedestroy($final);
+                throw new Exception('Failed to save cropped image');
+            }
+            
+            logToFile("Cropped image saved temporarily: {$tempFile}");
+            
+            // Upload to TikTok
+            $files = new File($config);
+            
+            // Prepare upload data
+            $uploadData = [
+                'advertiser_id' => $advertiser_id,
+                'file_name' => pathinfo($fileName, PATHINFO_FILENAME) . '_220x220.jpg',
+                'file' => new CURLFile($tempFile, 'image/jpeg', pathinfo($fileName, PATHINFO_FILENAME) . '_220x220.jpg')
+            ];
+            
+            logToFile("Uploading cropped image to TikTok...");
+            
+            $response = $files->upload($uploadData);
+            
+            logToFile("TikTok Upload Response: " . json_encode($response, JSON_PRETTY_PRINT));
+            
+            // Cleanup temp file
+            unlink($tempFile);
+            imagedestroy($src);
+            imagedestroy($square);
+            imagedestroy($final);
+            
+            $success = empty($response->code) || $response->code == 0;
+            
+            if ($success && isset($response->data->image_id)) {
+                echo json_encode([
+                    'success' => true,
+                    'image_id' => $response->data->image_id,
+                    'file_name' => pathinfo($fileName, PATHINFO_FILENAME) . '_220x220.jpg',
+                    'width' => 220,
+                    'height' => 220,
+                    'message' => 'Image automatically cropped to 220x220 and uploaded to TikTok',
+                    'original_image_id' => $imageId
+                ]);
+            } else {
+                throw new Exception($response->message ?? 'Failed to upload cropped image to TikTok');
+            }
+            break;
+
         default:
             logToFile("Unknown action received: " . $action);
             echo json_encode([
