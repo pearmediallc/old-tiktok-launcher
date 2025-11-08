@@ -1465,6 +1465,10 @@ try {
         case 'get_images':
             logToFile("============ GET IMAGES REQUEST ============");
             logToFile("Get Images - Advertiser ID: " . $advertiser_id);
+            
+            // CRITICAL FIX: Define access token (was missing!)
+            $accessToken = $_ENV['TIKTOK_ACCESS_TOKEN'] ?? '';
+            
             logToFile("Access Token: " . (!empty($accessToken) ? "Present (length: " . strlen($accessToken) . ")" : "MISSING"));
             logToFile("Session advertiser_id: " . ($_SESSION['selected_advertiser_id'] ?? 'NOT SET'));
             logToFile("Environment advertiser_id: " . ($_ENV['TIKTOK_ADVERTISER_ID'] ?? 'NOT SET'));
