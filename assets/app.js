@@ -2775,8 +2775,9 @@ async function selectAvatarImage(image) {
             });
             
             if (cropResponse.success) {
-                showToast(`✅ Square version (220x220) created and uploaded to TikTok!`, 'success');
-                console.log('✅ Cropped image uploaded:', cropResponse.image_id);
+                const dimensions = `${cropResponse.width}x${cropResponse.height}`;
+                showToast(`✅ Square version (${dimensions}) created and uploaded to TikTok!`, 'success');
+                console.log('✅ Cropped image uploaded:', cropResponse.image_id, 'Dimensions:', dimensions);
                 
                 // Use the cropped image ID
                 selectedAvatarImageId = cropResponse.image_id;
