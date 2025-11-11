@@ -119,27 +119,8 @@ async function loadTimezones() {
     }
 }
 
-// Update timezone information display
-function updateTimezoneInfo(timezone) {
-    const infoElement = document.getElementById('timezone-info');
-    if (infoElement) {
-        const offsetStr = timezone.utc_offset_hour >= 0 ? `+${timezone.utc_offset_hour}` : timezone.utc_offset_hour;
-        infoElement.textContent = `Selected: ${timezone.timezone_name} (UTC${offsetStr})`;
-    }
-    
-    // Store selected timezone for ad group creation
-    window.selectedTimezone = timezone;
-    console.log('🌍 Timezone selected:', timezone);
-}
-
-// Get selected timezone data
-function getSelectedTimezone() {
-    return window.selectedTimezone || {
-        timezone_id: '',
-        timezone_name: 'UTC',
-        utc_offset_hour: 0
-    };
-}
+// Note: Timezone selection functions removed - using automatic Colombia conversion
+// updateTimezoneInfo() and getSelectedTimezone() are no longer needed
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -596,16 +577,9 @@ async function createAdGroup() {
         return;
     }
 
-    // Validate timezone selection
-    const selectedTimezone = getSelectedTimezone();
-    if (!selectedTimezone.timezone_id) {
-        showToast('Please select a timezone', 'error');
-        return;
-    }
-
     if (!adGroupName || !pixelId || !budget || !startDate) {
-        showToast('Please fill in all required fields (including pixel ID and timezone)', 'error');
-        console.error('Missing fields - Pixel ID:', pixelId, 'Timezone:', selectedTimezone.timezone_id);
+        showToast('Please fill in all required fields', 'error');
+        console.error('Missing fields - Pixel ID:', pixelId);
         return;
     }
 
@@ -624,12 +598,11 @@ async function createAdGroup() {
     showLoading();
 
     try {
-        // Convert selected timezone time to UTC for TikTok API
-        const scheduleStartTime = convertTimezoneToUTC(startDate, selectedTimezone);
+        // Convert local time to Colombia timezone, then to UTC for TikTok API
+        const scheduleStartTime = convertColombiaToUTC(startDate);
 
-        console.log('🌍 Timezone conversion:', {
+        console.log('🇨🇴 Colombia timezone conversion:', {
             input: startDate,
-            timezone: selectedTimezone,
             utc_result: scheduleStartTime
         });
 
@@ -669,7 +642,7 @@ async function createAdGroup() {
 
             // TIMEZONE (TikTok timezone for scheduling)
             timezone_type: 'TIMEZONE_TYPE_CUSTOM',  // Use custom timezone
-            timezone: selectedTimezone.timezone_id,  // Selected timezone ID
+            timezone: 'America/Bogota',  // Colombia timezone ID
 
             // PACING
             pacing: 'PACING_MODE_SMOOTH',  // Standard delivery
