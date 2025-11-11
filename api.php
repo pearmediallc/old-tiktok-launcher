@@ -770,6 +770,15 @@ try {
                 $params['schedule_type'] = $data['schedule_type'];
             }
 
+            // NOTE: Timezone is NOT set at ad group level - it's set at advertiser account level
+            // TikTok API will use the advertiser's account timezone (should be America/Bogota for Colombia)
+            // The schedule_start_time and schedule_end_time are sent in UTC format
+            // TikTok interprets them according to the advertiser's timezone setting
+            if (!empty($data['timezone'])) {
+                logToFile("⚠️  Note: Timezone '{$data['timezone']}' is sent by frontend but will be ignored by TikTok API");
+                logToFile("    TikTok uses the advertiser account timezone instead (check with get_advertiser_info endpoint)");
+            }
+
             if (!empty($data['schedule_start_time'])) {
                 if (!is_valid_datetime($data['schedule_start_time'])) {
                     http_response_code(400);

@@ -673,9 +673,9 @@ async function createAdGroup() {
             schedule_type: 'SCHEDULE_FROM_NOW',  // Set start time and run continuously
             schedule_start_time: scheduleStartTime,
 
-            // TIMEZONE (TikTok timezone for scheduling)
-            timezone_type: 'TIMEZONE_TYPE_CUSTOM',  // Use custom timezone
-            timezone: 'America/Bogota',  // Colombia timezone ID
+            // NOTE: Timezone is NOT set at ad group level
+            // TikTok uses the advertiser account timezone (should be America/Bogota for Colombia)
+            // Verify your advertiser timezone with the status indicator in the dashboard header
 
             // PACING
             pacing: 'PACING_MODE_SMOOTH',  // Standard delivery

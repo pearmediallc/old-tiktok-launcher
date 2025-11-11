@@ -33,18 +33,42 @@ The TikTok API expects:
 
 **Note:** The text.txt file mentions using Unix timestamps with `start_time`/`end_time` fields, but the official TikTok API documentation uses datetime strings with `schedule_start_time`/`schedule_end_time` fields.
 
-### 4. Advertiser Timezone Verification
+### 4. Advertiser Timezone - The Critical Part! ⚠️
+
+**IMPORTANT:** Timezone is set at the **advertiser account level**, NOT at the ad group level!
+
+According to TikTok's API documentation:
+> "The TikTok API doesn't directly let you set the timezone per adgroup, it uses the advertiser's timezone."
+
+This means:
+- You **cannot** set timezone when creating ad groups
+- The advertiser account must be configured to `America/Bogota` (Colombia Time)
+- TikTok interprets all UTC times according to this advertiser timezone
+
+### 5. Advertiser Timezone Verification
 A new endpoint verifies your TikTok advertiser account timezone:
 
 **Endpoint:** `GET /api.php?action=get_advertiser_info`
 
-**Purpose:**
-- Confirms your TikTok advertiser account is set to Colombia timezone
-- Displays timezone status in dashboard header
-- Warns if timezone is not Colombia (UTC-5)
+**What it checks:**
+- Fetches advertiser timezone from TikTok API
+- Validates it's set to `America/Bogota` or UTC-5
+- Displays status in dashboard header with visual indicator
+
+**Expected Response:**
+```json
+{
+  "timezone": "America/Bogota",
+  "timezone_offset": -5,
+  "is_colombia": true
+}
+```
 
 **Why This Matters:**
-According to TikTok's API behavior, the platform interprets UTC times according to the advertiser's account timezone. If your advertiser account is set to Colombia timezone, your ads will run exactly when intended.
+If your advertiser account timezone is NOT set to Colombia:
+- Your ads will run at the wrong times
+- The conversion will be incorrect
+- You must change it in TikTok Ads Manager settings
 
 ## Visual Indicators
 
@@ -150,13 +174,53 @@ Body includes:
 - If advertiser timezone = Colombia (UTC-5)
 - TikTok shows and runs: 09:00 - 17:00 Colombia Time ✅
 
+## How to Set Advertiser Timezone to Colombia
+
+**⚠️ CRITICAL:** Your advertiser account MUST be set to `America/Bogota` timezone!
+
+### Steps to Check/Change Advertiser Timezone:
+
+1. **Check Current Timezone:**
+   - Open your dashboard - look at the header
+   - Green checkmark = Already set to Colombia ✅
+   - Yellow warning = Needs to be changed ⚠️
+
+2. **Change in TikTok Ads Manager:**
+   - Log into [TikTok Ads Manager](https://ads.tiktok.com/)
+   - Go to **Settings** → **Advertiser Account Settings**
+   - Look for **Timezone** setting
+   - Select: `(UTC-05:00) Colombia Time (Bogotá, Colombia)`
+   - Or select: `America/Bogota`
+   - Save changes
+
+3. **Verify via API:**
+   ```bash
+   GET https://business-api.tiktok.com/open_api/v1.3/advertiser/info/
+   ```
+   Response should show:
+   ```json
+   {
+     "timezone": "America/Bogota",
+     "timezone_offset": -5
+   }
+   ```
+
+**Note:** Some TikTok accounts may show `America/Mexico_City` with offset -5. This is also UTC-5 and will work correctly, though the label is different.
+
 ## Troubleshooting
+
+### Problem: Dashboard shows yellow warning (not Colombia timezone)
+**Solution:**
+1. Follow the steps above to change your advertiser timezone
+2. The timezone change may take a few minutes to propagate
+3. Refresh your dashboard to see the updated status
+4. If you cannot change it yourself, contact TikTok support
 
 ### Problem: Times don't match in TikTok Ads Manager
 **Solution:** Check your advertiser timezone:
 1. Look at dashboard header - is it Colombia?
 2. If not, change it in TikTok Ads Manager account settings
-3. Contact TikTok support if you need help changing it
+3. Verify the change with the API endpoint
 
 ### Problem: Console shows different times
 **Solution:** This is normal! The console shows:
