@@ -2641,6 +2641,66 @@ try {
             }
             break;
 
+        case 'get_timezones':
+            logToFile("============ GET TIMEZONES REQUEST ============");
+            
+            $accessToken = $_ENV['TIKTOK_ACCESS_TOKEN'] ?? '';
+            if (empty($accessToken)) {
+                throw new Exception('Access token is required');
+            }
+            
+            $url = "https://business-api.tiktok.com/open_api/v1.3/tool/timezone/";
+            
+            logToFile("Fetching timezones from TikTok API: {$url}");
+            
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER => [
+                    "Access-Token: " . $accessToken,
+                    "Content-Type: application/json"
+                ],
+                CURLOPT_TIMEOUT => 30
+            ]);
+            
+            $result = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            logToFile("Timezone API Response Code: {$httpCode}");
+            logToFile("Timezone API Response: " . $result);
+            
+            if ($httpCode === 200) {
+                $response = json_decode($result);
+                
+                if (isset($response->data->timezone_list)) {
+                    // Filter and format timezones for easier use
+                    $timezones = [];
+                    foreach ($response->data->timezone_list as $tz) {
+                        $timezones[] = [
+                            'timezone_id' => $tz->timezone_id,
+                            'timezone_name' => $tz->timezone_name,
+                            'utc_offset_hour' => $tz->utc_offset_hour
+                        ];
+                    }
+                    
+                    echo json_encode([
+                        'success' => true,
+                        'data' => [
+                            'timezones' => $timezones,
+                            'total' => count($timezones)
+                        ],
+                        'message' => 'Timezones fetched successfully'
+                    ]);
+                } else {
+                    throw new Exception('Invalid timezone API response format');
+                }
+            } else {
+                throw new Exception("Timezone API request failed with code: {$httpCode}");
+            }
+            break;
+
         case 'auto_crop_and_upload':
             logToFile("============ AUTO CROP AND UPLOAD REQUEST ============");
             
