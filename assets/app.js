@@ -182,30 +182,39 @@ function formatDateTimeLocal(date) {
 }
 
 // Convert Colombia Time to UTC for TikTok API
-function convertColombiaToUTC(colombiaDateTimeString) {
-    if (!colombiaDateTimeString) return null;
+function convertColombiaToUTC(localDateTimeString) {
+    if (!localDateTimeString) return null;
     
-    // The datetime-local input gives us a local time string (what user sees as Colombia time)
-    // We need to treat this as Colombia time and convert to UTC
+    console.log('🇨🇴 Converting time to Colombia timezone, then to UTC:', localDateTimeString);
     
-    // Parse the input as if it's Colombia time
-    const [datePart, timePart] = colombiaDateTimeString.split('T');
-    const [year, month, day] = datePart.split('-').map(Number);
-    const [hours, minutes] = timePart.split(':').map(Number);
+    // Parse the local datetime input
+    const localDate = new Date(localDateTimeString);
+    console.log('📅 Local time parsed:', localDate);
     
-    // Create UTC date object from Colombia time components
-    // Add 5 hours to convert Colombia (UTC-5) to UTC
-    const utcTime = new Date();
-    utcTime.setUTCFullYear(year);
-    utcTime.setUTCMonth(month - 1); // Month is 0-indexed
-    utcTime.setUTCDate(day);
-    utcTime.setUTCHours(hours + 5); // Colombia is UTC-5, so add 5 hours
-    utcTime.setUTCMinutes(minutes);
-    utcTime.setUTCSeconds(0);
-    utcTime.setUTCMilliseconds(0);
+    // Get the current timezone offset of the user's system
+    const localTimezoneOffset = localDate.getTimezoneOffset(); // in minutes
+    console.log('🌍 User timezone offset:', localTimezoneOffset, 'minutes');
+    
+    // Colombia is UTC-5, which is -5 hours = -300 minutes
+    const colombiaTimezoneOffset = -300; // UTC-5 in minutes
+    
+    // Calculate the difference between user's timezone and Colombia timezone
+    const offsetDifference = localTimezoneOffset - colombiaTimezoneOffset;
+    console.log('⏰ Offset difference:', offsetDifference, 'minutes');
+    
+    // Convert to Colombia time first
+    const colombiaTime = new Date(localDate.getTime() + (offsetDifference * 60 * 1000));
+    console.log('🇨🇴 Colombia time:', colombiaTime);
+    
+    // Now convert Colombia time to UTC (add 5 hours since Colombia is UTC-5)
+    const utcTime = new Date(colombiaTime.getTime() + (5 * 60 * 60 * 1000));
+    console.log('🌐 Final UTC time:', utcTime);
     
     // Return in format expected by TikTok API
-    return utcTime.toISOString().replace('T', ' ').substring(0, 19);
+    const result = utcTime.toISOString().replace('T', ' ').substring(0, 19);
+    console.log('✅ Final formatted time for API:', result);
+    
+    return result;
 }
 
 // Convert any timezone to UTC for TikTok API

@@ -159,28 +159,16 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Timezone</label>
-                            <select id="timezone-select" required>
-                                <option value="">Loading timezones...</option>
-                            </select>
-                            <small>Select timezone for schedule settings</small>
-                        </div>
-                        <div class="form-group">
-                            <label>Start Date & Time</label>
+                            <label>Start Date & Time (Will be converted to Colombia Time UTC-05:00)</label>
                             <input type="datetime-local" id="start-date" required>
-                            <small id="timezone-info">Times will be converted to selected timezone</small>
+                            <small>Enter your local time - it will be automatically converted to Colombia timezone</small>
                         </div>
-                    </div>
-
-                    <div class="form-row">
                         <div class="form-group">
                             <label>Bid Amount ($) <span class="optional">(Optional - TikTok will auto-optimize if empty)</span></label>
                             <input type="number" id="bid-price" placeholder="1.00" step="0.01" min="0.01">
                         </div>
-                        <div class="form-group">
-                            <!-- Empty for layout balance -->
-                        </div>
                     </div>
+
                 </div>
 
                 <div class="form-section">
