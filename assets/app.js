@@ -68,33 +68,64 @@ function toggleLogsPanel() {
     }
 }
 
+// Load Advertiser Info (timezone verification)
+async function loadAdvertiserInfo() {
+    try {
+        const response = await apiRequest('get_advertiser_info', {}, 'GET');
+        const statusElement = document.getElementById('timezone-status');
+
+        if (response.success && response.data) {
+            const data = response.data;
+            const utcOffset = data.timezone_offset >= 0 ? `+${data.timezone_offset}` : data.timezone_offset;
+
+            if (data.is_colombia) {
+                statusElement.innerHTML = `<span style="color: #22c55e;">✓</span> Advertiser Timezone: <strong>${data.timezone}</strong> (UTC${utcOffset}) - Colombia Time`;
+                statusElement.style.color = '#22c55e';
+            } else {
+                statusElement.innerHTML = `<span style="color: #f59e0b;">⚠</span> Advertiser Timezone: <strong>${data.timezone}</strong> (UTC${utcOffset}) - <em>Not Colombia Time</em>`;
+                statusElement.style.color = '#f59e0b';
+                console.warn('Advertiser timezone is not set to Colombia. Scheduled times may not align correctly.');
+            }
+
+            console.log('Advertiser Info:', data);
+        } else {
+            statusElement.textContent = 'Unable to verify timezone';
+            statusElement.style.color = '#ef4444';
+        }
+    } catch (error) {
+        console.error('Failed to load advertiser info:', error);
+        document.getElementById('timezone-status').textContent = 'Timezone verification failed';
+        document.getElementById('timezone-status').style.color = '#ef4444';
+    }
+}
+
 // Load TikTok timezones
 async function loadTimezones() {
     try {
         const response = await apiRequest('get_timezones', {}, 'GET');
         const select = document.getElementById('timezone-select');
-        
+
         if (response.success && response.data && response.data.timezones) {
             select.innerHTML = '<option value="">Select timezone...</option>';
-            
+
             // Sort timezones by UTC offset for easier selection
             const timezones = response.data.timezones.sort((a, b) => a.utc_offset_hour - b.utc_offset_hour);
-            
+
             timezones.forEach(tz => {
                 const option = document.createElement('option');
                 option.value = tz.timezone_id;
                 option.textContent = `${tz.timezone_name} (UTC${tz.utc_offset_hour >= 0 ? '+' : ''}${tz.utc_offset_hour})`;
                 option.setAttribute('data-offset', tz.utc_offset_hour);
-                
+
                 // Auto-select Colombia timezone (UTC-5)
                 if (tz.utc_offset_hour === -5 && tz.timezone_name.toLowerCase().includes('colombia')) {
                     option.selected = true;
                     updateTimezoneInfo(tz);
                 }
-                
+
                 select.appendChild(option);
             });
-            
+
             // Add timezone change handler
             select.addEventListener('change', function() {
                 const selectedOption = this.options[this.selectedIndex];
@@ -129,6 +160,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadIdentities();
     loadPixels();  // Load available pixels
     loadTimezones(); // Load TikTok timezones
+    loadAdvertiserInfo(); // Load and verify advertiser timezone
     addFirstAd();
 
     // Set default start date to tomorrow for both campaign and ad group (Colombia Time)
@@ -165,17 +197,18 @@ function formatDateTimeLocal(date) {
 // Convert Colombia Time to UTC for TikTok API
 function convertColombiaToUTC(colombiaDateTimeString) {
     if (!colombiaDateTimeString) return null;
-    
+
     console.log('🇨🇴 Converting Colombia time to UTC:', colombiaDateTimeString);
-    
+
     // The datetime-local input gives us Colombia time (user enters Colombia time directly)
     // We need to convert Colombia time (UTC-5) to UTC
-    
+    // TikTok API will then interpret this UTC time according to the advertiser's timezone
+
     // Parse the input as Colombia time
     const [datePart, timePart] = colombiaDateTimeString.split('T');
     const [year, month, day] = datePart.split('-').map(Number);
     const [hours, minutes] = timePart.split(':').map(Number);
-    
+
     // Create UTC date object from Colombia time components
     // Add 5 hours to convert Colombia (UTC-5) to UTC
     const utcTime = new Date();
@@ -186,11 +219,15 @@ function convertColombiaToUTC(colombiaDateTimeString) {
     utcTime.setUTCMinutes(minutes);
     utcTime.setUTCSeconds(0);
     utcTime.setUTCMilliseconds(0);
-    
-    // Return in format expected by TikTok API
+
+    // Return in format expected by TikTok API (YYYY-MM-DD HH:MM:SS in UTC)
     const result = utcTime.toISOString().replace('T', ' ').substring(0, 19);
-    console.log('✅ Colombia time converted to UTC:', result);
-    
+
+    console.log(`✅ Conversion complete:
+    📍 Colombia Time (UTC-5): ${colombiaDateTimeString.replace('T', ' ')}
+    🌐 UTC Time (for API): ${result}
+    ℹ️  TikTok will interpret this UTC time according to your advertiser timezone`);
+
     return result;
 }
 

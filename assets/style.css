@@ -35,6 +35,19 @@ body {
     font-weight: 700;
 }
 
+.header-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+#advertiser-timezone-info {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 8px 15px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
 .btn-logout {
     background: rgba(255,255,255,0.1);
     color: white;

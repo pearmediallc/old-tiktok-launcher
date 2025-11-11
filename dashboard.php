@@ -26,7 +26,12 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         <!-- Header -->
         <header class="header">
             <h1>🚀 TikTok Campaign Launcher</h1>
-            <button class="btn-logout" onclick="logout()">Logout</button>
+            <div class="header-info">
+                <div id="advertiser-timezone-info" style="font-size: 0.9rem; color: #666; margin-right: 15px;">
+                    <span id="timezone-status">Loading timezone...</span>
+                </div>
+                <button class="btn-logout" onclick="logout()">Logout</button>
+            </div>
         </header>
 
         <!-- Progress Steps -->

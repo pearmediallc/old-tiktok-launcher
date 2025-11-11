@@ -2641,18 +2641,20 @@ try {
             }
             break;
 
-        case 'get_timezones':
-            logToFile("============ GET TIMEZONES REQUEST ============");
-            
+        case 'get_advertiser_info':
+            logToFile("============ GET ADVERTISER INFO REQUEST ============");
+
+            $advertiserId = $_ENV['TIKTOK_ADVERTISER_ID'] ?? '';
             $accessToken = $_ENV['TIKTOK_ACCESS_TOKEN'] ?? '';
-            if (empty($accessToken)) {
-                throw new Exception('Access token is required');
+
+            if (empty($advertiserId) || empty($accessToken)) {
+                throw new Exception('Advertiser ID and Access token are required');
             }
-            
-            $url = "https://business-api.tiktok.com/open_api/v1.3/tool/timezone/";
-            
-            logToFile("Fetching timezones from TikTok API: {$url}");
-            
+
+            $url = "https://business-api.tiktok.com/open_api/v1.3/advertiser/info/?advertiser_id=" . $advertiserId;
+
+            logToFile("Fetching advertiser info from TikTok API: {$url}");
+
             $ch = curl_init();
             curl_setopt_array($ch, [
                 CURLOPT_URL => $url,
@@ -2663,17 +2665,81 @@ try {
                 ],
                 CURLOPT_TIMEOUT => 30
             ]);
-            
+
             $result = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
-            
-            logToFile("Timezone API Response Code: {$httpCode}");
-            logToFile("Timezone API Response: " . $result);
-            
+
+            logToFile("Advertiser Info API Response Code: {$httpCode}");
+            logToFile("Advertiser Info API Response: " . $result);
+
             if ($httpCode === 200) {
                 $response = json_decode($result);
-                
+
+                if (isset($response->data)) {
+                    $advertiserData = $response->data;
+
+                    // Check if timezone is Colombia (America/Bogota or UTC-5)
+                    $timezone = $advertiserData->timezone ?? 'Unknown';
+                    $timezoneOffset = $advertiserData->timezone_offset ?? 0;
+                    $isColombia = (stripos($timezone, 'Bogota') !== false) ||
+                                  (stripos($timezone, 'Colombia') !== false) ||
+                                  ($timezoneOffset == -5);
+
+                    echo json_encode([
+                        'success' => true,
+                        'data' => [
+                            'advertiser_id' => $advertiserData->advertiser_id ?? $advertiserId,
+                            'advertiser_name' => $advertiserData->name ?? 'Unknown',
+                            'timezone' => $timezone,
+                            'timezone_offset' => $timezoneOffset,
+                            'is_colombia' => $isColombia,
+                            'currency' => $advertiserData->currency ?? 'Unknown',
+                            'status' => $advertiserData->status ?? 'Unknown'
+                        ],
+                        'message' => 'Advertiser info fetched successfully'
+                    ]);
+                } else {
+                    throw new Exception('Invalid advertiser info API response format');
+                }
+            } else {
+                throw new Exception("Advertiser info API request failed with code: {$httpCode}");
+            }
+            break;
+
+        case 'get_timezones':
+            logToFile("============ GET TIMEZONES REQUEST ============");
+
+            $accessToken = $_ENV['TIKTOK_ACCESS_TOKEN'] ?? '';
+            if (empty($accessToken)) {
+                throw new Exception('Access token is required');
+            }
+
+            $url = "https://business-api.tiktok.com/open_api/v1.3/tool/timezone/";
+
+            logToFile("Fetching timezones from TikTok API: {$url}");
+
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER => [
+                    "Access-Token: " . $accessToken,
+                    "Content-Type: application/json"
+                ],
+                CURLOPT_TIMEOUT => 30
+            ]);
+
+            $result = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            logToFile("Timezone API Response Code: {$httpCode}");
+            logToFile("Timezone API Response: " . $result);
+
+            if ($httpCode === 200) {
+                $response = json_decode($result);
+
                 if (isset($response->data->timezone_list)) {
                     // Filter and format timezones for easier use
                     $timezones = [];
@@ -2684,7 +2750,7 @@ try {
                             'utc_offset_hour' => $tz->utc_offset_hour
                         ];
                     }
-                    
+
                     echo json_encode([
                         'success' => true,
                         'data' => [
