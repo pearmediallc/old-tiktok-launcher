@@ -159,9 +159,9 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Start Date & Time (Will be converted to Colombia Time UTC-05:00)</label>
+                            <label>Start Date & Time - Colombia Time (UTC-05:00)</label>
                             <input type="datetime-local" id="start-date" required>
-                            <small>Enter your local time - it will be automatically converted to Colombia timezone</small>
+                            <small>Enter time in Colombia timezone (UTC-05:00) - same as you select in TikTok Ads Manager</small>
                         </div>
                         <div class="form-group">
                             <label>Bid Amount ($) <span class="optional">(Optional - TikTok will auto-optimize if empty)</span></label>
