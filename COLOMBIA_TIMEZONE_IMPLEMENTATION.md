@@ -11,7 +11,7 @@ This document explains how the TikTok Campaign Launcher handles Colombia timezon
 - No timezone conversion required by the user
 
 ### 2. Frontend Conversion
-The JavaScript function `convertColombiaToUTC()` in [assets/app.js:197-232](assets/app.js#L197-L232) handles the conversion:
+The JavaScript function `convertColombiaToUTC()` in [assets/app.js:197-228](assets/app.js#L197-L228) handles the conversion:
 
 ```javascript
 // Example:
@@ -20,10 +20,14 @@ The JavaScript function `convertColombiaToUTC()` in [assets/app.js:197-232](asse
 // TikTok API receives the UTC time
 ```
 
-**Conversion Logic:**
-- Parse the Colombia time components (year, month, day, hour, minute)
-- Add 5 hours to convert from UTC-5 to UTC
-- Format as `YYYY-MM-DD HH:MM:SS` for TikTok API
+**Conversion Logic (Pure Logic Approach):**
+1. Parse the datetime-local input (format: `YYYY-MM-DDTHH:MM`)
+2. Extract components: year, month, day, hours, minutes
+3. Apply timezone conversion: Colombia is UTC-5, so add 5 hours to get UTC
+4. Use `Date.UTC()` to create a proper UTC timestamp from components
+5. Extract UTC components and format as `YYYY-MM-DD HH:MM:SS` for TikTok API
+
+This pure logic approach ensures accurate conversion without browser timezone interference.
 
 ### 3. API Format
 The TikTok API expects:
@@ -90,15 +94,20 @@ The header now displays your advertiser timezone status:
    - Displays timezone status in header
    - Auto-loads on page load
 
-3. **[assets/app.js:197-232](assets/app.js#L197-L232)**
-   - Enhanced `convertColombiaToUTC()` with better logging
+3. **[assets/app.js:184-194](assets/app.js#L184-L194)**
+   - Modified `formatDateTimeLocal()` to display dates as-is
+   - User enters time exactly as they want it in Colombia Time
+
+4. **[assets/app.js:197-228](assets/app.js#L197-L228)**
+   - Rewrote `convertColombiaToUTC()` with pure logic approach
+   - Uses `Date.UTC()` for accurate timezone conversion
    - Clear console output showing conversion process
 
-4. **[dashboard.php:27-35](dashboard.php#L27-L35)**
+5. **[dashboard.php:27-35](dashboard.php#L27-L35)**
    - Added timezone status display in header
    - Shows advertiser timezone info
 
-5. **[assets/style.css:38-49](assets/style.css#L38-L49)**
+6. **[assets/style.css:38-49](assets/style.css#L38-L49)**
    - Styled header info section
    - Timezone info badge styling
 

@@ -183,14 +183,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Format date for datetime-local input (Colombia Time UTC-05:00)
 function formatDateTimeLocal(date) {
-    // Convert to Colombia time (UTC-5) for display in datetime-local inputs
-    const colombiaDate = new Date(date.getTime() - (5 * 60 * 60 * 1000));
-    
-    const year = colombiaDate.getUTCFullYear();
-    const month = String(colombiaDate.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(colombiaDate.getUTCDate()).padStart(2, '0');
-    const hours = String(colombiaDate.getUTCHours()).padStart(2, '0');
-    const minutes = String(colombiaDate.getUTCMinutes()).padStart(2, '0');
+    // Display the date as-is for Colombia Time input
+    // User enters time as they want it in Colombia (UTC-5)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
     return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
@@ -200,33 +199,30 @@ function convertColombiaToUTC(colombiaDateTimeString) {
 
     console.log('🇨🇴 Converting Colombia time to UTC:', colombiaDateTimeString);
 
-    // The datetime-local input gives us Colombia time (user enters Colombia time directly)
-    // We need to convert Colombia time (UTC-5) to UTC
-    // TikTok API will then interpret this UTC time according to the advertiser's timezone
-
-    // Parse the input as Colombia time
+    // Parse the datetime-local input (format: YYYY-MM-DDTHH:MM)
+    // User enters this time as Colombia Time (UTC-5)
     const [datePart, timePart] = colombiaDateTimeString.split('T');
     const [year, month, day] = datePart.split('-').map(Number);
     const [hours, minutes] = timePart.split(':').map(Number);
 
-    // Create UTC date object from Colombia time components
-    // Add 5 hours to convert Colombia (UTC-5) to UTC
-    const utcTime = new Date();
-    utcTime.setUTCFullYear(year);
-    utcTime.setUTCMonth(month - 1); // Month is 0-indexed
-    utcTime.setUTCDate(day);
-    utcTime.setUTCHours(hours + 5); // Colombia is UTC-5, so add 5 hours to get UTC
-    utcTime.setUTCMinutes(minutes);
-    utcTime.setUTCSeconds(0);
-    utcTime.setUTCMilliseconds(0);
+    // Pure logic: Colombia is UTC-5, so to convert to UTC we add 5 hours
+    // Use Date.UTC() to create a UTC timestamp from components
+    const utcTimestamp = Date.UTC(year, month - 1, day, hours + 5, minutes, 0, 0);
+    const utcDate = new Date(utcTimestamp);
 
-    // Return in format expected by TikTok API (YYYY-MM-DD HH:MM:SS in UTC)
-    const result = utcTime.toISOString().replace('T', ' ').substring(0, 19);
+    // Format as YYYY-MM-DD HH:MM:SS for TikTok API
+    const utcYear = utcDate.getUTCFullYear();
+    const utcMonth = String(utcDate.getUTCMonth() + 1).padStart(2, '0');
+    const utcDay = String(utcDate.getUTCDate()).padStart(2, '0');
+    const utcHours = String(utcDate.getUTCHours()).padStart(2, '0');
+    const utcMinutes = String(utcDate.getUTCMinutes()).padStart(2, '0');
+    const utcSeconds = '00';
+
+    const result = `${utcYear}-${utcMonth}-${utcDay} ${utcHours}:${utcMinutes}:${utcSeconds}`;
 
     console.log(`✅ Conversion complete:
-    📍 Colombia Time (UTC-5): ${colombiaDateTimeString.replace('T', ' ')}
-    🌐 UTC Time (for API): ${result}
-    ℹ️  TikTok will interpret this UTC time according to your advertiser timezone`);
+    📍 Colombia Time (UTC-5): ${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}
+    🌐 UTC Time (for API): ${result}`);
 
     return result;
 }
