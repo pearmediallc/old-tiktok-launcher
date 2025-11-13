@@ -772,20 +772,27 @@ try {
 
             // NOTE: Timezone is NOT set at ad group level - it's set at advertiser account level
             // TikTok API will use the advertiser's account timezone (should be America/Bogota for Colombia)
-            // The schedule_start_time and schedule_end_time are sent in UTC format
+            // We use Unix timestamps (start_time and end_time) in UTC
             // TikTok interprets them according to the advertiser's timezone setting
             if (!empty($data['timezone'])) {
                 logToFile("⚠️  Note: Timezone '{$data['timezone']}' is sent by frontend but will be ignored by TikTok API");
                 logToFile("    TikTok uses the advertiser account timezone instead (check with get_advertiser_info endpoint)");
             }
 
+            // Convert datetime strings to Unix timestamps for TikTok API
+            // Flow: Frontend sends UTC datetime string → Backend converts to Unix timestamp
+            // Example: "2025-01-02 14:00:00" (UTC) → 1767381600 (Unix timestamp)
+            // TikTok API uses start_time and end_time fields (NOT schedule_start_time/schedule_end_time)
             if (!empty($data['schedule_start_time'])) {
                 if (!is_valid_datetime($data['schedule_start_time'])) {
                     http_response_code(400);
                     echo json_encode(['success' => false, 'message' => 'schedule_start_time must be YYYY-MM-DD HH:MM:SS (UTC)']);
                     exit;
                 }
-                $params['schedule_start_time'] = $data['schedule_start_time'];
+                // Convert UTC datetime string to Unix timestamp
+                $startTimestamp = strtotime($data['schedule_start_time'] . ' UTC');
+                $params['start_time'] = $startTimestamp;
+                logToFile("📅 Start time conversion: {$data['schedule_start_time']} (UTC) → {$startTimestamp} (Unix timestamp)");
             }
 
             if (!empty($data['schedule_end_time'])) {
@@ -794,7 +801,10 @@ try {
                     echo json_encode(['success' => false, 'message' => 'schedule_end_time must be YYYY-MM-DD HH:MM:SS (UTC)']);
                     exit;
                 }
-                $params['schedule_end_time'] = $data['schedule_end_time'];
+                // Convert UTC datetime string to Unix timestamp
+                $endTimestamp = strtotime($data['schedule_end_time'] . ' UTC');
+                $params['end_time'] = $endTimestamp;
+                logToFile("📅 End time conversion: {$data['schedule_end_time']} (UTC) → {$endTimestamp} (Unix timestamp)");
             }
 
             // Handle dayparting

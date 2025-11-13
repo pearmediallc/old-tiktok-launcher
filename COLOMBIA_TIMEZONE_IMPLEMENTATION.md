@@ -30,12 +30,15 @@ The JavaScript function `convertColombiaToUTC()` in [assets/app.js:197-228](asse
 This pure logic approach ensures accurate conversion without browser timezone interference.
 
 ### 3. API Format
-The TikTok API expects:
-- Field: `schedule_start_time` and `schedule_end_time`
-- Format: `YYYY-MM-DD HH:MM:SS` (UTC+0)
-- Example: `"2025-11-15 14:00:00"`
+The TikTok API expects Unix timestamps for ad groups:
+- Fields: `start_time` and `end_time` (NOT schedule_start_time/schedule_end_time)
+- Format: Unix timestamp (seconds since epoch) in UTC
+- Example: `1767381600` (which equals 2025-01-02 14:00:00 UTC)
 
-**Note:** The text.txt file mentions using Unix timestamps with `start_time`/`end_time` fields, but the official TikTok API documentation uses datetime strings with `schedule_start_time`/`schedule_end_time` fields.
+**Conversion Flow:**
+1. Frontend converts Colombia Time to UTC datetime string: `"2025-01-02 14:00:00"`
+2. Backend (api.php) converts UTC datetime string to Unix timestamp: `1767381600`
+3. TikTok API receives Unix timestamp and interprets it based on advertiser timezone
 
 ### 4. Advertiser Timezone - The Critical Part! ⚠️
 
@@ -148,8 +151,20 @@ Response includes: timezone, timezone_offset
 ```
 POST https://business-api.tiktok.com/open_api/v1.3/adgroup/create/
 Body includes:
-  - schedule_start_time: "YYYY-MM-DD HH:MM:SS" (UTC)
-  - schedule_end_time: "YYYY-MM-DD HH:MM:SS" (UTC)
+  - start_time: 1767381600 (Unix timestamp in UTC)
+  - end_time: 1767468000 (Unix timestamp in UTC)
+  - schedule_type: "SCHEDULE_FROM_CUSTOM"
+
+Example:
+{
+  "advertiser_id": "1234567890",
+  "campaign_id": "1122334455",
+  "adgroup_name": "Test Adset Colombia Morning",
+  "schedule_type": "SCHEDULE_FROM_CUSTOM",
+  "start_time": 1767381600,
+  "end_time": 1767468000,
+  ...
+}
 ```
 
 ## Important Notes
@@ -175,9 +190,21 @@ Body includes:
 - Start: 2025-11-15 09:00 (Colombia Time)
 - End: 2025-11-15 17:00 (Colombia Time)
 
-**Conversion (Automatic):**
-- Start: 2025-11-15 14:00:00 (UTC) → sent to API
-- End: 2025-11-15 22:00:00 (UTC) → sent to API
+**Frontend Conversion:**
+- Start: 2025-11-15 14:00:00 (UTC datetime string)
+- End: 2025-11-15 22:00:00 (UTC datetime string)
+
+**Backend Conversion (api.php):**
+- Start: 1763230800 (Unix timestamp)
+- End: 1763259600 (Unix timestamp)
+
+**Sent to TikTok API:**
+```json
+{
+  "start_time": 1763230800,
+  "end_time": 1763259600
+}
+```
 
 **TikTok Interpretation:**
 - If advertiser timezone = Colombia (UTC-5)
