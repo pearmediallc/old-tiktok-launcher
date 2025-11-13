@@ -2688,12 +2688,13 @@ try {
                 if (isset($response->data)) {
                     $advertiserData = $response->data;
 
-                    // Check if timezone is Colombia (America/Bogota or UTC-5)
+                    // Check if timezone is UTC-5 (Colombia/Mexico/Eastern Time all work)
                     $timezone = $advertiserData->timezone ?? 'Unknown';
                     $timezoneOffset = $advertiserData->timezone_offset ?? 0;
-                    $isColombia = (stripos($timezone, 'Bogota') !== false) ||
-                                  (stripos($timezone, 'Colombia') !== false) ||
-                                  ($timezoneOffset == -5);
+
+                    // Accept any timezone with UTC-5 offset
+                    // Common UTC-5 zones: America/Bogota, America/Mexico_City, America/Lima, etc.
+                    $isUTC5 = ($timezoneOffset == -5);
 
                     echo json_encode([
                         'success' => true,
@@ -2702,7 +2703,7 @@ try {
                             'advertiser_name' => $advertiserData->name ?? 'Unknown',
                             'timezone' => $timezone,
                             'timezone_offset' => $timezoneOffset,
-                            'is_colombia' => $isColombia,
+                            'is_colombia' => $isUTC5, // Renamed but still checking UTC-5
                             'currency' => $advertiserData->currency ?? 'Unknown',
                             'status' => $advertiserData->status ?? 'Unknown'
                         ],

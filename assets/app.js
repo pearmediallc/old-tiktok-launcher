@@ -79,12 +79,13 @@ async function loadAdvertiserInfo() {
             const utcOffset = data.timezone_offset >= 0 ? `+${data.timezone_offset}` : data.timezone_offset;
 
             if (data.is_colombia) {
-                statusElement.innerHTML = `<span style="color: #22c55e;">✓</span> Advertiser Timezone: <strong>${data.timezone}</strong> (UTC${utcOffset}) - Colombia Time`;
+                statusElement.innerHTML = `<span style="color: #22c55e;">✓</span> Advertiser Timezone: <strong>${data.timezone}</strong> (UTC${utcOffset}) - Compatible with Colombia Time`;
                 statusElement.style.color = '#22c55e';
+                console.log('✅ Timezone is UTC-5. All times will work correctly for Colombia.');
             } else {
-                statusElement.innerHTML = `<span style="color: #f59e0b;">⚠</span> Advertiser Timezone: <strong>${data.timezone}</strong> (UTC${utcOffset}) - <em>Not Colombia Time</em>`;
+                statusElement.innerHTML = `<span style="color: #f59e0b;">⚠</span> Advertiser Timezone: <strong>${data.timezone}</strong> (UTC${utcOffset}) - <em>Not UTC-5</em>`;
                 statusElement.style.color = '#f59e0b';
-                console.warn('Advertiser timezone is not set to Colombia. Scheduled times may not align correctly.');
+                console.warn('⚠️ Advertiser timezone is not UTC-5. Please change to America/Bogota or America/Mexico_City for Colombia Time scheduling.');
             }
 
             console.log('Advertiser Info:', data);
