@@ -31,9 +31,11 @@ This pure logic approach ensures accurate conversion without browser timezone in
 
 ### 3. API Format
 The TikTok API expects Unix timestamps for ad groups:
-- Fields: `start_time` and `end_time` (NOT schedule_start_time/schedule_end_time)
-- Format: Unix timestamp (seconds since epoch) in UTC
-- Example: `1767381600` (which equals 2025-01-02 14:00:00 UTC)
+- Fields: `schedule_start_time` and `schedule_end_time` (field names)
+- Format: Unix timestamp (seconds since epoch) in UTC (field values)
+- Example: `"schedule_start_time": 1767381600` (which equals 2025-01-02 14:00:00 UTC)
+
+**Important:** Field names are `schedule_start_time`/`schedule_end_time`, but values are Unix timestamps (NOT datetime strings).
 
 **Conversion Flow:**
 1. Frontend converts Colombia Time to UTC datetime string: `"2025-01-02 14:00:00"`
@@ -151,8 +153,8 @@ Response includes: timezone, timezone_offset
 ```
 POST https://business-api.tiktok.com/open_api/v1.3/adgroup/create/
 Body includes:
-  - start_time: 1767381600 (Unix timestamp in UTC)
-  - end_time: 1767468000 (Unix timestamp in UTC)
+  - schedule_start_time: 1767381600 (Unix timestamp in UTC)
+  - schedule_end_time: 1767468000 (Unix timestamp in UTC)
   - schedule_type: "SCHEDULE_FROM_CUSTOM"
 
 Example:
@@ -161,8 +163,8 @@ Example:
   "campaign_id": "1122334455",
   "adgroup_name": "Test Adset Colombia Morning",
   "schedule_type": "SCHEDULE_FROM_CUSTOM",
-  "start_time": 1767381600,
-  "end_time": 1767468000,
+  "schedule_start_time": 1767381600,
+  "schedule_end_time": 1767468000,
   ...
 }
 ```
@@ -201,8 +203,8 @@ Example:
 **Sent to TikTok API:**
 ```json
 {
-  "start_time": 1763230800,
-  "end_time": 1763259600
+  "schedule_start_time": 1763230800,
+  "schedule_end_time": 1763259600
 }
 ```
 

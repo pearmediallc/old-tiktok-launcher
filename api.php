@@ -782,7 +782,7 @@ try {
             // Convert datetime strings to Unix timestamps for TikTok API
             // Flow: Frontend sends UTC datetime string → Backend converts to Unix timestamp
             // Example: "2025-01-02 14:00:00" (UTC) → 1767381600 (Unix timestamp)
-            // TikTok API uses start_time and end_time fields (NOT schedule_start_time/schedule_end_time)
+            // TikTok API uses schedule_start_time and schedule_end_time fields with Unix timestamp values
             if (!empty($data['schedule_start_time'])) {
                 if (!is_valid_datetime($data['schedule_start_time'])) {
                     http_response_code(400);
@@ -791,7 +791,7 @@ try {
                 }
                 // Convert UTC datetime string to Unix timestamp
                 $startTimestamp = strtotime($data['schedule_start_time'] . ' UTC');
-                $params['start_time'] = $startTimestamp;
+                $params['schedule_start_time'] = $startTimestamp;
                 logToFile("📅 Start time conversion: {$data['schedule_start_time']} (UTC) → {$startTimestamp} (Unix timestamp)");
             }
 
@@ -803,7 +803,7 @@ try {
                 }
                 // Convert UTC datetime string to Unix timestamp
                 $endTimestamp = strtotime($data['schedule_end_time'] . ' UTC');
-                $params['end_time'] = $endTimestamp;
+                $params['schedule_end_time'] = $endTimestamp;
                 logToFile("📅 End time conversion: {$data['schedule_end_time']} (UTC) → {$endTimestamp} (Unix timestamp)");
             }
 
