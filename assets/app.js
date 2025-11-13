@@ -225,8 +225,6 @@ function isEDT(date) {
 function convertESTToUTC(estDateTimeString) {
     if (!estDateTimeString) return null;
     
-    console.log('🇺🇸 Converting Eastern Time to UTC:', estDateTimeString);
-    
     // Parse the input as Eastern Time
     const [datePart, timePart] = estDateTimeString.split('T');
     const [year, month, day] = datePart.split('-').map(Number);
@@ -240,7 +238,17 @@ function convertESTToUTC(estDateTimeString) {
     const utcOffset = isDST ? 4 : 5;
     const timezoneName = isDST ? 'EDT (UTC-4)' : 'EST (UTC-5)';
     
-    console.log(`📍 Date ${year}-${month}-${day} is in ${timezoneName}`);
+    // Format user input for display
+    const userInputFormatted = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    
+    // Add log showing user input and detected timezone
+    addLog('info', `🇺🇸 User Input: ${userInputFormatted} (${timezoneName})`, {
+        original_input: estDateTimeString,
+        formatted_display: userInputFormatted,
+        detected_timezone: timezoneName,
+        is_daylight_saving: isDST,
+        utc_offset_hours: utcOffset
+    });
     
     // Create date object in Eastern timezone
     const easternTime = new Date();
@@ -254,8 +262,19 @@ function convertESTToUTC(estDateTimeString) {
     
     const result = easternTime.toISOString().replace('T', ' ').substring(0, 19);
     
+    // Add log showing the UTC conversion result
+    addLog('info', `🌐 Converted to UTC: ${result} (for TikTok API)`, {
+        eastern_time: userInputFormatted,
+        timezone: timezoneName,
+        utc_time: result,
+        conversion_offset: `+${utcOffset} hours`
+    });
+    
+    // Console logs for debugging
+    console.log('🇺🇸 Converting Eastern Time to UTC:', estDateTimeString);
+    console.log(`📍 Date ${year}-${month}-${day} is in ${timezoneName}`);
     console.log('✅ Eastern Time conversion complete:');
-    console.log(`    📍 Eastern Time (${timezoneName}): ${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`);
+    console.log(`    📍 Eastern Time (${timezoneName}): ${userInputFormatted}`);
     console.log(`    🌐 UTC Time (for API): ${result}`);
     
     return result;
@@ -264,6 +283,15 @@ function convertESTToUTC(estDateTimeString) {
 // Master timezone conversion function - uses configuration
 function convertToUTC(dateTimeString, useTimezone = TIMEZONE_CONFIG.name) {
     if (!dateTimeString) return null;
+    
+    // Add log showing which timezone configuration is being used
+    addLog('info', `⚙️ Timezone Configuration: ${TIMEZONE_CONFIG.displayName}`, {
+        configured_timezone: useTimezone,
+        display_name: TIMEZONE_CONFIG.displayName,
+        base_utc_offset: TIMEZONE_CONFIG.utcOffset,
+        auto_detect_dst: TIMEZONE_CONFIG.autoDetectDST,
+        supports_dst: TIMEZONE_CONFIG.supportsDST
+    });
     
     console.log(`🌍 Using timezone: ${useTimezone} (${TIMEZONE_CONFIG.displayName})`);
     
@@ -274,6 +302,7 @@ function convertToUTC(dateTimeString, useTimezone = TIMEZONE_CONFIG.name) {
             return convertColombiaToUTC(dateTimeString);
         default:
             console.warn(`⚠️ Unknown timezone: ${useTimezone}, falling back to EST`);
+            addLog('warning', `⚠️ Unknown timezone '${useTimezone}', falling back to EST`);
             return convertESTToUTC(dateTimeString);
     }
 }
