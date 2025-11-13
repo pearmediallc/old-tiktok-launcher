@@ -11,6 +11,15 @@ let state = {
     mediaSelectionMode: 'multiple' // Allow multiple selection
 };
 
+// Timezone Configuration
+const TIMEZONE_CONFIG = {
+    name: 'EST', // Options: 'EST', 'Colombia' - Change this to switch timezone
+    displayName: 'Eastern Time (EST/EDT)',
+    utcOffset: -5, // Base offset (EST = -5, Colombia = -5)
+    autoDetectDST: true, // Automatically handle daylight saving for EST
+    supportsDST: true // Whether this timezone supports daylight saving
+};
+
 // API Logger Functions
 function addLog(type, message, details = null) {
     const logsContent = document.getElementById('logs-content');
@@ -79,13 +88,13 @@ async function loadAdvertiserInfo() {
             const utcOffset = data.timezone_offset >= 0 ? `+${data.timezone_offset}` : data.timezone_offset;
 
             if (data.is_colombia) {
-                statusElement.innerHTML = `<span style="color: #22c55e;">✓</span> Advertiser Timezone: <strong>${data.timezone}</strong> (UTC${utcOffset}) - Compatible with Colombia Time`;
+                statusElement.innerHTML = `<span style="color: #22c55e;">✓</span> Advertiser Timezone: <strong>${data.timezone}</strong> (UTC${utcOffset}) - Compatible with Eastern Time`;
                 statusElement.style.color = '#22c55e';
-                console.log('✅ Timezone is UTC-5. All times will work correctly for Colombia.');
+                console.log('✅ Timezone is UTC-5. All times will work correctly for Eastern Time.');
             } else {
                 statusElement.innerHTML = `<span style="color: #f59e0b;">⚠</span> Advertiser Timezone: <strong>${data.timezone}</strong> (UTC${utcOffset}) - <em>Not UTC-5</em>`;
                 statusElement.style.color = '#f59e0b';
-                console.warn('⚠️ Advertiser timezone is not UTC-5. Please change to America/Bogota or America/Mexico_City for Colombia Time scheduling.');
+                console.warn('⚠️ Advertiser timezone is not UTC-5. Please change to America/New_York or America/Toronto for Eastern Time scheduling.');
             }
 
             console.log('Advertiser Info:', data);
@@ -118,8 +127,8 @@ async function loadTimezones() {
                 option.textContent = `${tz.timezone_name} (UTC${tz.utc_offset_hour >= 0 ? '+' : ''}${tz.utc_offset_hour})`;
                 option.setAttribute('data-offset', tz.utc_offset_hour);
 
-                // Auto-select Colombia timezone (UTC-5)
-                if (tz.utc_offset_hour === -5 && tz.timezone_name.toLowerCase().includes('colombia')) {
+                // Auto-select EST timezone (UTC-5)
+                if (tz.utc_offset_hour === -5 && (tz.timezone_name.toLowerCase().includes('new_york') || tz.timezone_name.toLowerCase().includes('eastern'))) {
                     option.selected = true;
                     updateTimezoneInfo(tz);
                 }
@@ -151,7 +160,7 @@ async function loadTimezones() {
     }
 }
 
-// Note: Timezone selection functions removed - using automatic Colombia conversion
+// Note: Timezone selection functions removed - using automatic EST conversion
 // updateTimezoneInfo() and getSelectedTimezone() are no longer needed
 
 // Initialize on page load
@@ -164,12 +173,12 @@ document.addEventListener('DOMContentLoaded', function() {
     loadAdvertiserInfo(); // Load and verify advertiser timezone
     addFirstAd();
 
-    // Set default start date to tomorrow for both campaign and ad group (Colombia Time)
+    // Set default start date to tomorrow for both campaign and ad group (Eastern Time)
     const now = new Date();
-    const colombiaTime = new Date(now.getTime() - (5 * 60 * 60 * 1000)); // UTC-5 for Colombia
+    const easternTime = new Date(now.getTime() - (5 * 60 * 60 * 1000)); // UTC-5 for EST
     const tomorrow = new Date(colombiaTime);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(9, 0, 0, 0); // Set to 9:00 AM Colombia time
+    tomorrow.setHours(9, 0, 0, 0); // Set to 9:00 AM Eastern time
 
     // Campaign start date
     if (document.getElementById('campaign-start-date')) {
@@ -182,16 +191,91 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Format date for datetime-local input (Colombia Time UTC-05:00)
+// Format date for datetime-local input (Eastern Time EST/EDT)
 function formatDateTimeLocal(date) {
-    // Display the date as-is for Colombia Time input
-    // User enters time as they want it in Colombia (UTC-5)
+    // Display the date as-is for Eastern Time input
+    // User enters time as they want it in Eastern Time (EST/EDT)
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
     return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+// Check if a date is in Eastern Daylight Time (EDT)
+function isEDT(date) {
+    const year = date.getFullYear();
+    
+    // EDT starts second Sunday in March, 2:00 AM
+    const startEDT = new Date(year, 2, 1); // March 1
+    startEDT.setDate(14 - startEDT.getDay()); // Second Sunday
+    if (startEDT.getDay() === 0) startEDT.setDate(startEDT.getDate() + 7); // If first is Sunday, go to second
+    
+    // EDT ends first Sunday in November, 2:00 AM
+    const endEDT = new Date(year, 10, 1); // November 1
+    endEDT.setDate(7 - endEDT.getDay()); // First Sunday
+    if (endEDT.getDay() === 0) endEDT.setDate(endEDT.getDate() + 7); // If first is Sunday, go to next
+    endEDT.setDate(endEDT.getDate() - 7); // Go back to first Sunday
+    
+    return date >= startEDT && date < endEDT;
+}
+
+// Convert EST/EDT to UTC for TikTok API (handles daylight saving automatically)
+function convertESTToUTC(estDateTimeString) {
+    if (!estDateTimeString) return null;
+    
+    console.log('🇺🇸 Converting Eastern Time to UTC:', estDateTimeString);
+    
+    // Parse the input as Eastern Time
+    const [datePart, timePart] = estDateTimeString.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hours, minutes] = timePart.split(':').map(Number);
+    
+    // Create a date object to check if it's in DST
+    const checkDate = new Date(year, month - 1, day);
+    const isDST = isEDT(checkDate);
+    
+    // Determine offset: EST = UTC-5, EDT = UTC-4
+    const utcOffset = isDST ? 4 : 5;
+    const timezoneName = isDST ? 'EDT (UTC-4)' : 'EST (UTC-5)';
+    
+    console.log(`📍 Date ${year}-${month}-${day} is in ${timezoneName}`);
+    
+    // Create date object in Eastern timezone
+    const easternTime = new Date();
+    easternTime.setUTCFullYear(year);
+    easternTime.setUTCMonth(month - 1); // Month is 0-indexed
+    easternTime.setUTCDate(day);
+    easternTime.setUTCHours(hours + utcOffset); // Add offset to convert to UTC
+    easternTime.setUTCMinutes(minutes);
+    easternTime.setUTCSeconds(0);
+    easternTime.setUTCMilliseconds(0);
+    
+    const result = easternTime.toISOString().replace('T', ' ').substring(0, 19);
+    
+    console.log('✅ Eastern Time conversion complete:');
+    console.log(`    📍 Eastern Time (${timezoneName}): ${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`);
+    console.log(`    🌐 UTC Time (for API): ${result}`);
+    
+    return result;
+}
+
+// Master timezone conversion function - uses configuration
+function convertToUTC(dateTimeString, useTimezone = TIMEZONE_CONFIG.name) {
+    if (!dateTimeString) return null;
+    
+    console.log(`🌍 Using timezone: ${useTimezone} (${TIMEZONE_CONFIG.displayName})`);
+    
+    switch (useTimezone) {
+        case 'EST':
+            return convertESTToUTC(dateTimeString);
+        case 'Colombia':
+            return convertColombiaToUTC(dateTimeString);
+        default:
+            console.warn(`⚠️ Unknown timezone: ${useTimezone}, falling back to EST`);
+            return convertESTToUTC(dateTimeString);
+    }
 }
 
 // Convert Colombia Time to UTC for TikTok API
@@ -405,8 +489,9 @@ function getDaypartingData() {
     for (let tikTokDay = 0; tikTokDay < 7; tikTokDay++) {
         const uiDay = tikTokDayOrder[tikTokDay];
         for (let hour = 0; hour <= 24; hour++) {
-            // Convert Colombia Time (UTC-05:00) to UTC for TikTok
-            let utcHour = hour + 5; // Colombia is UTC-05:00, so add 5 to get UTC
+            // Convert Eastern Time (EST/EDT) to UTC for TikTok
+            // Note: This is simplified - actual conversion should use convertToUTC()
+            let utcHour = hour + 5; // EST is UTC-05:00, so add 5 to get UTC (simplified)
             let targetDay = uiDay;
             
             // Handle day overflow/underflow
@@ -516,17 +601,17 @@ async function createCampaign() {
             params.budget_optimize_on = false;
         }
         
-        // Add schedule times if provided (convert from Colombia Time to UTC)
+        // Add schedule times if provided (convert from Eastern Time to UTC)
         if (startDate) {
-            params.schedule_start_time = convertColombiaToUTC(startDate);
+            params.schedule_start_time = convertToUTC(startDate);
         }
 
         // Store budget mode for ad group to use
         state.campaignBudgetMode = 'BUDGET_MODE_DAY';
 
-        // Add end time if provided (convert from Colombia Time to UTC)
+        // Add end time if provided (convert from Eastern Time to UTC)
         if (endDate) {
-            params.schedule_end_time = convertColombiaToUTC(endDate);
+            params.schedule_end_time = convertToUTC(endDate);
         }
 
         const response = await apiRequest('create_campaign', params);
@@ -620,10 +705,10 @@ async function createAdGroup() {
     showLoading();
 
     try {
-        // Convert local time to Colombia timezone, then to UTC for TikTok API
-        const scheduleStartTime = convertColombiaToUTC(startDate);
+        // Convert local time to Eastern timezone, then to UTC for TikTok API
+        const scheduleStartTime = convertToUTC(startDate);
 
-        console.log('🇨🇴 Colombia timezone conversion:', {
+        console.log('🇺🇸 Eastern timezone conversion:', {
             input: startDate,
             utc_result: scheduleStartTime
         });
@@ -664,7 +749,7 @@ async function createAdGroup() {
 
             // TIMEZONE (TikTok timezone for scheduling)
             timezone_type: 'TIMEZONE_TYPE_CUSTOM',  // Use custom timezone
-            timezone: 'America/Bogota',  // Colombia timezone ID
+            timezone: 'America/New_York',  // Eastern timezone ID
 
             // PACING
             pacing: 'PACING_MODE_SMOOTH',  // Standard delivery

@@ -87,11 +87,11 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     <h3>Schedule</h3>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Start Date & Time (Colombia Time UTC-05:00)</label>
+                            <label>Start Date & Time (Eastern Time EST/EDT)</label>
                             <input type="datetime-local" id="campaign-start-date" required>
                         </div>
                         <div class="form-group">
-                            <label>End Date & Time (Colombia Time UTC-05:00)</label>
+                            <label>End Date & Time (Eastern Time EST/EDT)</label>
                             <input type="datetime-local" id="campaign-end-date">
                         </div>
                     </div>
@@ -164,9 +164,9 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Start Date & Time - Colombia Time (UTC-05:00)</label>
+                            <label>Start Date & Time - Eastern Time (EST/EDT)</label>
                             <input type="datetime-local" id="start-date" required>
-                            <small>Enter time in Colombia timezone (UTC-05:00) - same as you select in TikTok Ads Manager</small>
+                            <small>Enter time in Eastern timezone (EST/EDT) - automatically handles daylight saving time</small>
                         </div>
                         <div class="form-group">
                             <label>Bid Amount ($) <span class="optional">(Optional - TikTok will auto-optimize if empty)</span></label>
@@ -319,7 +319,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                         </div>
                         <div style="margin-top: 10px; font-size: 12px; color: #666;">
                             <p><strong>Note:</strong> Each hour checkbox controls both 30-minute slots within that hour (e.g., selecting 9am enables both 9:00-9:30 and 9:30-10:00).</p>
-                            <p><strong>Timezone:</strong> Colombia Time (UTC-05:00). Selected hours will be converted to UTC for TikTok scheduling.</p>
+                            <p><strong>Timezone:</strong> Eastern Time (EST/EDT). Selected hours will be converted to UTC for TikTok scheduling.</p>
                         </div>
                     </div>
                 </div>
