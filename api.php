@@ -791,8 +791,8 @@ try {
                 }
                 // Convert UTC datetime string to Unix timestamp
                 $startTimestamp = strtotime($data['schedule_start_time'] . ' UTC');
-                $params['schedule_start_time'] = $startTimestamp;
-                logToFile("📅 Start time conversion: {$data['schedule_start_time']} (UTC) → {$startTimestamp} (Unix timestamp)");
+                $params['schedule_start_time'] = (int)$startTimestamp;
+                logToFile("📅 Start time conversion: {$data['schedule_start_time']} (UTC) → {$startTimestamp} (Unix timestamp, type: " . gettype($params['schedule_start_time']) . ")");
             }
 
             if (!empty($data['schedule_end_time'])) {
@@ -803,8 +803,8 @@ try {
                 }
                 // Convert UTC datetime string to Unix timestamp
                 $endTimestamp = strtotime($data['schedule_end_time'] . ' UTC');
-                $params['schedule_end_time'] = $endTimestamp;
-                logToFile("📅 End time conversion: {$data['schedule_end_time']} (UTC) → {$endTimestamp} (Unix timestamp)");
+                $params['schedule_end_time'] = (int)$endTimestamp;
+                logToFile("📅 End time conversion: {$data['schedule_end_time']} (UTC) → {$endTimestamp} (Unix timestamp, type: " . gettype($params['schedule_end_time']) . ")");
             }
 
             // Handle dayparting
