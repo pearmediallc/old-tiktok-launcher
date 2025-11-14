@@ -23,39 +23,46 @@ const TIMEZONE_CONFIG = {
 // Colombia Timezone Functions
 function getCurrentColombiaTime() {
     const now = new Date();
-    // Colombia is UTC-5 (no daylight saving)
-    const colombiaTime = new Date(now.getTime() - (5 * 60 * 60 * 1000));
+    // Get UTC time and convert to Colombia (UTC-5)
+    const utcTime = now.getTime();
+    const colombiaOffset = -5 * 60 * 60 * 1000; // UTC-5 in milliseconds
+    const colombiaTime = new Date(utcTime + colombiaOffset);
     return colombiaTime;
 }
 
 function formatColombiaTime(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
+    // Format date in Colombia timezone
+    const utcDate = new Date(date.getTime());
+    const year = utcDate.getUTCFullYear();
+    const month = String(utcDate.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(utcDate.getUTCDate()).padStart(2, '0');
+    const hours = String(utcDate.getUTCHours()).padStart(2, '0');
+    const minutes = String(utcDate.getUTCMinutes()).padStart(2, '0');
     return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
 function formatColombiaTimeForInput(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const utcDate = new Date(date.getTime());
+    const year = utcDate.getUTCFullYear();
+    const month = String(utcDate.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(utcDate.getUTCDate()).padStart(2, '0');
+    const hours = String(utcDate.getUTCHours()).padStart(2, '0');
+    const minutes = String(utcDate.getUTCMinutes()).padStart(2, '0');
     return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 function convertLocalToColumbia(localDateTimeString) {
     if (!localDateTimeString) return null;
-    
-    // Parse local datetime
+
+    // Parse local datetime as-is (user's browser timezone)
     const localDate = new Date(localDateTimeString);
-    
-    // Convert to Colombia time (UTC-5)
+
+    // Get the time in Colombia timezone (UTC-5)
+    // Convert to UTC first, then apply Colombia offset
     const utcTime = localDate.getTime();
-    const colombiaTime = new Date(utcTime - (5 * 60 * 60 * 1000));
-    
+    const colombiaOffset = -5 * 60 * 60 * 1000; // UTC-5
+    const colombiaTime = new Date(utcTime + colombiaOffset);
+
     return formatColombiaTime(colombiaTime);
 }
 
@@ -66,18 +73,21 @@ function convertColumbiaToUTCForAPI(colombiaDateTimeString) {
     const [datePart, timePart] = colombiaDateTimeString.split(' ');
     const [year, month, day] = datePart.split('-').map(Number);
     const [hours, minutes] = timePart.split(':').map(Number);
-    
+
     // Create date object treating input as Colombia time (UTC-5)
-    const colombiaTime = new Date();
-    colombiaTime.setUTCFullYear(year);
-    colombiaTime.setUTCMonth(month - 1);
-    colombiaTime.setUTCDate(day);
-    colombiaTime.setUTCHours(hours + 5); // Add 5 hours to convert Colombia to UTC
-    colombiaTime.setUTCMinutes(minutes);
-    colombiaTime.setUTCSeconds(0);
-    colombiaTime.setUTCMilliseconds(0);
-    
-    return colombiaTime.toISOString().replace('T', ' ').substring(0, 19);
+    // Colombia time + 5 hours = UTC
+    const utcTime = new Date(Date.UTC(year, month - 1, day, hours + 5, minutes, 0, 0));
+
+    const result = utcTime.toISOString().replace('T', ' ').substring(0, 19);
+
+    console.log('🇨🇴 → 🌐 Colombia to UTC conversion:', {
+        colombia_input: colombiaDateTimeString,
+        parsed: { year, month, day, hours, minutes },
+        utc_hours: hours + 5,
+        utc_output: result
+    });
+
+    return result;
 }
 
 // Initialize Colombia Time Selection UI
@@ -127,10 +137,19 @@ function updateCurrentTimeDisplay() {
     const display = document.getElementById('current-time-display');
     if (display) {
         const now = new Date();
+
+        // Format user's local time
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const localTime = `${year}-${month}-${day} ${hours}:${minutes}`;
+
+        // Get Colombia time
         const colombiaTime = getCurrentColombiaTime();
-        const localTime = formatColombiaTime(now);
         const colombiaTimeFormatted = formatColombiaTime(colombiaTime);
-        
+
         display.innerHTML = `
             <strong>Your Time:</strong> ${localTime}<br>
             <strong>Colombia Time:</strong> ${colombiaTimeFormatted} (UTC-5)
@@ -954,12 +973,12 @@ async function createAdGroup() {
             // BUDGET AND SCHEDULE (use campaign's budget mode if set, otherwise use ad group's)
             budget_mode: state.campaignBudgetMode || budgetMode,  // Use campaign's budget mode if available
             budget: budget,
-            schedule_type: 'SCHEDULE_FROM_NOW',  // Set start time and run continuously
-            schedule_start_time: scheduleStartTime,
+            schedule_type: 'SCHEDULE_START_END',  // Use start and end time
+            schedule_start_time: scheduleStartTime,  // UTC datetime string
 
             // TIMEZONE (TikTok timezone for scheduling)
             timezone_type: 'TIMEZONE_TYPE_CUSTOM',  // Use custom timezone
-            timezone: 'America/New_York',  // Eastern timezone ID
+            timezone: 'America/Bogota',  // Colombia timezone ID
 
             // PACING
             pacing: 'PACING_MODE_SMOOTH',  // Standard delivery
