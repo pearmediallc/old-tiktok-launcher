@@ -961,11 +961,7 @@ async function createAdGroup() {
             budget_mode: state.campaignBudgetMode || budgetMode,  // Use campaign's budget mode if available
             budget: budget,
             schedule_type: 'SCHEDULE_FROM_NOW',  // Start from specified time, end 10 years later
-            schedule_start_time: scheduleStartTime,  // UTC datetime string
-
-            // TIMEZONE (TikTok timezone for scheduling)
-            timezone_type: 'TIMEZONE_TYPE_CUSTOM',  // Use custom timezone
-            timezone: 'America/Bogota',  // Colombia timezone ID
+            schedule_start_time: scheduleStartTime,  // UTC datetime string (will be converted to Unix timestamp by backend)
 
             // PACING
             pacing: 'PACING_MODE_SMOOTH',  // Standard delivery
