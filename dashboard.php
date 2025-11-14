@@ -83,19 +83,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     </div>
                 </div>
 
-                <div class="form-section">
-                    <h3>Schedule</h3>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Start Date & Time (Eastern Time EST/EDT)</label>
-                            <input type="datetime-local" id="campaign-start-date" required>
-                        </div>
-                        <div class="form-group">
-                            <label>End Date & Time (Eastern Time EST/EDT)</label>
-                            <input type="datetime-local" id="campaign-end-date">
-                        </div>
-                    </div>
-                </div>
+                <!-- Schedule section removed - campaign starts immediately -->
 
                 <div class="form-info">
                     <p><strong>Objective:</strong> Lead Generation</p>

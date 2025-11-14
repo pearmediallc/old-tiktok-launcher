@@ -31,14 +31,15 @@ function getCurrentColombiaTime() {
 }
 
 function formatColombiaTime(date) {
-    // Format date in Colombia timezone
+    // Format date in Colombia timezone with seconds for API compatibility
     const utcDate = new Date(date.getTime());
     const year = utcDate.getUTCFullYear();
     const month = String(utcDate.getUTCMonth() + 1).padStart(2, '0');
     const day = String(utcDate.getUTCDate()).padStart(2, '0');
     const hours = String(utcDate.getUTCHours()).padStart(2, '0');
     const minutes = String(utcDate.getUTCMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day} ${hours}:${minutes}`;
+    const seconds = String(utcDate.getUTCSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
 function formatColombiaTimeForInput(date) {
@@ -72,17 +73,20 @@ function convertColumbiaToUTCForAPI(colombiaDateTimeString) {
     // Parse Colombia time and convert to UTC for API
     const [datePart, timePart] = colombiaDateTimeString.split(' ');
     const [year, month, day] = datePart.split('-').map(Number);
-    const [hours, minutes] = timePart.split(':').map(Number);
+    const timeComponents = timePart.split(':').map(Number);
+    const hours = timeComponents[0];
+    const minutes = timeComponents[1];
+    const seconds = timeComponents[2] || 0; // Default to 0 if seconds not provided
 
     // Create date object treating input as Colombia time (UTC-5)
     // Colombia time + 5 hours = UTC
-    const utcTime = new Date(Date.UTC(year, month - 1, day, hours + 5, minutes, 0, 0));
+    const utcTime = new Date(Date.UTC(year, month - 1, day, hours + 5, minutes, seconds, 0));
 
     const result = utcTime.toISOString().replace('T', ' ').substring(0, 19);
 
     console.log('🇨🇴 → 🌐 Colombia to UTC conversion:', {
         colombia_input: colombiaDateTimeString,
-        parsed: { year, month, day, hours, minutes },
+        parsed: { year, month, day, hours, minutes, seconds },
         utc_hours: hours + 5,
         utc_output: result
     });
@@ -359,19 +363,14 @@ document.addEventListener('DOMContentLoaded', function() {
     addFirstAd();
     initializeColombiaTimeSelection(); // Initialize Colombia time UI
 
-    // Set default start date to tomorrow for both campaign and ad group (Eastern Time)
+    // Set default start date to tomorrow for ad group (will be overridden by Colombia time logic)
     const now = new Date();
     const easternTime = new Date(now.getTime() - (5 * 60 * 60 * 1000)); // UTC-5 for EST
     const tomorrow = new Date(easternTime);
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(9, 0, 0, 0); // Set to 9:00 AM Eastern time
 
-    // Campaign start date
-    if (document.getElementById('campaign-start-date')) {
-        document.getElementById('campaign-start-date').value = formatDateTimeLocal(tomorrow);
-    }
-
-    // Ad group start date - set default but will be overridden by Colombia time logic
+    // Ad group start date - set default for custom time selection
     if (document.getElementById('start-date')) {
         document.getElementById('start-date').value = formatDateTimeLocal(tomorrow);
     }
@@ -780,9 +779,7 @@ function prevStep() {
 // Campaign creation
 async function createCampaign() {
     const campaignName = document.getElementById('campaign-name').value.trim();
-    const startDate = document.getElementById('campaign-start-date').value;
-    const endDate = document.getElementById('campaign-end-date').value;
-    
+
     // Get CBO settings
     const cboEnabled = document.getElementById('cbo-enabled').checked;
     const campaignBudget = cboEnabled ? (parseFloat(document.getElementById('campaign-budget').value) || 0) : null;
@@ -792,7 +789,7 @@ async function createCampaign() {
         showToast('Please enter campaign name', 'error');
         return;
     }
-    
+
     if (cboEnabled && (!campaignBudget || campaignBudget < 20)) {
         showToast('Campaign budget must be at least $20 when CBO is enabled', 'error');
         return;
@@ -805,7 +802,7 @@ async function createCampaign() {
             campaign_name: campaignName,
             cbo_enabled: cboEnabled
         };
-        
+
         // Set budget parameters based on CBO setting
         if (cboEnabled) {
             params.budget = campaignBudget;
@@ -815,19 +812,9 @@ async function createCampaign() {
             params.budget_mode = 'BUDGET_MODE_INFINITE';
             params.budget_optimize_on = false;
         }
-        
-        // Add schedule times if provided (convert from Eastern Time to UTC)
-        if (startDate) {
-            params.schedule_start_time = convertToUTC(startDate);
-        }
 
         // Store budget mode for ad group to use
         state.campaignBudgetMode = 'BUDGET_MODE_DAY';
-
-        // Add end time if provided (convert from Eastern Time to UTC)
-        if (endDate) {
-            params.schedule_end_time = convertToUTC(endDate);
-        }
 
         const response = await apiRequest('create_campaign', params);
 
