@@ -164,9 +164,23 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Start Date & Time - Eastern Time (EST/EDT)</label>
-                            <input type="datetime-local" id="start-date" required>
-                            <small>Enter time in Eastern timezone (EST/EDT) - automatically handles daylight saving time</small>
+                            <label>Ad Group Start Time</label>
+                            <div class="radio-group">
+                                <label class="radio-option">
+                                    <input type="radio" name="start-time-option" value="now" id="start-now" checked>
+                                    <span>Start from now (Colombia Time)</span>
+                                    <div id="current-time-display" style="font-size: 12px; color: #666; margin-top: 4px;"></div>
+                                </label>
+                                <label class="radio-option">
+                                    <input type="radio" name="start-time-option" value="custom" id="start-custom">
+                                    <span>Choose specific time</span>
+                                </label>
+                            </div>
+                            <div id="custom-time-section" style="display: none; margin-top: 10px;">
+                                <input type="datetime-local" id="start-date">
+                                <small>Enter time in your local timezone - will be converted to Colombia Time (UTC-5)</small>
+                                <div id="colombia-time-preview" style="font-size: 12px; color: #007cba; margin-top: 4px;"></div>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>Bid Amount ($) <span class="optional">(Optional - TikTok will auto-optimize if empty)</span></label>

@@ -190,6 +190,45 @@ h3 {
     resize: vertical;
 }
 
+/* Radio Group Styles */
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.radio-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: #fafafa;
+}
+
+.radio-option:hover {
+    border-color: #007cba;
+    background: #f0f8ff;
+}
+
+.radio-option input[type="radio"] {
+    margin: 2px 0 0 0;
+}
+
+.radio-option input[type="radio"]:checked + span {
+    color: #007cba;
+    font-weight: 500;
+}
+
+.radio-option:has(input[type="radio"]:checked) {
+    border-color: #007cba;
+    background: #f0f8ff;
+}
+
 .form-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));

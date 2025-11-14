@@ -20,6 +20,172 @@ const TIMEZONE_CONFIG = {
     supportsDST: true // Whether this timezone supports daylight saving
 };
 
+// Colombia Timezone Functions
+function getCurrentColombiaTime() {
+    const now = new Date();
+    // Colombia is UTC-5 (no daylight saving)
+    const colombiaTime = new Date(now.getTime() - (5 * 60 * 60 * 1000));
+    return colombiaTime;
+}
+
+function formatColombiaTime(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
+function formatColombiaTimeForInput(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function convertLocalToColumbia(localDateTimeString) {
+    if (!localDateTimeString) return null;
+    
+    // Parse local datetime
+    const localDate = new Date(localDateTimeString);
+    
+    // Convert to Colombia time (UTC-5)
+    const utcTime = localDate.getTime();
+    const colombiaTime = new Date(utcTime - (5 * 60 * 60 * 1000));
+    
+    return formatColombiaTime(colombiaTime);
+}
+
+function convertColumbiaToUTCForAPI(colombiaDateTimeString) {
+    if (!colombiaDateTimeString) return null;
+    
+    // Parse Colombia time and convert to UTC for API
+    const [datePart, timePart] = colombiaDateTimeString.split(' ');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hours, minutes] = timePart.split(':').map(Number);
+    
+    // Create date object treating input as Colombia time (UTC-5)
+    const colombiaTime = new Date();
+    colombiaTime.setUTCFullYear(year);
+    colombiaTime.setUTCMonth(month - 1);
+    colombiaTime.setUTCDate(day);
+    colombiaTime.setUTCHours(hours + 5); // Add 5 hours to convert Colombia to UTC
+    colombiaTime.setUTCMinutes(minutes);
+    colombiaTime.setUTCSeconds(0);
+    colombiaTime.setUTCMilliseconds(0);
+    
+    return colombiaTime.toISOString().replace('T', ' ').substring(0, 19);
+}
+
+// Initialize Colombia Time Selection UI
+function initializeColombiaTimeSelection() {
+    // Update current time display every minute
+    updateCurrentTimeDisplay();
+    setInterval(updateCurrentTimeDisplay, 60000);
+    
+    // Set up radio button event handlers
+    const startNowRadio = document.getElementById('start-now');
+    const startCustomRadio = document.getElementById('start-custom');
+    const customTimeSection = document.getElementById('custom-time-section');
+    const startDateInput = document.getElementById('start-date');
+    
+    if (startNowRadio) {
+        startNowRadio.addEventListener('change', function() {
+            if (this.checked) {
+                customTimeSection.style.display = 'none';
+                addLog('info', '🇨🇴 Selected: Start from now (Colombia Time)', {
+                    option: 'start_from_now',
+                    colombia_time: formatColombiaTime(getCurrentColombiaTime())
+                });
+            }
+        });
+    }
+    
+    if (startCustomRadio) {
+        startCustomRadio.addEventListener('change', function() {
+            if (this.checked) {
+                customTimeSection.style.display = 'block';
+                updateColombiaTimePreview();
+                addLog('info', '🇨🇴 Selected: Choose specific time', {
+                    option: 'custom_time'
+                });
+            }
+        });
+    }
+    
+    if (startDateInput) {
+        startDateInput.addEventListener('change', updateColombiaTimePreview);
+        startDateInput.addEventListener('input', updateColombiaTimePreview);
+    }
+}
+
+// Update current time display
+function updateCurrentTimeDisplay() {
+    const display = document.getElementById('current-time-display');
+    if (display) {
+        const now = new Date();
+        const colombiaTime = getCurrentColombiaTime();
+        const localTime = formatColombiaTime(now);
+        const colombiaTimeFormatted = formatColombiaTime(colombiaTime);
+        
+        display.innerHTML = `
+            <strong>Your Time:</strong> ${localTime}<br>
+            <strong>Colombia Time:</strong> ${colombiaTimeFormatted} (UTC-5)
+        `;
+    }
+}
+
+// Update Colombia time preview for custom time selection
+function updateColombiaTimePreview() {
+    const preview = document.getElementById('colombia-time-preview');
+    const startDateInput = document.getElementById('start-date');
+    
+    if (preview && startDateInput && startDateInput.value) {
+        const localTime = startDateInput.value;
+        const colombiaTime = convertLocalToColumbia(localTime);
+        
+        preview.innerHTML = `
+            <strong>Your Input:</strong> ${localTime.replace('T', ' ')}<br>
+            <strong>Colombia Time:</strong> ${colombiaTime} (UTC-5)
+        `;
+        
+        addLog('info', '🇨🇴 Time conversion preview updated', {
+            local_input: localTime,
+            colombia_time: colombiaTime
+        });
+    }
+}
+
+// Get the final Colombia time for ad group creation
+function getFinalColombiaTime() {
+    const startNowRadio = document.getElementById('start-now');
+    const startDateInput = document.getElementById('start-date');
+    
+    if (startNowRadio && startNowRadio.checked) {
+        // Use current Colombia time
+        const colombiaTime = formatColombiaTime(getCurrentColombiaTime());
+        addLog('info', '🇨🇴 Using current Colombia time', {
+            colombia_time: colombiaTime,
+            source: 'current_time'
+        });
+        return colombiaTime;
+    } else if (startDateInput && startDateInput.value) {
+        // Convert user input to Colombia time
+        const colombiaTime = convertLocalToColumbia(startDateInput.value);
+        addLog('info', '🇨🇴 Using custom Colombia time', {
+            local_input: startDateInput.value,
+            colombia_time: colombiaTime,
+            source: 'custom_time'
+        });
+        return colombiaTime;
+    }
+    
+    return null;
+}
+
 // API Logger Functions
 function addLog(type, message, details = null) {
     const logsContent = document.getElementById('logs-content');
@@ -172,11 +338,12 @@ document.addEventListener('DOMContentLoaded', function() {
     loadTimezones(); // Load TikTok timezones
     loadAdvertiserInfo(); // Load and verify advertiser timezone
     addFirstAd();
+    initializeColombiaTimeSelection(); // Initialize Colombia time UI
 
     // Set default start date to tomorrow for both campaign and ad group (Eastern Time)
     const now = new Date();
     const easternTime = new Date(now.getTime() - (5 * 60 * 60 * 1000)); // UTC-5 for EST
-    const tomorrow = new Date(colombiaTime);
+    const tomorrow = new Date(easternTime);
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(9, 0, 0, 0); // Set to 9:00 AM Eastern time
 
@@ -185,7 +352,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('campaign-start-date').value = formatDateTimeLocal(tomorrow);
     }
 
-    // Ad group start date
+    // Ad group start date - set default but will be overridden by Colombia time logic
     if (document.getElementById('start-date')) {
         document.getElementById('start-date').value = formatDateTimeLocal(tomorrow);
     }
@@ -734,11 +901,25 @@ async function createAdGroup() {
     showLoading();
 
     try {
-        // Convert local time to Eastern timezone, then to UTC for TikTok API
-        const scheduleStartTime = convertToUTC(startDate);
+        // Get the Colombia time based on user selection
+        const colombiaTime = getFinalColombiaTime();
+        if (!colombiaTime) {
+            showToast('Please select a start time for the ad group', 'error');
+            hideLoading();
+            return;
+        }
+        
+        // Convert Colombia time to UTC for TikTok API
+        const scheduleStartTime = convertColumbiaToUTCForAPI(colombiaTime);
 
-        console.log('🇺🇸 Eastern timezone conversion:', {
-            input: startDate,
+        addLog('info', '🇨🇴 Colombia timezone conversion for API', {
+            colombia_time: colombiaTime,
+            utc_result: scheduleStartTime,
+            timezone: 'Colombia (UTC-5)'
+        });
+
+        console.log('🇨🇴 Colombia timezone conversion:', {
+            colombia_input: colombiaTime,
             utc_result: scheduleStartTime
         });
 
