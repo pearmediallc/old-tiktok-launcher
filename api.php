@@ -779,20 +779,18 @@ try {
                 logToFile("    TikTok uses the advertiser account timezone instead (check with get_advertiser_info endpoint)");
             }
 
-            // Convert datetime strings to Unix timestamps for TikTok API
-            // Flow: Frontend sends UTC datetime string → Backend converts to Unix timestamp
-            // Example: "2025-01-02 14:00:00" (UTC) → 1767381600 (Unix timestamp)
-            // TikTok API uses schedule_start_time and schedule_end_time fields with Unix timestamp values
+            // TikTok API expects datetime strings in format: YYYY-MM-DD HH:MM:SS (UTC+0)
+            // Documentation: schedule_start_time is type "datetime" not Unix timestamp
+            // Send datetime string directly - NO conversion to timestamp
             if (!empty($data['schedule_start_time'])) {
                 if (!is_valid_datetime($data['schedule_start_time'])) {
                     http_response_code(400);
                     echo json_encode(['success' => false, 'message' => 'schedule_start_time must be YYYY-MM-DD HH:MM:SS (UTC)']);
                     exit;
                 }
-                // Convert UTC datetime string to Unix timestamp
-                $startTimestamp = strtotime($data['schedule_start_time'] . ' UTC');
-                $params['schedule_start_time'] = (int)$startTimestamp;
-                logToFile("📅 Start time conversion: {$data['schedule_start_time']} (UTC) → {$startTimestamp} (Unix timestamp, type: " . gettype($params['schedule_start_time']) . ")");
+                // Send datetime string directly to TikTok API (format: YYYY-MM-DD HH:MM:SS)
+                $params['schedule_start_time'] = $data['schedule_start_time'];
+                logToFile("📅 Schedule start time (UTC datetime string): {$data['schedule_start_time']}");
             }
 
             if (!empty($data['schedule_end_time'])) {
@@ -801,10 +799,9 @@ try {
                     echo json_encode(['success' => false, 'message' => 'schedule_end_time must be YYYY-MM-DD HH:MM:SS (UTC)']);
                     exit;
                 }
-                // Convert UTC datetime string to Unix timestamp
-                $endTimestamp = strtotime($data['schedule_end_time'] . ' UTC');
-                $params['schedule_end_time'] = (int)$endTimestamp;
-                logToFile("📅 End time conversion: {$data['schedule_end_time']} (UTC) → {$endTimestamp} (Unix timestamp, type: " . gettype($params['schedule_end_time']) . ")");
+                // Send datetime string directly to TikTok API (format: YYYY-MM-DD HH:MM:SS)
+                $params['schedule_end_time'] = $data['schedule_end_time'];
+                logToFile("📅 Schedule end time (UTC datetime string): {$data['schedule_end_time']}");
             }
 
             // Handle dayparting
