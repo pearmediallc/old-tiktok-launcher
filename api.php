@@ -935,12 +935,19 @@ try {
                 'portfolio_content' => $portfolio_content
             ];
 
-            logToFile("Create CTA Portfolio Request:");
-            logToFile("  Advertiser ID: " . $advertiser_id);
-            logToFile("  Portfolio Type: CTA");
-            logToFile("  Portfolio Content Count: " . count($portfolio_content));
-            logToFile("  Full Params: " . json_encode($params, JSON_PRETTY_PRINT));
-            logToFile("  Access Token: " . (empty($config['access_token']) ? 'EMPTY' : 'SET (length: ' . strlen($config['access_token']) . ')'));
+            logToFile("======= CREATE CTA PORTFOLIO REQUEST =======");
+            logToFile("Advertiser ID: " . $advertiser_id);
+            logToFile("Portfolio Type: CTA");
+            logToFile("Portfolio Content Count: " . count($portfolio_content));
+            logToFile("Access Token: " . (empty($config['access_token']) ? 'EMPTY' : 'SET (length: ' . strlen($config['access_token']) . ')'));
+            logToFile("Request Payload (JSON): " . json_encode($params));
+            logToFile("Full Request Params:");
+            foreach ($portfolio_content as $idx => $item) {
+                logToFile("  CTA " . ($idx + 1) . ":");
+                logToFile("    asset_content: " . $item['asset_content']);
+                logToFile("    asset_ids: " . json_encode($item['asset_ids']));
+                logToFile("    asset_ids types: " . implode(', ', array_map('gettype', $item['asset_ids'])));
+            }
 
             $url = "https://business-api.tiktok.com/open_api/v1.3/creative/portfolio/create/";
 
@@ -958,20 +965,31 @@ try {
             $curlError = curl_error($ch);
             curl_close($ch);
 
-            logToFile("Create Portfolio Response Code: " . $httpCode);
+            logToFile("======= CREATE CTA PORTFOLIO RESPONSE =======");
+            logToFile("HTTP Status Code: " . $httpCode);
             if ($curlError) {
                 logToFile("CURL Error: " . $curlError);
             }
-            logToFile("Create Portfolio Response: " . $response);
+            logToFile("Raw Response: " . $response);
 
             $responseData = json_decode($response, true);
+            logToFile("Parsed Response:");
+            logToFile("  code: " . ($responseData['code'] ?? 'NULL'));
+            logToFile("  message: " . ($responseData['message'] ?? 'NULL'));
+            logToFile("  request_id: " . ($responseData['request_id'] ?? 'NULL'));
 
             // Enhanced error logging
             if (!isset($responseData['code']) || $responseData['code'] !== 0) {
-                logToFile("ERROR: Portfolio creation failed");
-                logToFile("  Response Code: " . ($responseData['code'] ?? 'NULL'));
-                logToFile("  Response Message: " . ($responseData['message'] ?? 'NULL'));
-                logToFile("  Full Response Data: " . json_encode($responseData, JSON_PRETTY_PRINT));
+                logToFile("======= ERROR: Portfolio creation failed =======");
+                logToFile("  API Response Code: " . ($responseData['code'] ?? 'NULL'));
+                logToFile("  API Response Message: " . ($responseData['message'] ?? 'NULL'));
+                if (isset($responseData['data'])) {
+                    logToFile("  Response Data: " . json_encode($responseData['data'], JSON_PRETTY_PRINT));
+                }
+                logToFile("  Full Response: " . json_encode($responseData, JSON_PRETTY_PRINT));
+            } else {
+                logToFile("======= SUCCESS: Portfolio created =======");
+                logToFile("  Portfolio ID: " . ($responseData['data']['portfolio_id'] ?? 'NULL'));
             }
 
             // Better error message

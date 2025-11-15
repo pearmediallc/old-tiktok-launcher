@@ -1352,13 +1352,25 @@ async function createCTAPortfolio(adIndex) {
 
     try {
         // Build portfolio_content array as per TikTok API spec
+        // Ensure asset_ids are strings as per TikTok API requirement
         const portfolioContent = assets.map(asset => ({
             asset_content: asset.asset_content,
-            asset_ids: asset.asset_ids
+            asset_ids: asset.asset_ids.map(id => String(id))
         }));
 
         console.log('Portfolio Content Structure:', JSON.stringify(portfolioContent, null, 2));
         console.log('Number of CTAs in Portfolio:', portfolioContent.length);
+
+        // Validate portfolio content
+        console.log('Validating portfolio content before sending...');
+        portfolioContent.forEach((item, idx) => {
+            console.log(`  CTA ${idx + 1}:`, {
+                asset_content: item.asset_content,
+                asset_ids_count: item.asset_ids.length,
+                asset_ids: item.asset_ids,
+                asset_ids_types: item.asset_ids.map(id => typeof id)
+            });
+        });
 
         const requestBody = {
             portfolio_content: portfolioContent
