@@ -955,18 +955,43 @@ try {
 
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
             curl_close($ch);
 
             logToFile("Create Portfolio Response Code: " . $httpCode);
+            if ($curlError) {
+                logToFile("CURL Error: " . $curlError);
+            }
             logToFile("Create Portfolio Response: " . $response);
 
             $responseData = json_decode($response, true);
 
+            // Enhanced error logging
+            if (!isset($responseData['code']) || $responseData['code'] !== 0) {
+                logToFile("ERROR: Portfolio creation failed");
+                logToFile("  Response Code: " . ($responseData['code'] ?? 'NULL'));
+                logToFile("  Response Message: " . ($responseData['message'] ?? 'NULL'));
+                logToFile("  Full Response Data: " . json_encode($responseData, JSON_PRETTY_PRINT));
+            }
+
+            // Better error message
+            $errorMessage = 'Failed to create CTA portfolio';
+            if (isset($responseData['message']) && $responseData['message'] !== 'OK') {
+                $errorMessage = $responseData['message'];
+            } elseif (isset($responseData['code']) && $responseData['code'] !== 0) {
+                $errorMessage = 'API Error Code: ' . $responseData['code'];
+                // Add specific error details if available
+                if (isset($responseData['data']['errors'])) {
+                    $errorMessage .= ' - ' . json_encode($responseData['data']['errors']);
+                }
+            }
+
             echo json_encode([
                 'success' => $httpCode === 200 && isset($responseData['code']) && $responseData['code'] === 0,
                 'data' => $responseData['data'] ?? null,
-                'message' => $responseData['message'] ?? 'Failed to create CTA portfolio',
-                'code' => $responseData['code'] ?? null
+                'message' => isset($responseData['code']) && $responseData['code'] === 0 ? $responseData['message'] : $errorMessage,
+                'code' => $responseData['code'] ?? null,
+                'raw_response' => $responseData // Include full response for debugging
             ]);
             break;
 

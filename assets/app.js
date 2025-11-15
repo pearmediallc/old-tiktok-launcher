@@ -1416,9 +1416,16 @@ async function createCTAPortfolio(adIndex) {
             console.error('Message:', result.message);
             console.error('Code:', result.code);
             console.error('Data:', result.data);
+            console.error('Raw Response:', result.raw_response);
 
-            listContainer.innerHTML = `<p style="color: #e74c3c;">Failed to create portfolio: ${result.message || 'Unknown error'}</p>`;
-            showToast('Failed to create CTA portfolio', 'error');
+            // Show detailed error message
+            let errorMsg = result.message || 'Unknown error';
+            if (result.raw_response) {
+                console.error('TikTok API Full Response:', JSON.stringify(result.raw_response, null, 2));
+            }
+
+            listContainer.innerHTML = `<p style="color: #e74c3c;">Failed to create portfolio: ${errorMsg}</p>`;
+            showToast('Failed to create CTA portfolio: ' + errorMsg, 'error');
         }
     } catch (error) {
         console.error('=== Exception Caught ===');
