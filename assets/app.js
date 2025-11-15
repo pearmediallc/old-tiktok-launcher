@@ -1234,8 +1234,13 @@ async function loadDynamicCTAs(adIndex) {
     const contentType = document.getElementById(`cta-content-type-${adIndex}`).value;
     const listContainer = document.getElementById(`dynamic-cta-list-${adIndex}`);
 
+    console.log('=== Load Dynamic CTAs Request ===');
+    console.log('Ad Index:', adIndex);
+    console.log('Content Type Selected:', contentType);
+
     // Validate content type is selected
     if (!contentType) {
+        console.warn('Content type not selected - validation failed');
         listContainer.innerHTML = '<p style="color: #e74c3c;">Please select a content type first.</p>';
         showToast('Please select a content type', 'error');
         return;
@@ -1243,22 +1248,42 @@ async function loadDynamicCTAs(adIndex) {
 
     listContainer.innerHTML = '<p style="color: #666;">Loading dynamic CTAs...</p>';
 
+    const requestUrl = `api.php?action=get_dynamic_ctas&content_type=${contentType}`;
+    console.log('Request URL:', requestUrl);
+    console.log('Sending GET request to TikTok API...');
+
     try {
-        const response = await fetch(`api.php?action=get_dynamic_ctas&content_type=${contentType}`);
+        const response = await fetch(requestUrl);
+
+        console.log('Response Status:', response.status);
+        console.log('Response OK:', response.ok);
+        console.log('Response Headers:', {
+            'Content-Type': response.headers.get('content-type'),
+            'Content-Length': response.headers.get('content-length')
+        });
+
         const result = await response.json();
 
-        console.log('Dynamic CTAs Response:', result);
+        console.log('=== API Response Received ===');
+        console.log('Success:', result.success);
+        console.log('Message:', result.message);
+        console.log('Code:', result.code);
+        console.log('Full Response Data:', JSON.stringify(result, null, 2));
 
         if (result.success && result.data && result.data.recommend_assets) {
             const assets = result.data.recommend_assets;
+            console.log('Recommend Assets Count:', assets.length);
+            console.log('Recommend Assets Details:', JSON.stringify(assets, null, 2));
 
             if (assets.length === 0) {
+                console.warn('No dynamic CTAs returned for content type:', contentType);
                 listContainer.innerHTML = '<p style="color: #666;">No dynamic CTAs available for this content type.</p>';
                 return;
             }
 
             // Store the assets for portfolio creation
             window[`dynamicCTAAssets_${adIndex}`] = assets;
+            console.log('Stored assets in window.dynamicCTAAssets_' + adIndex);
 
             // Display the dynamic CTAs with better formatting
             let html = '<div style="margin-bottom: 15px; padding: 15px; background: #f0f4ff; border-radius: 8px; border: 1px solid #667eea;">';
@@ -1280,23 +1305,44 @@ async function loadDynamicCTAs(adIndex) {
 
             listContainer.innerHTML = html;
 
+            console.log('UI updated with', assets.length, 'dynamic CTAs');
             showToast(`${assets.length} Dynamic CTAs loaded successfully`, 'success');
         } else {
+            console.error('=== API Request Failed ===');
+            console.error('Success:', result.success);
+            console.error('Message:', result.message);
+            console.error('Code:', result.code);
+            console.error('Data:', result.data);
+
             listContainer.innerHTML = `<p style="color: #e74c3c;">Failed to load dynamic CTAs: ${result.message || 'Unknown error'}</p>`;
             showToast('Failed to load dynamic CTAs', 'error');
         }
     } catch (error) {
-        console.error('Error loading dynamic CTAs:', error);
+        console.error('=== Exception Caught ===');
+        console.error('Error Type:', error.name);
+        console.error('Error Message:', error.message);
+        console.error('Error Stack:', error.stack);
+        console.error('Full Error Object:', error);
+
         listContainer.innerHTML = '<p style="color: #e74c3c;">Error loading dynamic CTAs. Please try again.</p>';
         showToast('Error loading dynamic CTAs', 'error');
     }
+
+    console.log('=== Load Dynamic CTAs Complete ===');
 }
 
 // Create CTA portfolio from dynamic CTAs
 async function createCTAPortfolio(adIndex) {
+    console.log('=== Create CTA Portfolio Request ===');
+    console.log('Ad Index:', adIndex);
+
     const assets = window[`dynamicCTAAssets_${adIndex}`];
 
+    console.log('Loaded Assets from window:', assets);
+    console.log('Assets Count:', assets ? assets.length : 0);
+
     if (!assets || assets.length === 0) {
+        console.warn('No dynamic CTAs available - cannot create portfolio');
         showToast('No dynamic CTAs available. Please load CTAs first.', 'error');
         return;
     }
@@ -1311,25 +1357,47 @@ async function createCTAPortfolio(adIndex) {
             asset_ids: asset.asset_ids
         }));
 
+        console.log('Portfolio Content Structure:', JSON.stringify(portfolioContent, null, 2));
+        console.log('Number of CTAs in Portfolio:', portfolioContent.length);
+
+        const requestBody = {
+            portfolio_content: portfolioContent
+        };
+
+        console.log('Request Body:', JSON.stringify(requestBody, null, 2));
+        console.log('Sending POST request to create portfolio...');
+
         const response = await fetch('api.php?action=create_cta_portfolio', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                portfolio_content: portfolioContent
-            })
+            body: JSON.stringify(requestBody)
+        });
+
+        console.log('Response Status:', response.status);
+        console.log('Response OK:', response.ok);
+        console.log('Response Headers:', {
+            'Content-Type': response.headers.get('content-type'),
+            'Content-Length': response.headers.get('content-length')
         });
 
         const result = await response.json();
 
-        console.log('Create Portfolio Response:', result);
+        console.log('=== API Response Received ===');
+        console.log('Success:', result.success);
+        console.log('Message:', result.message);
+        console.log('Code:', result.code);
+        console.log('Full Response Data:', JSON.stringify(result, null, 2));
 
         if (result.success && result.data && result.data.portfolio_id) {
             const portfolioId = result.data.portfolio_id;
+            console.log('Portfolio Created Successfully!');
+            console.log('Portfolio ID:', portfolioId);
 
             // Store the portfolio ID
             document.getElementById(`dynamic-cta-portfolio-${adIndex}`).value = portfolioId;
+            console.log('Stored portfolio ID in hidden input field');
 
             // Update the UI to show success
             let html = '<div style="padding: 15px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; color: #155724;">';
@@ -1340,16 +1408,30 @@ async function createCTAPortfolio(adIndex) {
 
             listContainer.innerHTML = html;
 
+            console.log('UI updated with success message');
             showToast('CTA Portfolio created successfully', 'success');
         } else {
+            console.error('=== Portfolio Creation Failed ===');
+            console.error('Success:', result.success);
+            console.error('Message:', result.message);
+            console.error('Code:', result.code);
+            console.error('Data:', result.data);
+
             listContainer.innerHTML = `<p style="color: #e74c3c;">Failed to create portfolio: ${result.message || 'Unknown error'}</p>`;
             showToast('Failed to create CTA portfolio', 'error');
         }
     } catch (error) {
-        console.error('Error creating CTA portfolio:', error);
+        console.error('=== Exception Caught ===');
+        console.error('Error Type:', error.name);
+        console.error('Error Message:', error.message);
+        console.error('Error Stack:', error.stack);
+        console.error('Full Error Object:', error);
+
         listContainer.innerHTML = '<p style="color: #e74c3c;">Error creating portfolio. Please try again.</p>';
         showToast('Error creating CTA portfolio', 'error');
     }
+
+    console.log('=== Create CTA Portfolio Complete ===');
 }
 
 // Media modal

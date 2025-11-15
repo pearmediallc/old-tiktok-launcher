@@ -860,18 +860,33 @@ try {
             // GET request to TikTok API to get dynamic CTA recommendations
             $content_type = $_GET['content_type'] ?? 'APP_DOWNLOAD';
 
+            // Validate access_token
+            if (empty($config['access_token'])) {
+                logToFile("ERROR: access_token is empty in config");
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'The access_token is empty. Please check your environment configuration.',
+                    'code' => null
+                ]);
+                exit;
+            }
+
             $url = "https://business-api.tiktok.com/open_api/v1.3/creative/cta/recommend/?" . http_build_query([
                 'advertiser_id' => $advertiser_id,
                 'asset_type' => 'CTA_AUTO_OPTIMIZED',
                 'content_type' => $content_type
             ]);
 
-            logToFile("GET Dynamic CTAs URL: " . $url);
+            logToFile("GET Dynamic CTAs Request:");
+            logToFile("  URL: " . $url);
+            logToFile("  Content Type: " . $content_type);
+            logToFile("  Advertiser ID: " . $advertiser_id);
+            logToFile("  Access Token: " . (empty($config['access_token']) ? 'EMPTY' : 'SET (length: ' . strlen($config['access_token']) . ')'));
 
             $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Access-Token: ' . $_SESSION['access_token']
+                'Access-Token: ' . $config['access_token']
             ]);
 
             $response = curl_exec($ch);
@@ -903,13 +918,29 @@ try {
                 exit;
             }
 
+            // Validate access_token
+            if (empty($config['access_token'])) {
+                logToFile("ERROR: access_token is empty in config");
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'The access_token is empty. Please check your environment configuration.',
+                    'code' => null
+                ]);
+                exit;
+            }
+
             $params = [
                 'advertiser_id' => $advertiser_id,
                 'creative_portfolio_type' => 'CTA',
                 'portfolio_content' => $portfolio_content
             ];
 
-            logToFile("Create CTA Portfolio Params: " . json_encode($params, JSON_PRETTY_PRINT));
+            logToFile("Create CTA Portfolio Request:");
+            logToFile("  Advertiser ID: " . $advertiser_id);
+            logToFile("  Portfolio Type: CTA");
+            logToFile("  Portfolio Content Count: " . count($portfolio_content));
+            logToFile("  Full Params: " . json_encode($params, JSON_PRETTY_PRINT));
+            logToFile("  Access Token: " . (empty($config['access_token']) ? 'EMPTY' : 'SET (length: ' . strlen($config['access_token']) . ')'));
 
             $url = "https://business-api.tiktok.com/open_api/v1.3/creative/portfolio/create/";
 
@@ -918,7 +949,7 @@ try {
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($params));
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Access-Token: ' . $_SESSION['access_token'],
+                'Access-Token: ' . $config['access_token'],
                 'Content-Type: application/json'
             ]);
 
