@@ -1078,14 +1078,48 @@ function addAdForm(index, duplicateFrom = null) {
 
         <div class="form-group">
             <label>Call to Action</label>
-            <div class="cta-chips" id="cta-chips-${index}">
-                ${allCTAs.map(cta => `
-                    <div class="cta-chip" data-cta="${cta}" onclick="selectCTA(${index}, '${cta}')">
-                        ${cta.replace(/_/g, ' ')}
-                    </div>
-                `).join('')}
+            <div style="margin-bottom: 15px;">
+                <label style="display: inline-flex; align-items: center; margin-right: 20px;">
+                    <input type="radio" name="cta-mode-${index}" value="static" checked onchange="toggleCTAMode(${index}, 'static')" style="margin-right: 8px;">
+                    Static CTA
+                </label>
+                <label style="display: inline-flex; align-items: center;">
+                    <input type="radio" name="cta-mode-${index}" value="dynamic" onchange="toggleCTAMode(${index}, 'dynamic')" style="margin-right: 8px;">
+                    Dynamic CTA (Auto-Optimized)
+                </label>
             </div>
-            <input type="hidden" id="cta-${index}" value="LEARN_MORE">
+
+            <div id="static-cta-section-${index}">
+                <div class="cta-chips" id="cta-chips-${index}">
+                    ${allCTAs.map(cta => `
+                        <div class="cta-chip" data-cta="${cta}" onclick="selectCTA(${index}, '${cta}')">
+                            ${cta.replace(/_/g, ' ')}
+                        </div>
+                    `).join('')}
+                </div>
+                <input type="hidden" id="cta-${index}" value="LEARN_MORE">
+            </div>
+
+            <div id="dynamic-cta-section-${index}" style="display: none;">
+                <div class="form-group">
+                    <label>Content Type</label>
+                    <select id="cta-content-type-${index}" onchange="loadDynamicCTAs(${index})">
+                        <option value="APP_DOWNLOAD">App Download</option>
+                        <option value="VIDEO">Video</option>
+                        <option value="ECOMMERCE">E-commerce</option>
+                        <option value="LEAD_GENERATION">Lead Generation</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button type="button" class="btn-secondary" onclick="loadDynamicCTAs(${index})" style="width: 100%;">
+                        Load Dynamic CTAs
+                    </button>
+                </div>
+                <div id="dynamic-cta-list-${index}" style="margin-top: 10px;">
+                    <!-- Dynamic CTAs will be loaded here -->
+                </div>
+                <input type="hidden" id="dynamic-cta-portfolio-${index}">
+            </div>
         </div>
 
         <div class="form-group">
@@ -1177,6 +1211,133 @@ function selectCTA(adIndex, cta) {
 
     // Update hidden input
     document.getElementById(`cta-${adIndex}`).value = cta;
+}
+
+// Toggle between static and dynamic CTA modes
+function toggleCTAMode(adIndex, mode) {
+    const staticSection = document.getElementById(`static-cta-section-${adIndex}`);
+    const dynamicSection = document.getElementById(`dynamic-cta-section-${adIndex}`);
+
+    if (mode === 'static') {
+        staticSection.style.display = 'block';
+        dynamicSection.style.display = 'none';
+    } else {
+        staticSection.style.display = 'none';
+        dynamicSection.style.display = 'block';
+    }
+}
+
+// Load dynamic CTAs from TikTok API
+async function loadDynamicCTAs(adIndex) {
+    const contentType = document.getElementById(`cta-content-type-${adIndex}`).value;
+    const listContainer = document.getElementById(`dynamic-cta-list-${adIndex}`);
+
+    listContainer.innerHTML = '<p style="color: #666;">Loading dynamic CTAs...</p>';
+
+    try {
+        const response = await fetch(`api.php?action=get_dynamic_ctas&content_type=${contentType}`);
+        const result = await response.json();
+
+        console.log('Dynamic CTAs Response:', result);
+
+        if (result.success && result.data && result.data.recommend_assets) {
+            const assets = result.data.recommend_assets;
+
+            if (assets.length === 0) {
+                listContainer.innerHTML = '<p style="color: #666;">No dynamic CTAs available for this content type.</p>';
+                return;
+            }
+
+            // Store the assets for portfolio creation
+            window[`dynamicCTAAssets_${adIndex}`] = assets;
+
+            // Display the dynamic CTAs
+            let html = '<div style="margin-bottom: 10px; padding: 10px; background: #f0f4ff; border-radius: 8px;">';
+            html += '<p style="margin: 0 0 10px 0; font-weight: 600;">Available Dynamic CTAs:</p>';
+            html += '<ul style="margin: 0; padding-left: 20px;">';
+
+            assets.forEach(asset => {
+                html += `<li style="margin-bottom: 5px;"><strong>${asset.asset_content}</strong> (${asset.asset_ids.length} variants)</li>`;
+            });
+
+            html += '</ul>';
+            html += '<p style="margin: 10px 0 0 0; font-size: 12px; color: #666;">Click "Create Portfolio" to use these CTAs in your ad.</p>';
+            html += '</div>';
+
+            html += '<button type="button" class="btn-primary" onclick="createCTAPortfolio(' + adIndex + ')" style="width: 100%;">Create CTA Portfolio</button>';
+
+            listContainer.innerHTML = html;
+
+            showToast('Dynamic CTAs loaded successfully', 'success');
+        } else {
+            listContainer.innerHTML = `<p style="color: #e74c3c;">Failed to load dynamic CTAs: ${result.message || 'Unknown error'}</p>`;
+            showToast('Failed to load dynamic CTAs', 'error');
+        }
+    } catch (error) {
+        console.error('Error loading dynamic CTAs:', error);
+        listContainer.innerHTML = '<p style="color: #e74c3c;">Error loading dynamic CTAs. Please try again.</p>';
+        showToast('Error loading dynamic CTAs', 'error');
+    }
+}
+
+// Create CTA portfolio from dynamic CTAs
+async function createCTAPortfolio(adIndex) {
+    const assets = window[`dynamicCTAAssets_${adIndex}`];
+
+    if (!assets || assets.length === 0) {
+        showToast('No dynamic CTAs available. Please load CTAs first.', 'error');
+        return;
+    }
+
+    const listContainer = document.getElementById(`dynamic-cta-list-${adIndex}`);
+    listContainer.innerHTML = '<p style="color: #666;">Creating CTA portfolio...</p>';
+
+    try {
+        // Build portfolio_content array as per TikTok API spec
+        const portfolioContent = assets.map(asset => ({
+            asset_content: asset.asset_content,
+            asset_ids: asset.asset_ids
+        }));
+
+        const response = await fetch('api.php?action=create_cta_portfolio', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                portfolio_content: portfolioContent
+            })
+        });
+
+        const result = await response.json();
+
+        console.log('Create Portfolio Response:', result);
+
+        if (result.success && result.data && result.data.portfolio_id) {
+            const portfolioId = result.data.portfolio_id;
+
+            // Store the portfolio ID
+            document.getElementById(`dynamic-cta-portfolio-${adIndex}`).value = portfolioId;
+
+            // Update the UI to show success
+            let html = '<div style="padding: 15px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; color: #155724;">';
+            html += '<p style="margin: 0 0 10px 0; font-weight: 600;">✓ CTA Portfolio Created Successfully</p>';
+            html += `<p style="margin: 0; font-size: 14px;">Portfolio ID: ${portfolioId}</p>`;
+            html += '<p style="margin: 10px 0 0 0; font-size: 12px;">This portfolio will be used when creating your ad.</p>';
+            html += '</div>';
+
+            listContainer.innerHTML = html;
+
+            showToast('CTA Portfolio created successfully', 'success');
+        } else {
+            listContainer.innerHTML = `<p style="color: #e74c3c;">Failed to create portfolio: ${result.message || 'Unknown error'}</p>`;
+            showToast('Failed to create CTA portfolio', 'error');
+        }
+    } catch (error) {
+        console.error('Error creating CTA portfolio:', error);
+        listContainer.innerHTML = '<p style="color: #e74c3c;">Error creating portfolio. Please try again.</p>';
+        showToast('Error creating CTA portfolio', 'error');
+    }
 }
 
 // Media modal
@@ -2523,17 +2684,29 @@ async function publishAll() {
             const selectedIdentity = identitySelect.value;
             const selectedOption = identitySelect.options[identitySelect.selectedIndex];
             const identityType = selectedOption ? selectedOption.getAttribute('data-identity-type') : 'CUSTOMIZED_USER';
-            
+
+            // Check if using dynamic CTA
+            const ctaMode = document.querySelector(`input[name="cta-mode-${adIndex}"]:checked`)?.value || 'static';
+            const dynamicCTAPortfolio = document.getElementById(`dynamic-cta-portfolio-${adIndex}`)?.value;
+
             const adData = {
                 adgroup_id: state.adGroupId,
                 ad_name: document.getElementById(`ad-name-${adIndex}`).value,
                 ad_text: document.getElementById(`ad-text-${adIndex}`).value,
-                call_to_action: document.getElementById(`cta-${adIndex}`).value,
                 landing_page_url: document.getElementById(`destination-url-${adIndex}`).value,
                 identity_id: selectedIdentity,
                 identity_type: identityType || 'CUSTOMIZED_USER',
                 promotion_type: 'WEBSITE'  // Using WEBSITE for Lead Gen campaigns with landing pages
             };
+
+            // Add CTA based on mode
+            if (ctaMode === 'dynamic' && dynamicCTAPortfolio) {
+                adData.call_to_action_id = dynamicCTAPortfolio;
+                console.log(`Using dynamic CTA portfolio ID: ${dynamicCTAPortfolio}`);
+            } else {
+                adData.call_to_action = document.getElementById(`cta-${adIndex}`).value;
+                console.log(`Using static CTA: ${adData.call_to_action}`);
+            }
 
             const creativeType = document.getElementById(`creative-type-${adIndex}`).value;
             const creativeId = document.getElementById(`creative-id-${adIndex}`).value;

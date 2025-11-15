@@ -856,6 +856,89 @@ try {
             ]);
             break;
 
+        case 'get_dynamic_ctas':
+            // GET request to TikTok API to get dynamic CTA recommendations
+            $content_type = $_GET['content_type'] ?? 'APP_DOWNLOAD';
+
+            $url = "https://business-api.tiktok.com/open_api/v1.3/creative/cta/recommend/?" . http_build_query([
+                'advertiser_id' => $advertiser_id,
+                'asset_type' => 'CTA_AUTO_OPTIMIZED',
+                'content_type' => $content_type
+            ]);
+
+            logToFile("GET Dynamic CTAs URL: " . $url);
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Access-Token: ' . $_SESSION['access_token']
+            ]);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            logToFile("Dynamic CTAs Response Code: " . $httpCode);
+            logToFile("Dynamic CTAs Response: " . $response);
+
+            $responseData = json_decode($response, true);
+
+            echo json_encode([
+                'success' => $httpCode === 200 && isset($responseData['code']) && $responseData['code'] === 0,
+                'data' => $responseData['data'] ?? null,
+                'message' => $responseData['message'] ?? 'Failed to fetch dynamic CTAs',
+                'code' => $responseData['code'] ?? null
+            ]);
+            break;
+
+        case 'create_cta_portfolio':
+            // POST request to create CTA portfolio with portfolio_content structure
+            $portfolio_content = $requestData['portfolio_content'] ?? [];
+
+            if (empty($portfolio_content)) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'portfolio_content is required'
+                ]);
+                exit;
+            }
+
+            $params = [
+                'advertiser_id' => $advertiser_id,
+                'creative_portfolio_type' => 'CTA',
+                'portfolio_content' => $portfolio_content
+            ];
+
+            logToFile("Create CTA Portfolio Params: " . json_encode($params, JSON_PRETTY_PRINT));
+
+            $url = "https://business-api.tiktok.com/open_api/v1.3/creative/portfolio/create/";
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($params));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Access-Token: ' . $_SESSION['access_token'],
+                'Content-Type: application/json'
+            ]);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            logToFile("Create Portfolio Response Code: " . $httpCode);
+            logToFile("Create Portfolio Response: " . $response);
+
+            $responseData = json_decode($response, true);
+
+            echo json_encode([
+                'success' => $httpCode === 200 && isset($responseData['code']) && $responseData['code'] === 0,
+                'data' => $responseData['data'] ?? null,
+                'message' => $responseData['message'] ?? 'Failed to create CTA portfolio',
+                'code' => $responseData['code'] ?? null
+            ]);
+            break;
+
         case 'create_ad':
             $ad = new Ad($config);
             $data = $requestData;
