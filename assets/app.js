@@ -1103,11 +1103,13 @@ function addAdForm(index, duplicateFrom = null) {
             <div id="dynamic-cta-section-${index}" style="display: none;">
                 <div class="form-group">
                     <label>Content Type</label>
-                    <select id="cta-content-type-${index}" onchange="loadDynamicCTAs(${index})">
+                    <select id="cta-content-type-${index}">
+                        <option value="">Select content type...</option>
+                        <option value="LANDING_PAGE">Landing Page</option>
                         <option value="APP_DOWNLOAD">App Download</option>
-                        <option value="VIDEO">Video</option>
-                        <option value="ECOMMERCE">E-commerce</option>
-                        <option value="LEAD_GENERATION">Lead Generation</option>
+                        <option value="OTHER">Other</option>
+                        <option value="MESSAGE">Message</option>
+                        <option value="PHONE_CALL">Phone Call</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -1232,6 +1234,13 @@ async function loadDynamicCTAs(adIndex) {
     const contentType = document.getElementById(`cta-content-type-${adIndex}`).value;
     const listContainer = document.getElementById(`dynamic-cta-list-${adIndex}`);
 
+    // Validate content type is selected
+    if (!contentType) {
+        listContainer.innerHTML = '<p style="color: #e74c3c;">Please select a content type first.</p>';
+        showToast('Please select a content type', 'error');
+        return;
+    }
+
     listContainer.innerHTML = '<p style="color: #666;">Loading dynamic CTAs...</p>';
 
     try {
@@ -1251,24 +1260,27 @@ async function loadDynamicCTAs(adIndex) {
             // Store the assets for portfolio creation
             window[`dynamicCTAAssets_${adIndex}`] = assets;
 
-            // Display the dynamic CTAs
-            let html = '<div style="margin-bottom: 10px; padding: 10px; background: #f0f4ff; border-radius: 8px;">';
-            html += '<p style="margin: 0 0 10px 0; font-weight: 600;">Available Dynamic CTAs:</p>';
-            html += '<ul style="margin: 0; padding-left: 20px;">';
+            // Display the dynamic CTAs with better formatting
+            let html = '<div style="margin-bottom: 15px; padding: 15px; background: #f0f4ff; border-radius: 8px; border: 1px solid #667eea;">';
+            html += '<p style="margin: 0 0 12px 0; font-weight: 600; color: #333;">Recommended Dynamic CTAs:</p>';
+            html += '<div style="background: white; padding: 12px; border-radius: 6px; margin-bottom: 10px;">';
 
-            assets.forEach(asset => {
-                html += `<li style="margin-bottom: 5px;"><strong>${asset.asset_content}</strong> (${asset.asset_ids.length} variants)</li>`;
+            assets.forEach((asset, idx) => {
+                html += `<div style="padding: 8px 0; ${idx < assets.length - 1 ? 'border-bottom: 1px solid #e0e0e0;' : ''}">`;
+                html += `<div style="font-weight: 600; color: #667eea; font-size: 15px; margin-bottom: 4px;">"${asset.asset_content}"</div>`;
+                html += `<div style="font-size: 12px; color: #666;">${asset.asset_ids.length} variant${asset.asset_ids.length > 1 ? 's' : ''} • IDs: ${asset.asset_ids.join(', ')}</div>`;
+                html += `</div>`;
             });
 
-            html += '</ul>';
-            html += '<p style="margin: 10px 0 0 0; font-size: 12px; color: #666;">Click "Create Portfolio" to use these CTAs in your ad.</p>';
+            html += '</div>';
+            html += '<p style="margin: 10px 0 0 0; font-size: 12px; color: #666;"><strong>Note:</strong> All CTAs above will be included in the portfolio and TikTok will auto-optimize which ones to show.</p>';
             html += '</div>';
 
             html += '<button type="button" class="btn-primary" onclick="createCTAPortfolio(' + adIndex + ')" style="width: 100%;">Create CTA Portfolio</button>';
 
             listContainer.innerHTML = html;
 
-            showToast('Dynamic CTAs loaded successfully', 'success');
+            showToast(`${assets.length} Dynamic CTAs loaded successfully`, 'success');
         } else {
             listContainer.innerHTML = `<p style="color: #e74c3c;">Failed to load dynamic CTAs: ${result.message || 'Unknown error'}</p>`;
             showToast('Failed to load dynamic CTAs', 'error');
