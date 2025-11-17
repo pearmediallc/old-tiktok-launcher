@@ -1434,10 +1434,13 @@ async function createCTAPortfolio(adIndex) {
         console.log('Code:', result.code);
         console.log('Full Response Data:', JSON.stringify(result, null, 2));
 
-        if (result.success && result.data && result.data.portfolio_id) {
-            const portfolioId = result.data.portfolio_id;
+        // TikTok API returns creative_portfolio_id, backend normalizes to portfolio_id
+        const portfolioId = result.data?.portfolio_id || result.data?.creative_portfolio_id;
+
+        if (result.success && result.data && portfolioId) {
             console.log('Portfolio Created Successfully!');
             console.log('Portfolio ID:', portfolioId);
+            console.log('Raw data received:', result.data);
 
             // Store the portfolio ID
             document.getElementById(`dynamic-cta-portfolio-${adIndex}`).value = portfolioId;

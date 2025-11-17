@@ -978,6 +978,12 @@ try {
             logToFile("  message: " . ($responseData['message'] ?? 'NULL'));
             logToFile("  request_id: " . ($responseData['request_id'] ?? 'NULL'));
 
+            // Normalize the response: TikTok returns creative_portfolio_id, but we want portfolio_id
+            if (isset($responseData['data']['creative_portfolio_id']) && !isset($responseData['data']['portfolio_id'])) {
+                $responseData['data']['portfolio_id'] = $responseData['data']['creative_portfolio_id'];
+                logToFile("Normalized creative_portfolio_id to portfolio_id: " . $responseData['data']['portfolio_id']);
+            }
+
             // Enhanced error logging
             if (!isset($responseData['code']) || $responseData['code'] !== 0) {
                 logToFile("======= ERROR: Portfolio creation failed =======");
@@ -990,6 +996,7 @@ try {
             } else {
                 logToFile("======= SUCCESS: Portfolio created =======");
                 logToFile("  Portfolio ID: " . ($responseData['data']['portfolio_id'] ?? 'NULL'));
+                logToFile("  Creative Portfolio ID: " . ($responseData['data']['creative_portfolio_id'] ?? 'NULL'));
             }
 
             // Better error message
