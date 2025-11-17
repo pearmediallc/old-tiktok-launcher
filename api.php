@@ -42,8 +42,15 @@ use TikTokAds\Identity\Identity;
 use TikTokAds\Tools\Tools;
 
 // SDK Configuration
+// Prioritize OAuth token over .env token for production use
+$access_token = isset($_SESSION['oauth_access_token']) && !empty($_SESSION['oauth_access_token'])
+    ? $_SESSION['oauth_access_token']
+    : ($_ENV['TIKTOK_ACCESS_TOKEN'] ?? '');
+
 $config = [
-    'access_token' => $_ENV['TIKTOK_ACCESS_TOKEN'] ?? '',
+    'access_token' => $access_token,
+    'app_id'       => $_ENV['TIKTOK_APP_ID'] ?? '',
+    'app_secret'   => $_ENV['TIKTOK_APP_SECRET'] ?? '',
     'environment'  => $_ENV['TIKTOK_ENVIRONMENT'] ?? 'production',
     'api_version'  => 'v1.3'
 ];
@@ -158,6 +165,40 @@ header('Content-Type: application/json');
 
 try {
     switch ($action) {
+        case 'set_oauth_advertiser':
+            // Set OAuth advertiser from selection page
+            $advertiserId = $requestData['advertiser_id'] ?? '';
+
+            if (empty($advertiserId)) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Advertiser ID is required'
+                ]);
+                exit;
+            }
+
+            // Verify this advertiser ID is in the authorized list
+            if (!isset($_SESSION['oauth_advertiser_ids']) || !in_array($advertiserId, $_SESSION['oauth_advertiser_ids'])) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Unauthorized advertiser ID'
+                ]);
+                exit;
+            }
+
+            // Set selected advertiser
+            $_SESSION['selected_advertiser_id'] = $advertiserId;
+            $_SESSION['authenticated'] = true;
+
+            error_log("OAuth: Set advertiser ID to " . $advertiserId);
+
+            echo json_encode([
+                'success' => true,
+                'message' => 'Advertiser set successfully',
+                'advertiser_id' => $advertiserId
+            ]);
+            break;
+
         case 'test_auth':
             echo json_encode([
                 'success' => true,

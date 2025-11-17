@@ -135,6 +135,67 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
             font-size: 14px;
             text-align: center;
         }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 30px 0;
+            color: #999;
+            font-size: 14px;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .divider span {
+            padding: 0 15px;
+        }
+
+        .btn-oauth {
+            width: 100%;
+            padding: 12px;
+            background: #fe2c55;
+            color: white;
+            border: 2px solid #fe2c55;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-oauth:hover {
+            transform: translateY(-2px);
+            background: #d91d45;
+            box-shadow: 0 6px 20px rgba(254, 44, 85, 0.3);
+        }
+
+        .info-text {
+            text-align: center;
+            font-size: 13px;
+            color: #666;
+            margin-top: 15px;
+            line-height: 1.5;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            background: #4caf50;
+            color: white;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
     </style>
 </head>
 <body>
@@ -161,6 +222,19 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
 
             <button type="submit" class="btn-login">Login</button>
         </form>
+
+        <div class="divider">
+            <span>OR</span>
+        </div>
+
+        <a href="oauth-init.php" class="btn-oauth">
+            🔗 Connect Traffic Channel <span class="badge">RECOMMENDED</span>
+        </a>
+
+        <p class="info-text">
+            Connect your TikTok Ads account to automatically access all your ad accounts.<br>
+            <strong>Production-ready OAuth authentication</strong>
+        </p>
     </div>
 </body>
 </html>
