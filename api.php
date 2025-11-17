@@ -1048,15 +1048,24 @@ try {
                 'identity_type' => $data['identity_type'] ?? 'CUSTOMIZED_USER',
                 'identity_id' => $data['identity_id']
             ];
-            
-            // Add call_to_action - required field
-            if (!empty($data['call_to_action'])) {
-                $creative['call_to_action'] = $data['call_to_action'];
+
+            // Handle CTA: Either call_to_action_id (Dynamic CTA) OR call_to_action (Static CTA)
+            // According to TikTok docs: If call_to_action_id is specified, DO NOT pass call_to_action
+            if (!empty($data['call_to_action_id'])) {
+                // Using Dynamic CTA portfolio
+                $creative['call_to_action_id'] = $data['call_to_action_id'];
+                logToFile("Using Dynamic CTA Portfolio ID: " . $data['call_to_action_id']);
             } else {
-                // Default CTAs based on campaign type
-                $creative['call_to_action'] = $isLeadGen ? 'SIGN_UP' : 'LEARN_MORE';
+                // Using Static CTA - required field when not using portfolio
+                if (!empty($data['call_to_action'])) {
+                    $creative['call_to_action'] = $data['call_to_action'];
+                } else {
+                    // Default CTAs based on campaign type
+                    $creative['call_to_action'] = $isLeadGen ? 'SIGN_UP' : 'LEARN_MORE';
+                }
+                logToFile("Using Static CTA: " . $creative['call_to_action']);
             }
-            
+
             // According to TikTok docs: landing_page_url is REQUIRED when promotion_type is WEBSITE
             // This applies to Lead Generation campaigns with WEBSITE promotion_type
             if (!empty($data['landing_page_url'])) {
@@ -1081,7 +1090,7 @@ try {
             }
             
             logToFile("Campaign type: " . ($isLeadGen ? "Lead Generation" : "Standard"));
-            logToFile("Call to action: " . $creative['call_to_action']);
+            logToFile("CTA Type: " . (isset($creative['call_to_action_id']) ? "Dynamic (Portfolio ID: " . $creative['call_to_action_id'] . ")" : "Static (" . ($creative['call_to_action'] ?? 'N/A') . ")"));
             logToFile("Landing page URL included: " . (isset($creative['landing_page_url']) ? "Yes - " . $creative['landing_page_url'] : "No"));
 
             // Add video_id and/or image_ids based on format
