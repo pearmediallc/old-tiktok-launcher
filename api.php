@@ -1020,6 +1020,58 @@ try {
             ]);
             break;
 
+        case 'get_cta_portfolios':
+            // GET request to list existing CTA portfolios
+            $page = $_GET['page'] ?? 1;
+            $page_size = $_GET['page_size'] ?? 100;
+
+            logToFile("======= Fetching CTA Portfolio List =======");
+            logToFile("  Advertiser ID: " . $advertiser_id);
+            logToFile("  Page: " . $page);
+            logToFile("  Page Size: " . $page_size);
+
+            $url = "https://business-api.tiktok.com/open_api/v1.3/creative/portfolio/list/?advertiser_id=" . $advertiser_id . "&page=" . $page . "&page_size=" . $page_size;
+
+            logToFile("  Request URL: " . $url);
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Access-Token: ' . $config['access_token']
+            ]);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            $responseData = json_decode($response, true);
+
+            logToFile("  HTTP Code: " . $httpCode);
+            logToFile("  Response: " . json_encode($responseData, JSON_PRETTY_PRINT));
+
+            // Filter for CTA portfolios only
+            $ctaPortfolios = [];
+            if (isset($responseData['data']['portfolios']) && is_array($responseData['data']['portfolios'])) {
+                foreach ($responseData['data']['portfolios'] as $portfolio) {
+                    // Only include CTA type portfolios
+                    if (isset($portfolio['creative_portfolio_type']) && $portfolio['creative_portfolio_type'] === 'CTA') {
+                        $ctaPortfolios[] = $portfolio;
+                    }
+                }
+                logToFile("  CTA Portfolios Found: " . count($ctaPortfolios));
+            }
+
+            echo json_encode([
+                'success' => $httpCode === 200 && isset($responseData['code']) && $responseData['code'] === 0,
+                'data' => [
+                    'portfolios' => $ctaPortfolios,
+                    'page_info' => $responseData['data']['page_info'] ?? null
+                ],
+                'message' => $responseData['message'] ?? 'Failed to fetch portfolios',
+                'code' => $responseData['code'] ?? null
+            ]);
+            break;
+
         case 'create_ad':
             $ad = new Ad($config);
             $data = $requestData;

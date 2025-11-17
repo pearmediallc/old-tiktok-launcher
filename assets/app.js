@@ -1112,11 +1112,23 @@ function addAdForm(index, duplicateFrom = null) {
                         <option value="PHONE_CALL">Phone Call</option>
                     </select>
                 </div>
+
                 <div class="form-group">
-                    <button type="button" class="btn-secondary" onclick="loadDynamicCTAs(${index})" style="width: 100%;">
-                        Load Dynamic CTAs
-                    </button>
+                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Choose Portfolio Option:</label>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" class="btn-secondary" onclick="loadExistingPortfolios(${index})" style="flex: 1;">
+                            📋 Use Existing Portfolio
+                        </button>
+                        <button type="button" class="btn-secondary" onclick="loadDynamicCTAs(${index})" style="flex: 1;">
+                            ✨ Create New Portfolio
+                        </button>
+                    </div>
                 </div>
+
+                <div id="existing-portfolios-${index}" style="margin-top: 10px; display: none;">
+                    <!-- Existing portfolios will be loaded here -->
+                </div>
+
                 <div id="dynamic-cta-list-${index}" style="margin-top: 10px;">
                     <!-- Dynamic CTAs will be loaded here -->
                 </div>
@@ -1233,10 +1245,16 @@ function toggleCTAMode(adIndex, mode) {
 async function loadDynamicCTAs(adIndex) {
     const contentType = document.getElementById(`cta-content-type-${adIndex}`).value;
     const listContainer = document.getElementById(`dynamic-cta-list-${adIndex}`);
+    const existingContainer = document.getElementById(`existing-portfolios-${adIndex}`);
 
     console.log('=== Load Dynamic CTAs Request ===');
     console.log('Ad Index:', adIndex);
     console.log('Content Type Selected:', contentType);
+
+    // Hide existing portfolios section, show dynamic CTA creation section
+    existingContainer.style.display = 'none';
+    existingContainer.innerHTML = '';
+    listContainer.style.display = 'block';
 
     // Validate content type is selected
     if (!contentType) {
@@ -1341,6 +1359,186 @@ async function loadDynamicCTAs(adIndex) {
     }
 
     console.log('=== Load Dynamic CTAs Complete ===');
+}
+
+// Load existing CTA portfolios from TikTok account
+async function loadExistingPortfolios(adIndex) {
+    const existingContainer = document.getElementById(`existing-portfolios-${adIndex}`);
+    const dynamicContainer = document.getElementById(`dynamic-cta-list-${adIndex}`);
+
+    console.log('=== Load Existing Portfolios Request ===');
+    console.log('Ad Index:', adIndex);
+
+    // Hide dynamic CTA creation section, show existing portfolios section
+    dynamicContainer.style.display = 'none';
+    dynamicContainer.innerHTML = '';
+    existingContainer.style.display = 'block';
+
+    // Show API request details in UI
+    let loadingHtml = '<div style="padding: 15px; background: #e8f5e9; border: 1px solid #4caf50; border-radius: 8px; margin-bottom: 10px;">';
+    loadingHtml += '<p style="margin: 0 0 10px 0; font-weight: 600; color: #2e7d32;">🔄 API Request Details</p>';
+    loadingHtml += '<div style="background: white; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 12px; overflow-x: auto;">';
+    loadingHtml += '<div><strong>TikTok Endpoint:</strong> /creative/portfolio/list/</div>';
+    loadingHtml += '<div><strong>Method:</strong> GET</div>';
+    loadingHtml += '<div><strong>Full URL:</strong> https://business-api.tiktok.com/open_api/v1.3/creative/portfolio/list/</div>';
+    loadingHtml += '<div><strong>Parameters:</strong> advertiser_id, page=1, page_size=100</div>';
+    loadingHtml += '<div><strong>Headers:</strong> Access-Token</div>';
+    loadingHtml += '</div>';
+    loadingHtml += '<p style="margin: 10px 0 0 0; font-size: 12px; color: #2e7d32;">⏳ Fetching existing CTA portfolios...</p>';
+    loadingHtml += '</div>';
+    existingContainer.innerHTML = loadingHtml;
+
+    const requestUrl = `api.php?action=get_cta_portfolios&page=1&page_size=100`;
+    console.log('Request URL:', requestUrl);
+    console.log('Sending GET request to TikTok API...');
+
+    try {
+        const response = await fetch(requestUrl);
+
+        console.log('Response Status:', response.status);
+        console.log('Response OK:', response.ok);
+
+        const result = await response.json();
+
+        console.log('=== API Response Received ===');
+        console.log('Success:', result.success);
+        console.log('Message:', result.message);
+        console.log('Code:', result.code);
+        console.log('Full Response Data:', JSON.stringify(result, null, 2));
+
+        if (result.success && result.data && result.data.portfolios) {
+            const portfolios = result.data.portfolios;
+            console.log('CTA Portfolios Count:', portfolios.length);
+            console.log('Portfolios Details:', JSON.stringify(portfolios, null, 2));
+
+            if (portfolios.length === 0) {
+                console.warn('No existing CTA portfolios found');
+                let html = '<div style="padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;">';
+                html += '<p style="margin: 0; color: #856404;">📋 No existing CTA portfolios found.</p>';
+                html += '<p style="margin: 10px 0 0 0; font-size: 13px; color: #856404;">You can create a new portfolio using the "Create New Portfolio" button.</p>';
+                html += '</div>';
+                existingContainer.innerHTML = html;
+                showToast('No existing portfolios found', 'info');
+                return;
+            }
+
+            // Display the existing portfolios as a selection list
+            let html = '<div style="padding: 15px; background: #e8f5e9; border: 1px solid #4caf50; border-radius: 8px; margin-bottom: 10px;">';
+            html += '<p style="margin: 0 0 10px 0; font-weight: 600; color: #2e7d32;">✅ API Response</p>';
+            html += '<div style="background: white; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 12px; max-height: 150px; overflow-y: auto;">';
+            html += '<pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word;">' + JSON.stringify(result, null, 2) + '</pre>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<div style="margin-bottom: 15px; padding: 15px; background: #f0f4ff; border-radius: 8px; border: 1px solid #667eea;">';
+            html += '<p style="margin: 0 0 12px 0; font-weight: 600; color: #333;">📋 Select an Existing CTA Portfolio:</p>';
+            html += '<div style="background: white; padding: 12px; border-radius: 6px;">';
+
+            portfolios.forEach((portfolio, idx) => {
+                const portfolioId = portfolio.creative_portfolio_id || portfolio.portfolio_id || 'N/A';
+                const createdTime = portfolio.create_time ? new Date(portfolio.create_time * 1000).toLocaleDateString() : 'N/A';
+                const portfolioName = portfolio.portfolio_name || `Portfolio ${portfolioId}`;
+
+                html += `<div style="padding: 12px; margin-bottom: 10px; border: 2px solid #e0e0e0; border-radius: 6px; cursor: pointer; transition: all 0.2s;"
+                         onclick="selectExistingPortfolio(${adIndex}, '${portfolioId}', this)"
+                         onmouseover="this.style.borderColor='#667eea'; this.style.background='#f8f9ff';"
+                         onmouseout="this.style.borderColor='#e0e0e0'; this.style.background='white';">`;
+                html += `<div style="font-weight: 600; color: #333; font-size: 14px; margin-bottom: 6px;">${portfolioName}</div>`;
+                html += `<div style="font-size: 12px; color: #666; margin-bottom: 4px;"><strong>Portfolio ID:</strong> ${portfolioId}</div>`;
+                html += `<div style="font-size: 12px; color: #666;"><strong>Created:</strong> ${createdTime}</div>`;
+
+                // Show portfolio content if available
+                if (portfolio.portfolio_content && portfolio.portfolio_content.length > 0) {
+                    html += `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e0e0e0;">`;
+                    html += `<div style="font-size: 11px; color: #888; margin-bottom: 4px;">CTAs in this portfolio:</div>`;
+                    portfolio.portfolio_content.forEach(cta => {
+                        if (cta.asset_content) {
+                            html += `<div style="font-size: 11px; color: #667eea; margin-left: 8px;">• "${cta.asset_content}"</div>`;
+                        }
+                    });
+                    html += `</div>`;
+                }
+
+                html += `</div>`;
+            });
+
+            html += '</div>';
+            html += '<p style="margin: 10px 0 0 0; font-size: 12px; color: #666;"><strong>Tip:</strong> Click on a portfolio to select it for your ad.</p>';
+            html += '</div>';
+
+            existingContainer.innerHTML = html;
+            console.log('UI updated with', portfolios.length, 'existing portfolios');
+            showToast(`${portfolios.length} portfolio${portfolios.length > 1 ? 's' : ''} loaded successfully`, 'success');
+
+        } else {
+            console.error('=== API Request Failed ===');
+            console.error('Success:', result.success);
+            console.error('Message:', result.message);
+            console.error('Code:', result.code);
+            console.error('Data:', result.data);
+
+            let html = '<div style="padding: 15px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px;">';
+            html += '<p style="margin: 0 0 10px 0; font-weight: 600; color: #721c24;">❌ Failed to Load Portfolios</p>';
+            html += `<p style="margin: 0; font-size: 14px; color: #721c24;"><strong>Error:</strong> ${result.message || 'Unknown error'}</p>`;
+            html += '<div style="background: white; padding: 10px; border-radius: 6px; margin-top: 10px;">';
+            html += '<p style="margin: 0 0 8px 0; font-weight: 600; font-size: 12px; color: #721c24;">Full API Response:</p>';
+            html += '<pre style="margin: 0; font-family: monospace; font-size: 11px; color: #333; white-space: pre-wrap; word-wrap: break-word; max-height: 200px; overflow-y: auto;">';
+            html += JSON.stringify(result, null, 2);
+            html += '</pre>';
+            html += '</div>';
+            html += '</div>';
+            existingContainer.innerHTML = html;
+            showToast('Failed to load existing portfolios', 'error');
+        }
+    } catch (error) {
+        console.error('=== Exception Caught ===');
+        console.error('Error Type:', error.name);
+        console.error('Error Message:', error.message);
+        console.error('Error Stack:', error.stack);
+
+        existingContainer.innerHTML = '<p style="color: #e74c3c;">Error loading existing portfolios. Please try again.</p>';
+        showToast('Error loading existing portfolios', 'error');
+    }
+
+    console.log('=== Load Existing Portfolios Complete ===');
+}
+
+// Select an existing portfolio and store its ID
+function selectExistingPortfolio(adIndex, portfolioId, element) {
+    console.log('=== Select Existing Portfolio ===');
+    console.log('Ad Index:', adIndex);
+    console.log('Portfolio ID:', portfolioId);
+
+    // Store the selected portfolio ID
+    document.getElementById(`dynamic-cta-portfolio-${adIndex}`).value = portfolioId;
+
+    // Visual feedback - highlight selected portfolio
+    const container = element.parentElement;
+    Array.from(container.children).forEach(child => {
+        child.style.borderColor = '#e0e0e0';
+        child.style.background = 'white';
+        child.style.borderWidth = '2px';
+    });
+
+    element.style.borderColor = '#4caf50';
+    element.style.background = '#f1f8f4';
+    element.style.borderWidth = '3px';
+
+    // Show success message
+    const existingContainer = document.getElementById(`existing-portfolios-${adIndex}`);
+    let successMsg = document.getElementById(`portfolio-success-${adIndex}`);
+
+    if (!successMsg) {
+        successMsg = document.createElement('div');
+        successMsg.id = `portfolio-success-${adIndex}`;
+        successMsg.style.cssText = 'margin-top: 15px; padding: 12px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 6px; color: #155724;';
+        existingContainer.appendChild(successMsg);
+    }
+
+    successMsg.innerHTML = `<strong>✓ Selected Portfolio ID:</strong> ${portfolioId}`;
+
+    console.log('Portfolio selected successfully');
+    showToast('Portfolio selected successfully', 'success');
 }
 
 // Create CTA portfolio from dynamic CTAs
