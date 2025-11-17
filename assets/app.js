@@ -1246,7 +1246,19 @@ async function loadDynamicCTAs(adIndex) {
         return;
     }
 
-    listContainer.innerHTML = '<p style="color: #666;">Loading dynamic CTAs...</p>';
+    // Show API request details in UI
+    let loadingHtml = '<div style="padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; margin-bottom: 10px;">';
+    loadingHtml += '<p style="margin: 0 0 10px 0; font-weight: 600; color: #856404;">🔄 API Request Details</p>';
+    loadingHtml += '<div style="background: white; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 12px; overflow-x: auto;">';
+    loadingHtml += '<div><strong>TikTok Endpoint:</strong> /creative/cta/recommend/</div>';
+    loadingHtml += '<div><strong>Method:</strong> GET</div>';
+    loadingHtml += '<div><strong>Full URL:</strong> https://business-api.tiktok.com/open_api/v1.3/creative/cta/recommend/</div>';
+    loadingHtml += `<div><strong>Parameters:</strong> advertiser_id, content_type=${contentType}</div>`;
+    loadingHtml += '<div><strong>Headers:</strong> Access-Token</div>';
+    loadingHtml += '</div>';
+    loadingHtml += '<p style="margin: 10px 0 0 0; font-size: 12px; color: #856404;">⏳ Fetching CTA recommendations...</p>';
+    loadingHtml += '</div>';
+    listContainer.innerHTML = loadingHtml;
 
     const requestUrl = `api.php?action=get_dynamic_ctas&content_type=${contentType}`;
     console.log('Request URL:', requestUrl);
@@ -1348,37 +1360,57 @@ async function createCTAPortfolio(adIndex) {
     }
 
     const listContainer = document.getElementById(`dynamic-cta-list-${adIndex}`);
-    listContainer.innerHTML = '<p style="color: #666;">Creating CTA portfolio...</p>';
+
+    // Build portfolio_content array as per TikTok API spec
+    // Ensure asset_ids are strings as per TikTok API requirement
+    const portfolioContent = assets.map(asset => ({
+        asset_content: asset.asset_content,
+        asset_ids: asset.asset_ids.map(id => String(id))
+    }));
+
+    console.log('Portfolio Content Structure:', JSON.stringify(portfolioContent, null, 2));
+    console.log('Number of CTAs in Portfolio:', portfolioContent.length);
+
+    // Validate portfolio content
+    console.log('Validating portfolio content before sending...');
+    portfolioContent.forEach((item, idx) => {
+        console.log(`  CTA ${idx + 1}:`, {
+            asset_content: item.asset_content,
+            asset_ids_count: item.asset_ids.length,
+            asset_ids: item.asset_ids,
+            asset_ids_types: item.asset_ids.map(id => typeof id)
+        });
+    });
+
+    const requestBody = {
+        portfolio_content: portfolioContent
+    };
+
+    // Show API request details in UI
+    let loadingHtml = '<div style="padding: 15px; background: #d1ecf1; border: 1px solid #17a2b8; border-radius: 8px; margin-bottom: 10px;">';
+    loadingHtml += '<p style="margin: 0 0 10px 0; font-weight: 600; color: #0c5460;">📤 Creating CTA Portfolio - API Request</p>';
+    loadingHtml += '<div style="background: white; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 12px; overflow-x: auto;">';
+    loadingHtml += '<div><strong>TikTok Endpoint:</strong> /creative/portfolio/create/</div>';
+    loadingHtml += '<div><strong>Method:</strong> POST</div>';
+    loadingHtml += '<div><strong>Full URL:</strong> https://business-api.tiktok.com/open_api/v1.3/creative/portfolio/create/</div>';
+    loadingHtml += '<div><strong>Headers:</strong> Access-Token, Content-Type: application/json</div>';
+    loadingHtml += '<div style="margin-top: 8px;"><strong>Request Body:</strong></div>';
+    loadingHtml += '<div style="background: #f8f9fa; padding: 8px; border-radius: 4px; margin-top: 4px; max-height: 200px; overflow-y: auto;">';
+    loadingHtml += '<pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word;">' + JSON.stringify({
+        advertiser_id: '{current_advertiser}',
+        creative_portfolio_type: 'CTA',
+        portfolio_content: portfolioContent
+    }, null, 2) + '</pre>';
+    loadingHtml += '</div>';
+    loadingHtml += '</div>';
+    loadingHtml += '<p style="margin: 10px 0 0 0; font-size: 12px; color: #0c5460;">⏳ Sending request to TikTok API...</p>';
+    loadingHtml += '</div>';
+    listContainer.innerHTML = loadingHtml;
+
+    console.log('Request Body:', JSON.stringify(requestBody, null, 2));
+    console.log('Sending POST request to create portfolio...');
 
     try {
-        // Build portfolio_content array as per TikTok API spec
-        // Ensure asset_ids are strings as per TikTok API requirement
-        const portfolioContent = assets.map(asset => ({
-            asset_content: asset.asset_content,
-            asset_ids: asset.asset_ids.map(id => String(id))
-        }));
-
-        console.log('Portfolio Content Structure:', JSON.stringify(portfolioContent, null, 2));
-        console.log('Number of CTAs in Portfolio:', portfolioContent.length);
-
-        // Validate portfolio content
-        console.log('Validating portfolio content before sending...');
-        portfolioContent.forEach((item, idx) => {
-            console.log(`  CTA ${idx + 1}:`, {
-                asset_content: item.asset_content,
-                asset_ids_count: item.asset_ids.length,
-                asset_ids: item.asset_ids,
-                asset_ids_types: item.asset_ids.map(id => typeof id)
-            });
-        });
-
-        const requestBody = {
-            portfolio_content: portfolioContent
-        };
-
-        console.log('Request Body:', JSON.stringify(requestBody, null, 2));
-        console.log('Sending POST request to create portfolio...');
-
         const response = await fetch('api.php?action=create_cta_portfolio', {
             method: 'POST',
             headers: {
@@ -1411,11 +1443,17 @@ async function createCTAPortfolio(adIndex) {
             document.getElementById(`dynamic-cta-portfolio-${adIndex}`).value = portfolioId;
             console.log('Stored portfolio ID in hidden input field');
 
-            // Update the UI to show success
+            // Update the UI to show success with API response
             let html = '<div style="padding: 15px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; color: #155724;">';
-            html += '<p style="margin: 0 0 10px 0; font-weight: 600;">✓ CTA Portfolio Created Successfully</p>';
-            html += `<p style="margin: 0; font-size: 14px;">Portfolio ID: ${portfolioId}</p>`;
-            html += '<p style="margin: 10px 0 0 0; font-size: 12px;">This portfolio will be used when creating your ad.</p>';
+            html += '<p style="margin: 0 0 10px 0; font-weight: 600;">✅ CTA Portfolio Created Successfully</p>';
+            html += `<p style="margin: 0; font-size: 14px;"><strong>Portfolio ID:</strong> ${portfolioId}</p>`;
+            html += '<p style="margin: 10px 0; font-size: 12px;">This portfolio will be used when creating your ad.</p>';
+            html += '<div style="background: white; padding: 10px; border-radius: 6px; margin-top: 10px;">';
+            html += '<p style="margin: 0 0 8px 0; font-weight: 600; font-size: 12px; color: #155724;">API Response:</p>';
+            html += '<pre style="margin: 0; font-family: monospace; font-size: 11px; color: #333; white-space: pre-wrap; word-wrap: break-word; max-height: 200px; overflow-y: auto;">';
+            html += JSON.stringify(result, null, 2);
+            html += '</pre>';
+            html += '</div>';
             html += '</div>';
 
             listContainer.innerHTML = html;
@@ -1430,13 +1468,25 @@ async function createCTAPortfolio(adIndex) {
             console.error('Data:', result.data);
             console.error('Raw Response:', result.raw_response);
 
-            // Show detailed error message
+            // Show detailed error message with full API response
             let errorMsg = result.message || 'Unknown error';
             if (result.raw_response) {
                 console.error('TikTok API Full Response:', JSON.stringify(result.raw_response, null, 2));
             }
 
-            listContainer.innerHTML = `<p style="color: #e74c3c;">Failed to create portfolio: ${errorMsg}</p>`;
+            let html = '<div style="padding: 15px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; color: #721c24;">';
+            html += '<p style="margin: 0 0 10px 0; font-weight: 600;">❌ Portfolio Creation Failed</p>';
+            html += `<p style="margin: 0; font-size: 14px;"><strong>Error:</strong> ${errorMsg}</p>`;
+            html += `<p style="margin: 5px 0 0 0; font-size: 13px;"><strong>Code:</strong> ${result.code || 'N/A'}</p>`;
+            html += '<div style="background: white; padding: 10px; border-radius: 6px; margin-top: 10px;">';
+            html += '<p style="margin: 0 0 8px 0; font-weight: 600; font-size: 12px; color: #721c24;">Full API Response:</p>';
+            html += '<pre style="margin: 0; font-family: monospace; font-size: 11px; color: #333; white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto;">';
+            html += JSON.stringify(result, null, 2);
+            html += '</pre>';
+            html += '</div>';
+            html += '</div>';
+
+            listContainer.innerHTML = html;
             showToast('Failed to create CTA portfolio: ' + errorMsg, 'error');
         }
     } catch (error) {
