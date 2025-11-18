@@ -15,143 +15,614 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Select Advertiser Account</title>
+    <title>TikTok Campaign Launcher</title>
     <link rel="stylesheet" href="assets/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        .advertiser-container {
-            max-width: 800px;
-            margin: 50px auto;
-            padding: 30px;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        .advertiser-list {
-            display: grid;
-            gap: 15px;
-            margin-top: 30px;
-        }
-        .advertiser-card {
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             padding: 20px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
+        }
+
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            padding-top: 20px;
+        }
+
+        .header h1 {
+            font-size: 42px;
+            font-weight: 800;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            font-size: 18px;
+            opacity: 0.95;
+            font-weight: 400;
+        }
+
+        .wizard-container {
             background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
         }
-        .advertiser-card:hover {
+
+        .wizard-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px;
+            color: white;
+        }
+
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 18px;
+            transition: all 0.3s;
+        }
+
+        .step.active .step-number {
+            background: white;
+            color: #667eea;
+            box-shadow: 0 4px 15px rgba(255,255,255,0.3);
+        }
+
+        .step.completed .step-number {
+            background: #4caf50;
+        }
+
+        .step-label {
+            font-weight: 600;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .step.active .step-label {
+            opacity: 1;
+        }
+
+        .step-divider {
+            width: 50px;
+            height: 2px;
+            background: rgba(255,255,255,0.3);
+        }
+
+        .wizard-body {
+            padding: 40px;
+        }
+
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+            animation: fadeIn 0.4s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .section-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 10px;
+        }
+
+        .section-subtitle {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .selection-card {
+            border: 3px solid #e0e0e0;
+            border-radius: 16px;
+            padding: 25px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .selection-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transform: scaleX(0);
+            transition: transform 0.3s;
+        }
+
+        .selection-card:hover {
             border-color: #667eea;
-            background: #f8f9ff;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(102, 126, 234, 0.2);
         }
-        .advertiser-card.selected {
+
+        .selection-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .selection-card.selected {
             border-color: #4caf50;
-            background: #f1f8f4;
-            border-width: 3px;
+            background: linear-gradient(135deg, #f1f8f4 0%, #e8f5e9 100%);
+            box-shadow: 0 8px 24px rgba(76, 175, 80, 0.3);
         }
-        .advertiser-name {
+
+        .selection-card.selected::before {
+            background: #4caf50;
+            transform: scaleX(1);
+        }
+
+        .card-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #667eea15, #764ba215);
+        }
+
+        .selection-card.selected .card-icon {
+            background: linear-gradient(135deg, #4caf5015, #66bb6a15);
+        }
+
+        .card-title {
             font-size: 20px;
             font-weight: 700;
             color: #1a1a1a;
             margin-bottom: 8px;
         }
-        .advertiser-id {
+
+        .card-subtitle {
             font-size: 14px;
-            font-weight: 500;
             color: #666;
-            margin-bottom: 8px;
+            margin-bottom: 12px;
+            font-weight: 500;
         }
-        .advertiser-status {
+
+        .card-description {
             font-size: 13px;
             color: #888;
+            line-height: 1.6;
         }
-        .success-badge {
-            display: inline-block;
-            padding: 4px 12px;
+
+        .check-icon {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
             background: #4caf50;
             color: white;
-            border-radius: 4px;
-            font-size: 12px;
-            margin-left: 10px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
         }
-        .btn-continue {
-            margin-top: 30px;
-            padding: 15px 40px;
-            font-size: 16px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 8px;
+
+        .selection-card.selected .check-icon {
+            display: flex;
+            animation: checkPop 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        @keyframes checkPop {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .campaign-type-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .campaign-card {
+            border: 3px solid #e0e0e0;
+            border-radius: 16px;
+            padding: 30px;
             cursor: pointer;
             transition: all 0.3s;
+            background: white;
+            position: relative;
         }
-        .btn-continue:hover {
-            background: #5568d3;
+
+        .campaign-card:hover {
+            border-color: #667eea;
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(102, 126, 234, 0.25);
+        }
+
+        .campaign-card.selected {
+            border-color: #4caf50;
+            background: linear-gradient(135deg, #ffffff 0%, #f1f8f4 100%);
+            box-shadow: 0 10px 30px rgba(76, 175, 80, 0.3);
+        }
+
+        .campaign-icon {
+            width: 70px;
+            height: 70px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .campaign-card.selected .campaign-icon {
+            background: linear-gradient(135deg, #4caf50, #66bb6a);
+        }
+
+        .campaign-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 10px;
+        }
+
+        .campaign-description {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.7;
+            margin-bottom: 15px;
+        }
+
+        .campaign-features {
+            list-style: none;
+            padding: 0;
+        }
+
+        .campaign-features li {
+            padding: 8px 0;
+            font-size: 13px;
+            color: #555;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .campaign-features li::before {
+            content: '✓';
+            color: #4caf50;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+            padding-top: 20px;
+            border-top: 2px solid #f0f0f0;
+            margin-top: 30px;
+        }
+
+        .btn {
+            padding: 14px 32px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #666;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
         }
-        .btn-continue:disabled {
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:disabled {
             background: #ccc;
             cursor: not-allowed;
+            box-shadow: none;
             transform: none;
         }
-        .header-info {
-            background: #e8f5e9;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #4caf50;
+
+        .success-banner {
+            background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+            border-left: 5px solid #4caf50;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .success-banner-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #4caf50;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .success-banner-text {
+            flex: 1;
+        }
+
+        .success-banner-title {
+            font-weight: 700;
+            color: #2e7d32;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .success-banner-subtitle {
+            color: #388e3c;
+            font-size: 14px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            background: #fff3cd;
+            border-radius: 16px;
+            margin-top: 30px;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .empty-state-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .empty-state-text {
+            color: #856404;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 32px;
+            }
+
+            .wizard-body {
+                padding: 25px;
+            }
+
+            .card-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .campaign-type-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .step-label {
+                display: none;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="advertiser-container">
-            <h1>🎯 Select Your Ad Account</h1>
+    <div class="main-container">
+        <div class="header">
+            <h1>🚀 TikTok Campaign Launcher</h1>
+            <p>Create powerful ad campaigns in minutes</p>
+        </div>
 
-            <div class="header-info">
-                <p style="margin: 0; color: #2e7d32;">
-                    <strong>✓ Successfully connected!</strong><br>
-                    Found <?php echo count($advertiser_ids); ?> advertiser account<?php echo count($advertiser_ids) > 1 ? 's' : ''; ?> linked to your TikTok Ads Manager.
-                </p>
+        <div class="wizard-container">
+            <div class="wizard-header">
+                <div class="step-indicator">
+                    <div class="step active" id="step-indicator-1">
+                        <div class="step-number">1</div>
+                        <div class="step-label">Ad Account</div>
+                    </div>
+                    <div class="step-divider"></div>
+                    <div class="step" id="step-indicator-2">
+                        <div class="step-number">2</div>
+                        <div class="step-label">Campaign Type</div>
+                    </div>
+                    <div class="step-divider"></div>
+                    <div class="step" id="step-indicator-3">
+                        <div class="step-number">3</div>
+                        <div class="step-label">Launch</div>
+                    </div>
+                </div>
             </div>
 
-            <?php if (empty($advertiser_ids)): ?>
-                <div style="padding: 30px; text-align: center; background: #fff3cd; border-radius: 8px; margin-top: 20px;">
-                    <p style="color: #856404; margin: 0;">
-                        No advertiser accounts found. Please make sure you have access to at least one TikTok Ads account.
-                    </p>
-                    <a href="index.php" style="display: inline-block; margin-top: 20px; padding: 12px 24px; background: #667eea; color: white; text-decoration: none; border-radius: 6px;">
-                        Back to Login
-                    </a>
-                </div>
-            <?php else: ?>
-                <div class="advertiser-list" id="advertiser-list">
-                    <?php foreach ($advertiser_ids as $index => $advertiser_id):
-                        $details = $advertiser_details[$advertiser_id] ?? null;
-                        $name = $details ? $details['name'] : 'Advertiser Account ' . ($index + 1);
-                    ?>
-                        <div class="advertiser-card" onclick="selectAdvertiser('<?php echo htmlspecialchars($advertiser_id); ?>', this)">
-                            <div class="advertiser-name">
-                                📊 <?php echo htmlspecialchars($name); ?>
-                                <span class="success-badge">Connected</span>
-                            </div>
-                            <div class="advertiser-id">
-                                ID: <?php echo htmlspecialchars($advertiser_id); ?>
-                            </div>
-                            <div class="advertiser-status">
-                                Click to select this account
+            <div class="wizard-body">
+                <!-- Step 1: Select Ad Account -->
+                <div class="section active" id="section-1">
+                    <div class="success-banner">
+                        <div class="success-banner-icon">✓</div>
+                        <div class="success-banner-text">
+                            <div class="success-banner-title">Successfully Connected!</div>
+                            <div class="success-banner-subtitle">
+                                Found <?php echo count($advertiser_ids); ?> advertiser account<?php echo count($advertiser_ids) > 1 ? 's' : ''; ?> linked to your TikTok Ads Manager
                             </div>
                         </div>
-                    <?php endforeach; ?>
+                    </div>
+
+                    <div class="section-title">Select Your Ad Account</div>
+                    <div class="section-subtitle">Choose the TikTok Ads account you want to use for your campaigns</div>
+
+                    <?php if (empty($advertiser_ids)): ?>
+                        <div class="empty-state">
+                            <div class="empty-state-icon">⚠️</div>
+                            <div class="empty-state-title">No Accounts Found</div>
+                            <div class="empty-state-text">
+                                No advertiser accounts found. Please make sure you have access to at least one TikTok Ads account.
+                            </div>
+                            <a href="index.php" class="btn btn-primary">Back to Login</a>
+                        </div>
+                    <?php else: ?>
+                        <div class="card-grid" id="advertiser-list">
+                            <?php foreach ($advertiser_ids as $index => $advertiser_id):
+                                $details = $advertiser_details[$advertiser_id] ?? null;
+                                $name = $details ? $details['name'] : 'Advertiser Account ' . ($index + 1);
+                            ?>
+                                <div class="selection-card" onclick="selectAdvertiser('<?php echo htmlspecialchars($advertiser_id); ?>', this)">
+                                    <div class="check-icon">✓</div>
+                                    <div class="card-icon">📊</div>
+                                    <div class="card-title"><?php echo htmlspecialchars($name); ?></div>
+                                    <div class="card-subtitle">ID: <?php echo htmlspecialchars($advertiser_id); ?></div>
+                                    <div class="card-description">Click to select this account for campaign creation</div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <div class="button-group">
+                            <button class="btn btn-primary" id="btn-next-1" onclick="goToStep(2)" disabled>
+                                Next: Choose Campaign Type →
+                            </button>
+                        </div>
+                    <?php endif; ?>
                 </div>
 
-                <button id="continue-btn" class="btn-continue" onclick="continueToDashboard()" disabled>
-                    Continue to Dashboard →
-                </button>
-            <?php endif; ?>
+                <!-- Step 2: Select Campaign Type -->
+                <div class="section" id="section-2">
+                    <div class="section-title">Choose Your Campaign Type</div>
+                    <div class="section-subtitle">Select the campaign type that best fits your marketing goals</div>
+
+                    <div class="campaign-type-grid">
+                        <div class="campaign-card" onclick="selectCampaignType('manual', this)">
+                            <div class="check-icon">✓</div>
+                            <div class="campaign-icon">🎯</div>
+                            <div class="campaign-title">Manual Campaign</div>
+                            <div class="campaign-description">
+                                Full control over your campaign settings, targeting, and optimization strategies.
+                            </div>
+                            <ul class="campaign-features">
+                                <li>Custom audience targeting</li>
+                                <li>Manual bid management</li>
+                                <li>Advanced optimization controls</li>
+                                <li>Detailed performance tracking</li>
+                                <li>Flexible budget allocation</li>
+                            </ul>
+                        </div>
+
+                        <div class="campaign-card" onclick="selectCampaignType('smart', this)">
+                            <div class="check-icon">✓</div>
+                            <div class="campaign-icon">⚡</div>
+                            <div class="campaign-title">Smart+ Campaign</div>
+                            <div class="campaign-description">
+                                AI-powered automation that optimizes your campaigns for maximum performance.
+                            </div>
+                            <ul class="campaign-features">
+                                <li>Automated audience discovery</li>
+                                <li>Smart bid optimization</li>
+                                <li>AI-driven budget allocation</li>
+                                <li>Real-time performance optimization</li>
+                                <li>Simplified campaign setup</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button class="btn btn-secondary" onclick="goToStep(1)">← Back</button>
+                        <button class="btn btn-primary" id="btn-next-2" onclick="launchDashboard()" disabled>
+                            Launch Dashboard →
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
         let selectedAdvertiserId = null;
+        let selectedCampaignType = null;
 
         // Store OAuth tokens in browser localStorage on page load
         window.addEventListener('DOMContentLoaded', function() {
@@ -173,7 +644,7 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
 
         function selectAdvertiser(advertiserId, element) {
             // Remove selection from all cards
-            document.querySelectorAll('.advertiser-card').forEach(card => {
+            document.querySelectorAll('.selection-card').forEach(card => {
                 card.classList.remove('selected');
             });
 
@@ -181,21 +652,61 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
             element.classList.add('selected');
             selectedAdvertiserId = advertiserId;
 
-            // Enable continue button
-            document.getElementById('continue-btn').disabled = false;
+            // Enable next button
+            document.getElementById('btn-next-1').disabled = false;
 
             console.log('Selected Advertiser ID:', advertiserId);
         }
 
-        function continueToDashboard() {
-            if (!selectedAdvertiserId) {
-                alert('Please select an advertiser account');
+        function selectCampaignType(type, element) {
+            // Remove selection from all campaign cards
+            document.querySelectorAll('.campaign-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+
+            // Add selection to clicked card
+            element.classList.add('selected');
+            selectedCampaignType = type;
+
+            // Enable launch button
+            document.getElementById('btn-next-2').disabled = false;
+
+            console.log('Selected Campaign Type:', type);
+        }
+
+        function goToStep(stepNumber) {
+            // Hide all sections
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
+
+            // Show target section
+            document.getElementById('section-' + stepNumber).classList.add('active');
+
+            // Update step indicators
+            document.querySelectorAll('.step').forEach((step, index) => {
+                step.classList.remove('active', 'completed');
+                if (index + 1 < stepNumber) {
+                    step.classList.add('completed');
+                } else if (index + 1 === stepNumber) {
+                    step.classList.add('active');
+                }
+            });
+
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function launchDashboard() {
+            if (!selectedAdvertiserId || !selectedCampaignType) {
+                alert('Please select both an advertiser and campaign type');
                 return;
             }
 
-            // Update localStorage with selected advertiser
+            // Update localStorage with selected advertiser and campaign type
             const tokenData = JSON.parse(localStorage.getItem('tiktok_oauth_token') || '{}');
             tokenData.selected_advertiser_id = selectedAdvertiserId;
+            tokenData.campaign_type = selectedCampaignType;
             localStorage.setItem('tiktok_oauth_token', JSON.stringify(tokenData));
 
             // Send selected advertiser to backend (for session)
@@ -205,7 +716,8 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    advertiser_id: selectedAdvertiserId
+                    advertiser_id: selectedAdvertiserId,
+                    campaign_type: selectedCampaignType
                 })
             })
             .then(response => response.json())
@@ -213,7 +725,7 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
                 if (result.success) {
                     window.location.href = 'dashboard.php';
                 } else {
-                    alert('Failed to set advertiser: ' + result.message);
+                    alert('Failed to initialize: ' + result.message);
                 }
             })
             .catch(error => {
@@ -224,7 +736,7 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
 
         // Auto-select if only one advertiser
         <?php if (count($advertiser_ids) === 1): ?>
-            const firstCard = document.querySelector('.advertiser-card');
+            const firstCard = document.querySelector('.selection-card');
             if (firstCard) {
                 selectAdvertiser('<?php echo htmlspecialchars($advertiser_ids[0]); ?>', firstCard);
             }

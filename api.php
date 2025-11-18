@@ -172,8 +172,9 @@ header('Content-Type: application/json');
 try {
     switch ($action) {
         case 'set_oauth_advertiser':
-            // Set OAuth advertiser from selection page
+            // Set OAuth advertiser and campaign type from selection page
             $advertiserId = $requestData['advertiser_id'] ?? '';
+            $campaignType = $requestData['campaign_type'] ?? 'manual';
 
             if (empty($advertiserId)) {
                 echo json_encode([
@@ -192,15 +193,16 @@ try {
                 exit;
             }
 
-            // Set selected advertiser in session
+            // Set selected advertiser and campaign type in session
             $_SESSION['selected_advertiser_id'] = $advertiserId;
+            $_SESSION['campaign_type'] = $campaignType;
             $_SESSION['authenticated'] = true;
 
-            error_log("OAuth: Set advertiser ID to " . $advertiserId);
+            error_log("OAuth: Set advertiser ID to " . $advertiserId . " with campaign type: " . $campaignType);
 
             echo json_encode([
                 'success' => true,
-                'message' => 'Advertiser set successfully',
+                'message' => 'Advertiser and campaign type set successfully',
                 'advertiser_id' => $advertiserId
             ]);
             break;
