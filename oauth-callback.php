@@ -3,9 +3,6 @@ session_start();
 
 // Load environment variables
 require_once 'config.php';
-require_once __DIR__ . '/sdk/vendor/autoload.php';
-
-use TikTokAds\Tools\Tools;
 
 // Log all received parameters
 error_log("OAuth Callback: " . print_r($_GET, true));
@@ -65,26 +62,35 @@ $_SESSION['oauth_token_type'] = $tokenData['data']['token_type'] ?? 'Bearer';
 error_log("OAuth Success: Token obtained");
 error_log("Advertiser IDs: " . json_encode($_SESSION['oauth_advertiser_ids']));
 
-// Fetch advertiser names using TikTok SDK
+// Fetch advertiser names using direct API call
 $advertiser_details = [];
 if (!empty($_SESSION['oauth_advertiser_ids'])) {
-    $tools = new Tools([
-        'access_token' => $access_token,
-        'app_id' => $config['app_id'],
-        'app_secret' => $config['app_secret']
-    ]);
-
     try {
-        // Use the SDK to get advertiser info
-        $response = $tools->getAdvertiserInfo([
+        // Use TikTok API to get advertiser info
+        $advertiser_info_url = 'https://business-api.tiktok.com/open_api/v1.3/advertiser/info/';
+
+        $info_params = [
             'advertiser_ids' => $_SESSION['oauth_advertiser_ids'],
             'fields' => ['advertiser_id', 'advertiser_name', 'status']
+        ];
+
+        $ch = curl_init($advertiser_info_url . '?' . http_build_query($info_params));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Access-Token: ' . $access_token
         ]);
 
-        error_log("Advertiser Info Response: " . json_encode($response));
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
 
-        if (isset($response['data']['list']) && is_array($response['data']['list'])) {
-            foreach ($response['data']['list'] as $advertiser) {
+        error_log("Advertiser Info Response Code: " . $httpCode);
+        error_log("Advertiser Info Response: " . $response);
+
+        $infoData = json_decode($response, true);
+
+        if ($httpCode === 200 && isset($infoData['data']['list']) && is_array($infoData['data']['list'])) {
+            foreach ($infoData['data']['list'] as $advertiser) {
                 $advertiser_details[$advertiser['advertiser_id']] = [
                     'id' => $advertiser['advertiser_id'],
                     'name' => $advertiser['advertiser_name'] ?? 'Account',
