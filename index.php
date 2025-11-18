@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($username === $_ENV['AUTH_USERNAME'] && $password === $_ENV['AUTH_PASSWORD']) {
         $_SESSION['authenticated'] = true;
+        $_SESSION['username'] = $username;
         header('Location: select-advertiser.php');
         exit;
     } else {

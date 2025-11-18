@@ -51,13 +51,16 @@ if ($httpCode !== 200 || !isset($tokenData['data']['access_token'])) {
     die('Token exchange failed: ' . htmlspecialchars($error_message));
 }
 
-// Store access token and advertiser IDs
+// Store tokens in session (will be transferred to browser localStorage via JavaScript)
 $_SESSION['oauth_access_token'] = $tokenData['data']['access_token'];
+$_SESSION['oauth_refresh_token'] = $tokenData['data']['refresh_token'] ?? '';
 $_SESSION['oauth_advertiser_ids'] = $tokenData['data']['advertiser_ids'] ?? [];
+$_SESSION['oauth_expires_in'] = $tokenData['data']['expires_in'] ?? 86400;
+$_SESSION['oauth_token_type'] = $tokenData['data']['token_type'] ?? 'Bearer';
 
 error_log("OAuth Success: Token obtained");
 error_log("Advertiser IDs: " . json_encode($_SESSION['oauth_advertiser_ids']));
 
-// Redirect to advertiser selection page
+// Redirect to advertiser selection page where JavaScript will store token in localStorage
 header('Location: select-advertiser-oauth.php');
 exit;

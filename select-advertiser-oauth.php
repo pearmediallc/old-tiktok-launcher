@@ -140,6 +140,24 @@ $advertiser_ids = $_SESSION['oauth_advertiser_ids'];
     <script>
         let selectedAdvertiserId = null;
 
+        // Store OAuth tokens in browser localStorage on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            <?php if (isset($_SESSION['oauth_access_token'])): ?>
+                const tokenData = {
+                    access_token: <?php echo json_encode($_SESSION['oauth_access_token']); ?>,
+                    refresh_token: <?php echo json_encode($_SESSION['oauth_refresh_token'] ?? ''); ?>,
+                    expires_in: <?php echo json_encode($_SESSION['oauth_expires_in'] ?? 86400); ?>,
+                    token_type: <?php echo json_encode($_SESSION['oauth_token_type'] ?? 'Bearer'); ?>,
+                    advertiser_ids: <?php echo json_encode($_SESSION['oauth_advertiser_ids'] ?? []); ?>,
+                    expires_at: Date.now() + (<?php echo $_SESSION['oauth_expires_in'] ?? 86400; ?> * 1000)
+                };
+
+                // Store in localStorage for persistence across sessions
+                localStorage.setItem('tiktok_oauth_token', JSON.stringify(tokenData));
+                console.log('OAuth token stored in browser localStorage');
+            <?php endif; ?>
+        });
+
         function selectAdvertiser(advertiserId, element) {
             // Remove selection from all cards
             document.querySelectorAll('.advertiser-card').forEach(card => {
@@ -162,7 +180,12 @@ $advertiser_ids = $_SESSION['oauth_advertiser_ids'];
                 return;
             }
 
-            // Send selected advertiser to backend
+            // Update localStorage with selected advertiser
+            const tokenData = JSON.parse(localStorage.getItem('tiktok_oauth_token') || '{}');
+            tokenData.selected_advertiser_id = selectedAdvertiserId;
+            localStorage.setItem('tiktok_oauth_token', JSON.stringify(tokenData));
+
+            // Send selected advertiser to backend (for session)
             fetch('api.php?action=set_oauth_advertiser', {
                 method: 'POST',
                 headers: {

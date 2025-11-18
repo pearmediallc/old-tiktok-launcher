@@ -42,10 +42,16 @@ use TikTokAds\Identity\Identity;
 use TikTokAds\Tools\Tools;
 
 // SDK Configuration
-// Prioritize OAuth token over .env token for production use
+// Priority: Session OAuth token > .env token
 $access_token = isset($_SESSION['oauth_access_token']) && !empty($_SESSION['oauth_access_token'])
     ? $_SESSION['oauth_access_token']
     : ($_ENV['TIKTOK_ACCESS_TOKEN'] ?? '');
+
+if (isset($_SESSION['oauth_access_token']) && !empty($_SESSION['oauth_access_token'])) {
+    error_log("Using OAuth token from session");
+} else {
+    error_log("Using token from .env (fallback)");
+}
 
 $config = [
     'access_token' => $access_token,
@@ -186,7 +192,7 @@ try {
                 exit;
             }
 
-            // Set selected advertiser
+            // Set selected advertiser in session
             $_SESSION['selected_advertiser_id'] = $advertiserId;
             $_SESSION['authenticated'] = true;
 
