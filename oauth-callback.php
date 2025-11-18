@@ -3,6 +3,9 @@ session_start();
 
 // Load environment variables
 require_once 'config.php';
+require_once __DIR__ . '/sdk/vendor/autoload.php';
+
+use TikTokAds\Tools\Tools;
 
 // Log all received parameters
 error_log("OAuth Callback: " . print_r($_GET, true));
@@ -61,6 +64,41 @@ $_SESSION['oauth_token_type'] = $tokenData['data']['token_type'] ?? 'Bearer';
 
 error_log("OAuth Success: Token obtained");
 error_log("Advertiser IDs: " . json_encode($_SESSION['oauth_advertiser_ids']));
+
+// Fetch advertiser names using TikTok SDK
+$advertiser_details = [];
+if (!empty($_SESSION['oauth_advertiser_ids'])) {
+    $tools = new Tools([
+        'access_token' => $access_token,
+        'app_id' => $config['app_id'],
+        'app_secret' => $config['app_secret']
+    ]);
+
+    try {
+        // Use the SDK to get advertiser info
+        $response = $tools->getAdvertiserInfo([
+            'advertiser_ids' => $_SESSION['oauth_advertiser_ids'],
+            'fields' => ['advertiser_id', 'advertiser_name', 'status']
+        ]);
+
+        error_log("Advertiser Info Response: " . json_encode($response));
+
+        if (isset($response['data']['list']) && is_array($response['data']['list'])) {
+            foreach ($response['data']['list'] as $advertiser) {
+                $advertiser_details[$advertiser['advertiser_id']] = [
+                    'id' => $advertiser['advertiser_id'],
+                    'name' => $advertiser['advertiser_name'] ?? 'Account',
+                    'status' => $advertiser['status'] ?? 'active'
+                ];
+            }
+        }
+    } catch (Exception $e) {
+        error_log("Error fetching advertiser info: " . $e->getMessage());
+    }
+}
+
+$_SESSION['oauth_advertiser_details'] = $advertiser_details;
+error_log("Advertiser Details: " . json_encode($advertiser_details));
 
 // Redirect to advertiser selection page where JavaScript will store token in localStorage
 header('Location: select-advertiser-oauth.php');

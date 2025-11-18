@@ -8,6 +8,7 @@ if (!isset($_SESSION['oauth_access_token']) || !isset($_SESSION['oauth_advertise
 }
 
 $advertiser_ids = $_SESSION['oauth_advertiser_ids'];
+$advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -123,10 +124,13 @@ $advertiser_ids = $_SESSION['oauth_advertiser_ids'];
                 </div>
             <?php else: ?>
                 <div class="advertiser-list" id="advertiser-list">
-                    <?php foreach ($advertiser_ids as $index => $advertiser_id): ?>
+                    <?php foreach ($advertiser_ids as $index => $advertiser_id):
+                        $details = $advertiser_details[$advertiser_id] ?? null;
+                        $name = $details ? $details['name'] : 'Advertiser Account ' . ($index + 1);
+                    ?>
                         <div class="advertiser-card" onclick="selectAdvertiser('<?php echo htmlspecialchars($advertiser_id); ?>', this)">
                             <div class="advertiser-name">
-                                📊 Advertiser Account <?php echo ($index + 1); ?>
+                                📊 <?php echo htmlspecialchars($name); ?>
                                 <span class="success-badge">Connected</span>
                             </div>
                             <div class="advertiser-id">
