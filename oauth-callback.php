@@ -62,16 +62,16 @@ $_SESSION['oauth_token_type'] = $tokenData['data']['token_type'] ?? 'Bearer';
 error_log("OAuth Success: Token obtained");
 error_log("Advertiser IDs: " . json_encode($_SESSION['oauth_advertiser_ids']));
 
-// Fetch advertiser names using direct API call
+// Fetch advertiser names using correct OAuth2 endpoint
 $advertiser_details = [];
 if (!empty($_SESSION['oauth_advertiser_ids'])) {
     try {
-        // Use TikTok API to get advertiser info
-        $advertiser_info_url = 'https://business-api.tiktok.com/open_api/v1.3/advertiser/info/';
+        // Use TikTok OAuth2 advertiser endpoint
+        $advertiser_info_url = 'https://business-api.tiktok.com/open_api/v1.3/oauth2/advertiser/get/';
 
         $info_params = [
-            'advertiser_ids' => $_SESSION['oauth_advertiser_ids'],
-            'fields' => ['advertiser_id', 'advertiser_name', 'status']
+            'app_id' => $config['app_id'],
+            'secret' => $config['app_secret']
         ];
 
         $ch = curl_init($advertiser_info_url . '?' . http_build_query($info_params));
