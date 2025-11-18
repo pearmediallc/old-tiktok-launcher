@@ -177,7 +177,17 @@ if (!isset($_SESSION['authenticated']) || !$_SESSION['authenticated']) {
                 <h2>Select Advertiser Account</h2>
                 <p>Choose which advertiser account you want to use for creating campaigns</p>
             </div>
-            
+
+            <!-- OAuth Connect Button -->
+            <div style="margin-bottom: 30px; text-align: center;">
+                <a href="oauth-init.php" style="display: inline-block; padding: 15px 30px; background: #fe2c55; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; transition: all 0.3s;">
+                    🔗 Connect Your TikTok Ad Account via OAuth
+                </a>
+                <p style="margin-top: 10px; font-size: 13px; color: #666;">
+                    Or select from existing accounts below
+                </p>
+            </div>
+
             <!-- Search Bar -->
             <div class="search-container" id="search-container" style="display: none;">
                 <span class="search-icon">🔍</span>

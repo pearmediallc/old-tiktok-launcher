@@ -228,43 +228,26 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
     <div class="login-container">
         <div class="login-header">
             <h1>🚀 TikTok Campaign Launcher</h1>
-            <p>Connect your TikTok Ads account to get started</p>
-        </div>
-
-        <a href="oauth-init.php" class="btn-oauth btn-oauth-primary">
-            🔗 Connect TikTok Ads Account
-        </a>
-
-        <p class="info-text">
-            <strong>✓ Secure OAuth 2.0 authentication</strong><br>
-            Access all your advertiser accounts instantly<br>
-            No credentials needed - authorize with TikTok directly
-        </p>
-
-        <div class="divider">
-            <span>Developer Access</span>
+            <p>Login to access the dashboard</p>
         </div>
 
         <?php if (isset($error)): ?>
             <div class="error"><?php echo htmlspecialchars($error); ?></div>
         <?php endif; ?>
 
-        <details class="developer-login">
-            <summary>Use developer credentials instead</summary>
-            <form method="POST" action="" style="margin-top: 20px;">
-                <div class="form-group">
-                    <label for="username">Username</label>
-                    <input type="text" id="username" name="username" required>
-                </div>
+        <form method="POST" action="">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autofocus>
+            </div>
 
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" name="password" required>
-                </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
 
-                <button type="submit" class="btn-login">Login with Credentials</button>
-            </form>
-        </details>
+            <button type="submit" class="btn-login">Login</button>
+        </form>
     </div>
 </body>
 </html>
