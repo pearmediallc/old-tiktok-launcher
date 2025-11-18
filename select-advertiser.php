@@ -174,229 +174,24 @@ if (!isset($_SESSION['authenticated']) || !$_SESSION['authenticated']) {
         <!-- Advertiser Selection -->
         <div class="advertiser-selection">
             <div class="advertiser-header">
-                <h2>Select Advertiser Account</h2>
-                <p>Choose which advertiser account you want to use for creating campaigns</p>
+                <h2>Connect TikTok Ad Account</h2>
+                <p>Connect your TikTok Ads Manager account to start creating campaigns</p>
             </div>
 
             <!-- OAuth Connect Button -->
-            <div style="margin-bottom: 30px; text-align: center;">
-                <a href="oauth-init.php" style="display: inline-block; padding: 15px 30px; background: #fe2c55; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; transition: all 0.3s;">
-                    🔗 Connect Your TikTok Ad Account via OAuth
+            <div style="margin-bottom: 30px; text-align: center; padding: 40px 20px;">
+                <a href="oauth-init.php" style="display: inline-block; padding: 20px 50px; background: #fe2c55; color: white; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 18px; transition: all 0.3s; box-shadow: 0 4px 12px rgba(254, 44, 85, 0.3);">
+                    🔗 Connect Your TikTok Ad Account
                 </a>
-                <p style="margin-top: 10px; font-size: 13px; color: #666;">
-                    Or select from existing accounts below
+                <p style="margin-top: 20px; font-size: 14px; color: #888; line-height: 1.6;">
+                    You'll be redirected to TikTok to authorize access.<br>
+                    After authorization, you can select which advertiser account to use.
                 </p>
-            </div>
-
-            <!-- Search Bar -->
-            <div class="search-container" id="search-container" style="display: none;">
-                <span class="search-icon">🔍</span>
-                <input type="text" class="search-input" id="search-input" placeholder="Search advertiser accounts by name or ID..." onkeyup="filterAdvertisers()">
-            </div>
-            
-            <div class="search-results-info" id="search-results-info" style="display: none;">
-                Showing <span id="visible-count">0</span> of <span id="total-count">0</span> accounts
-            </div>
-            
-            <div id="advertiser-container" class="loading-advertisers">
-                <div class="spinner"></div>
-                <p>Loading advertiser accounts...</p>
-            </div>
-            
-            <div class="continue-button" id="continue-container" style="display: none;">
-                <button class="btn-primary" onclick="proceedWithSelectedAdvertiser()" disabled id="continue-btn">
-                    Continue to Campaign Creation →
-                </button>
             </div>
         </div>
     </div>
 
-    <!-- Toast Notification -->
-    <div id="toast" class="toast"></div>
-
     <script>
-        let selectedAdvertiserId = null;
-        let allAdvertisers = [];
-
-        // Load advertiser accounts on page load
-        window.addEventListener('DOMContentLoaded', () => {
-            loadAdvertiserAccounts();
-        });
-
-        async function loadAdvertiserAccounts() {
-            try {
-                const response = await fetch('api.php?action=get_advertisers', {
-                    method: 'GET',
-                    headers: { 
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                const responseText = await response.text();
-                console.log('Raw response:', responseText);
-                
-                let result;
-                try {
-                    result = JSON.parse(responseText);
-                } catch (parseError) {
-                    console.error('Failed to parse response:', parseError);
-                    showError('Invalid response from server. Please check the logs.');
-                    return;
-                }
-                
-                if (result.success) {
-                    console.log('Advertisers loaded:', result.data);
-                    allAdvertisers = result.data || [];
-                    displayAdvertiserAccounts(allAdvertisers);
-                } else {
-                    showError('Failed to load advertiser accounts: ' + (result.message || result.error || 'Unknown error'));
-                }
-            } catch (error) {
-                console.error('Error loading advertisers:', error);
-                showError('Failed to load advertiser accounts. Please try again.');
-            }
-        }
-
-        function displayAdvertiserAccounts(advertisers, isFiltered = false) {
-            const container = document.getElementById('advertiser-container');
-            
-            if (!advertisers || advertisers.length === 0) {
-                if (isFiltered) {
-                    container.innerHTML = `
-                        <div class="no-advertisers">
-                            <p>No advertiser accounts match your search.</p>
-                            <p>Try adjusting your search terms.</p>
-                        </div>
-                    `;
-                } else {
-                    container.innerHTML = `
-                        <div class="no-advertisers">
-                            <p>No advertiser accounts found.</p>
-                            <p>Please ensure your TikTok access token has the necessary permissions.</p>
-                        </div>
-                    `;
-                }
-                return;
-            }
-
-            // Show search bar if more than 5 accounts
-            if (allAdvertisers.length > 5) {
-                document.getElementById('search-container').style.display = 'block';
-                document.getElementById('search-results-info').style.display = 'block';
-            }
-            
-            // Update results info
-            document.getElementById('visible-count').textContent = advertisers.length;
-            document.getElementById('total-count').textContent = allAdvertisers.length;
-
-            let html = '<div class="advertiser-list">';
-            advertisers.forEach((advertiser, index) => {
-                // Status field may not be included in response, assume active if not present
-                const isActive = !advertiser.status || advertiser.status === 'STATUS_ENABLE' || advertiser.status === 'ENABLE';
-                html += `
-                    <div class="advertiser-item" onclick="selectAdvertiser('${advertiser.advertiser_id}', this)">
-                        <div class="advertiser-info">
-                            <div class="advertiser-name">
-                                ${advertiser.advertiser_name || `Advertiser ${index + 1}`}
-                                <span class="advertiser-status">
-                                    Active
-                                </span>
-                            </div>
-                            <div class="advertiser-id">ID: ${advertiser.advertiser_id}</div>
-                        </div>
-                        <input type="radio" name="advertiser" class="advertiser-radio" value="${advertiser.advertiser_id}">
-                    </div>
-                `;
-            });
-            html += '</div>';
-            
-            container.innerHTML = html;
-            document.getElementById('continue-container').style.display = 'flex';
-        }
-
-        function selectAdvertiser(advertiserId, element) {
-            // Remove previous selection
-            document.querySelectorAll('.advertiser-item').forEach(item => {
-                item.classList.remove('selected');
-                item.querySelector('.advertiser-radio').checked = false;
-            });
-
-            // Add selection to clicked item
-            element.classList.add('selected');
-            element.querySelector('.advertiser-radio').checked = true;
-            
-            selectedAdvertiserId = advertiserId;
-            document.getElementById('continue-btn').disabled = false;
-        }
-
-        function filterAdvertisers() {
-            const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
-            
-            if (!searchTerm) {
-                displayAdvertiserAccounts(allAdvertisers, false);
-                return;
-            }
-            
-            const filteredAdvertisers = allAdvertisers.filter(advertiser => {
-                const name = (advertiser.advertiser_name || '').toLowerCase();
-                const id = (advertiser.advertiser_id || '').toLowerCase();
-                return name.includes(searchTerm) || id.includes(searchTerm);
-            });
-            
-            displayAdvertiserAccounts(filteredAdvertisers, true);
-        }
-
-        async function proceedWithSelectedAdvertiser() {
-            if (!selectedAdvertiserId) {
-                showError('Please select an advertiser account');
-                return;
-            }
-
-            document.getElementById('continue-btn').disabled = true;
-            document.getElementById('continue-btn').textContent = 'Setting up...';
-
-            try {
-                const response = await fetch('api.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'set_advertiser',
-                        advertiser_id: selectedAdvertiserId
-                    })
-                });
-
-                const responseText = await response.text();
-                console.log('Set advertiser raw response:', responseText);
-                
-                let result;
-                try {
-                    result = JSON.parse(responseText);
-                } catch (parseError) {
-                    console.error('Failed to parse set_advertiser response:', parseError);
-                    showError('Invalid response from server when setting advertiser');
-                    document.getElementById('continue-btn').disabled = false;
-                    document.getElementById('continue-btn').textContent = 'Continue to Campaign Creation →';
-                    return;
-                }
-                
-                if (result.success) {
-                    showSuccess('Advertiser account selected successfully');
-                    setTimeout(() => {
-                        window.location.href = result.redirect || 'campaign-select.php';
-                    }, 1000);
-                } else {
-                    showError('Failed to set advertiser: ' + (result.message || result.error || 'Unknown error'));
-                    document.getElementById('continue-btn').disabled = false;
-                    document.getElementById('continue-btn').textContent = 'Continue to Campaign Creation →';
-                }
-            } catch (error) {
-                console.error('Error setting advertiser:', error);
-                showError('Failed to set advertiser account. Please try again.');
-                document.getElementById('continue-btn').disabled = false;
-                document.getElementById('continue-btn').textContent = 'Continue to Campaign Creation →';
-            }
-        }
-
         function logout() {
             fetch('api.php', {
                 method: 'POST',
@@ -405,23 +200,6 @@ if (!isset($_SESSION['authenticated']) || !$_SESSION['authenticated']) {
             }).then(() => {
                 window.location.href = 'index.php';
             });
-        }
-
-        function showToast(message, type = '') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = 'toast show ' + type;
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
-        }
-
-        function showSuccess(message) {
-            showToast(message, 'success');
-        }
-
-        function showError(message) {
-            showToast(message, 'error');
         }
     </script>
 </body>
