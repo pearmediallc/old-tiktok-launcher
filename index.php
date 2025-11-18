@@ -36,7 +36,7 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TikTok Campaign Launcher - Login</title>
+    <title>TikTok Campaign Launcher - Connect Your Account</title>
     <style>
         * {
             margin: 0;
@@ -158,43 +158,69 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
 
         .btn-oauth {
             width: 100%;
-            padding: 12px;
+            padding: 16px;
             background: #fe2c55;
             color: white;
             border: 2px solid #fe2c55;
-            border-radius: 5px;
-            font-size: 16px;
+            border-radius: 8px;
+            font-size: 18px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
             text-decoration: none;
             display: inline-block;
             text-align: center;
+            margin-top: 10px;
         }
 
         .btn-oauth:hover {
-            transform: translateY(-2px);
+            transform: translateY(-3px);
             background: #d91d45;
-            box-shadow: 0 6px 20px rgba(254, 44, 85, 0.3);
+            box-shadow: 0 8px 25px rgba(254, 44, 85, 0.4);
+        }
+
+        .btn-oauth-primary {
+            padding: 20px;
+            font-size: 20px;
+            box-shadow: 0 4px 15px rgba(254, 44, 85, 0.3);
         }
 
         .info-text {
             text-align: center;
-            font-size: 13px;
+            font-size: 14px;
             color: #666;
-            margin-top: 15px;
-            line-height: 1.5;
+            margin-top: 20px;
+            line-height: 1.8;
         }
 
-        .badge {
-            display: inline-block;
-            padding: 4px 8px;
-            background: #4caf50;
-            color: white;
-            border-radius: 4px;
-            font-size: 11px;
+        .developer-login {
+            margin-top: 10px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .developer-login summary {
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+            list-style: none;
+            padding: 5px;
+        }
+
+        .developer-login summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .developer-login summary:hover {
+            color: #333;
+        }
+
+        .developer-login[open] summary {
+            color: #333;
             font-weight: 600;
-            margin-left: 8px;
+            margin-bottom: 10px;
         }
     </style>
 </head>
@@ -202,39 +228,43 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
     <div class="login-container">
         <div class="login-header">
             <h1>🚀 TikTok Campaign Launcher</h1>
-            <p>Login to access the dashboard</p>
+            <p>Connect your TikTok Ads account to get started</p>
+        </div>
+
+        <a href="oauth-init.php" class="btn-oauth btn-oauth-primary">
+            🔗 Connect TikTok Ads Account
+        </a>
+
+        <p class="info-text">
+            <strong>✓ Secure OAuth 2.0 authentication</strong><br>
+            Access all your advertiser accounts instantly<br>
+            No credentials needed - authorize with TikTok directly
+        </p>
+
+        <div class="divider">
+            <span>Developer Access</span>
         </div>
 
         <?php if (isset($error)): ?>
             <div class="error"><?php echo htmlspecialchars($error); ?></div>
         <?php endif; ?>
 
-        <form method="POST" action="">
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" required autofocus>
-            </div>
+        <details class="developer-login">
+            <summary>Use developer credentials instead</summary>
+            <form method="POST" action="" style="margin-top: 20px;">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
 
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
-            </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
 
-            <button type="submit" class="btn-login">Login</button>
-        </form>
-
-        <div class="divider">
-            <span>OR</span>
-        </div>
-
-        <a href="oauth-init.php" class="btn-oauth">
-            🔗 Connect Traffic Channel <span class="badge">RECOMMENDED</span>
-        </a>
-
-        <p class="info-text">
-            Connect your TikTok Ads account to automatically access all your ad accounts.<br>
-            <strong>Production-ready OAuth authentication</strong>
-        </p>
+                <button type="submit" class="btn-login">Login with Credentials</button>
+            </form>
+        </details>
     </div>
 </body>
 </html>

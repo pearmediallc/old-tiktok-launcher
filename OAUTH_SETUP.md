@@ -20,26 +20,37 @@ This guide explains how to configure and use the OAuth authentication system to 
 
 ## 🔧 Configuration Steps
 
-### Step 1: Register Redirect URI in TikTok Developer Portal
+### ⚠️ IMPORTANT: Step 1 - Register Redirect URI in TikTok Developer Portal
+
+**You MUST complete this step before OAuth will work!**
+
+The 404 error you're seeing means the redirect URI hasn't been registered yet with TikTok.
 
 1. Go to [TikTok For Business Developer Portal](https://business-api.tiktok.com/portal/developer)
 2. Log in with your developer account
-3. Navigate to **My Apps** → Select your app
-4. Go to **App Settings** or **OAuth Settings**
-5. Add the following Redirect URIs:
+3. Navigate to **My Apps** → Select your app (App ID: 7535662119501430785)
+4. Look for **OAuth Redirect URLs** or **Redirect URIs** section
+5. Click **Add** or **Edit**
+6. Add EXACTLY this URL (copy and paste to avoid typos):
 
-   **For Local Development:**
+   **For Local Development (ADD THIS NOW):**
    ```
    http://localhost:8080/oauth-callback.php
    ```
 
-   **For Production:**
+   **For Production (Add when deploying):**
    ```
    https://yourdomain.com/oauth-callback.php
    ```
 
-6. Save the changes
-7. Wait for TikTok to approve the redirect URI (usually instant, but can take a few minutes)
+7. Click **Save** or **Submit**
+8. Wait for approval (usually instant)
+9. Once approved, the OAuth flow will work!
+
+**Common Issues:**
+- Make sure the URL is EXACTLY `http://localhost:8080/oauth-callback.php` (no trailing slash, no extra characters)
+- Don't use `https://` for localhost - use `http://`
+- Port must be 8080 (or whatever port your PHP server is running on)
 
 ### Step 2: Update .env for Production
 
