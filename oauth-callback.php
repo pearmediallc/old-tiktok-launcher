@@ -52,7 +52,8 @@ if ($httpCode !== 200 || !isset($tokenData['data']['access_token'])) {
 }
 
 // Store tokens in session (will be transferred to browser localStorage via JavaScript)
-$_SESSION['oauth_access_token'] = $tokenData['data']['access_token'];
+$access_token = $tokenData['data']['access_token'];
+$_SESSION['oauth_access_token'] = $access_token;
 $_SESSION['oauth_refresh_token'] = $tokenData['data']['refresh_token'] ?? '';
 $_SESSION['oauth_advertiser_ids'] = $tokenData['data']['advertiser_ids'] ?? [];
 $_SESSION['oauth_expires_in'] = $tokenData['data']['expires_in'] ?? 86400;
@@ -60,6 +61,49 @@ $_SESSION['oauth_token_type'] = $tokenData['data']['token_type'] ?? 'Bearer';
 
 error_log("OAuth Success: Token obtained");
 error_log("Advertiser IDs: " . json_encode($_SESSION['oauth_advertiser_ids']));
+
+// Fetch advertiser details (names) from TikTok API
+$advertiser_details = [];
+if (!empty($_SESSION['oauth_advertiser_ids'])) {
+    $advertiser_info_url = 'https://business-api.tiktok.com/open_api/v1.3/oauth2/advertiser/get/';
+
+    $ch = curl_init($advertiser_info_url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+        'app_id' => $config['app_id'],
+        'secret' => $config['app_secret'],
+        'access_token' => $access_token
+    ]));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json'
+    ]);
+
+    $advertiser_response = curl_exec($ch);
+    $advertiser_http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    error_log("Advertiser Info Response Code: " . $advertiser_http_code);
+    error_log("Advertiser Info Response: " . $advertiser_response);
+
+    if ($advertiser_http_code === 200) {
+        $advertiser_data = json_decode($advertiser_response, true);
+        if (isset($advertiser_data['data']['list']) && is_array($advertiser_data['data']['list'])) {
+            foreach ($advertiser_data['data']['list'] as $advertiser) {
+                $advertiser_details[$advertiser['advertiser_id']] = [
+                    'id' => $advertiser['advertiser_id'],
+                    'name' => $advertiser['advertiser_name'] ?? 'Unnamed Account',
+                    'status' => $advertiser['status'] ?? 'unknown'
+                ];
+            }
+        }
+    }
+}
+
+// Store advertiser details in session
+$_SESSION['oauth_advertiser_details'] = $advertiser_details;
+
+error_log("Advertiser Details: " . json_encode($advertiser_details));
 
 // Redirect to advertiser selection page where JavaScript will store token in localStorage
 header('Location: select-advertiser-oauth.php');

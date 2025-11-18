@@ -8,6 +8,7 @@ if (!isset($_SESSION['oauth_access_token']) || !isset($_SESSION['oauth_advertise
 }
 
 $advertiser_ids = $_SESSION['oauth_advertiser_ids'];
+$advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -46,15 +47,21 @@ $advertiser_ids = $_SESSION['oauth_advertiser_ids'];
             background: #f1f8f4;
             border-width: 3px;
         }
+        .advertiser-name {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
         .advertiser-id {
-            font-size: 18px;
-            font-weight: 600;
-            color: #333;
+            font-size: 14px;
+            font-weight: 500;
+            color: #666;
             margin-bottom: 8px;
         }
         .advertiser-status {
-            font-size: 14px;
-            color: #666;
+            font-size: 13px;
+            color: #888;
         }
         .success-badge {
             display: inline-block;
@@ -117,11 +124,18 @@ $advertiser_ids = $_SESSION['oauth_advertiser_ids'];
                 </div>
             <?php else: ?>
                 <div class="advertiser-list" id="advertiser-list">
-                    <?php foreach ($advertiser_ids as $index => $advertiser_id): ?>
+                    <?php foreach ($advertiser_ids as $index => $advertiser_id):
+                        $details = $advertiser_details[$advertiser_id] ?? null;
+                        $name = $details ? $details['name'] : 'Account ' . ($index + 1);
+                        $status = $details ? $details['status'] : 'active';
+                    ?>
                         <div class="advertiser-card" onclick="selectAdvertiser('<?php echo htmlspecialchars($advertiser_id); ?>', this)">
-                            <div class="advertiser-id">
-                                📊 Advertiser ID: <?php echo htmlspecialchars($advertiser_id); ?>
+                            <div class="advertiser-name">
+                                📊 <?php echo htmlspecialchars($name); ?>
                                 <span class="success-badge">Connected</span>
+                            </div>
+                            <div class="advertiser-id">
+                                ID: <?php echo htmlspecialchars($advertiser_id); ?>
                             </div>
                             <div class="advertiser-status">
                                 Click to select this account
