@@ -14,12 +14,12 @@ $state = bin2hex(random_bytes(16));
 $_SESSION['oauth_state'] = $state;
 
 // Build TikTok OAuth authorization URL
-$auth_url = 'https://business-api.tiktok.com/open_api/v1.3/oauth2/authorize/';
+// Use the portal/auth endpoint which is the correct authorization page
+$auth_url = 'https://business-api.tiktok.com/portal/auth';
 $params = [
     'app_id' => $app_id,
     'state' => $state,
-    'redirect_uri' => $redirect_uri,
-    'rid' => uniqid() // Optional request ID for tracking
+    'redirect_uri' => $redirect_uri
 ];
 
 $authorization_url = $auth_url . '?' . http_build_query($params);
