@@ -1115,9 +1115,12 @@ function addAdForm(index, duplicateFrom = null) {
 
                 <div class="form-group">
                     <label style="font-weight: 600; margin-bottom: 10px; display: block;">Choose Portfolio Option:</label>
-                    <div style="display: flex; gap: 10px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
                         <button type="button" class="btn-secondary" onclick="loadExistingPortfolios(${index})" style="flex: 1;">
                             📋 Use Existing Portfolio
+                        </button>
+                        <button type="button" class="btn-secondary" onclick="useFrequentlyUsedCTAs(${index})" style="flex: 1; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none;">
+                            ⚡ Use Frequently Used CTAs
                         </button>
                         <button type="button" class="btn-secondary" onclick="loadDynamicCTAs(${index})" style="flex: 1;">
                             ✨ Create New Portfolio
@@ -1501,6 +1504,133 @@ async function loadExistingPortfolios(adIndex) {
     }
 
     console.log('=== Load Existing Portfolios Complete ===');
+}
+
+// Use Frequently Used CTAs - Get or create portfolio with predefined CTAs
+async function useFrequentlyUsedCTAs(adIndex) {
+    const existingContainer = document.getElementById(`existing-portfolios-${adIndex}`);
+    const dynamicContainer = document.getElementById(`dynamic-cta-list-${adIndex}`);
+
+    console.log('=== Use Frequently Used CTAs ===');
+    console.log('Ad Index:', adIndex);
+
+    // Hide other sections
+    existingContainer.style.display = 'none';
+    existingContainer.innerHTML = '';
+    dynamicContainer.style.display = 'block';
+
+    // Show loading message
+    let loadingHtml = '<div style="padding: 15px; background: linear-gradient(135deg, #e8f5e9, #c8e6c9); border: 2px solid #4caf50; border-radius: 8px; margin-bottom: 10px;">';
+    loadingHtml += '<p style="margin: 0 0 10px 0; font-weight: 600; color: #2e7d32;">⚡ Frequently Used CTAs</p>';
+    loadingHtml += '<div style="background: white; padding: 12px; border-radius: 6px; font-size: 13px;">';
+    loadingHtml += '<p style="margin: 0 0 8px 0; color: #2e7d32;"><strong>Checking for existing portfolio...</strong></p>';
+    loadingHtml += '<p style="margin: 0; font-size: 12px; color: #666;">This will use or create a portfolio with these CTAs:</p>';
+    loadingHtml += '<ul style="margin: 8px 0 0 20px; font-size: 12px; color: #555;">';
+    loadingHtml += '<li>Learn more</li>';
+    loadingHtml += '<li>Check it out</li>';
+    loadingHtml += '<li>View now</li>';
+    loadingHtml += '<li>Read more</li>';
+    loadingHtml += '<li>Apply now</li>';
+    loadingHtml += '</ul>';
+    loadingHtml += '</div>';
+    loadingHtml += '</div>';
+    dynamicContainer.innerHTML = loadingHtml;
+
+    const requestUrl = `api.php?action=get_or_create_frequently_used_cta_portfolio`;
+    console.log('Request URL:', requestUrl);
+
+    try {
+        const response = await fetch(requestUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log('Response Status:', response.status);
+        const result = await response.json();
+
+        console.log('=== API Response ===');
+        console.log('Success:', result.success);
+        console.log('Message:', result.message);
+        console.log('Portfolio ID:', result.data?.portfolio_id);
+        console.log('Created New:', result.data?.created_new);
+        console.log('Full Response:', JSON.stringify(result, null, 2));
+
+        if (result.success && result.data?.portfolio_id) {
+            const portfolioId = result.data.portfolio_id;
+            const isNew = result.data.created_new;
+
+            // Store the portfolio ID
+            document.getElementById(`dynamic-cta-portfolio-${adIndex}`).value = portfolioId;
+
+            // Show success message with portfolio details
+            let html = '<div style="padding: 15px; background: linear-gradient(135deg, #e8f5e9, #c8e6c9); border: 2px solid #4caf50; border-radius: 8px;">';
+            html += '<p style="margin: 0 0 12px 0; font-weight: 700; color: #2e7d32; font-size: 16px;">✅ ' + (isNew ? 'Portfolio Created Successfully!' : 'Using Existing Portfolio') + '</p>';
+
+            html += '<div style="background: white; padding: 15px; border-radius: 6px; margin-bottom: 12px;">';
+            html += '<p style="margin: 0 0 10px 0; font-weight: 600; color: #333;"><strong>Portfolio ID:</strong> ' + portfolioId + '</p>';
+            html += '<p style="margin: 0 0 8px 0; font-weight: 600; font-size: 13px; color: #555;">Frequently Used CTAs:</p>';
+            html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px;">';
+
+            const ctas = [
+                { text: 'Learn more', ids: '201781, 201535' },
+                { text: 'Check it out', ids: '202156, 202150' },
+                { text: 'View now', ids: '202001, 201529' },
+                { text: 'Read more', ids: '201829, 201621' },
+                { text: 'Apply now', ids: '201963, 201489' }
+            ];
+
+            ctas.forEach(cta => {
+                html += `<div style="padding: 10px; background: #f8f9ff; border: 1px solid #667eea; border-radius: 6px;">`;
+                html += `<div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 4px;">"${cta.text}"</div>`;
+                html += `<div style="font-size: 11px; color: #666;">IDs: ${cta.ids}</div>`;
+                html += `</div>`;
+            });
+
+            html += '</div>';
+            html += '</div>';
+
+            if (isNew) {
+                html += '<div style="background: #fff3cd; padding: 12px; border-radius: 6px; border: 1px solid #ffc107;">';
+                html += '<p style="margin: 0; font-size: 13px; color: #856404;"><strong>ℹ️ Note:</strong> This portfolio has been saved and will be reused for future campaigns on this advertiser account.</p>';
+                html += '</div>';
+            } else {
+                html += '<div style="background: #d1ecf1; padding: 12px; border-radius: 6px; border: 1px solid #bee5eb;">';
+                html += '<p style="margin: 0; font-size: 13px; color: #0c5460;"><strong>ℹ️ Info:</strong> Using existing portfolio - no need to create a new one!</p>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+
+            dynamicContainer.innerHTML = html;
+            showToast(isNew ? 'Frequently used CTA portfolio created!' : 'Using existing frequently used CTA portfolio', 'success');
+        } else {
+            console.error('Failed to get/create portfolio');
+            console.error('Message:', result.message);
+            console.error('Response:', result);
+
+            let html = '<div style="padding: 15px; background: #f8d7da; border: 2px solid #f5c6cb; border-radius: 8px;">';
+            html += '<p style="margin: 0 0 10px 0; font-weight: 600; color: #721c24;">❌ Failed to Create Portfolio</p>';
+            html += `<p style="margin: 0; font-size: 14px; color: #721c24;"><strong>Error:</strong> ${result.message || 'Unknown error'}</p>`;
+            html += '<div style="background: white; padding: 10px; border-radius: 6px; margin-top: 10px;">';
+            html += '<pre style="margin: 0; font-family: monospace; font-size: 11px; max-height: 200px; overflow-y: auto;">';
+            html += JSON.stringify(result, null, 2);
+            html += '</pre>';
+            html += '</div>';
+            html += '</div>';
+            dynamicContainer.innerHTML = html;
+            showToast('Failed to create frequently used CTA portfolio', 'error');
+        }
+    } catch (error) {
+        console.error('=== Exception Caught ===');
+        console.error('Error:', error);
+
+        dynamicContainer.innerHTML = '<p style="color: #e74c3c;">Error loading frequently used CTAs. Please try again.</p>';
+        showToast('Error loading frequently used CTAs', 'error');
+    }
+
+    console.log('=== Use Frequently Used CTAs Complete ===');
 }
 
 // Select an existing portfolio and store its ID
