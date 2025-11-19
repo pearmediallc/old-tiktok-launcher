@@ -1593,11 +1593,13 @@ async function useFrequentlyUsedCTAs(adIndex) {
 
             if (isNew) {
                 html += '<div style="background: #fff3cd; padding: 12px; border-radius: 6px; border: 1px solid #ffc107;">';
-                html += '<p style="margin: 0; font-size: 13px; color: #856404;"><strong>ℹ️ Note:</strong> This portfolio has been saved and will be reused for future campaigns on this advertiser account.</p>';
+                html += '<p style="margin: 0; font-size: 13px; color: #856404;"><strong>✅ Portfolio Created!</strong></p>';
+                html += '<p style="margin: 8px 0 0 0; font-size: 12px; color: #856404;">This portfolio is now saved as <strong>"Frequently Used CTAs"</strong> and will appear in the <strong>"📋 Use Existing Portfolio"</strong> list for all future campaigns on this advertiser account.</p>';
                 html += '</div>';
             } else {
                 html += '<div style="background: #d1ecf1; padding: 12px; border-radius: 6px; border: 1px solid #bee5eb;">';
-                html += '<p style="margin: 0; font-size: 13px; color: #0c5460;"><strong>ℹ️ Info:</strong> Using existing portfolio - no need to create a new one!</p>';
+                html += '<p style="margin: 0; font-size: 13px; color: #0c5460;"><strong>♻️ Portfolio Already Exists!</strong></p>';
+                html += '<p style="margin: 8px 0 0 0; font-size: 12px; color: #0c5460;">This portfolio already exists and can be found in <strong>"📋 Use Existing Portfolio"</strong> as <strong>"Frequently Used CTAs"</strong>. No need to create it again!</p>';
                 html += '</div>';
             }
 

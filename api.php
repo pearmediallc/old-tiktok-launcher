@@ -1208,6 +1208,7 @@ try {
             $createParams = [
                 'advertiser_id' => $advertiser_id,
                 'creative_portfolio_type' => 'CTA',
+                'portfolio_name' => 'Frequently Used CTAs',
                 'portfolio_content' => $frequentlyUsedCTAs
             ];
 
