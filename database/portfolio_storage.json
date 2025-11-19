@@ -1,0 +1,4 @@
+{
+  "comment": "Stores CTA portfolio IDs per advertiser to avoid recreating them",
+  "portfolios": {}
+}

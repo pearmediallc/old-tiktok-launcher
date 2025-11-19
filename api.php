@@ -1121,6 +1121,146 @@ try {
             ]);
             break;
 
+        case 'get_or_create_frequently_used_cta_portfolio':
+            // Check if portfolio already exists for this advertiser, if not create it
+            logToFile("======= GET OR CREATE FREQUENTLY USED CTA PORTFOLIO =======");
+            logToFile("  Advertiser ID: " . $advertiser_id);
+
+            // Storage file path
+            $storageFile = __DIR__ . '/database/portfolio_storage.json';
+            $storage = json_decode(file_get_contents($storageFile), true);
+
+            // Check if we already have a portfolio ID for this advertiser
+            $existingPortfolioId = $storage['portfolios'][$advertiser_id] ?? null;
+
+            if ($existingPortfolioId) {
+                logToFile("  Found existing portfolio ID: " . $existingPortfolioId);
+
+                // Verify it still exists in TikTok
+                $verifyUrl = "https://business-api.tiktok.com/open_api/v1.3/creative/portfolio/list/?advertiser_id=" . $advertiser_id . "&page=1&page_size=100";
+
+                $ch = curl_init($verifyUrl);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Access-Token: ' . $config['access_token']
+                ]);
+
+                $verifyResponse = curl_exec($ch);
+                $verifyHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                $verifyData = json_decode($verifyResponse, true);
+
+                // Check if our portfolio still exists
+                $portfolioStillExists = false;
+                if (isset($verifyData['data']['portfolios']) && is_array($verifyData['data']['portfolios'])) {
+                    foreach ($verifyData['data']['portfolios'] as $portfolio) {
+                        if ($portfolio['creative_portfolio_id'] == $existingPortfolioId) {
+                            $portfolioStillExists = true;
+                            logToFile("  Portfolio verified in TikTok");
+                            break;
+                        }
+                    }
+                }
+
+                if ($portfolioStillExists) {
+                    // Return existing portfolio ID
+                    echo json_encode([
+                        'success' => true,
+                        'data' => [
+                            'portfolio_id' => $existingPortfolioId,
+                            'created_new' => false
+                        ],
+                        'message' => 'Using existing frequently used CTA portfolio'
+                    ]);
+                    break;
+                } else {
+                    logToFile("  Portfolio no longer exists in TikTok, will create new one");
+                }
+            }
+
+            // Create new portfolio with frequently used CTAs
+            logToFile("  Creating new frequently used CTA portfolio");
+
+            $frequentlyUsedCTAs = [
+                [
+                    "asset_content" => "Learn more",
+                    "asset_ids" => ["201781", "201535"]
+                ],
+                [
+                    "asset_content" => "Check it out",
+                    "asset_ids" => ["202156", "202150"]
+                ],
+                [
+                    "asset_content" => "View now",
+                    "asset_ids" => ["202001", "201529"]
+                ],
+                [
+                    "asset_content" => "Read more",
+                    "asset_ids" => ["201829", "201621"]
+                ],
+                [
+                    "asset_content" => "Apply now",
+                    "asset_ids" => ["201963", "201489"]
+                ]
+            ];
+
+            $createParams = [
+                'advertiser_id' => $advertiser_id,
+                'creative_portfolio_type' => 'CTA',
+                'portfolio_content' => $frequentlyUsedCTAs
+            ];
+
+            logToFile("  Portfolio Content: " . json_encode($frequentlyUsedCTAs, JSON_PRETTY_PRINT));
+
+            $createUrl = "https://business-api.tiktok.com/open_api/v1.3/creative/portfolio/create/";
+
+            $ch = curl_init($createUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($createParams));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Access-Token: ' . $config['access_token'],
+                'Content-Type: application/json'
+            ]);
+
+            $createResponse = curl_exec($ch);
+            $createHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            $createData = json_decode($createResponse, true);
+
+            logToFile("  Create Response Code: " . $createHttpCode);
+            logToFile("  Create Response: " . json_encode($createData, JSON_PRETTY_PRINT));
+
+            if ($createHttpCode === 200 && isset($createData['code']) && $createData['code'] === 0) {
+                $newPortfolioId = $createData['data']['creative_portfolio_id'];
+                logToFile("  SUCCESS: Portfolio created with ID: " . $newPortfolioId);
+
+                // Save portfolio ID to storage
+                $storage['portfolios'][$advertiser_id] = $newPortfolioId;
+                file_put_contents($storageFile, json_encode($storage, JSON_PRETTY_PRINT));
+                logToFile("  Portfolio ID saved to storage");
+
+                echo json_encode([
+                    'success' => true,
+                    'data' => [
+                        'portfolio_id' => $newPortfolioId,
+                        'created_new' => true
+                    ],
+                    'message' => 'Created and saved frequently used CTA portfolio'
+                ]);
+            } else {
+                logToFile("  ERROR: Failed to create portfolio");
+                echo json_encode([
+                    'success' => false,
+                    'message' => $createData['message'] ?? 'Failed to create frequently used CTA portfolio',
+                    'code' => $createData['code'] ?? null,
+                    'raw_response' => $createData
+                ]);
+            }
+            break;
+
         case 'create_ad':
             $ad = new Ad($config);
             $data = $requestData;
