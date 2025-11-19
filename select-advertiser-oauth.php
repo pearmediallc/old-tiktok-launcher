@@ -267,6 +267,43 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
             100% { transform: scale(1); }
         }
 
+        .card-next-button {
+            display: none;
+            margin-top: 20px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .card-next-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+        }
+
+        .selection-card.selected .card-next-button {
+            display: block;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         .campaign-type-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -552,20 +589,19 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
                                 $details = $advertiser_details[$advertiser_id] ?? null;
                                 $name = $details ? $details['name'] : 'Advertiser Account ' . ($index + 1);
                             ?>
-                                <div class="selection-card" onclick="selectAdvertiser('<?php echo htmlspecialchars($advertiser_id); ?>', this)">
-                                    <div class="check-icon">✓</div>
-                                    <div class="card-icon">📊</div>
-                                    <div class="card-title"><?php echo htmlspecialchars($name); ?></div>
-                                    <div class="card-subtitle">ID: <?php echo htmlspecialchars($advertiser_id); ?></div>
-                                    <div class="card-description">Click to select this account for campaign creation</div>
+                                <div class="selection-card" data-advertiser-id="<?php echo htmlspecialchars($advertiser_id); ?>">
+                                    <div onclick="selectAdvertiser('<?php echo htmlspecialchars($advertiser_id); ?>', this.parentElement)">
+                                        <div class="check-icon">✓</div>
+                                        <div class="card-icon">📊</div>
+                                        <div class="card-title"><?php echo htmlspecialchars($name); ?></div>
+                                        <div class="card-subtitle">ID: <?php echo htmlspecialchars($advertiser_id); ?></div>
+                                        <div class="card-description">Click to select this account for campaign creation</div>
+                                    </div>
+                                    <button class="card-next-button" onclick="goToStep(2); event.stopPropagation();">
+                                        Next: Choose Campaign Type →
+                                    </button>
                                 </div>
                             <?php endforeach; ?>
-                        </div>
-
-                        <div class="button-group">
-                            <button class="btn btn-primary" id="btn-next-1" onclick="goToStep(2)" disabled>
-                                Next: Choose Campaign Type →
-                            </button>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -651,9 +687,6 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
             // Add selection to clicked card
             element.classList.add('selected');
             selectedAdvertiserId = advertiserId;
-
-            // Enable next button
-            document.getElementById('btn-next-1').disabled = false;
 
             console.log('Selected Advertiser ID:', advertiserId);
         }
