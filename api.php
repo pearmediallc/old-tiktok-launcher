@@ -1121,6 +1121,55 @@ try {
             ]);
             break;
 
+        case 'get_portfolio_details':
+            // GET request to fetch specific portfolio details by ID
+            $portfolio_id = $_GET['portfolio_id'] ?? $requestData['portfolio_id'] ?? '';
+
+            if (empty($portfolio_id)) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'portfolio_id is required'
+                ]);
+                break;
+            }
+
+            logToFile("======= Fetching Portfolio Details =======");
+            logToFile("  Advertiser ID: " . $advertiser_id);
+            logToFile("  Portfolio ID: " . $portfolio_id);
+
+            $url = "https://business-api.tiktok.com/open_api/v1.3/creative/portfolio/get/";
+            $params = [
+                'advertiser_id' => $advertiser_id,
+                'creative_portfolio_id' => $portfolio_id
+            ];
+
+            $url .= '?' . http_build_query($params);
+            logToFile("  Request URL: " . $url);
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Access-Token: ' . $config['access_token']
+            ]);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            $responseData = json_decode($response, true);
+
+            logToFile("  HTTP Code: " . $httpCode);
+            logToFile("  Response: " . json_encode($responseData, JSON_PRETTY_PRINT));
+
+            echo json_encode([
+                'success' => $httpCode === 200 && isset($responseData['code']) && $responseData['code'] === 0,
+                'data' => $responseData['data'] ?? null,
+                'message' => $responseData['message'] ?? 'Failed to fetch portfolio details',
+                'code' => $responseData['code'] ?? null,
+                'raw_response' => $responseData
+            ]);
+            break;
+
         case 'get_or_create_frequently_used_cta_portfolio':
             // Check if portfolio already exists for this advertiser, if not create it
             logToFile("======= GET OR CREATE FREQUENTLY USED CTA PORTFOLIO =======");
