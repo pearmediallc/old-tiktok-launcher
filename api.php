@@ -1108,51 +1108,26 @@ try {
             break;
 
         case 'get_cta_portfolios':
-            // GET request to list existing CTA portfolios
-            $page = $_GET['page'] ?? 1;
-            $page_size = $_GET['page_size'] ?? 100;
-
-            logToFile("======= Fetching CTA Portfolio List =======");
+            // Fetch CTA portfolios ONLY from database (portfolios created by this tool)
+            // NO TikTok API call - we only show what's in our database
+            logToFile("======= Fetching CTA Portfolios from Database =======");
             logToFile("  Advertiser ID: " . $advertiser_id);
-            logToFile("  Page: " . $page);
-            logToFile("  Page Size: " . $page_size);
 
-            $url = "https://business-api.tiktok.com/open_api/v1.3/creative/portfolio/list/?advertiser_id=" . $advertiser_id . "&page=" . $page . "&page_size=" . $page_size;
-
-            logToFile("  Request URL: " . $url);
-
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Access-Token: ' . $config['access_token']
-            ]);
-
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            $responseData = json_decode($response, true);
-
-            logToFile("  HTTP Code: " . $httpCode);
-            logToFile("  Response: " . json_encode($responseData, JSON_PRETTY_PRINT));
-
-            // Filter for CTA portfolios only
             $ctaPortfolios = [];
-            if (isset($responseData['data']['portfolios']) && is_array($responseData['data']['portfolios'])) {
-                foreach ($responseData['data']['portfolios'] as $portfolio) {
-                    // Only include CTA type portfolios
-                    if (isset($portfolio['creative_portfolio_type']) && $portfolio['creative_portfolio_type'] === 'CTA') {
-                        $ctaPortfolios[] = $portfolio;
-                    }
-                }
-                logToFile("  CTA Portfolios Found from TikTok API: " . count($ctaPortfolios));
-            }
+            $success = false;
+            $message = 'Failed to fetch portfolios';
 
-            // Get portfolios from database that were created by this tool
             try {
                 $db = Database::getInstance();
+
+                // Fetch all portfolios for this advertiser from database with full content
                 $dbPortfolios = $db->fetchAll(
-                    "SELECT creative_portfolio_id, portfolio_name, portfolio_type, created_at
+                    "SELECT
+                        creative_portfolio_id,
+                        portfolio_name,
+                        portfolio_type,
+                        portfolio_content,
+                        created_at
                      FROM tool_portfolios
                      WHERE advertiser_id = :advertiser_id
                      AND portfolio_type = 'CTA'
@@ -1163,43 +1138,46 @@ try {
 
                 logToFile("  CTA Portfolios Found in Database: " . count($dbPortfolios));
 
-                // Create a map of portfolio IDs from TikTok API for quick lookup
-                $tiktokPortfolioIds = [];
-                foreach ($ctaPortfolios as $portfolio) {
-                    $tiktokPortfolioIds[$portfolio['creative_portfolio_id']] = true;
-                }
-
-                // Add database portfolios that aren't already in the TikTok API response
-                // This ensures we show all portfolios created by the tool, even if they're on different pages
+                // Format portfolios for frontend
                 foreach ($dbPortfolios as $dbPortfolio) {
-                    if (!isset($tiktokPortfolioIds[$dbPortfolio['creative_portfolio_id']])) {
-                        // Portfolio exists in DB but not in current API page
-                        // Add it with a flag to indicate it's from database
-                        $ctaPortfolios[] = [
-                            'creative_portfolio_id' => $dbPortfolio['creative_portfolio_id'],
-                            'portfolio_name' => $dbPortfolio['portfolio_name'],
-                            'creative_portfolio_type' => 'CTA',
-                            'created_by_tool' => true,
-                            'from_database' => true
-                        ];
-                        logToFile("  Added portfolio from DB: " . $dbPortfolio['creative_portfolio_id']);
-                    }
+                    // Decode JSON portfolio_content
+                    $portfolioContent = json_decode($dbPortfolio['portfolio_content'], true);
+
+                    $ctaPortfolios[] = [
+                        'creative_portfolio_id' => $dbPortfolio['creative_portfolio_id'],
+                        'portfolio_id' => $dbPortfolio['creative_portfolio_id'], // Alias for compatibility
+                        'portfolio_name' => $dbPortfolio['portfolio_name'],
+                        'creative_portfolio_type' => 'CTA',
+                        'portfolio_content' => $portfolioContent ?: [], // Array of CTAs
+                        'created_by_tool' => true,
+                        'from_database' => true,
+                        'create_time' => strtotime($dbPortfolio['created_at']) // Unix timestamp
+                    ];
+
+                    logToFile("  Portfolio: " . $dbPortfolio['portfolio_name'] . " (ID: " . $dbPortfolio['creative_portfolio_id'] . ")");
                 }
 
-                logToFile("  Total CTA Portfolios (merged): " . count($ctaPortfolios));
+                $success = true;
+                $message = count($ctaPortfolios) > 0
+                    ? 'Found ' . count($ctaPortfolios) . ' portfolio(s)'
+                    : 'No portfolios found. Create one using "Use Frequently Used CTAs" or "Create New Portfolio".';
+
+                logToFile("  SUCCESS: Returning " . count($ctaPortfolios) . " portfolios from database");
+
             } catch (Exception $e) {
-                logToFile("  Warning: Database query failed: " . $e->getMessage());
-                // Continue with just TikTok API results if database fails
+                logToFile("  ERROR: Database query failed: " . $e->getMessage());
+                $message = 'Database error: ' . $e->getMessage();
+                $success = false;
             }
 
             echo json_encode([
-                'success' => $httpCode === 200 && isset($responseData['code']) && $responseData['code'] === 0,
+                'success' => $success,
                 'data' => [
                     'portfolios' => $ctaPortfolios,
-                    'page_info' => $responseData['data']['page_info'] ?? null
+                    'page_info' => null // No pagination - showing all from database
                 ],
-                'message' => $responseData['message'] ?? 'Failed to fetch portfolios',
-                'code' => $responseData['code'] ?? null
+                'message' => $message,
+                'code' => $success ? 0 : -1
             ]);
             break;
 
