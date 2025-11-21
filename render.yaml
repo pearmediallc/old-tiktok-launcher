@@ -1,13 +1,10 @@
 services:
   - type: web
     name: tiktok-launcher
-    env: php
-    buildCommand: |
-      # Install PostgreSQL PDO driver
-      apt-get update && apt-get install -y php-pgsql
-      # Install composer dependencies
-      cd sdk && composer install || true
-    startCommand: php -S 0.0.0.0:$PORT
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     envVars:
       - key: DB_DRIVER
         value: pgsql
