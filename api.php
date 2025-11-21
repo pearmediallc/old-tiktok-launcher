@@ -34,6 +34,9 @@ if (file_exists(__DIR__ . '/.env')) {
 require_once __DIR__ . '/sdk/vendor/autoload.php';
 require_once __DIR__ . '/state_location_mapping.php';
 
+// Load Database helper
+require_once __DIR__ . '/database/Database.php';
+
 use TikTokAds\Campaign\Campaign;
 use TikTokAds\AdGroup\AdGroup;
 use TikTokAds\Ad\Ad;
@@ -1046,6 +1049,41 @@ try {
                 logToFile("======= SUCCESS: Portfolio created =======");
                 logToFile("  Portfolio ID: " . ($responseData['data']['portfolio_id'] ?? 'NULL'));
                 logToFile("  Creative Portfolio ID: " . ($responseData['data']['creative_portfolio_id'] ?? 'NULL'));
+
+                // Save to database for permanent storage
+                try {
+                    $db = Database::getInstance();
+                    $creative_portfolio_id = $responseData['data']['creative_portfolio_id'] ?? ($responseData['data']['portfolio_id'] ?? null);
+
+                    if ($creative_portfolio_id) {
+                        // Extract portfolio name from content if available
+                        $portfolio_name = $requestData['portfolio_name'] ?? 'CTA Portfolio';
+
+                        $portfolioData = [
+                            'advertiser_id' => $advertiser_id,
+                            'creative_portfolio_id' => $creative_portfolio_id,
+                            'portfolio_name' => $portfolio_name,
+                            'portfolio_type' => 'CTA',
+                            'portfolio_content' => json_encode($portfolio_content),
+                            'created_by_tool' => 1
+                        ];
+
+                        // Use INSERT ... ON DUPLICATE KEY UPDATE to handle re-creation
+                        $sql = "INSERT INTO tool_portfolios
+                                (advertiser_id, creative_portfolio_id, portfolio_name, portfolio_type, portfolio_content, created_by_tool)
+                                VALUES (:advertiser_id, :creative_portfolio_id, :portfolio_name, :portfolio_type, :portfolio_content, :created_by_tool)
+                                ON DUPLICATE KEY UPDATE
+                                portfolio_name = VALUES(portfolio_name),
+                                portfolio_content = VALUES(portfolio_content),
+                                updated_at = CURRENT_TIMESTAMP";
+
+                        $db->query($sql, $portfolioData);
+                        logToFile("✓ Portfolio saved to database (ID: $creative_portfolio_id)");
+                    }
+                } catch (Exception $e) {
+                    logToFile("⚠️  Warning: Failed to save portfolio to database: " . $e->getMessage());
+                    // Don't fail the request if database save fails
+                }
             }
 
             // Better error message
@@ -1107,7 +1145,51 @@ try {
                         $ctaPortfolios[] = $portfolio;
                     }
                 }
-                logToFile("  CTA Portfolios Found: " . count($ctaPortfolios));
+                logToFile("  CTA Portfolios Found from TikTok API: " . count($ctaPortfolios));
+            }
+
+            // Get portfolios from database that were created by this tool
+            try {
+                $db = Database::getInstance();
+                $dbPortfolios = $db->fetchAll(
+                    "SELECT creative_portfolio_id, portfolio_name, portfolio_type, created_at
+                     FROM tool_portfolios
+                     WHERE advertiser_id = :advertiser_id
+                     AND portfolio_type = 'CTA'
+                     AND created_by_tool = 1
+                     ORDER BY created_at DESC",
+                    ['advertiser_id' => $advertiser_id]
+                );
+
+                logToFile("  CTA Portfolios Found in Database: " . count($dbPortfolios));
+
+                // Create a map of portfolio IDs from TikTok API for quick lookup
+                $tiktokPortfolioIds = [];
+                foreach ($ctaPortfolios as $portfolio) {
+                    $tiktokPortfolioIds[$portfolio['creative_portfolio_id']] = true;
+                }
+
+                // Add database portfolios that aren't already in the TikTok API response
+                // This ensures we show all portfolios created by the tool, even if they're on different pages
+                foreach ($dbPortfolios as $dbPortfolio) {
+                    if (!isset($tiktokPortfolioIds[$dbPortfolio['creative_portfolio_id']])) {
+                        // Portfolio exists in DB but not in current API page
+                        // Add it with a flag to indicate it's from database
+                        $ctaPortfolios[] = [
+                            'creative_portfolio_id' => $dbPortfolio['creative_portfolio_id'],
+                            'portfolio_name' => $dbPortfolio['portfolio_name'],
+                            'creative_portfolio_type' => 'CTA',
+                            'created_by_tool' => true,
+                            'from_database' => true
+                        ];
+                        logToFile("  Added portfolio from DB: " . $dbPortfolio['creative_portfolio_id']);
+                    }
+                }
+
+                logToFile("  Total CTA Portfolios (merged): " . count($ctaPortfolios));
+            } catch (Exception $e) {
+                logToFile("  Warning: Database query failed: " . $e->getMessage());
+                // Continue with just TikTok API results if database fails
             }
 
             echo json_encode([
@@ -1175,12 +1257,24 @@ try {
             logToFile("======= GET OR CREATE FREQUENTLY USED CTA PORTFOLIO =======");
             logToFile("  Advertiser ID: " . $advertiser_id);
 
-            // Storage file path
-            $storageFile = __DIR__ . '/database/portfolio_storage.json';
-            $storage = json_decode(file_get_contents($storageFile), true);
+            // Check database for existing frequently used CTA portfolio
+            try {
+                $db = Database::getInstance();
+                $existingPortfolio = $db->fetchOne(
+                    "SELECT creative_portfolio_id, portfolio_name
+                     FROM tool_portfolios
+                     WHERE advertiser_id = :advertiser_id
+                     AND portfolio_name = 'Frequently Used CTAs'
+                     ORDER BY created_at DESC
+                     LIMIT 1",
+                    ['advertiser_id' => $advertiser_id]
+                );
 
-            // Check if we already have a portfolio ID for this advertiser
-            $existingPortfolioId = $storage['portfolios'][$advertiser_id] ?? null;
+                $existingPortfolioId = $existingPortfolio['creative_portfolio_id'] ?? null;
+            } catch (Exception $e) {
+                logToFile("  Warning: Database query failed: " . $e->getMessage());
+                $existingPortfolioId = null;
+            }
 
             if ($existingPortfolioId) {
                 logToFile("  Found existing portfolio ID: " . $existingPortfolioId);
@@ -1287,10 +1381,29 @@ try {
                 $newPortfolioId = $createData['data']['creative_portfolio_id'];
                 logToFile("  SUCCESS: Portfolio created with ID: " . $newPortfolioId);
 
-                // Save portfolio ID to storage
-                $storage['portfolios'][$advertiser_id] = $newPortfolioId;
-                file_put_contents($storageFile, json_encode($storage, JSON_PRETTY_PRINT));
-                logToFile("  Portfolio ID saved to storage");
+                // Save portfolio ID to database
+                try {
+                    $db = Database::getInstance();
+                    $portfolioData = [
+                        'advertiser_id' => $advertiser_id,
+                        'creative_portfolio_id' => $newPortfolioId,
+                        'portfolio_name' => 'Frequently Used CTAs',
+                        'portfolio_type' => 'CTA',
+                        'portfolio_content' => json_encode($frequentlyUsedCTAs),
+                        'created_by_tool' => 1
+                    ];
+
+                    $sql = "INSERT INTO tool_portfolios
+                            (advertiser_id, creative_portfolio_id, portfolio_name, portfolio_type, portfolio_content, created_by_tool)
+                            VALUES (:advertiser_id, :creative_portfolio_id, :portfolio_name, :portfolio_type, :portfolio_content, :created_by_tool)
+                            ON DUPLICATE KEY UPDATE
+                            updated_at = CURRENT_TIMESTAMP";
+
+                    $db->query($sql, $portfolioData);
+                    logToFile("  Portfolio ID saved to database");
+                } catch (Exception $e) {
+                    logToFile("  Warning: Failed to save to database: " . $e->getMessage());
+                }
 
                 echo json_encode([
                     'success' => true,

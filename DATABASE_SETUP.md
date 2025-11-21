@@ -69,6 +69,7 @@ You should see:
 - `tiktok_adgroups` - Synced ad groups
 - `tiktok_metrics` - Performance data
 - `sync_logs` - Sync history
+- `tool_portfolios` - **NEW!** Portfolios created by the launcher
 - `v_active_connections` - View
 - `v_campaign_performance` - View
 
@@ -213,6 +214,39 @@ CREATE TABLE sync_logs (
 );
 ```
 
+### tool_portfolios (NEW!)
+**Stores ALL portfolios created through the TikTok Launcher tool.**
+
+This table ensures portfolios appear in the "existing portfolios" list, even if TikTok API pagination doesn't show them.
+
+```sql
+CREATE TABLE tool_portfolios (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    advertiser_id VARCHAR(255) NOT NULL,           -- TikTok Advertiser ID
+    creative_portfolio_id VARCHAR(255) NOT NULL,   -- Portfolio ID from TikTok API
+    portfolio_name VARCHAR(500),                    -- Name of the portfolio
+    portfolio_type VARCHAR(50) DEFAULT 'CTA',      -- Portfolio type (CTA, etc)
+    portfolio_content JSON,                         -- Full portfolio content data
+    created_by_tool BOOLEAN DEFAULT TRUE,           -- Whether created by launcher
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_portfolio (advertiser_id, creative_portfolio_id),
+    INDEX idx_advertiser_id (advertiser_id)
+);
+```
+
+**Key Features**:
+- **Automatic Storage**: Every portfolio created via the tool is automatically saved
+- **Deduplication**: UNIQUE constraint prevents duplicate entries
+- **Fast Lookups**: Indexed by advertiser_id for quick queries
+- **JSON Storage**: Full portfolio content stored for future reference
+- **Smart Merging**: Database portfolios are merged with TikTok API results when fetching
+
+**How It Works**:
+1. **Portfolio Creation**: When creating a portfolio via `create_cta_portfolio` or "Frequently Used CTAs", it's automatically saved to this table
+2. **Portfolio Retrieval**: When fetching portfolios, backend merges database records with TikTok API results
+3. **Always Visible**: Portfolios created by the tool will always appear in the "existing portfolios" list
+
 ## How OAuth Flow Works with Database
 
 ### 1. User Login
@@ -296,6 +330,62 @@ SELECT
 FROM tiktok_connections
 WHERE connection_status = 'active';
 ```
+
+### 4. Test Portfolio Storage (NEW!)
+
+**Step 1**: Create a portfolio through the tool
+- Login to TikTok Launcher
+- Complete OAuth flow and select an advertiser
+- Navigate to Ad creation
+- Click "Create New Portfolio" under Dynamic CTA
+- Add some CTAs and create the portfolio
+
+**Step 2**: Verify portfolio is stored in database
+```sql
+SELECT
+    advertiser_id,
+    creative_portfolio_id,
+    portfolio_name,
+    portfolio_type,
+    created_by_tool,
+    created_at
+FROM tool_portfolios
+ORDER BY created_at DESC
+LIMIT 5;
+```
+
+**Step 3**: Test "Frequently Used CTAs" feature
+- Click "Use Frequently Used CTAs" button
+- Should create portfolio with 5 predefined CTAs
+
+**Step 4**: Check frequently used CTA portfolio
+```sql
+SELECT
+    advertiser_id,
+    creative_portfolio_id,
+    portfolio_name,
+    JSON_LENGTH(portfolio_content) as cta_count,
+    created_at
+FROM tool_portfolios
+WHERE portfolio_name = 'Frequently Used CTAs';
+```
+
+**Step 5**: Verify portfolios appear in existing list
+- Click "Use Existing Portfolio"
+- You should see ALL portfolios you created, including:
+  - Custom portfolios from "Create New Portfolio"
+  - "Frequently Used CTAs" portfolio
+  - Portfolios are merged from both database and TikTok API
+
+**Step 6**: Check database logs
+```bash
+tail -f tiktok_launcher.log | grep -i portfolio
+```
+
+You should see:
+- `✓ Portfolio saved to database (ID: ...)`
+- `CTA Portfolios Found in Database: N`
+- `Total CTA Portfolios (merged): N`
 
 ## Manual Database Setup (Alternative)
 

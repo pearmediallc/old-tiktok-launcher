@@ -199,3 +199,25 @@ SELECT
 FROM tiktok_campaigns c
 LEFT JOIN tiktok_metrics m ON c.campaign_id = m.campaign_id AND c.connection_id = m.connection_id
 GROUP BY c.connection_id, c.campaign_id, c.campaign_name, c.objective_type, c.operation_status, c.budget;
+
+-- ============================================
+-- Table 7: Tool-Created Portfolios
+-- ============================================
+-- This table stores ALL portfolios created through the TikTok Launcher tool
+-- Purpose: Track portfolios so they appear in "existing portfolios" list
+CREATE TABLE IF NOT EXISTS tool_portfolios (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    advertiser_id VARCHAR(255) NOT NULL COMMENT 'TikTok Advertiser ID',
+    creative_portfolio_id VARCHAR(255) NOT NULL COMMENT 'Portfolio ID from TikTok API',
+    portfolio_name VARCHAR(500) COMMENT 'Name of the portfolio',
+    portfolio_type VARCHAR(50) DEFAULT 'CTA' COMMENT 'Portfolio type (CTA, etc)',
+    portfolio_content JSON COMMENT 'Full portfolio content data',
+    created_by_tool BOOLEAN DEFAULT TRUE COMMENT 'Whether this was created by the launcher',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_portfolio (advertiser_id, creative_portfolio_id),
+    INDEX idx_advertiser_id (advertiser_id),
+    INDEX idx_portfolio_id (creative_portfolio_id),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Stores all portfolios created through TikTok Launcher for easy retrieval';
