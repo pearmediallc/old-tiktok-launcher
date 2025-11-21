@@ -1123,7 +1123,7 @@ try {
                      FROM tool_portfolios
                      WHERE advertiser_id = :advertiser_id
                      AND portfolio_type = 'CTA'
-                     AND created_by_tool = 1
+                     AND created_by_tool = TRUE
                      ORDER BY created_at DESC",
                     ['advertiser_id' => $advertiser_id]
                 );
