@@ -1426,39 +1426,61 @@ async function loadExistingPortfolios(adIndex) {
             }
 
             // Display the existing portfolios as a selection list
-            let html = '<div style="padding: 15px; background: #e8f5e9; border: 1px solid #4caf50; border-radius: 8px; margin-bottom: 10px;">';
-            html += '<p style="margin: 0 0 10px 0; font-weight: 600; color: #2e7d32;">✅ API Response</p>';
-            html += '<div style="background: white; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 12px; max-height: 150px; overflow-y: auto;">';
-            html += '<pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word;">' + JSON.stringify(result, null, 2) + '</pre>';
-            html += '</div>';
-            html += '</div>';
-
-            html += '<div style="margin-bottom: 15px; padding: 15px; background: #f0f4ff; border-radius: 8px; border: 1px solid #667eea;">';
-            html += '<p style="margin: 0 0 12px 0; font-weight: 600; color: #333;">📋 Select an Existing CTA Portfolio:</p>';
-            html += '<div style="background: white; padding: 12px; border-radius: 6px;">';
+            let html = '<div style="margin-bottom: 15px; padding: 15px; background: #f0f4ff; border-radius: 8px; border: 2px solid #667eea;">';
+            html += '<p style="margin: 0 0 12px 0; font-weight: 600; color: #333; font-size: 16px;">📋 Select an Existing CTA Portfolio</p>';
+            html += `<p style="margin: 0 0 15px 0; font-size: 13px; color: #666;">Found ${portfolios.length} portfolio${portfolios.length > 1 ? 's' : ''}. Click to select one for your ad.</p>`;
+            html += '<div style="background: white; padding: 12px; border-radius: 6px; max-height: 500px; overflow-y: auto;">';
 
             portfolios.forEach((portfolio, idx) => {
                 const portfolioId = portfolio.creative_portfolio_id || portfolio.portfolio_id || 'N/A';
                 const createdTime = portfolio.create_time ? new Date(portfolio.create_time * 1000).toLocaleDateString() : 'N/A';
                 const portfolioName = portfolio.portfolio_name || `Portfolio ${portfolioId}`;
+                const isFromTool = portfolio.created_by_tool || portfolio.from_database;
+                const isFrequentlyUsed = portfolioName === 'Frequently Used CTAs';
 
-                html += `<div style="padding: 12px; margin-bottom: 10px; border: 2px solid #e0e0e0; border-radius: 6px; cursor: pointer; transition: all 0.2s;"
-                         onclick="selectExistingPortfolio(${adIndex}, '${portfolioId}', this)"
-                         onmouseover="this.style.borderColor='#667eea'; this.style.background='#f8f9ff';"
-                         onmouseout="this.style.borderColor='#e0e0e0'; this.style.background='white';">`;
-                html += `<div style="font-weight: 600; color: #333; font-size: 14px; margin-bottom: 6px;">${portfolioName}</div>`;
-                html += `<div style="font-size: 12px; color: #666; margin-bottom: 4px;"><strong>Portfolio ID:</strong> ${portfolioId}</div>`;
-                html += `<div style="font-size: 12px; color: #666;"><strong>Created:</strong> ${createdTime}</div>`;
+                // Card styling based on portfolio type
+                let cardIcon = '📋';
+                let cardBadge = '';
+                if (isFrequentlyUsed) {
+                    cardIcon = '⚡';
+                    cardBadge = '<span style="display: inline-block; padding: 2px 8px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-radius: 12px; font-size: 10px; font-weight: 600; margin-left: 8px;">FREQUENTLY USED</span>';
+                } else if (isFromTool) {
+                    cardIcon = '✨';
+                    cardBadge = '<span style="display: inline-block; padding: 2px 8px; background: #4caf50; color: white; border-radius: 12px; font-size: 10px; font-weight: 600; margin-left: 8px;">CREATED BY TOOL</span>';
+                }
+
+                html += `<div class="portfolio-card" data-portfolio-id="${portfolioId}" style="padding: 15px; margin-bottom: 12px; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer; transition: all 0.2s; background: white;"
+                         onclick="selectExistingPortfolioWithDetails(${adIndex}, '${portfolioId}', this)"
+                         onmouseover="this.style.borderColor='#667eea'; this.style.background='#f8f9ff'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.2)';"
+                         onmouseout="this.style.borderColor='#e0e0e0'; this.style.background='white'; this.style.transform='translateY(0)'; this.style.boxShadow='none';">`;
+
+                html += `<div style="display: flex; align-items: center; margin-bottom: 8px;">`;
+                html += `<div style="font-size: 24px; margin-right: 10px;">${cardIcon}</div>`;
+                html += `<div style="flex: 1;">`;
+                html += `<div style="font-weight: 600; color: #333; font-size: 15px;">${portfolioName}${cardBadge}</div>`;
+                html += `<div style="font-size: 11px; color: #999; margin-top: 2px;">ID: ${portfolioId}</div>`;
+                html += `</div>`;
+                html += `</div>`;
 
                 // Show portfolio content if available
                 if (portfolio.portfolio_content && portfolio.portfolio_content.length > 0) {
-                    html += `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e0e0e0;">`;
-                    html += `<div style="font-size: 11px; color: #888; margin-bottom: 4px;">CTAs in this portfolio:</div>`;
+                    html += `<div style="margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid #667eea;">`;
+                    html += `<div style="font-size: 11px; color: #666; font-weight: 600; margin-bottom: 6px;">📝 ${portfolio.portfolio_content.length} CTA${portfolio.portfolio_content.length > 1 ? 's' : ''} in this portfolio:</div>`;
+                    html += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-top: 6px;">`;
                     portfolio.portfolio_content.forEach(cta => {
                         if (cta.asset_content) {
-                            html += `<div style="font-size: 11px; color: #667eea; margin-left: 8px;">• "${cta.asset_content}"</div>`;
+                            const assetCount = cta.asset_ids ? cta.asset_ids.length : 0;
+                            html += `<div style="padding: 6px 10px; background: white; border-radius: 4px; border: 1px solid #e0e0e0;">`;
+                            html += `<div style="font-size: 12px; font-weight: 600; color: #667eea;">\"${cta.asset_content}\"</div>`;
+                            html += `<div style="font-size: 10px; color: #999; margin-top: 2px;">${assetCount} asset${assetCount !== 1 ? 's' : ''}</div>`;
+                            html += `</div>`;
                         }
                     });
+                    html += `</div>`;
+                    html += `</div>`;
+                } else {
+                    html += `<div style="margin-top: 8px; padding: 8px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">`;
+                    html += `<div style="font-size: 11px; color: #856404;">ℹ️ Click to load portfolio details</div>`;
                     html += `</div>`;
                 }
 
@@ -1635,9 +1657,9 @@ async function useFrequentlyUsedCTAs(adIndex) {
     console.log('=== Use Frequently Used CTAs Complete ===');
 }
 
-// Select an existing portfolio and store its ID
-function selectExistingPortfolio(adIndex, portfolioId, element) {
-    console.log('=== Select Existing Portfolio ===');
+// Select an existing portfolio with details - enhanced version
+async function selectExistingPortfolioWithDetails(adIndex, portfolioId, element) {
+    console.log('=== Select Existing Portfolio With Details ===');
     console.log('Ad Index:', adIndex);
     console.log('Portfolio ID:', portfolioId);
 
@@ -1656,21 +1678,85 @@ function selectExistingPortfolio(adIndex, portfolioId, element) {
     element.style.background = '#f1f8f4';
     element.style.borderWidth = '3px';
 
-    // Show success message
-    const existingContainer = document.getElementById(`existing-portfolios-${adIndex}`);
-    let successMsg = document.getElementById(`portfolio-success-${adIndex}`);
+    // Fetch portfolio details to show what CTAs will be used
+    try {
+        const response = await fetch(`api.php?action=get_portfolio_details&portfolio_id=${portfolioId}`);
+        const result = await response.json();
 
-    if (!successMsg) {
-        successMsg = document.createElement('div');
-        successMsg.id = `portfolio-success-${adIndex}`;
-        successMsg.style.cssText = 'margin-top: 15px; padding: 12px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 6px; color: #155724;';
-        existingContainer.appendChild(successMsg);
+        console.log('Portfolio Details:', result);
+
+        // Show success message with portfolio details
+        const existingContainer = document.getElementById(`existing-portfolios-${adIndex}`);
+        let successMsg = document.getElementById(`portfolio-success-${adIndex}`);
+
+        if (!successMsg) {
+            successMsg = document.createElement('div');
+            successMsg.id = `portfolio-success-${adIndex}`;
+            existingContainer.appendChild(successMsg);
+        }
+
+        let html = '<div style="margin-top: 15px; padding: 15px; background: linear-gradient(135deg, #d4edda, #c3e6cb); border: 2px solid #28a745; border-radius: 8px; box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2);">';
+        html += '<div style="display: flex; align-items: center; margin-bottom: 12px;">';
+        html += '<div style="font-size: 24px; margin-right: 10px;">✅</div>';
+        html += '<div><div style="font-weight: 600; color: #155724; font-size: 16px;">Portfolio Selected Successfully!</div>';
+        html += `<div style="font-size: 12px; color: #155724; margin-top: 2px;">Portfolio ID: ${portfolioId}</div></div>`;
+        html += '</div>';
+
+        if (result.success && result.data && result.data.portfolio_content) {
+            const content = result.data.portfolio_content;
+            const portfolioName = result.data.portfolio_name || 'Selected Portfolio';
+
+            html += '<div style="background: white; padding: 12px; border-radius: 6px; margin-top: 10px;">';
+            html += `<div style="font-size: 13px; font-weight: 600; color: #333; margin-bottom: 8px;">📝 ${portfolioName}</div>`;
+            html += `<div style="font-size: 12px; color: #666; margin-bottom: 10px;">This ad will use the following ${content.length} CTA${content.length > 1 ? 's' : ''}:</div>`;
+
+            html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">';
+            content.forEach((cta, idx) => {
+                if (cta.asset_content) {
+                    const assetCount = cta.asset_ids ? cta.asset_ids.length : 0;
+                    html += '<div style="padding: 10px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid #667eea;">';
+                    html += `<div style="font-size: 13px; font-weight: 600; color: #667eea; margin-bottom: 4px;">${idx + 1}. "${cta.asset_content}"</div>`;
+                    html += `<div style="font-size: 11px; color: #999;">Asset IDs: ${assetCount}</div>`;
+                    if (cta.asset_ids && cta.asset_ids.length > 0) {
+                        html += `<div style="font-size: 10px; color: #999; margin-top: 2px;">${cta.asset_ids.slice(0, 2).join(', ')}${cta.asset_ids.length > 2 ? '...' : ''}</div>`;
+                    }
+                    html += '</div>';
+                }
+            });
+            html += '</div>';
+            html += '</div>';
+        } else {
+            html += '<div style="background: white; padding: 10px; border-radius: 6px; margin-top: 10px; font-size: 12px; color: #666;">';
+            html += `✓ Portfolio ${portfolioId} has been selected and will be used for your ad.`;
+            html += '</div>';
+        }
+
+        html += '</div>';
+        successMsg.innerHTML = html;
+
+        console.log('Portfolio selected and details loaded');
+        showToast('Portfolio selected successfully', 'success');
+    } catch (error) {
+        console.error('Error fetching portfolio details:', error);
+
+        // Still show success message even if details fetch fails
+        const existingContainer = document.getElementById(`existing-portfolios-${adIndex}`);
+        let successMsg = document.getElementById(`portfolio-success-${adIndex}`);
+
+        if (!successMsg) {
+            successMsg = document.createElement('div');
+            successMsg.id = `portfolio-success-${adIndex}`;
+            existingContainer.appendChild(successMsg);
+        }
+
+        successMsg.innerHTML = `<div style="margin-top: 15px; padding: 12px; background: #d4edda; border: 2px solid #28a745; border-radius: 6px;"><strong style="color: #155724;">✓ Selected Portfolio ID:</strong> <span style="color: #155724;">${portfolioId}</span></div>`;
+        showToast('Portfolio selected successfully', 'success');
     }
+}
 
-    successMsg.innerHTML = `<strong>✓ Selected Portfolio ID:</strong> ${portfolioId}`;
-
-    console.log('Portfolio selected successfully');
-    showToast('Portfolio selected successfully', 'success');
+// Legacy function for backward compatibility
+function selectExistingPortfolio(adIndex, portfolioId, element) {
+    selectExistingPortfolioWithDetails(adIndex, portfolioId, element);
 }
 
 // Create CTA portfolio from dynamic CTAs
