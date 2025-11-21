@@ -2,9 +2,17 @@ services:
   - type: web
     name: tiktok-launcher
     env: php
-    buildCommand: cd sdk && composer install
+    buildCommand: |
+      # Install PostgreSQL PDO driver
+      apt-get update && apt-get install -y php-pgsql
+      # Install composer dependencies
+      cd sdk && composer install || true
     startCommand: php -S 0.0.0.0:$PORT
     envVars:
+      - key: DB_DRIVER
+        value: pgsql
+      - key: DB_URL
+        sync: false
       - key: AUTH_USERNAME
         sync: false
       - key: AUTH_PASSWORD
@@ -12,4 +20,10 @@ services:
       - key: TIKTOK_ACCESS_TOKEN
         sync: false
       - key: TIKTOK_ADVERTISER_ID
+        sync: false
+      - key: TIKTOK_APP_ID
+        sync: false
+      - key: TIKTOK_APP_SECRET
+        sync: false
+      - key: OAUTH_REDIRECT_URI
         sync: false
