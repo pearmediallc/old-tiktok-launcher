@@ -1068,16 +1068,8 @@ try {
                             'created_by_tool' => 1
                         ];
 
-                        // Use INSERT ... ON DUPLICATE KEY UPDATE to handle re-creation
-                        $sql = "INSERT INTO tool_portfolios
-                                (advertiser_id, creative_portfolio_id, portfolio_name, portfolio_type, portfolio_content, created_by_tool)
-                                VALUES (:advertiser_id, :creative_portfolio_id, :portfolio_name, :portfolio_type, :portfolio_content, :created_by_tool)
-                                ON DUPLICATE KEY UPDATE
-                                portfolio_name = VALUES(portfolio_name),
-                                portfolio_content = VALUES(portfolio_content),
-                                updated_at = CURRENT_TIMESTAMP";
-
-                        $db->query($sql, $portfolioData);
+                        // Use database-agnostic upsert (works with both MySQL and PostgreSQL)
+                        $db->upsert('tool_portfolios', $portfolioData, ['advertiser_id', 'creative_portfolio_id']);
                         logToFile("✓ Portfolio saved to database (ID: $creative_portfolio_id)");
                     }
                 } catch (Exception $e) {
@@ -1371,13 +1363,8 @@ try {
                         'created_by_tool' => 1
                     ];
 
-                    $sql = "INSERT INTO tool_portfolios
-                            (advertiser_id, creative_portfolio_id, portfolio_name, portfolio_type, portfolio_content, created_by_tool)
-                            VALUES (:advertiser_id, :creative_portfolio_id, :portfolio_name, :portfolio_type, :portfolio_content, :created_by_tool)
-                            ON DUPLICATE KEY UPDATE
-                            updated_at = CURRENT_TIMESTAMP";
-
-                    $db->query($sql, $portfolioData);
+                    // Use database-agnostic upsert (works with both MySQL and PostgreSQL)
+                    $db->upsert('tool_portfolios', $portfolioData, ['advertiser_id', 'creative_portfolio_id']);
                     logToFile("  Portfolio ID saved to database");
                 } catch (Exception $e) {
                     logToFile("  Warning: Failed to save to database: " . $e->getMessage());

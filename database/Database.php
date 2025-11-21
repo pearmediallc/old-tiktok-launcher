@@ -37,13 +37,34 @@ class Database {
             }
         }
 
-        $host = $_ENV['DB_HOST'] ?? 'localhost';
-        $dbname = $_ENV['DB_NAME'] ?? 'tiktok_launcher';
-        $username = $_ENV['DB_USER'] ?? 'root';
-        $password = $_ENV['DB_PASSWORD'] ?? '';
-        $charset = 'utf8mb4';
+        $driver = $_ENV['DB_DRIVER'] ?? 'mysql'; // 'mysql' or 'pgsql'
 
-        $dsn = "mysql:host=$host;dbname=$dbname;charset=$charset";
+        // Check if DATABASE_URL is provided (Render.com style)
+        if (!empty($_ENV['DB_URL'])) {
+            // Parse the DATABASE_URL
+            $dbUrl = parse_url($_ENV['DB_URL']);
+            $host = $dbUrl['host'] ?? 'localhost';
+            $port = $dbUrl['port'] ?? 5432;  // Default PostgreSQL port
+            $dbname = ltrim($dbUrl['path'] ?? '/tiktok_launcher', '/');
+            $username = $dbUrl['user'] ?? 'root';
+            $password = $dbUrl['pass'] ?? '';
+        } else {
+            // Use individual environment variables
+            $host = $_ENV['DB_HOST'] ?? 'localhost';
+            $dbname = $_ENV['DB_NAME'] ?? 'tiktok_launcher';
+            $username = $_ENV['DB_USER'] ?? 'root';
+            $password = $_ENV['DB_PASSWORD'] ?? '';
+            $port = $_ENV['DB_PORT'] ?? '3306';
+        }
+
+        // Build DSN based on database driver
+        if ($driver === 'pgsql') {
+            $dsn = "pgsql:host=$host;port=$port;dbname=$dbname;sslmode=require";
+        } else {
+            $charset = 'utf8mb4';
+            $dsn = "mysql:host=$host;dbname=$dbname;charset=$charset";
+        }
+
         $options = [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -166,5 +187,48 @@ class Database {
      */
     public function __wakeup() {
         throw new Exception("Cannot unserialize singleton");
+    }
+
+    /**
+     * Database-agnostic upsert (insert or update)
+     * Works with both MySQL and PostgreSQL
+     */
+    public function upsert($table, $data, $uniqueColumns) {
+        $driver = $_ENV['DB_DRIVER'] ?? 'mysql';
+
+        $keys = array_keys($data);
+        $fields = implode(', ', $keys);
+        $placeholders = ':' . implode(', :', $keys);
+
+        if ($driver === 'pgsql') {
+            // PostgreSQL: INSERT ... ON CONFLICT ... DO UPDATE
+            $conflictColumns = implode(', ', $uniqueColumns);
+            $updateSet = [];
+            foreach ($keys as $key) {
+                if (!in_array($key, $uniqueColumns)) {
+                    $updateSet[] = "$key = EXCLUDED.$key";
+                }
+            }
+            $updateSet[] = "updated_at = CURRENT_TIMESTAMP";
+            $updateClause = implode(', ', $updateSet);
+
+            $sql = "INSERT INTO $table ($fields) VALUES ($placeholders)
+                    ON CONFLICT ($conflictColumns) DO UPDATE SET $updateClause";
+        } else {
+            // MySQL: INSERT ... ON DUPLICATE KEY UPDATE
+            $updateSet = [];
+            foreach ($keys as $key) {
+                if (!in_array($key, $uniqueColumns)) {
+                    $updateSet[] = "$key = VALUES($key)";
+                }
+            }
+            $updateSet[] = "updated_at = CURRENT_TIMESTAMP";
+            $updateClause = implode(', ', $updateSet);
+
+            $sql = "INSERT INTO $table ($fields) VALUES ($placeholders)
+                    ON DUPLICATE KEY UPDATE $updateClause";
+        }
+
+        return $this->query($sql, $data);
     }
 }
