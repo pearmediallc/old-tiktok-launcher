@@ -37,24 +37,26 @@ class Database {
             }
         }
 
-        $driver = $_ENV['DB_DRIVER'] ?? 'mysql'; // 'mysql' or 'pgsql'
+        // Get environment variables (Render uses getenv(), local uses $_ENV)
+        $driver = getenv('DB_DRIVER') ?: ($_ENV['DB_DRIVER'] ?? 'mysql');
+        $dbUrl = getenv('DB_URL') ?: ($_ENV['DB_URL'] ?? '');
 
         // Check if DATABASE_URL is provided (Render.com style)
-        if (!empty($_ENV['DB_URL'])) {
+        if (!empty($dbUrl)) {
             // Parse the DATABASE_URL
-            $dbUrl = parse_url($_ENV['DB_URL']);
-            $host = $dbUrl['host'] ?? 'localhost';
-            $port = $dbUrl['port'] ?? 5432;  // Default PostgreSQL port
-            $dbname = ltrim($dbUrl['path'] ?? '/tiktok_launcher', '/');
-            $username = $dbUrl['user'] ?? 'root';
-            $password = $dbUrl['pass'] ?? '';
+            $parsed = parse_url($dbUrl);
+            $host = $parsed['host'] ?? 'localhost';
+            $port = $parsed['port'] ?? 5432;  // Default PostgreSQL port
+            $dbname = ltrim($parsed['path'] ?? '/tiktok_launcher', '/');
+            $username = $parsed['user'] ?? 'root';
+            $password = $parsed['pass'] ?? '';
         } else {
             // Use individual environment variables
-            $host = $_ENV['DB_HOST'] ?? 'localhost';
-            $dbname = $_ENV['DB_NAME'] ?? 'tiktok_launcher';
-            $username = $_ENV['DB_USER'] ?? 'root';
-            $password = $_ENV['DB_PASSWORD'] ?? '';
-            $port = $_ENV['DB_PORT'] ?? '3306';
+            $host = getenv('DB_HOST') ?: ($_ENV['DB_HOST'] ?? 'localhost');
+            $dbname = getenv('DB_NAME') ?: ($_ENV['DB_NAME'] ?? 'tiktok_launcher');
+            $username = getenv('DB_USER') ?: ($_ENV['DB_USER'] ?? 'root');
+            $password = getenv('DB_PASSWORD') ?: ($_ENV['DB_PASSWORD'] ?? '');
+            $port = getenv('DB_PORT') ?: ($_ENV['DB_PORT'] ?? '3306');
         }
 
         // Build DSN based on database driver
@@ -194,7 +196,7 @@ class Database {
      * Works with both MySQL and PostgreSQL
      */
     public function upsert($table, $data, $uniqueColumns) {
-        $driver = $_ENV['DB_DRIVER'] ?? 'mysql';
+        $driver = getenv('DB_DRIVER') ?: ($_ENV['DB_DRIVER'] ?? 'mysql');
 
         $keys = array_keys($data);
         $fields = implode(', ', $keys);
