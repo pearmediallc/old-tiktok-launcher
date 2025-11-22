@@ -1364,7 +1364,7 @@ async function selectDirectCTA(adIndex, ctaText, assetId) {
     try {
         const portfolioName = `CTA_${ctaText.replace(/\s+/g, '_')}_${Date.now()}`;
 
-        // Create portfolio via API
+        // Create portfolio via API with correct portfolio_content structure
         const response = await fetch('api.php?action=create_cta_portfolio', {
             method: 'POST',
             headers: {
@@ -1372,7 +1372,12 @@ async function selectDirectCTA(adIndex, ctaText, assetId) {
             },
             body: JSON.stringify({
                 portfolio_name: portfolioName,
-                cta_ids: [assetId]
+                portfolio_content: [
+                    {
+                        asset_content: ctaText,
+                        asset_ids: [assetId]
+                    }
+                ]
             })
         });
 
