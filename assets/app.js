@@ -1102,63 +1102,68 @@ function addAdForm(index, duplicateFrom = null) {
 
             <div id="dynamic-cta-section-${index}" style="display: none;">
                 <div class="form-group">
-                    <label>Content Type or Select CTA Directly</label>
-                    <select id="cta-content-type-${index}" onchange="handleContentTypeChange(${index})">
-                        <option value="">Select content type or CTA...</option>
-                        <optgroup label="Content Types">
+                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Choose How to Create CTA Portfolio:</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                        <button type="button" class="btn-secondary" onclick="showContentTypeOption(${index})" style="padding: 15px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 8px; font-weight: 600;">
+                            📝 Choose Content Type
+                        </button>
+                        <button type="button" class="btn-secondary" onclick="showCTAListOption(${index})" style="padding: 15px; background: linear-gradient(135deg, #f093fb, #f5576c); color: white; border: none; border-radius: 8px; font-weight: 600;">
+                            🎯 Select from CTA List
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Content Type Selection Flow -->
+                <div id="content-type-flow-${index}" style="display: none;">
+                    <div class="form-group">
+                        <label>Select Content Type</label>
+                        <select id="cta-content-type-${index}">
+                            <option value="">Choose content type...</option>
                             <option value="LANDING_PAGE">Landing Page</option>
                             <option value="APP_DOWNLOAD">App Download</option>
                             <option value="OTHER">Other</option>
                             <option value="MESSAGE">Message</option>
                             <option value="PHONE_CALL">Phone Call</option>
-                        </optgroup>
-                        <optgroup label="Select CTA Directly">
-                            <option value="CTA:Learn more">Learn more</option>
-                            <option value="CTA:Apply now">Apply now</option>
-                            <option value="CTA:Check if you qualify">Check if you qualify</option>
-                            <option value="CTA:Check eligibility now">Check eligibility now</option>
-                            <option value="CTA:Request a quote today">Request a quote today</option>
-                            <option value="CTA:Join today">Join today</option>
-                            <option value="CTA:Read more">Read more</option>
-                            <option value="CTA:View now">View now</option>
-                            <option value="CTA:Check it out">Check it out</option>
-                            <option value="CTA:Get it today">Get it today</option>
-                            <option value="CTA:Download now">Download now</option>
-                            <option value="CTA:Download app now">Download app now</option>
-                            <option value="CTA:Install app">Install app</option>
-                            <option value="CTA:Download today">Download today</option>
-                            <option value="CTA:Try it now">Try it now</option>
-                            <option value="CTA:Install it now">Install it now</option>
-                            <option value="CTA:Download app">Download app</option>
-                            <option value="CTA:Try it today">Try it today</option>
-                            <option value="CTA:Experience now">Experience now</option>
-                            <option value="CTA:Interested">Interested</option>
-                        </optgroup>
-                    </select>
-                </div>
+                        </select>
+                    </div>
 
-                <div class="form-group" id="portfolio-option-section-${index}">
-                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Choose Portfolio Option:</label>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
-                        <button type="button" class="btn-secondary" onclick="loadExistingPortfolios(${index})" style="flex: 1;">
-                            📋 Use Existing Portfolio
-                        </button>
-                        <button type="button" class="btn-secondary" onclick="useFrequentlyUsedCTAs(${index})" style="flex: 1; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none;">
-                            ⚡ Use Frequently Used CTAs
-                        </button>
-                        <button type="button" class="btn-secondary" onclick="loadDynamicCTAs(${index})" style="flex: 1;">
-                            ✨ Create New Portfolio
-                        </button>
+                    <div class="form-group" id="portfolio-option-section-${index}" style="display: none;">
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Choose Portfolio Option:</label>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                            <button type="button" class="btn-secondary" onclick="loadExistingPortfolios(${index})">
+                                📋 Use Existing Portfolio
+                            </button>
+                            <button type="button" class="btn-secondary" onclick="useFrequentlyUsedCTAs(${index})" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none;">
+                                ⚡ Use Frequently Used CTAs
+                            </button>
+                            <button type="button" class="btn-secondary" onclick="loadDynamicCTAs(${index})">
+                                ✨ Create New Portfolio
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="existing-portfolios-${index}" style="margin-top: 10px; display: none;">
+                        <!-- Existing portfolios will be loaded here -->
+                    </div>
+
+                    <div id="dynamic-cta-list-${index}" style="margin-top: 10px;">
+                        <!-- Dynamic CTAs will be loaded here -->
                     </div>
                 </div>
 
-                <div id="existing-portfolios-${index}" style="margin-top: 10px; display: none;">
-                    <!-- Existing portfolios will be loaded here -->
+                <!-- Direct CTA Selection Flow -->
+                <div id="cta-list-flow-${index}" style="display: none;">
+                    <div class="form-group">
+                        <label style="font-weight: 600; margin-bottom: 15px; display: block; color: #f5576c;">Select a CTA to Create Portfolio & Ad</label>
+                        <div id="cta-selection-grid-${index}" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+                            <!-- CTAs will be populated here -->
+                        </div>
+                    </div>
+                    <div id="cta-selection-result-${index}" style="margin-top: 15px;">
+                        <!-- Result message will appear here -->
+                    </div>
                 </div>
 
-                <div id="dynamic-cta-list-${index}" style="margin-top: 10px;">
-                    <!-- Dynamic CTAs will be loaded here -->
-                </div>
                 <input type="hidden" id="dynamic-cta-portfolio-${index}">
             </div>
         </div>
@@ -1292,59 +1297,62 @@ const CTA_ASSET_MAPPING = {
     "Interested": "1821962939206657"
 };
 
-// Handle content type or direct CTA selection
-async function handleContentTypeChange(adIndex) {
+// Show Content Type option (traditional flow)
+function showContentTypeOption(adIndex) {
+    const contentTypeFlow = document.getElementById(`content-type-flow-${adIndex}`);
+    const ctaListFlow = document.getElementById(`cta-list-flow-${adIndex}`);
+
+    contentTypeFlow.style.display = 'block';
+    ctaListFlow.style.display = 'none';
+
+    // Add event listener to content type dropdown
     const selectElement = document.getElementById(`cta-content-type-${adIndex}`);
-    const selectedValue = selectElement.value;
-    const portfolioOptionsDiv = document.getElementById(`portfolio-option-section-${adIndex}`);
-    const dynamicSection = document.getElementById(`dynamic-cta-section-${adIndex}`);
-    const existingContainer = document.getElementById(`existing-portfolios-${adIndex}`);
-
-    console.log('=== Content Type/CTA Change ===');
-    console.log('Ad Index:', adIndex);
-    console.log('Selected Value:', selectedValue);
-
-    // Reset sections
-    dynamicSection.style.display = 'none';
-    existingContainer.style.display = 'none';
-
-    // Check if user selected a direct CTA (value starts with "CTA:")
-    if (selectedValue.startsWith('CTA:')) {
-        const ctaText = selectedValue.replace('CTA:', '');
-        const assetId = CTA_ASSET_MAPPING[ctaText];
-
-        console.log('Direct CTA selected:', ctaText);
-        console.log('Asset ID:', assetId);
-
-        if (!assetId) {
-            showToast('CTA asset ID not found', 'error');
-            return;
+    selectElement.onchange = function() {
+        const portfolioOptionsDiv = document.getElementById(`portfolio-option-section-${adIndex}`);
+        if (this.value) {
+            portfolioOptionsDiv.style.display = 'block';
+        } else {
+            portfolioOptionsDiv.style.display = 'none';
         }
-
-        // Hide portfolio options since we're auto-creating
-        portfolioOptionsDiv.style.display = 'none';
-
-        // Auto-create portfolio with selected CTA
-        await createPortfolioFromDirectCTA(adIndex, ctaText, assetId);
-
-    } else if (selectedValue) {
-        // Normal content type selected - show portfolio options
-        portfolioOptionsDiv.style.display = 'block';
-    } else {
-        // No selection - hide portfolio options
-        portfolioOptionsDiv.style.display = 'none';
-    }
+    };
 }
 
-// Create portfolio directly from selected CTA
-async function createPortfolioFromDirectCTA(adIndex, ctaText, assetId) {
-    const dynamicSection = document.getElementById(`dynamic-cta-section-${adIndex}`);
+// Show CTA List option (direct CTA selection)
+function showCTAListOption(adIndex) {
+    const contentTypeFlow = document.getElementById(`content-type-flow-${adIndex}`);
+    const ctaListFlow = document.getElementById(`cta-list-flow-${adIndex}`);
 
-    // Show loading message
-    dynamicSection.style.display = 'block';
-    dynamicSection.innerHTML = `
-        <div style="padding: 15px; background: #e3f2fd; border: 1px solid #2196f3; border-radius: 8px; margin-top: 10px;">
-            <p style="margin: 0 0 10px 0; font-weight: 600; color: #1565c0;">🎯 Creating Portfolio with Selected CTA</p>
+    contentTypeFlow.style.display = 'none';
+    ctaListFlow.style.display = 'block';
+
+    // Populate CTA grid
+    const ctaGrid = document.getElementById(`cta-selection-grid-${adIndex}`);
+    const ctas = Object.keys(CTA_ASSET_MAPPING);
+
+    let gridHTML = '';
+    ctas.forEach(ctaText => {
+        gridHTML += `
+            <button type="button"
+                    onclick="selectDirectCTA(${adIndex}, '${ctaText}', '${CTA_ASSET_MAPPING[ctaText]}')"
+                    style="padding: 12px 15px; background: white; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s ease; text-align: left;"
+                    onmouseover="this.style.borderColor='#f5576c'; this.style.background='#fff5f7';"
+                    onmouseout="this.style.borderColor='#e0e0e0'; this.style.background='white';">
+                ${ctaText}
+            </button>
+        `;
+    });
+
+    ctaGrid.innerHTML = gridHTML;
+}
+
+// Handle direct CTA selection
+async function selectDirectCTA(adIndex, ctaText, assetId) {
+    const resultDiv = document.getElementById(`cta-selection-result-${adIndex}`);
+
+    // Show loading
+    resultDiv.innerHTML = `
+        <div style="padding: 15px; background: #e3f2fd; border: 1px solid #2196f3; border-radius: 8px;">
+            <p style="margin: 0 0 10px 0; font-weight: 600; color: #1565c0;">🎯 Creating Portfolio with "${ctaText}"</p>
             <div style="background: white; padding: 10px; border-radius: 6px; font-size: 13px;">
                 <div><strong>CTA Text:</strong> ${ctaText}</div>
                 <div><strong>Asset ID:</strong> ${assetId}</div>
@@ -1372,21 +1380,24 @@ async function createPortfolioFromDirectCTA(adIndex, ctaText, assetId) {
         console.log('Create Portfolio Response:', data);
 
         if (data.success && data.portfolio_id) {
-            // Store portfolio ID in the ad's data
+            // Store portfolio ID
+            document.getElementById(`dynamic-cta-portfolio-${adIndex}`).value = data.portfolio_id;
+
             if (!window.adCTAPortfolios) {
                 window.adCTAPortfolios = {};
             }
             window.adCTAPortfolios[adIndex] = data.portfolio_id;
 
-            // Show success message
-            dynamicSection.innerHTML = `
-                <div style="padding: 15px; background: #d4edda; border: 1px solid #28a745; border-radius: 8px; margin-top: 10px;">
+            // Show success
+            resultDiv.innerHTML = `
+                <div style="padding: 15px; background: #d4edda; border: 1px solid #28a745; border-radius: 8px;">
                     <p style="margin: 0 0 10px 0; font-weight: 600; color: #155724;">✅ Portfolio Created Successfully</p>
                     <div style="background: white; padding: 10px; border-radius: 6px; font-size: 13px;">
                         <div><strong>Portfolio Name:</strong> ${portfolioName}</div>
                         <div><strong>Portfolio ID:</strong> ${data.portfolio_id}</div>
                         <div><strong>CTA:</strong> ${ctaText}</div>
                         <div><strong>Asset ID:</strong> ${assetId}</div>
+                        <div style="margin-top: 8px; color: #28a745; font-weight: 600;">✓ Stored in Database</div>
                     </div>
                     <p style="margin: 10px 0 0 0; font-size: 12px; color: #155724;">✓ This portfolio will be used when creating the ad</p>
                 </div>
@@ -1399,9 +1410,13 @@ async function createPortfolioFromDirectCTA(adIndex, ctaText, assetId) {
 
     } catch (error) {
         console.error('Error creating portfolio:', error);
-        dynamicSection.innerHTML = `
-            <div style="padding: 15px; background: #f8d7da; border: 1px solid #dc3545; border-radius: 8px; margin-top: 10px;">
+        resultDiv.innerHTML = `
+            <div style="padding: 15px; background: #f8d7da; border: 1px solid #dc3545; border-radius: 8px;">
                 <p style="margin: 0; color: #721c24;">❌ Failed to create portfolio: ${error.message}</p>
+                <button onclick="selectDirectCTA(${adIndex}, '${ctaText}', '${assetId}')"
+                        style="margin-top: 10px; padding: 8px 15px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    Retry
+                </button>
             </div>
         `;
         showToast('Failed to create portfolio', 'error');
