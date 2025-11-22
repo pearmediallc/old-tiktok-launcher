@@ -19,7 +19,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TikTok Campaign Launcher - Dashboard</title>
-    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/style.css?v=<?php echo time(); ?>">
 </head>
 <body>
     <div class="container">
@@ -547,6 +547,6 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         </div>
     </div>
 
-    <script src="assets/app.js"></script>
+    <script src="assets/app.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>
