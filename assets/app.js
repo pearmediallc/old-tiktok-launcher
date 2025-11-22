@@ -1102,18 +1102,42 @@ function addAdForm(index, duplicateFrom = null) {
 
             <div id="dynamic-cta-section-${index}" style="display: none;">
                 <div class="form-group">
-                    <label>Content Type</label>
-                    <select id="cta-content-type-${index}">
-                        <option value="">Select content type...</option>
-                        <option value="LANDING_PAGE">Landing Page</option>
-                        <option value="APP_DOWNLOAD">App Download</option>
-                        <option value="OTHER">Other</option>
-                        <option value="MESSAGE">Message</option>
-                        <option value="PHONE_CALL">Phone Call</option>
+                    <label>Content Type or Select CTA Directly</label>
+                    <select id="cta-content-type-${index}" onchange="handleContentTypeChange(${index})">
+                        <option value="">Select content type or CTA...</option>
+                        <optgroup label="Content Types">
+                            <option value="LANDING_PAGE">Landing Page</option>
+                            <option value="APP_DOWNLOAD">App Download</option>
+                            <option value="OTHER">Other</option>
+                            <option value="MESSAGE">Message</option>
+                            <option value="PHONE_CALL">Phone Call</option>
+                        </optgroup>
+                        <optgroup label="Select CTA Directly">
+                            <option value="CTA:Learn more">Learn more</option>
+                            <option value="CTA:Apply now">Apply now</option>
+                            <option value="CTA:Check if you qualify">Check if you qualify</option>
+                            <option value="CTA:Check eligibility now">Check eligibility now</option>
+                            <option value="CTA:Request a quote today">Request a quote today</option>
+                            <option value="CTA:Join today">Join today</option>
+                            <option value="CTA:Read more">Read more</option>
+                            <option value="CTA:View now">View now</option>
+                            <option value="CTA:Check it out">Check it out</option>
+                            <option value="CTA:Get it today">Get it today</option>
+                            <option value="CTA:Download now">Download now</option>
+                            <option value="CTA:Download app now">Download app now</option>
+                            <option value="CTA:Install app">Install app</option>
+                            <option value="CTA:Download today">Download today</option>
+                            <option value="CTA:Try it now">Try it now</option>
+                            <option value="CTA:Install it now">Install it now</option>
+                            <option value="CTA:Download app">Download app</option>
+                            <option value="CTA:Try it today">Try it today</option>
+                            <option value="CTA:Experience now">Experience now</option>
+                            <option value="CTA:Interested">Interested</option>
+                        </optgroup>
                     </select>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" id="portfolio-option-section-${index}">
                     <label style="font-weight: 600; margin-bottom: 10px; display: block;">Choose Portfolio Option:</label>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
                         <button type="button" class="btn-secondary" onclick="loadExistingPortfolios(${index})" style="flex: 1;">
@@ -1241,6 +1265,146 @@ function toggleCTAMode(adIndex, mode) {
     } else {
         staticSection.style.display = 'none';
         dynamicSection.style.display = 'block';
+    }
+}
+
+// CTA to Asset ID mapping
+const CTA_ASSET_MAPPING = {
+    "Learn more": "1821962886917121",
+    "Apply now": "1821962911664129",
+    "Check if you qualify": "1821962913593345",
+    "Check eligibility now": "1821962915044353",
+    "Request a quote today": "1821962916651009",
+    "Join today": "1821962918128641",
+    "Read more": "1821962919685121",
+    "View now": "1821962921241601",
+    "Check it out": "1821962922560513",
+    "Get it today": "1821962924158977",
+    "Download now": "1821962925649921",
+    "Download app now": "1821962927232001",
+    "Install app": "1821962928747521",
+    "Download today": "1821962930180097",
+    "Try it now": "1821962931653633",
+    "Install it now": "1821962933144577",
+    "Download app": "1821962934635521",
+    "Try it today": "1821962936175617",
+    "Experience now": "1821962937691137",
+    "Interested": "1821962939206657"
+};
+
+// Handle content type or direct CTA selection
+async function handleContentTypeChange(adIndex) {
+    const selectElement = document.getElementById(`cta-content-type-${adIndex}`);
+    const selectedValue = selectElement.value;
+    const portfolioOptionsDiv = document.getElementById(`portfolio-options-${adIndex}`);
+    const dynamicSection = document.getElementById(`dynamic-cta-section-${adIndex}`);
+    const existingContainer = document.getElementById(`existing-portfolios-${adIndex}`);
+
+    console.log('=== Content Type/CTA Change ===');
+    console.log('Ad Index:', adIndex);
+    console.log('Selected Value:', selectedValue);
+
+    // Reset sections
+    dynamicSection.style.display = 'none';
+    existingContainer.style.display = 'none';
+
+    // Check if user selected a direct CTA (value starts with "CTA:")
+    if (selectedValue.startsWith('CTA:')) {
+        const ctaText = selectedValue.replace('CTA:', '');
+        const assetId = CTA_ASSET_MAPPING[ctaText];
+
+        console.log('Direct CTA selected:', ctaText);
+        console.log('Asset ID:', assetId);
+
+        if (!assetId) {
+            showToast('CTA asset ID not found', 'error');
+            return;
+        }
+
+        // Hide portfolio options since we're auto-creating
+        portfolioOptionsDiv.style.display = 'none';
+
+        // Auto-create portfolio with selected CTA
+        await createPortfolioFromDirectCTA(adIndex, ctaText, assetId);
+
+    } else if (selectedValue) {
+        // Normal content type selected - show portfolio options
+        portfolioOptionsDiv.style.display = 'block';
+    } else {
+        // No selection - hide portfolio options
+        portfolioOptionsDiv.style.display = 'none';
+    }
+}
+
+// Create portfolio directly from selected CTA
+async function createPortfolioFromDirectCTA(adIndex, ctaText, assetId) {
+    const dynamicSection = document.getElementById(`dynamic-cta-section-${adIndex}`);
+
+    // Show loading message
+    dynamicSection.style.display = 'block';
+    dynamicSection.innerHTML = `
+        <div style="padding: 15px; background: #e3f2fd; border: 1px solid #2196f3; border-radius: 8px; margin-top: 10px;">
+            <p style="margin: 0 0 10px 0; font-weight: 600; color: #1565c0;">🎯 Creating Portfolio with Selected CTA</p>
+            <div style="background: white; padding: 10px; border-radius: 6px; font-size: 13px;">
+                <div><strong>CTA Text:</strong> ${ctaText}</div>
+                <div><strong>Asset ID:</strong> ${assetId}</div>
+            </div>
+            <p style="margin: 10px 0 0 0; font-size: 12px; color: #1565c0;">⏳ Creating portfolio...</p>
+        </div>
+    `;
+
+    try {
+        const portfolioName = `CTA_${ctaText.replace(/\s+/g, '_')}_${Date.now()}`;
+
+        // Create portfolio via API
+        const response = await fetch('api.php?action=create_cta_portfolio', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                portfolio_name: portfolioName,
+                cta_ids: [assetId]
+            })
+        });
+
+        const data = await response.json();
+        console.log('Create Portfolio Response:', data);
+
+        if (data.success && data.portfolio_id) {
+            // Store portfolio ID in the ad's data
+            if (!window.adCTAPortfolios) {
+                window.adCTAPortfolios = {};
+            }
+            window.adCTAPortfolios[adIndex] = data.portfolio_id;
+
+            // Show success message
+            dynamicSection.innerHTML = `
+                <div style="padding: 15px; background: #d4edda; border: 1px solid #28a745; border-radius: 8px; margin-top: 10px;">
+                    <p style="margin: 0 0 10px 0; font-weight: 600; color: #155724;">✅ Portfolio Created Successfully</p>
+                    <div style="background: white; padding: 10px; border-radius: 6px; font-size: 13px;">
+                        <div><strong>Portfolio Name:</strong> ${portfolioName}</div>
+                        <div><strong>Portfolio ID:</strong> ${data.portfolio_id}</div>
+                        <div><strong>CTA:</strong> ${ctaText}</div>
+                        <div><strong>Asset ID:</strong> ${assetId}</div>
+                    </div>
+                    <p style="margin: 10px 0 0 0; font-size: 12px; color: #155724;">✓ This portfolio will be used when creating the ad</p>
+                </div>
+            `;
+
+            showToast(`Portfolio created with CTA: ${ctaText}`, 'success');
+        } else {
+            throw new Error(data.message || 'Failed to create portfolio');
+        }
+
+    } catch (error) {
+        console.error('Error creating portfolio:', error);
+        dynamicSection.innerHTML = `
+            <div style="padding: 15px; background: #f8d7da; border: 1px solid #dc3545; border-radius: 8px; margin-top: 10px;">
+                <p style="margin: 0; color: #721c24;">❌ Failed to create portfolio: ${error.message}</p>
+            </div>
+        `;
+        showToast('Failed to create portfolio', 'error');
     }
 }
 
