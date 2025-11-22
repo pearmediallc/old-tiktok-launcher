@@ -1296,7 +1296,7 @@ const CTA_ASSET_MAPPING = {
 async function handleContentTypeChange(adIndex) {
     const selectElement = document.getElementById(`cta-content-type-${adIndex}`);
     const selectedValue = selectElement.value;
-    const portfolioOptionsDiv = document.getElementById(`portfolio-options-${adIndex}`);
+    const portfolioOptionsDiv = document.getElementById(`portfolio-option-section-${adIndex}`);
     const dynamicSection = document.getElementById(`dynamic-cta-section-${adIndex}`);
     const existingContainer = document.getElementById(`existing-portfolios-${adIndex}`);
 
