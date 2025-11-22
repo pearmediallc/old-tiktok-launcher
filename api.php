@@ -1090,12 +1090,20 @@ try {
                 }
             }
 
+            // Extract portfolio_id from response
+            $portfolioId = null;
+            if (isset($responseData['data']['creative_portfolio_id'])) {
+                $portfolioId = $responseData['data']['creative_portfolio_id'];
+            } elseif (isset($responseData['data']['portfolio_id'])) {
+                $portfolioId = $responseData['data']['portfolio_id'];
+            }
+
             echo json_encode([
                 'success' => $httpCode === 200 && isset($responseData['code']) && $responseData['code'] === 0,
+                'portfolio_id' => $portfolioId,
                 'data' => $responseData['data'] ?? null,
-                'message' => isset($responseData['code']) && $responseData['code'] === 0 ? $responseData['message'] : $errorMessage,
-                'code' => $responseData['code'] ?? null,
-                'raw_response' => $responseData // Include full response for debugging
+                'message' => isset($responseData['code']) && $responseData['code'] === 0 ? 'Portfolio created successfully' : $errorMessage,
+                'code' => $responseData['code'] ?? null
             ]);
             break;
 
