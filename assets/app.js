@@ -1101,58 +1101,50 @@ function addAdForm(index, duplicateFrom = null) {
             </div>
 
             <div id="dynamic-cta-section-${index}" style="display: none;">
+                <!-- Content Type Selection (Default) -->
                 <div class="form-group">
-                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Choose How to Create CTA Portfolio:</label>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
-                        <button type="button" class="btn-secondary" onclick="showContentTypeOption(${index})" style="padding: 15px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 8px; font-weight: 600;">
-                            📝 Choose Content Type
+                    <label>Content Type</label>
+                    <select id="cta-content-type-${index}">
+                        <option value="">Select content type...</option>
+                        <option value="LANDING_PAGE">Landing Page</option>
+                        <option value="APP_DOWNLOAD">App Download</option>
+                        <option value="OTHER">Other</option>
+                        <option value="MESSAGE">Message</option>
+                        <option value="PHONE_CALL">Phone Call</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="portfolio-option-section-${index}" style="display: none;">
+                    <label style="font-weight: 600; margin-bottom: 10px; display: block;">Choose Portfolio Option:</label>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                        <button type="button" class="btn-secondary" onclick="loadExistingPortfolios(${index})">
+                            📋 Use Existing Portfolio
                         </button>
-                        <button type="button" class="btn-secondary" onclick="showCTAListOption(${index})" style="padding: 15px; background: linear-gradient(135deg, #f093fb, #f5576c); color: white; border: none; border-radius: 8px; font-weight: 600;">
-                            🎯 Select from CTA List
+                        <button type="button" class="btn-secondary" onclick="useFrequentlyUsedCTAs(${index})" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none;">
+                            ⚡ Use Frequently Used CTAs
+                        </button>
+                        <button type="button" class="btn-secondary" onclick="loadDynamicCTAs(${index})">
+                            ✨ Create New Portfolio
                         </button>
                     </div>
                 </div>
 
-                <!-- Content Type Selection Flow -->
-                <div id="content-type-flow-${index}" style="display: none;">
-                    <div class="form-group">
-                        <label>Select Content Type</label>
-                        <select id="cta-content-type-${index}">
-                            <option value="">Choose content type...</option>
-                            <option value="LANDING_PAGE">Landing Page</option>
-                            <option value="APP_DOWNLOAD">App Download</option>
-                            <option value="OTHER">Other</option>
-                            <option value="MESSAGE">Message</option>
-                            <option value="PHONE_CALL">Phone Call</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group" id="portfolio-option-section-${index}" style="display: none;">
-                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Choose Portfolio Option:</label>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
-                            <button type="button" class="btn-secondary" onclick="loadExistingPortfolios(${index})">
-                                📋 Use Existing Portfolio
-                            </button>
-                            <button type="button" class="btn-secondary" onclick="useFrequentlyUsedCTAs(${index})" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none;">
-                                ⚡ Use Frequently Used CTAs
-                            </button>
-                            <button type="button" class="btn-secondary" onclick="loadDynamicCTAs(${index})">
-                                ✨ Create New Portfolio
-                            </button>
-                        </div>
-                    </div>
-
-                    <div id="existing-portfolios-${index}" style="margin-top: 10px; display: none;">
-                        <!-- Existing portfolios will be loaded here -->
-                    </div>
-
-                    <div id="dynamic-cta-list-${index}" style="margin-top: 10px;">
-                        <!-- Dynamic CTAs will be loaded here -->
-                    </div>
+                <div id="existing-portfolios-${index}" style="margin-top: 10px; display: none;">
+                    <!-- Existing portfolios will be loaded here -->
                 </div>
 
-                <!-- Direct CTA Selection Flow -->
-                <div id="cta-list-flow-${index}" style="display: none;">
+                <div id="dynamic-cta-list-${index}" style="margin-top: 10px;">
+                    <!-- Dynamic CTAs will be loaded here -->
+                </div>
+
+                <!-- OR Divider -->
+                <div style="text-align: center; margin: 20px 0; position: relative;">
+                    <div style="border-top: 1px solid #e0e0e0; position: absolute; width: 100%; top: 50%;"></div>
+                    <span style="background: white; padding: 0 15px; position: relative; color: #666; font-weight: 600;">OR</span>
+                </div>
+
+                <!-- Direct CTA Selection (Additional Option) -->
+                <div id="cta-list-flow-${index}">
                     <div class="form-group">
                         <label style="font-weight: 600; margin-bottom: 15px; display: block; color: #f5576c;">Select CTAs (click multiple to add to portfolio)</label>
                         <div id="cta-selection-grid-${index}" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 15px;">
@@ -1285,7 +1277,48 @@ function toggleCTAMode(adIndex, mode) {
     } else {
         staticSection.style.display = 'none';
         dynamicSection.style.display = 'block';
+
+        // Initialize content type dropdown handler
+        const selectElement = document.getElementById(`cta-content-type-${adIndex}`);
+        selectElement.onchange = function() {
+            const portfolioOptionsDiv = document.getElementById(`portfolio-option-section-${adIndex}`);
+            if (this.value) {
+                portfolioOptionsDiv.style.display = 'block';
+            } else {
+                portfolioOptionsDiv.style.display = 'none';
+            }
+        };
+
+        // Populate CTA grid for direct selection
+        populateCTAGrid(adIndex);
     }
+}
+
+// Populate the CTA selection grid
+function populateCTAGrid(adIndex) {
+    const ctaGrid = document.getElementById(`cta-selection-grid-${adIndex}`);
+    if (!ctaGrid) return;
+
+    // Initialize selected CTAs storage
+    if (!window.selectedCTAs) {
+        window.selectedCTAs = {};
+    }
+    window.selectedCTAs[adIndex] = [];
+
+    const ctas = Object.keys(CTA_ASSET_MAPPING);
+    let gridHTML = '';
+    ctas.forEach(ctaText => {
+        gridHTML += `
+            <button type="button"
+                    id="cta-btn-${adIndex}-${ctaText.replace(/\s+/g, '_')}"
+                    onclick="toggleCTASelection(${adIndex}, '${ctaText}', '${CTA_ASSET_MAPPING[ctaText]}')"
+                    style="padding: 12px 15px; background: white; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s ease; text-align: left;">
+                ${ctaText}
+            </button>
+        `;
+    });
+
+    ctaGrid.innerHTML = gridHTML;
 }
 
 // CTA to Asset ID mapping
@@ -1311,59 +1344,6 @@ const CTA_ASSET_MAPPING = {
     "Experience now": "1821962937691137",
     "Interested": "1821962939206657"
 };
-
-// Show Content Type option (traditional flow)
-function showContentTypeOption(adIndex) {
-    const contentTypeFlow = document.getElementById(`content-type-flow-${adIndex}`);
-    const ctaListFlow = document.getElementById(`cta-list-flow-${adIndex}`);
-
-    contentTypeFlow.style.display = 'block';
-    ctaListFlow.style.display = 'none';
-
-    // Add event listener to content type dropdown
-    const selectElement = document.getElementById(`cta-content-type-${adIndex}`);
-    selectElement.onchange = function() {
-        const portfolioOptionsDiv = document.getElementById(`portfolio-option-section-${adIndex}`);
-        if (this.value) {
-            portfolioOptionsDiv.style.display = 'block';
-        } else {
-            portfolioOptionsDiv.style.display = 'none';
-        }
-    };
-}
-
-// Show CTA List option (direct CTA selection - multiple)
-function showCTAListOption(adIndex) {
-    const contentTypeFlow = document.getElementById(`content-type-flow-${adIndex}`);
-    const ctaListFlow = document.getElementById(`cta-list-flow-${adIndex}`);
-
-    contentTypeFlow.style.display = 'none';
-    ctaListFlow.style.display = 'block';
-
-    // Initialize selected CTAs storage
-    if (!window.selectedCTAs) {
-        window.selectedCTAs = {};
-    }
-    window.selectedCTAs[adIndex] = [];
-
-    // Populate CTA grid with toggle buttons
-    const ctaGrid = document.getElementById(`cta-selection-grid-${adIndex}`);
-    const ctas = Object.keys(CTA_ASSET_MAPPING);
-
-    let gridHTML = '';
-    ctas.forEach(ctaText => {
-        gridHTML += `
-            <button type="button"
-                    id="cta-btn-${adIndex}-${ctaText.replace(/\s+/g, '_')}"
-                    onclick="toggleCTASelection(${adIndex}, '${ctaText}', '${CTA_ASSET_MAPPING[ctaText]}')"
-                    style="padding: 12px 15px; background: white; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s ease; text-align: left;">
-                ${ctaText}
-            </button>
-        `;
-    });
-
-    ctaGrid.innerHTML = gridHTML;
-}
 
 // Toggle CTA selection (add/remove from selection)
 function toggleCTASelection(adIndex, ctaText, assetId) {
