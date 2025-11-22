@@ -1154,9 +1154,24 @@ function addAdForm(index, duplicateFrom = null) {
                 <!-- Direct CTA Selection Flow -->
                 <div id="cta-list-flow-${index}" style="display: none;">
                     <div class="form-group">
-                        <label style="font-weight: 600; margin-bottom: 15px; display: block; color: #f5576c;">Select a CTA to Create Portfolio & Ad</label>
-                        <div id="cta-selection-grid-${index}" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+                        <label style="font-weight: 600; margin-bottom: 15px; display: block; color: #f5576c;">Select CTAs (click multiple to add to portfolio)</label>
+                        <div id="cta-selection-grid-${index}" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 15px;">
                             <!-- CTAs will be populated here -->
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; margin-bottom: 15px;">
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; margin-bottom: 5px;">Selected CTAs: <span id="selected-cta-count-${index}">0</span></div>
+                                <div id="selected-cta-list-${index}" style="font-size: 13px; color: #666;">
+                                    No CTAs selected
+                                </div>
+                            </div>
+                            <button type="button"
+                                    id="create-portfolio-btn-${index}"
+                                    onclick="createPortfolioFromSelectedCTAs(${index})"
+                                    disabled
+                                    style="padding: 12px 24px; background: linear-gradient(135deg, #28a745, #20c997); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; white-space: nowrap;">
+                                ✓ Create Portfolio
+                            </button>
                         </div>
                     </div>
                     <div id="cta-selection-result-${index}" style="margin-top: 15px;">
@@ -1317,7 +1332,7 @@ function showContentTypeOption(adIndex) {
     };
 }
 
-// Show CTA List option (direct CTA selection)
+// Show CTA List option (direct CTA selection - multiple)
 function showCTAListOption(adIndex) {
     const contentTypeFlow = document.getElementById(`content-type-flow-${adIndex}`);
     const ctaListFlow = document.getElementById(`cta-list-flow-${adIndex}`);
@@ -1325,7 +1340,13 @@ function showCTAListOption(adIndex) {
     contentTypeFlow.style.display = 'none';
     ctaListFlow.style.display = 'block';
 
-    // Populate CTA grid
+    // Initialize selected CTAs storage
+    if (!window.selectedCTAs) {
+        window.selectedCTAs = {};
+    }
+    window.selectedCTAs[adIndex] = [];
+
+    // Populate CTA grid with toggle buttons
     const ctaGrid = document.getElementById(`cta-selection-grid-${adIndex}`);
     const ctas = Object.keys(CTA_ASSET_MAPPING);
 
@@ -1333,10 +1354,9 @@ function showCTAListOption(adIndex) {
     ctas.forEach(ctaText => {
         gridHTML += `
             <button type="button"
-                    onclick="selectDirectCTA(${adIndex}, '${ctaText}', '${CTA_ASSET_MAPPING[ctaText]}')"
-                    style="padding: 12px 15px; background: white; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s ease; text-align: left;"
-                    onmouseover="this.style.borderColor='#f5576c'; this.style.background='#fff5f7';"
-                    onmouseout="this.style.borderColor='#e0e0e0'; this.style.background='white';">
+                    id="cta-btn-${adIndex}-${ctaText.replace(/\s+/g, '_')}"
+                    onclick="toggleCTASelection(${adIndex}, '${ctaText}', '${CTA_ASSET_MAPPING[ctaText]}')"
+                    style="padding: 12px 15px; background: white; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s ease; text-align: left;">
                 ${ctaText}
             </button>
         `;
@@ -1345,26 +1365,99 @@ function showCTAListOption(adIndex) {
     ctaGrid.innerHTML = gridHTML;
 }
 
-// Handle direct CTA selection
-async function selectDirectCTA(adIndex, ctaText, assetId) {
+// Toggle CTA selection (add/remove from selection)
+function toggleCTASelection(adIndex, ctaText, assetId) {
+    if (!window.selectedCTAs) {
+        window.selectedCTAs = {};
+    }
+    if (!window.selectedCTAs[adIndex]) {
+        window.selectedCTAs[adIndex] = [];
+    }
+
+    const btnId = `cta-btn-${adIndex}-${ctaText.replace(/\s+/g, '_')}`;
+    const btn = document.getElementById(btnId);
+
+    // Check if already selected
+    const existingIndex = window.selectedCTAs[adIndex].findIndex(item => item.text === ctaText);
+
+    if (existingIndex >= 0) {
+        // Deselect
+        window.selectedCTAs[adIndex].splice(existingIndex, 1);
+        btn.style.background = 'white';
+        btn.style.borderColor = '#e0e0e0';
+        btn.style.color = '#000';
+    } else {
+        // Select
+        window.selectedCTAs[adIndex].push({
+            text: ctaText,
+            assetId: assetId
+        });
+        btn.style.background = 'linear-gradient(135deg, #f093fb, #f5576c)';
+        btn.style.borderColor = '#f5576c';
+        btn.style.color = 'white';
+    }
+
+    // Update selection display
+    updateCTASelectionDisplay(adIndex);
+}
+
+// Update the selection count and list display
+function updateCTASelectionDisplay(adIndex) {
+    const selectedCTAs = window.selectedCTAs[adIndex] || [];
+    const countSpan = document.getElementById(`selected-cta-count-${adIndex}`);
+    const listDiv = document.getElementById(`selected-cta-list-${adIndex}`);
+    const createBtn = document.getElementById(`create-portfolio-btn-${adIndex}`);
+
+    countSpan.textContent = selectedCTAs.length;
+
+    if (selectedCTAs.length === 0) {
+        listDiv.textContent = 'No CTAs selected';
+        listDiv.style.color = '#666';
+        createBtn.disabled = true;
+        createBtn.style.opacity = '0.5';
+        createBtn.style.cursor = 'not-allowed';
+    } else {
+        listDiv.innerHTML = selectedCTAs.map(cta => `<span style="display: inline-block; padding: 4px 8px; background: #e8f5e9; border-radius: 4px; margin: 2px; font-size: 12px;">${cta.text}</span>`).join('');
+        listDiv.style.color = '#28a745';
+        createBtn.disabled = false;
+        createBtn.style.opacity = '1';
+        createBtn.style.cursor = 'pointer';
+    }
+}
+
+// Create portfolio from selected CTAs
+async function createPortfolioFromSelectedCTAs(adIndex) {
+    const selectedCTAs = window.selectedCTAs[adIndex] || [];
     const resultDiv = document.getElementById(`cta-selection-result-${adIndex}`);
 
+    if (selectedCTAs.length === 0) {
+        showToast('Please select at least one CTA', 'error');
+        return;
+    }
+
     // Show loading
+    const ctaList = selectedCTAs.map(c => c.text).join(', ');
     resultDiv.innerHTML = `
         <div style="padding: 15px; background: #e3f2fd; border: 1px solid #2196f3; border-radius: 8px;">
-            <p style="margin: 0 0 10px 0; font-weight: 600; color: #1565c0;">🎯 Creating Portfolio with "${ctaText}"</p>
+            <p style="margin: 0 0 10px 0; font-weight: 600; color: #1565c0;">🎯 Creating Portfolio with ${selectedCTAs.length} CTA(s)</p>
             <div style="background: white; padding: 10px; border-radius: 6px; font-size: 13px;">
-                <div><strong>CTA Text:</strong> ${ctaText}</div>
-                <div><strong>Asset ID:</strong> ${assetId}</div>
+                <div><strong>Selected CTAs:</strong> ${ctaList}</div>
+                <div><strong>Count:</strong> ${selectedCTAs.length}</div>
             </div>
             <p style="margin: 10px 0 0 0; font-size: 12px; color: #1565c0;">⏳ Creating portfolio...</p>
         </div>
     `;
 
     try {
-        const portfolioName = `CTA_${ctaText.replace(/\s+/g, '_')}_${Date.now()}`;
+        const portfolioName = `CTA_Multi_${Date.now()}`;
 
-        // Create portfolio via API with correct portfolio_content structure
+        // Build portfolio_content array for TikTok API
+        const portfolio_content = selectedCTAs.map(cta => ({
+            asset_content: cta.text,
+            asset_ids: [cta.assetId]
+        }));
+
+        // Create portfolio via API
         const response = await fetch('api.php?action=create_cta_portfolio', {
             method: 'POST',
             headers: {
@@ -1372,12 +1465,7 @@ async function selectDirectCTA(adIndex, ctaText, assetId) {
             },
             body: JSON.stringify({
                 portfolio_name: portfolioName,
-                portfolio_content: [
-                    {
-                        asset_content: ctaText,
-                        asset_ids: [assetId]
-                    }
-                ]
+                portfolio_content: portfolio_content
             })
         });
 
@@ -1394,21 +1482,26 @@ async function selectDirectCTA(adIndex, ctaText, assetId) {
             window.adCTAPortfolios[adIndex] = data.portfolio_id;
 
             // Show success
+            const ctaDetails = selectedCTAs.map(cta =>
+                `<div style="padding: 6px; background: #e8f5e9; border-radius: 4px; margin: 4px 0;">• ${cta.text} (${cta.assetId})</div>`
+            ).join('');
+
             resultDiv.innerHTML = `
                 <div style="padding: 15px; background: #d4edda; border: 1px solid #28a745; border-radius: 8px;">
                     <p style="margin: 0 0 10px 0; font-weight: 600; color: #155724;">✅ Portfolio Created Successfully</p>
                     <div style="background: white; padding: 10px; border-radius: 6px; font-size: 13px;">
                         <div><strong>Portfolio Name:</strong> ${portfolioName}</div>
                         <div><strong>Portfolio ID:</strong> ${data.portfolio_id}</div>
-                        <div><strong>CTA:</strong> ${ctaText}</div>
-                        <div><strong>Asset ID:</strong> ${assetId}</div>
+                        <div><strong>Total CTAs:</strong> ${selectedCTAs.length}</div>
+                        <div style="margin-top: 8px;"><strong>CTAs in Portfolio:</strong></div>
+                        ${ctaDetails}
                         <div style="margin-top: 8px; color: #28a745; font-weight: 600;">✓ Stored in Database</div>
                     </div>
                     <p style="margin: 10px 0 0 0; font-size: 12px; color: #155724;">✓ This portfolio will be used when creating the ad</p>
                 </div>
             `;
 
-            showToast(`Portfolio created with CTA: ${ctaText}`, 'success');
+            showToast(`Portfolio created with ${selectedCTAs.length} CTA(s)`, 'success');
         } else {
             throw new Error(data.message || 'Failed to create portfolio');
         }
@@ -1418,7 +1511,7 @@ async function selectDirectCTA(adIndex, ctaText, assetId) {
         resultDiv.innerHTML = `
             <div style="padding: 15px; background: #f8d7da; border: 1px solid #dc3545; border-radius: 8px;">
                 <p style="margin: 0; color: #721c24;">❌ Failed to create portfolio: ${error.message}</p>
-                <button onclick="selectDirectCTA(${adIndex}, '${ctaText}', '${assetId}')"
+                <button onclick="createPortfolioFromSelectedCTAs(${adIndex})"
                         style="margin-top: 10px; padding: 8px 15px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">
                     Retry
                 </button>
