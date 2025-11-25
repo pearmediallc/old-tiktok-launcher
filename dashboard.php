@@ -340,8 +340,14 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     <!-- Ad forms will be dynamically added here -->
                 </div>
 
-                <div class="button-row">
-                    <button class="btn-secondary" onclick="duplicateAd()">+ Duplicate Last Ad</button>
+                <div class="button-row" style="align-items: center; gap: 15px;">
+                    <button class="btn-secondary" onclick="duplicateAd(1)">+ Duplicate Last Ad</button>
+                    <span style="color: #666;">or</span>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="number" id="bulk-duplicate-count" min="1" max="50" value="5"
+                               style="width: 70px; padding: 10px; border: 2px solid #ddd; border-radius: 5px; text-align: center; font-size: 14px;">
+                        <button class="btn-primary" onclick="duplicateAdBulk()">Duplicate Multiple Ads</button>
+                    </div>
                 </div>
 
                 <div class="button-row" style="margin-top: 20px;">

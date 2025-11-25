@@ -1227,15 +1227,44 @@ function addAdForm(index, duplicateFrom = null) {
     }
 }
 
-// Duplicate ad
-function duplicateAd() {
+// Duplicate ad (single or multiple)
+function duplicateAd(count = 1) {
     const lastAdIndex = state.ads.length - 1;
-    const newIndex = state.ads.length;
 
-    addAdForm(newIndex, lastAdIndex);
-    state.ads.push({ index: newIndex });
+    for (let i = 0; i < count; i++) {
+        const newIndex = state.ads.length;
+        addAdForm(newIndex, lastAdIndex);
+        state.ads.push({ index: newIndex });
+    }
 
-    showToast('Ad duplicated', 'success');
+    if (count === 1) {
+        showToast('Ad duplicated', 'success');
+    } else {
+        showToast(`${count} ads duplicated successfully`, 'success');
+    }
+}
+
+// Duplicate multiple ads based on input
+function duplicateAdBulk() {
+    const countInput = document.getElementById('bulk-duplicate-count');
+    const count = parseInt(countInput.value) || 1;
+
+    if (count < 1) {
+        showToast('Please enter a valid number (minimum 1)', 'error');
+        return;
+    }
+
+    if (count > 50) {
+        showToast('Maximum 50 ads can be duplicated at once', 'error');
+        return;
+    }
+
+    if (state.ads.length === 0) {
+        showToast('Please create at least one ad first', 'error');
+        return;
+    }
+
+    duplicateAd(count);
 }
 
 // Remove ad
