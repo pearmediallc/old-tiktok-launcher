@@ -221,10 +221,189 @@ try {
             break;
             
         // Smart+ Campaign actions
-        case 'create_smart_campaign':
-            logToFile("Processing Smart+ Campaign Creation...");
+        case 'publish_smart_plus_campaign':
+            // NEW: Smart+ Campaign - Creates campaign, ad group, and ads in ONE API call
+            // Endpoint: /campaign/spc/create/
+            logToFile("============ PUBLISH SMART+ CAMPAIGN ============");
             $data = $requestData;
-            
+
+            // Validate required fields
+            $requiredFields = ['campaign_name', 'budget', 'identity_id', 'media_info_list', 'title_list', 'landing_page_url'];
+            foreach ($requiredFields as $field) {
+                if (empty($data[$field])) {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => "Missing required field: {$field}"
+                    ]);
+                    exit;
+                }
+            }
+
+            // Get access token
+            $accessToken = isset($_SESSION['oauth_access_token']) && !empty($_SESSION['oauth_access_token'])
+                ? $_SESSION['oauth_access_token']
+                : ($_ENV['TIKTOK_ACCESS_TOKEN'] ?? '');
+
+            // Build media_info_list - each item needs media_info wrapper with video_info inside
+            $mediaInfoList = [];
+            foreach ($data['media_info_list'] as $media) {
+                $mediaItem = [
+                    'media_info' => [
+                        'video_info' => [
+                            'video_id' => $media['video_id']
+                        ]
+                    ]
+                ];
+                // Add image cover if provided
+                if (!empty($media['image_id'])) {
+                    $mediaItem['media_info']['image_info'] = [
+                        ['web_uri' => $media['image_id']]
+                    ];
+                }
+                $mediaInfoList[] = $mediaItem;
+            }
+
+            // Build title_list - array of objects with 'title' key
+            $titleList = [];
+            foreach ($data['title_list'] as $title) {
+                $titleList[] = ['title' => $title];
+            }
+
+            // Build Smart+ Campaign params according to documentation
+            $params = [
+                'advertiser_id' => $advertiser_id,
+                'operation_status' => 'ENABLE',
+                'objective_type' => 'LEAD_GENERATION',
+                'campaign_type' => 'REGULAR_CAMPAIGN',
+                'campaign_name' => $data['campaign_name'],
+
+                // Lead Generation specific
+                'promotion_type' => 'LEAD_GENERATION',
+                'promotion_target_type' => 'EXTERNAL_WEBSITE',
+                'optimization_goal' => 'LEAD_GENERATION',
+
+                // Budget - BUDGET_MODE_DYNAMIC_DAILY_BUDGET is REQUIRED for Lead Gen
+                'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
+                'budget' => floatval($data['budget']),
+
+                // Schedule
+                'schedule_type' => 'SCHEDULE_START_END',
+                'schedule_start_time' => $data['schedule_start_time'] ?? date('Y-m-d H:i:s'),
+                'schedule_end_time' => $data['schedule_end_time'] ?? date('Y-m-d H:i:s', strtotime('+1 year')),
+
+                // Placement - Required for Lead Gen: PLACEMENT_TYPE_NORMAL with PLACEMENT_TIKTOK
+                'placement_type' => 'PLACEMENT_TYPE_NORMAL',
+                'placements' => ['PLACEMENT_TIKTOK'],
+
+                // Location targeting
+                'location_ids' => $data['location_ids'] ?? ['6252001'], // Default: United States
+
+                // Audience targeting
+                'spc_audience_age' => $data['spc_audience_age'] ?? '18+',
+                'exclude_age_under_eighteen' => true,
+                'gender' => $data['gender'] ?? 'GENDER_UNLIMITED',
+
+                // Bidding
+                'bid_type' => 'BID_TYPE_NO_BID', // Maximum Delivery for Smart+
+                'billing_event' => 'OCPM',
+
+                // Attribution
+                'click_attribution_window' => 'SEVEN_DAYS',
+                'view_attribution_window' => 'ONE_DAY',
+                'attribution_event_count' => 'EVERY',
+
+                // Identity - Required for non-Spark Ads
+                'identity_type' => 'CUSTOMIZED_USER',
+                'identity_id' => $data['identity_id'],
+
+                // Media
+                'media_info_list' => $mediaInfoList,
+
+                // Ad text/titles
+                'title_list' => $titleList,
+
+                // Landing page
+                'landing_page_urls' => [
+                    ['landing_page_url' => $data['landing_page_url']]
+                ]
+            ];
+
+            // Add pixel_id if provided (for conversion tracking)
+            if (!empty($data['pixel_id'])) {
+                $params['pixel_id'] = $data['pixel_id'];
+                if (!empty($data['optimization_event'])) {
+                    $params['optimization_event'] = $data['optimization_event'];
+                }
+            }
+
+            // Add CTA portfolio ID - Required for Lead Gen (NOT call_to_action_list)
+            if (!empty($data['call_to_action_id'])) {
+                $params['call_to_action_id'] = $data['call_to_action_id'];
+            }
+
+            logToFile("=== SMART+ CAMPAIGN API CALL ===");
+            logToFile("TikTok API Endpoint: /campaign/spc/create/");
+            logToFile("Smart+ Campaign Params: " . json_encode($params, JSON_PRETTY_PRINT));
+            logToFile("===============================");
+
+            // Make API call
+            $url = "https://business-api.tiktok.com/open_api/v1.3/campaign/spc/create/";
+
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => json_encode($params),
+                CURLOPT_HTTPHEADER => [
+                    "Access-Token: " . $accessToken,
+                    "Content-Type: application/json"
+                ],
+            ]);
+
+            $result = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            logToFile("=== SMART+ API RESPONSE ===");
+            logToFile("HTTP Code: " . $httpCode);
+            logToFile("CURL Error: " . ($curlError ?: 'None'));
+            logToFile("Raw Response: " . $result);
+            logToFile("===========================");
+
+            if ($httpCode === 200) {
+                $response = json_decode($result, true);
+                if ($response && isset($response['code']) && $response['code'] == 0) {
+                    logToFile("Smart+ Campaign published successfully!");
+                    echo json_encode([
+                        'success' => true,
+                        'data' => $response['data'],
+                        'message' => 'Smart+ Campaign published successfully!'
+                    ]);
+                } else {
+                    logToFile("Smart+ Campaign publish failed: " . json_encode($response));
+                    echo json_encode([
+                        'success' => false,
+                        'message' => $response['message'] ?? 'Failed to publish Smart+ campaign',
+                        'error' => $response
+                    ]);
+                }
+            } else {
+                logToFile("HTTP error: " . $httpCode);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'API request failed with HTTP ' . $httpCode,
+                    'error' => $result
+                ]);
+            }
+            exit;
+
+        case 'create_smart_campaign':
+            // LEGACY: Old multi-step campaign creation - kept for backward compatibility
+            logToFile("Processing Smart+ Campaign Creation (Legacy)...");
+            $data = $requestData;
+
             // Smart+ campaigns using official TikTok API structure
             $params = [
                 'advertiser_id' => $advertiser_id,
@@ -254,11 +433,11 @@ try {
                 'view_attribution_window' => 'ONE_DAY',
                 'attribution_event_count' => 'EVERY'
             ];
-            
+
             // Override schedule times if provided from frontend
             if (!empty($data['schedule_start_time'])) {
                 $params['schedule_start_time'] = $data['schedule_start_time'];
-                
+
                 // If end time is provided, use it; otherwise set a default end time (1 year from start)
                 if (!empty($data['schedule_end_time'])) {
                     $params['schedule_end_time'] = $data['schedule_end_time'];
@@ -270,7 +449,7 @@ try {
                     $params['schedule_end_time'] = $endTime->format('Y-m-d H:i:s');
                 }
             }
-            
+
             // Handle CBO (Campaign Budget Optimization) settings
             if (isset($data['cbo_enabled']) && $data['cbo_enabled'] === true) {
                 // CBO enabled - set budget at campaign level
@@ -285,19 +464,19 @@ try {
                 // No budget parameter needed for BUDGET_MODE_INFINITE
                 logToFile("CBO Disabled - Budget will be set at ad group level");
             }
-            
+
             // Note: Smart+ Lead Generation campaigns don't require identity_id at campaign level
             // Identity is only required when creating ads within the campaign
-            
+
             logToFile("=== SMART+ CAMPAIGN API CALL ===");
             logToFile("TikTok API Endpoint: /campaign/spc/create/");
             logToFile("Smart+ Campaign Params: " . json_encode($params, JSON_PRETTY_PRINT));
             logToFile("===============================");
-            
+
             // Use direct API call for Smart+ Campaign endpoint
             $accessToken = $_ENV['TIKTOK_ACCESS_TOKEN'] ?? '';
             $url = "https://business-api.tiktok.com/open_api/v1.3/campaign/spc/create/";
-            
+
             $ch = curl_init();
             curl_setopt_array($ch, [
                 CURLOPT_URL => $url,
@@ -309,16 +488,16 @@ try {
                     "Content-Type: application/json"
                 ],
             ]);
-            
+
             $result = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
-            
+
             logToFile("=== SMART+ API RESPONSE ===");
             logToFile("HTTP Code: " . $httpCode);
             logToFile("Raw Response: " . $result);
             logToFile("===========================");
-            
+
             if ($httpCode === 200) {
                 $response = json_decode($result, true);
                 if ($response && isset($response['code']) && $response['code'] == 0) {
@@ -344,7 +523,7 @@ try {
                     'error' => $result
                 ];
             }
-            
+
             logToFile("=== FINAL RESPONSE ===");
             logToFile("Sending response: " . json_encode($smartResponse, JSON_PRETTY_PRINT));
             echo json_encode($smartResponse);
