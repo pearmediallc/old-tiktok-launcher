@@ -1,22 +1,22 @@
-// Smart+ Campaign JavaScript - Single Page Form
-// Uses the NEW /campaign/spc/create/ endpoint that creates everything in ONE API call
+// Smart+ Campaign JavaScript - Spark Ads Version
+// Uses /campaign/spc/create/ with TT_USER/AUTH_CODE and tiktok_item_id
 
 // State management
 const state = {
-    selectedMedia: [],
+    selectedPosts: [],      // TikTok posts (Spark Ads)
     selectedCTAs: ['LEARN_MORE'],
-    ctaPortfolioId: null
+    ctaPortfolioId: null,
+    currentIdentity: null   // Currently selected identity {id, type}
 };
 
 // Initialize on page load
 window.addEventListener('DOMContentLoaded', async () => {
-    console.log('=== Smart+ Campaign Single Page Form Initialization ===');
+    console.log('=== Smart+ Campaign (Spark Ads) Initialization ===');
 
     try {
         await loadAdvertiserInfo();
         await loadPixels();
         await loadIdentities();
-        loadVideos();
     } catch (error) {
         console.error('Initialization error:', error);
         showToast('Failed to initialize page', 'error');
@@ -59,7 +59,7 @@ async function loadPixels() {
 
         const data = await response.json();
         const select = document.getElementById('pixel-select');
-        select.innerHTML = '<option value="">Select a pixel (optional)</option>';
+        select.innerHTML = '<option value="">Select a pixel (required for Website)</option>';
 
         if (data.success && data.data && data.data.pixels) {
             data.data.pixels.forEach(pixel => {
@@ -80,7 +80,7 @@ async function loadPixels() {
     }
 }
 
-// Load identities
+// Load identities - Focus on TT_USER for Spark Ads
 async function loadIdentities() {
     try {
         const response = await fetch('api.php', {
@@ -91,171 +91,248 @@ async function loadIdentities() {
 
         const data = await response.json();
         const select = document.getElementById('identity-select');
-        select.innerHTML = '<option value="">Select an identity</option>';
+        select.innerHTML = '<option value="">Select a linked TikTok account</option>';
 
-        if (data.success && data.data) {
-            data.data.forEach(identity => {
+        let hasTTUser = false;
+
+        if (data.success && data.data && data.data.list) {
+            data.data.list.forEach(identity => {
                 const option = document.createElement('option');
-                option.value = identity.identity_id;
-                option.textContent = identity.display_name || identity.identity_name || 'Unnamed Identity';
+                option.value = JSON.stringify({
+                    identity_id: identity.identity_id,
+                    identity_type: identity.identity_type || 'TT_USER'
+                });
+
+                const typeLabel = identity.identity_type === 'TT_USER' ? '🔗 TikTok Account' :
+                                  identity.identity_type === 'CUSTOMIZED_USER' ? '📝 Custom' :
+                                  identity.identity_type;
+                option.textContent = `${typeLabel}: ${identity.display_name || identity.identity_name || 'Unnamed'}`;
+
+                // Highlight TT_USER identities
+                if (identity.identity_type === 'TT_USER') {
+                    hasTTUser = true;
+                    option.style.fontWeight = 'bold';
+                }
+
                 select.appendChild(option);
             });
         }
+
+        // Show warning if no TT_USER identities
+        const warningDiv = document.getElementById('identity-warning');
+        if (!hasTTUser && warningDiv) {
+            warningDiv.style.display = 'block';
+            warningDiv.innerHTML = `
+                <p style="color:#ff6b00;margin:10px 0;">
+                    ⚠️ <strong>No linked TikTok account found!</strong><br>
+                    Smart+ Lead Gen requires a linked TikTok account (TT_USER).<br>
+                    <a href="https://ads.tiktok.com" target="_blank">Link your TikTok account in Ads Manager</a>
+                </p>
+            `;
+        }
+
+        // When identity changes, load their TikTok posts
+        select.addEventListener('change', async () => {
+            if (select.value) {
+                const identity = JSON.parse(select.value);
+                state.currentIdentity = identity;
+
+                // Show/hide posts section based on identity type
+                const postsSection = document.getElementById('tiktok-posts-section');
+                if (identity.identity_type === 'TT_USER' || identity.identity_type === 'BC_AUTH_TT') {
+                    postsSection.style.display = 'block';
+                    await loadTikTokPosts(identity.identity_id, identity.identity_type);
+                } else if (identity.identity_type === 'CUSTOMIZED_USER') {
+                    postsSection.style.display = 'none';
+                    showToast('CUSTOMIZED_USER is not supported for Smart+ Lead Gen. Please link a TikTok account.', 'error');
+                }
+            }
+        });
     } catch (error) {
         console.error('Error loading identities:', error);
         document.getElementById('identity-select').innerHTML = '<option value="">No identities available</option>';
     }
 }
 
-// Load videos from media library
-async function loadVideos() {
+// Load TikTok posts from linked account
+async function loadTikTokPosts(identityId, identityType) {
+    const grid = document.getElementById('posts-grid');
+    grid.innerHTML = '<p style="text-align:center;padding:30px;">Loading TikTok posts...</p>';
+
     try {
         const response = await fetch('api.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'get_videos' })
+            body: JSON.stringify({
+                action: 'get_tiktok_posts',
+                identity_id: identityId,
+                identity_type: identityType
+            })
         });
 
         const data = await response.json();
-        const grid = document.getElementById('media-grid');
         grid.innerHTML = '';
 
-        if (data.success && data.data && data.data.list) {
-            data.data.list.forEach(video => {
+        if (data.success && data.data && data.data.video_list) {
+            data.data.video_list.forEach(post => {
                 const item = document.createElement('div');
-                item.className = 'media-item';
-                item.dataset.videoId = video.video_id;
-                item.dataset.url = video.video_cover_url || video.preview_url || '';
-                item.onclick = () => toggleMediaSelection(video);
+                item.className = 'post-item';
+                item.dataset.itemId = post.item_id;
+                item.onclick = () => togglePostSelection(post);
 
                 // Check if already selected
-                if (state.selectedMedia.find(m => m.video_id === video.video_id)) {
+                if (state.selectedPosts.find(p => p.tiktok_item_id === post.item_id)) {
                     item.classList.add('selected');
                 }
 
                 item.innerHTML = `
-                    <div class="media-preview">
-                        ${video.video_cover_url ?
-                            `<img src="${video.video_cover_url}" alt="${video.file_name || 'Video'}">` :
-                            `<div style="background:#333;width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:white;">VIDEO</div>`
+                    <div class="post-preview">
+                        ${post.video_cover_url ?
+                            `<img src="${post.video_cover_url}" alt="TikTok Post">` :
+                            `<div style="background:#333;width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:white;">📹</div>`
                         }
-                        <div class="media-type">VIDEO</div>
+                        <div class="post-type">TIKTOK POST</div>
                     </div>
-                    <div class="media-info">
-                        <p>${video.file_name || 'Unnamed Video'}</p>
-                        <small>${video.width || '?'}x${video.height || '?'}</small>
+                    <div class="post-info">
+                        <p>${post.video_description ? post.video_description.substring(0, 50) + '...' : 'TikTok Video'}</p>
+                        <small>ID: ${post.item_id.substring(0, 10)}...</small>
                     </div>
                 `;
 
                 grid.appendChild(item);
             });
+
+            if (data.data.video_list.length === 0) {
+                grid.innerHTML = '<p style="text-align:center;padding:30px;color:#666;">No TikTok posts found for this account.</p>';
+            }
         } else {
-            grid.innerHTML = '<p style="text-align:center;padding:30px;color:#666;">No videos found. Click "Sync from TikTok" to load videos.</p>';
+            grid.innerHTML = `
+                <div style="text-align:center;padding:30px;">
+                    <p style="color:#666;">Could not load TikTok posts.</p>
+                    <p style="color:#999;font-size:12px;">${data.message || 'Try linking your TikTok account again.'}</p>
+                </div>
+            `;
         }
     } catch (error) {
-        console.error('Error loading videos:', error);
-        document.getElementById('media-grid').innerHTML = '<p style="text-align:center;padding:30px;color:#f00;">Error loading videos</p>';
+        console.error('Error loading TikTok posts:', error);
+        grid.innerHTML = '<p style="text-align:center;padding:30px;color:#f00;">Error loading TikTok posts</p>';
     }
 }
 
-// Toggle media selection
-function toggleMediaSelection(video) {
-    const index = state.selectedMedia.findIndex(m => m.video_id === video.video_id);
+// Toggle post selection
+function togglePostSelection(post) {
+    const index = state.selectedPosts.findIndex(p => p.tiktok_item_id === post.item_id);
 
     if (index > -1) {
         // Deselect
-        state.selectedMedia.splice(index, 1);
-    } else if (state.selectedMedia.length < 30) {
+        state.selectedPosts.splice(index, 1);
+    } else if (state.selectedPosts.length < 30) {
         // Select
-        state.selectedMedia.push(video);
+        state.selectedPosts.push({
+            tiktok_item_id: post.item_id,
+            video_cover_url: post.video_cover_url,
+            video_description: post.video_description
+        });
     } else {
-        showToast('Maximum 30 videos allowed', 'error');
+        showToast('Maximum 30 posts allowed', 'error');
         return;
     }
 
-    // Update visual selection in modal
-    document.querySelectorAll('.media-item').forEach(item => {
-        if (item.dataset.videoId === video.video_id) {
-            item.classList.toggle('selected', state.selectedMedia.find(m => m.video_id === video.video_id));
+    // Update visual selection
+    document.querySelectorAll('.post-item').forEach(item => {
+        if (item.dataset.itemId === post.item_id) {
+            item.classList.toggle('selected', state.selectedPosts.find(p => p.tiktok_item_id === post.item_id));
         }
     });
 
     // Update counter
-    document.getElementById('selection-counter').textContent = `${state.selectedMedia.length} selected`;
+    updateSelectedPostsDisplay();
 }
 
-// Open media modal
-function openMediaModal() {
-    document.getElementById('media-modal').style.display = 'block';
-    document.getElementById('selection-counter').textContent = `${state.selectedMedia.length} selected`;
-    loadVideos();
+// Update selected posts display
+function updateSelectedPostsDisplay() {
+    const counter = document.getElementById('posts-counter');
+    if (counter) {
+        counter.textContent = `${state.selectedPosts.length} post(s) selected`;
+    }
+
+    // Update selected posts grid
+    const selectedGrid = document.getElementById('selected-posts-grid');
+    if (selectedGrid) {
+        selectedGrid.innerHTML = '';
+        state.selectedPosts.forEach(post => {
+            const item = document.createElement('div');
+            item.className = 'selected-post-item';
+            item.innerHTML = `
+                ${post.video_cover_url ?
+                    `<img src="${post.video_cover_url}" alt="Selected Post">` :
+                    `<div style="background:#333;width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:white;">📹</div>`
+                }
+                <button class="remove-btn" onclick="removeSelectedPost('${post.tiktok_item_id}')">&times;</button>
+            `;
+            selectedGrid.appendChild(item);
+        });
+    }
 }
 
-// Close media modal
-function closeMediaModal() {
-    document.getElementById('media-modal').style.display = 'none';
+// Remove selected post
+function removeSelectedPost(itemId) {
+    state.selectedPosts = state.selectedPosts.filter(p => p.tiktok_item_id !== itemId);
+    updateSelectedPostsDisplay();
+
+    // Update visual in grid
+    document.querySelectorAll('.post-item').forEach(item => {
+        if (item.dataset.itemId === itemId) {
+            item.classList.remove('selected');
+        }
+    });
 }
 
-// Confirm media selection
-function confirmMediaSelection() {
-    if (state.selectedMedia.length === 0) {
-        showToast('Please select at least one video', 'error');
+// Add AUTH_CODE manually
+async function addAuthCode() {
+    const authCodeInput = document.getElementById('auth-code-input');
+    const authCode = authCodeInput ? authCodeInput.value.trim() : '';
+
+    if (!authCode) {
+        showToast('Please enter an authorization code', 'error');
         return;
     }
 
-    // Update the display grid
-    const grid = document.getElementById('selected-media-grid');
-    grid.innerHTML = '';
-
-    state.selectedMedia.forEach(video => {
-        const item = document.createElement('div');
-        item.className = 'selected-media-item';
-        item.innerHTML = `
-            ${video.video_cover_url ?
-                `<img src="${video.video_cover_url}" alt="${video.file_name || 'Video'}">` :
-                `<div style="background:#333;width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:white;">VIDEO</div>`
-            }
-            <button class="remove-btn" onclick="removeSelectedMedia('${video.video_id}')">&times;</button>
-        `;
-        grid.appendChild(item);
-    });
-
-    closeMediaModal();
-    showToast(`${state.selectedMedia.length} video(s) selected`, 'success');
-}
-
-// Remove selected media
-function removeSelectedMedia(videoId) {
-    state.selectedMedia = state.selectedMedia.filter(m => m.video_id !== videoId);
-    confirmMediaSelection();
-}
-
-// Switch media tab
-function switchMediaTab(tab, event) {
-    event.preventDefault();
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
-}
-
-// Sync TikTok Library
-async function syncTikTokLibrary() {
     showLoading();
     try {
         const response = await fetch('api.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'sync_tiktok_media' })
+            body: JSON.stringify({
+                action: 'get_video_by_auth_code',
+                auth_code: authCode
+            })
         });
 
         const data = await response.json();
-        if (data.success) {
-            showToast('Media synced successfully', 'success');
-            loadVideos();
+
+        if (data.success && data.data) {
+            const post = data.data;
+            state.selectedPosts.push({
+                tiktok_item_id: post.item_id || post.tiktok_item_id,
+                video_cover_url: post.video_cover_url,
+                video_description: post.video_description || 'Authorized Video'
+            });
+
+            // Set identity type to AUTH_CODE
+            state.currentIdentity = {
+                identity_id: post.identity_id,
+                identity_type: 'AUTH_CODE'
+            };
+
+            updateSelectedPostsDisplay();
+            showToast('Video authorized successfully!', 'success');
+            authCodeInput.value = '';
         } else {
-            showToast(data.message || 'Failed to sync media', 'error');
+            showToast(data.message || 'Invalid authorization code', 'error');
         }
     } catch (error) {
-        showToast('Error syncing media', 'error');
+        showToast('Error verifying auth code', 'error');
     } finally {
         hideLoading();
     }
@@ -292,22 +369,22 @@ function removeAdText(btn) {
 
 // Select CTA
 function selectCTA(element) {
-    // Toggle selection
     element.classList.toggle('selected');
 
-    // Update state
     state.selectedCTAs = [];
     document.querySelectorAll('.cta-item.selected').forEach(item => {
         state.selectedCTAs.push(item.dataset.cta);
     });
 
-    // Ensure at least one is selected
     if (state.selectedCTAs.length === 0) {
         element.classList.add('selected');
         state.selectedCTAs.push(element.dataset.cta);
     }
 
-    document.getElementById('selected-ctas').value = state.selectedCTAs.join(',');
+    const selectedCtasInput = document.getElementById('selected-ctas');
+    if (selectedCtasInput) {
+        selectedCtasInput.value = state.selectedCTAs.join(',');
+    }
 }
 
 // Create CTA portfolio
@@ -317,10 +394,9 @@ async function createCTAPortfolio() {
     }
 
     try {
-        // Build portfolio content
         const portfolioContent = state.selectedCTAs.map(cta => ({
             asset_content: cta,
-            asset_ids: state.selectedMedia.map(m => m.video_id)
+            asset_ids: state.selectedPosts.map(p => p.tiktok_item_id)
         }));
 
         const response = await fetch('api.php', {
@@ -335,80 +411,27 @@ async function createCTAPortfolio() {
         const data = await response.json();
         if (data.success && data.data && (data.data.portfolio_id || data.data.creative_portfolio_id)) {
             return data.data.portfolio_id || data.data.creative_portfolio_id;
-        } else {
-            console.error('CTA Portfolio creation failed:', data);
-            return null;
         }
+        return null;
     } catch (error) {
         console.error('Error creating CTA portfolio:', error);
         return null;
     }
 }
 
-// Open create identity modal
-function openCreateIdentityModal() {
-    document.getElementById('create-identity-modal').style.display = 'block';
-    document.getElementById('new-identity-name').value = '';
-    document.getElementById('new-identity-name').focus();
-}
-
-// Close create identity modal
-function closeCreateIdentityModal() {
-    document.getElementById('create-identity-modal').style.display = 'none';
-}
-
-// Create new identity
-async function createNewIdentity() {
-    const displayName = document.getElementById('new-identity-name').value.trim();
-
-    if (!displayName) {
-        showToast('Please enter a display name', 'error');
-        return;
-    }
-
-    showLoading();
-    try {
-        const response = await fetch('api.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'create_identity',
-                display_name: displayName
-            })
-        });
-
-        const data = await response.json();
-        if (data.success && data.data && data.data.identity_id) {
-            showToast('Identity created successfully', 'success');
-            closeCreateIdentityModal();
-            await loadIdentities();
-
-            // Select the new identity
-            document.getElementById('identity-select').value = data.data.identity_id;
-        } else {
-            showToast(data.message || 'Failed to create identity', 'error');
-        }
-    } catch (error) {
-        showToast('Error creating identity', 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-// MAIN: Publish Smart+ Campaign
+// MAIN: Publish Smart+ Campaign with Spark Ads
 async function publishSmartCampaign() {
-    console.log('=== PUBLISHING SMART+ CAMPAIGN ===');
+    console.log('=== PUBLISHING SMART+ CAMPAIGN (SPARK ADS) ===');
 
-    // Validate all fields
+    // Get form values
     const campaignName = document.getElementById('campaign-name').value.trim();
     const budget = parseFloat(document.getElementById('budget').value);
     const ageTargeting = document.getElementById('age-targeting').value;
     const pixelId = document.getElementById('pixel-select').value;
     const pixelEvent = document.getElementById('pixel-event').value;
-    const identityId = document.getElementById('identity-select').value;
     const landingPageUrl = document.getElementById('landing-page-url').value.trim();
 
-    // Collect ad texts
+    // Collect ad texts (not used in Spark Ads, but kept for compatibility)
     const adTexts = [];
     document.querySelectorAll('.ad-text-input').forEach(input => {
         const text = input.value.trim();
@@ -426,20 +449,24 @@ async function publishSmartCampaign() {
         showToast('Minimum budget is $20', 'error');
         return;
     }
-    if (!identityId) {
-        showToast('Please select an identity', 'error');
+    if (!state.currentIdentity) {
+        showToast('Please select a linked TikTok account', 'error');
         return;
     }
-    if (state.selectedMedia.length === 0) {
-        showToast('Please select at least one video', 'error');
+    if (state.currentIdentity.identity_type === 'CUSTOMIZED_USER') {
+        showToast('Smart+ Lead Gen requires TT_USER or AUTH_CODE (Spark Ads)', 'error');
         return;
     }
-    if (adTexts.length === 0) {
-        showToast('Please enter at least one ad text (min 12 characters)', 'error');
+    if (state.selectedPosts.length === 0) {
+        showToast('Please select at least one TikTok post', 'error');
         return;
     }
     if (!landingPageUrl) {
         showToast('Please enter a landing page URL', 'error');
+        return;
+    }
+    if (!pixelId) {
+        showToast('Please select a pixel (required for Website optimization)', 'error');
         return;
     }
 
@@ -451,21 +478,12 @@ async function publishSmartCampaign() {
     showLoading();
 
     try {
-        // Step 1: Create CTA Portfolio
+        // Step 1: Create CTA Portfolio (Dynamic CTA)
         console.log('Creating CTA Portfolio...');
         const ctaPortfolioId = await createCTAPortfolio();
-        if (ctaPortfolioId) {
-            console.log('CTA Portfolio created:', ctaPortfolioId);
-        } else {
-            console.log('No CTA Portfolio created, proceeding without it');
-        }
+        console.log('CTA Portfolio:', ctaPortfolioId || 'Not created');
 
-        // Step 2: Build media_info_list for Smart+ API
-        const mediaInfoList = state.selectedMedia.map(video => ({
-            video_id: video.video_id
-        }));
-
-        // Step 3: Calculate schedule times (UTC)
+        // Step 2: Calculate schedule times (UTC)
         const now = new Date();
         const startTime = new Date(now.getTime() + 3600000); // 1 hour from now
         const endTime = new Date(now.getTime() + 365 * 24 * 3600000); // 1 year from now
@@ -474,26 +492,38 @@ async function publishSmartCampaign() {
             return date.toISOString().replace('T', ' ').substring(0, 19);
         };
 
-        // Step 4: Build the complete Smart+ Campaign payload
+        // Step 3: Build the Smart+ Campaign payload for Spark Ads
         const payload = {
             action: 'publish_smart_plus_campaign',
             campaign_name: campaignName,
             budget: budget,
             spc_audience_age: ageTargeting,
-            identity_id: identityId,
-            media_info_list: mediaInfoList,
-            title_list: adTexts,
-            landing_page_url: landingPageUrl,
-            location_ids: ['6252001'], // United States
-            schedule_start_time: formatUTC(startTime),
-            schedule_end_time: formatUTC(endTime)
-        };
 
-        // Add pixel if selected
-        if (pixelId) {
-            payload.pixel_id = pixelId;
-            payload.optimization_event = pixelEvent;
-        }
+            // Identity (TT_USER, AUTH_CODE, or BC_AUTH_TT)
+            identity_id: state.currentIdentity.identity_id,
+            identity_type: state.currentIdentity.identity_type,
+
+            // TikTok posts (Spark Ads)
+            tiktok_posts: state.selectedPosts,
+
+            // Destination
+            landing_page_url: landingPageUrl,
+
+            // Targeting
+            location_ids: ['6252001'], // United States
+
+            // Schedule
+            schedule_start_time: formatUTC(startTime),
+            schedule_end_time: formatUTC(endTime),
+
+            // Pixel (required for Website)
+            pixel_id: pixelId,
+            optimization_event: pixelEvent || 'FORM',
+
+            // Promotion type
+            promotion_target_type: 'EXTERNAL_WEBSITE',
+            optimization_goal: 'CONVERT'
+        };
 
         // Add CTA portfolio if created
         if (ctaPortfolioId) {
@@ -502,7 +532,7 @@ async function publishSmartCampaign() {
 
         console.log('Smart+ Campaign Payload:', JSON.stringify(payload, null, 2));
 
-        // Step 5: Call the API
+        // Step 4: Call the API
         const response = await fetch('api.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -515,23 +545,16 @@ async function publishSmartCampaign() {
         if (result.success) {
             showToast('Smart+ Campaign published successfully!', 'success');
 
-            // Show success message with campaign ID
             if (result.data && result.data.campaign_id) {
-                alert(`Campaign Created Successfully!\n\nCampaign ID: ${result.data.campaign_id}\n\nYour Smart+ Campaign is now live with AI-powered optimization.`);
+                alert(`🎉 Campaign Created Successfully!\n\nCampaign ID: ${result.data.campaign_id}\n\nYour Smart+ Lead Generation Campaign is now live with Spark Ads!`);
             }
 
-            // Redirect back to campaign selection
             setTimeout(() => {
                 window.location.href = 'campaign-select.php';
             }, 2000);
         } else {
             showToast(result.message || 'Failed to publish campaign', 'error');
             console.error('Campaign creation failed:', result);
-
-            // Show detailed error
-            if (result.error) {
-                console.error('Error details:', result.error);
-            }
         }
     } catch (error) {
         console.error('Error publishing campaign:', error);
@@ -545,19 +568,25 @@ async function publishSmartCampaign() {
 
 // Utility functions
 function showLoading() {
-    document.getElementById('loading').style.display = 'flex';
+    const loading = document.getElementById('loading');
+    if (loading) loading.style.display = 'flex';
 }
 
 function hideLoading() {
-    document.getElementById('loading').style.display = 'none';
+    const loading = document.getElementById('loading');
+    if (loading) loading.style.display = 'none';
 }
 
 function showToast(message, type = 'success') {
     const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.className = 'toast show ' + type;
+    if (toast) {
+        toast.textContent = message;
+        toast.className = 'toast show ' + type;
 
-    setTimeout(() => {
-        toast.className = 'toast';
-    }, 3000);
+        setTimeout(() => {
+            toast.className = 'toast';
+        }, 3000);
+    } else {
+        console.log(`[${type}] ${message}`);
+    }
 }

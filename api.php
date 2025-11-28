@@ -83,6 +83,47 @@ function logToFile($message) {
     file_put_contents(__DIR__ . '/api_debug.log', $logMessage, FILE_APPEND);
 }
 
+// Helper function to make TikTok API calls
+function makeApiCall($url, $params, $accessToken, $method = 'POST') {
+    logToFile("API Call: {$method} {$url}");
+    logToFile("Params: " . json_encode($params, JSON_PRETTY_PRINT));
+
+    $ch = curl_init();
+
+    if ($method === 'GET') {
+        $url .= '?' . http_build_query($params);
+        curl_setopt($ch, CURLOPT_HTTPGET, true);
+    } else {
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($params));
+    }
+
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            "Access-Token: " . $accessToken,
+            "Content-Type: application/json"
+        ],
+        CURLOPT_TIMEOUT => 60
+    ]);
+
+    $result = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    logToFile("Response HTTP Code: " . $httpCode);
+    logToFile("Response: " . $result);
+
+    if ($curlError) {
+        logToFile("CURL Error: " . $curlError);
+        return null;
+    }
+
+    return json_decode($result, true);
+}
+
 // Download and store TikTok images locally (like video thumbnails)
 function downloadAndStoreImage($imageUrl, $imageId, $fileName) {
     if (empty($imageUrl)) {
@@ -220,15 +261,14 @@ try {
             ]);
             break;
             
-        // Smart+ Campaign actions
+        // Smart+ Lead Generation Campaign using /campaign/spc/create/
+        // Uses Spark Ads (TT_USER/AUTH_CODE with tiktok_item_id)
         case 'publish_smart_plus_campaign':
-            // NEW: Smart+ Campaign - Creates campaign, ad group, and ads in ONE API call
-            // Endpoint: /campaign/spc/create/
-            logToFile("============ PUBLISH SMART+ CAMPAIGN ============");
+            logToFile("============ PUBLISH SMART+ CAMPAIGN (SPC) ============");
             $data = $requestData;
 
-            // Validate required fields
-            $requiredFields = ['campaign_name', 'budget', 'identity_id', 'media_info_list', 'title_list', 'landing_page_url'];
+            // Validate required fields for Smart+ with Spark Ads
+            $requiredFields = ['campaign_name', 'budget', 'identity_id', 'identity_type', 'tiktok_posts', 'landing_page_url'];
             foreach ($requiredFields as $field) {
                 if (empty($data[$field])) {
                     echo json_encode([
@@ -239,162 +279,130 @@ try {
                 }
             }
 
+            // Validate identity_type is valid for Smart+ Lead Gen (must be Spark Ads)
+            $validIdentityTypes = ['TT_USER', 'AUTH_CODE', 'BC_AUTH_TT'];
+            if (!in_array($data['identity_type'], $validIdentityTypes)) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Smart+ Lead Generation requires Spark Ads. identity_type must be TT_USER, AUTH_CODE, or BC_AUTH_TT'
+                ]);
+                exit;
+            }
+
             // Get access token
             $accessToken = isset($_SESSION['oauth_access_token']) && !empty($_SESSION['oauth_access_token'])
                 ? $_SESSION['oauth_access_token']
                 : ($_ENV['TIKTOK_ACCESS_TOKEN'] ?? '');
 
-            // Build media_info_list - each item needs media_info wrapper with video_info inside
-            $mediaInfoList = [];
-            foreach ($data['media_info_list'] as $media) {
-                $mediaItem = [
-                    'media_info' => [
-                        'video_info' => [
-                            'video_id' => $media['video_id']
-                        ]
-                    ]
-                ];
-                // Add image cover if provided
-                if (!empty($media['image_id'])) {
-                    $mediaItem['media_info']['image_info'] = [
-                        ['web_uri' => $media['image_id']]
+            // Schedule times
+            $scheduleStartTime = $data['schedule_start_time'] ?? date('Y-m-d H:i:s', strtotime('+1 hour'));
+            $scheduleEndTime = $data['schedule_end_time'] ?? date('Y-m-d H:i:s', strtotime('+1 year'));
+
+            try {
+                // Build media_info_list for Spark Ads (TikTok posts)
+                $mediaInfoList = [];
+                foreach ($data['tiktok_posts'] as $post) {
+                    $mediaInfo = [
+                        'identity_type' => $data['identity_type'],
+                        'identity_id' => $data['identity_id'],
+                        'tiktok_item_id' => $post['tiktok_item_id']
                     ];
+
+                    // Add identity_authorized_bc_id if using BC_AUTH_TT
+                    if ($data['identity_type'] === 'BC_AUTH_TT' && !empty($data['identity_authorized_bc_id'])) {
+                        $mediaInfo['identity_authorized_bc_id'] = $data['identity_authorized_bc_id'];
+                    }
+
+                    $mediaInfoList[] = ['media_info' => $mediaInfo];
                 }
-                $mediaInfoList[] = $mediaItem;
-            }
 
-            // Build title_list - array of objects with 'title' key
-            $titleList = [];
-            foreach ($data['title_list'] as $title) {
-                $titleList[] = ['title' => $title];
-            }
+                // Build Smart+ Campaign payload for /campaign/spc/create/
+                $spcParams = [
+                    'advertiser_id' => $advertiser_id,
+                    'objective_type' => 'LEAD_GENERATION',
+                    'campaign_name' => $data['campaign_name'],
 
-            // Build Smart+ Campaign params according to documentation
-            $params = [
-                'advertiser_id' => $advertiser_id,
-                'operation_status' => 'ENABLE',
-                'objective_type' => 'LEAD_GENERATION',
-                'campaign_type' => 'REGULAR_CAMPAIGN',
-                'campaign_name' => $data['campaign_name'],
+                    // Promotion type - Website (EXTERNAL_WEBSITE) or Instant Form (INSTANT_PAGE)
+                    'promotion_type' => 'LEAD_GENERATION',
+                    'promotion_target_type' => $data['promotion_target_type'] ?? 'EXTERNAL_WEBSITE',
 
-                // Lead Generation specific
-                'promotion_type' => 'LEAD_GENERATION',
-                'promotion_target_type' => 'EXTERNAL_WEBSITE',
-                'optimization_goal' => 'LEAD_GENERATION',
+                    // Optimization goal
+                    'optimization_goal' => $data['optimization_goal'] ?? 'CONVERT',
 
-                // Budget - BUDGET_MODE_DYNAMIC_DAILY_BUDGET is REQUIRED for Lead Gen
-                'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
-                'budget' => floatval($data['budget']),
+                    // Placement
+                    'placement_type' => 'PLACEMENT_TYPE_NORMAL',
+                    'placements' => ['PLACEMENT_TIKTOK'],
 
-                // Schedule
-                'schedule_type' => 'SCHEDULE_START_END',
-                'schedule_start_time' => $data['schedule_start_time'] ?? date('Y-m-d H:i:s'),
-                'schedule_end_time' => $data['schedule_end_time'] ?? date('Y-m-d H:i:s', strtotime('+1 year')),
+                    // Targeting
+                    'location_ids' => $data['location_ids'] ?? ['6252001'],
+                    'spc_audience_age' => $data['spc_audience_age'] ?? '25+',
 
-                // Placement - Required for Lead Gen: PLACEMENT_TYPE_NORMAL with PLACEMENT_TIKTOK
-                'placement_type' => 'PLACEMENT_TYPE_NORMAL',
-                'placements' => ['PLACEMENT_TIKTOK'],
+                    // Budget & Schedule
+                    'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
+                    'budget' => floatval($data['budget']),
+                    'schedule_type' => 'SCHEDULE_START_END',
+                    'schedule_start_time' => $scheduleStartTime,
+                    'schedule_end_time' => $scheduleEndTime,
 
-                // Location targeting
-                'location_ids' => $data['location_ids'] ?? ['6252001'], // Default: United States
+                    // Bidding
+                    'bid_type' => $data['bid_type'] ?? 'BID_TYPE_NO_BID',
+                    'billing_event' => 'OCPM',
 
-                // Audience targeting
-                'spc_audience_age' => $data['spc_audience_age'] ?? '18+',
-                'exclude_age_under_eighteen' => true,
-                'gender' => $data['gender'] ?? 'GENDER_UNLIMITED',
+                    // Spark Ads media (TikTok posts)
+                    'media_info_list' => $mediaInfoList,
 
-                // Bidding
-                'bid_type' => 'BID_TYPE_NO_BID', // Maximum Delivery for Smart+
-                'billing_event' => 'OCPM',
+                    // Destination
+                    'landing_page_urls' => [
+                        ['landing_page_url' => $data['landing_page_url']]
+                    ],
 
-                // Attribution
-                'click_attribution_window' => 'SEVEN_DAYS',
-                'view_attribution_window' => 'ONE_DAY',
-                'attribution_event_count' => 'EVERY',
+                    // Dynamic CTA (required for Lead Gen)
+                    'call_to_action_id' => $data['call_to_action_id'] ?? null
+                ];
 
-                // Identity - Required for non-Spark Ads
-                'identity_type' => 'CUSTOMIZED_USER',
-                'identity_id' => $data['identity_id'],
-
-                // Media
-                'media_info_list' => $mediaInfoList,
-
-                // Ad text/titles
-                'title_list' => $titleList,
-
-                // Landing page
-                'landing_page_urls' => [
-                    ['landing_page_url' => $data['landing_page_url']]
-                ]
-            ];
-
-            // Add pixel_id if provided (for conversion tracking)
-            if (!empty($data['pixel_id'])) {
-                $params['pixel_id'] = $data['pixel_id'];
-                if (!empty($data['optimization_event'])) {
-                    $params['optimization_event'] = $data['optimization_event'];
+                // Add pixel and optimization_event for Website optimization
+                if (($data['promotion_target_type'] ?? 'EXTERNAL_WEBSITE') === 'EXTERNAL_WEBSITE') {
+                    if (!empty($data['pixel_id'])) {
+                        $spcParams['pixel_id'] = $data['pixel_id'];
+                        $spcParams['optimization_event'] = $data['optimization_event'] ?? 'FORM';
+                    }
                 }
-            }
 
-            // Add CTA portfolio ID - Required for Lead Gen (NOT call_to_action_list)
-            if (!empty($data['call_to_action_id'])) {
-                $params['call_to_action_id'] = $data['call_to_action_id'];
-            }
+                // Add conversion_bid_price if using custom bid
+                if (($data['bid_type'] ?? '') === 'BID_TYPE_CUSTOM' && !empty($data['conversion_bid_price'])) {
+                    $spcParams['conversion_bid_price'] = floatval($data['conversion_bid_price']);
+                }
 
-            logToFile("=== SMART+ CAMPAIGN API CALL ===");
-            logToFile("TikTok API Endpoint: /campaign/spc/create/");
-            logToFile("Smart+ Campaign Params: " . json_encode($params, JSON_PRETTY_PRINT));
-            logToFile("===============================");
+                // Remove null values
+                $spcParams = array_filter($spcParams, function($v) { return $v !== null; });
 
-            // Make API call
-            $url = "https://business-api.tiktok.com/open_api/v1.3/campaign/spc/create/";
+                logToFile("Smart+ SPC Params: " . json_encode($spcParams, JSON_PRETTY_PRINT));
 
-            $ch = curl_init();
-            curl_setopt_array($ch, [
-                CURLOPT_URL => $url,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_POST => true,
-                CURLOPT_POSTFIELDS => json_encode($params),
-                CURLOPT_HTTPHEADER => [
-                    "Access-Token: " . $accessToken,
-                    "Content-Type: application/json"
-                ],
-            ]);
+                // Call /campaign/spc/create/ endpoint
+                $result = makeApiCall(
+                    'https://business-api.tiktok.com/open_api/v1.3/campaign/spc/create/',
+                    $spcParams,
+                    $accessToken
+                );
 
-            $result = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlError = curl_error($ch);
-            curl_close($ch);
+                logToFile("Smart+ SPC Response: " . json_encode($result, JSON_PRETTY_PRINT));
 
-            logToFile("=== SMART+ API RESPONSE ===");
-            logToFile("HTTP Code: " . $httpCode);
-            logToFile("CURL Error: " . ($curlError ?: 'None'));
-            logToFile("Raw Response: " . $result);
-            logToFile("===========================");
-
-            if ($httpCode === 200) {
-                $response = json_decode($result, true);
-                if ($response && isset($response['code']) && $response['code'] == 0) {
-                    logToFile("Smart+ Campaign published successfully!");
+                if ($result && isset($result['code']) && $result['code'] == 0) {
+                    logToFile("============ SMART+ CAMPAIGN CREATED SUCCESSFULLY ============");
                     echo json_encode([
                         'success' => true,
-                        'data' => $response['data'],
+                        'data' => $result['data'] ?? null,
                         'message' => 'Smart+ Campaign published successfully!'
                     ]);
                 } else {
-                    logToFile("Smart+ Campaign publish failed: " . json_encode($response));
-                    echo json_encode([
-                        'success' => false,
-                        'message' => $response['message'] ?? 'Failed to publish Smart+ campaign',
-                        'error' => $response
-                    ]);
+                    throw new Exception($result['message'] ?? 'Failed to create Smart+ campaign');
                 }
-            } else {
-                logToFile("HTTP error: " . $httpCode);
+
+            } catch (Exception $e) {
+                logToFile("Smart+ Campaign Error: " . $e->getMessage());
                 echo json_encode([
                     'success' => false,
-                    'message' => 'API request failed with HTTP ' . $httpCode,
-                    'error' => $result
+                    'message' => $e->getMessage()
                 ]);
             }
             exit;
@@ -2189,6 +2197,134 @@ try {
                 'data' => ['list' => $allIdentities],
                 'message' => empty($allIdentities) ? 'No identities found - Create one in TikTok Ads Manager' : null
             ]);
+            break;
+
+        // Get TikTok posts from linked TT_USER account for Spark Ads
+        case 'get_tiktok_posts':
+            logToFile("============ GET TIKTOK POSTS FOR SPARK ADS ============");
+
+            $identityId = $requestData['identity_id'] ?? '';
+            $identityType = $requestData['identity_type'] ?? 'TT_USER';
+
+            if (empty($identityId)) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'identity_id is required'
+                ]);
+                break;
+            }
+
+            $accessToken = $_ENV['TIKTOK_ACCESS_TOKEN'] ?? '';
+
+            // Use /identity/video/get/ endpoint to get videos from linked TikTok account
+            $url = "https://business-api.tiktok.com/open_api/v1.3/identity/video/get/";
+            $queryParams = [
+                'advertiser_id' => $advertiser_id,
+                'identity_id' => $identityId,
+                'identity_type' => $identityType,
+                'page' => $requestData['page'] ?? 1,
+                'page_size' => $requestData['page_size'] ?? 20
+            ];
+
+            $queryString = http_build_query($queryParams);
+            $fullUrl = $url . '?' . $queryString;
+
+            logToFile("Fetching TikTok posts from: " . $fullUrl);
+
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $fullUrl,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPGET => true,
+                CURLOPT_HTTPHEADER => [
+                    "Access-Token: " . $accessToken,
+                    "Content-Type: application/json"
+                ],
+                CURLOPT_TIMEOUT => 30
+            ]);
+
+            $result = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            logToFile("TikTok Posts Response (HTTP $httpCode): " . $result);
+
+            $response = json_decode($result, true);
+
+            if ($response && isset($response['code']) && $response['code'] == 0) {
+                echo json_encode([
+                    'success' => true,
+                    'data' => $response['data'] ?? [],
+                    'message' => 'TikTok posts retrieved successfully'
+                ]);
+            } else {
+                echo json_encode([
+                    'success' => false,
+                    'message' => $response['message'] ?? 'Failed to get TikTok posts',
+                    'code' => $response['code'] ?? null
+                ]);
+            }
+            break;
+
+        // Get video info using AUTH_CODE
+        case 'get_video_by_auth_code':
+            logToFile("============ GET VIDEO BY AUTH CODE ============");
+
+            $authCode = $requestData['auth_code'] ?? '';
+
+            if (empty($authCode)) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'auth_code is required'
+                ]);
+                break;
+            }
+
+            $accessToken = $_ENV['TIKTOK_ACCESS_TOKEN'] ?? '';
+
+            // Use /identity/video/info/ endpoint to get video info from auth code
+            $url = "https://business-api.tiktok.com/open_api/v1.3/identity/video/info/";
+            $params = [
+                'advertiser_id' => $advertiser_id,
+                'auth_code' => $authCode
+            ];
+
+            logToFile("Getting video info for auth_code: " . $authCode);
+
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => json_encode($params),
+                CURLOPT_HTTPHEADER => [
+                    "Access-Token: " . $accessToken,
+                    "Content-Type: application/json"
+                ],
+                CURLOPT_TIMEOUT => 30
+            ]);
+
+            $result = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            logToFile("Auth Code Video Response (HTTP $httpCode): " . $result);
+
+            $response = json_decode($result, true);
+
+            if ($response && isset($response['code']) && $response['code'] == 0) {
+                echo json_encode([
+                    'success' => true,
+                    'data' => $response['data'] ?? [],
+                    'message' => 'Video info retrieved successfully'
+                ]);
+            } else {
+                echo json_encode([
+                    'success' => false,
+                    'message' => $response['message'] ?? 'Failed to get video info from auth code',
+                    'code' => $response['code'] ?? null
+                ]);
+            }
             break;
 
         case 'get_pixels':
