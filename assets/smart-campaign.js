@@ -808,6 +808,15 @@ function testLandingUrl() {
     }
 }
 
+// Get selected CTAs from checkboxes
+function getSelectedCTAs() {
+    const selectedCTAs = [];
+    document.querySelectorAll('.cta-checkbox:checked').forEach(cb => {
+        selectedCTAs.push(cb.value);
+    });
+    return selectedCTAs;
+}
+
 // =====================
 // STEP 4: Review & Publish (Creates Ad)
 // =====================
@@ -819,7 +828,7 @@ function reviewAds() {
 
     const identityId = document.getElementById('global-identity').value;
     const landingUrl = document.getElementById('global-landing-url').value.trim();
-    const cta = document.getElementById('global-cta').value;
+    const selectedCTAs = getSelectedCTAs();
 
     if (!identityId) {
         showToast('Please select an identity', 'error');
@@ -828,6 +837,11 @@ function reviewAds() {
 
     if (!landingUrl) {
         showToast('Please enter a landing page URL', 'error');
+        return;
+    }
+
+    if (selectedCTAs.length === 0) {
+        showToast('Please select at least one Call to Action', 'error');
         return;
     }
 
@@ -853,7 +867,7 @@ function reviewAds() {
 
     state.globalIdentityId = identityId;
     state.globalLandingUrl = landingUrl;
-    state.globalCta = cta;
+    state.globalCtaList = selectedCTAs;
 
     const identity = state.identities.find(i => i.identity_id === identityId);
     const identityName = identity ? (identity.display_name || identity.identity_name) : identityId;
@@ -862,22 +876,20 @@ function reviewAds() {
     document.getElementById('campaign-summary').innerHTML = `
         <p><strong>Campaign Name:</strong> ${state.campaignName}</p>
         <p><strong>Campaign ID:</strong> ${state.campaignId}</p>
-        <p><strong>CBO:</strong> ${state.cboEnabled ? 'Enabled' : 'Disabled'}</p>
-        ${state.cboEnabled ? `<p><strong>Budget:</strong> $${state.budget}/day</p>` : ''}
+        <p><strong>Budget:</strong> $${state.budget}/day</p>
     `;
 
     document.getElementById('adgroup-summary').innerHTML = `
         <p><strong>Ad Group ID:</strong> ${state.adGroupId}</p>
         <p><strong>Pixel ID:</strong> ${state.pixelId}</p>
         <p><strong>Optimization Event:</strong> ${state.optimizationEvent}</p>
-        ${!state.cboEnabled ? `<p><strong>Ad Group Budget:</strong> $${state.adGroupBudget}/day</p>` : ''}
     `;
 
     let adsSummaryHtml = `
         <div class="summary-item" style="background: #f0f4ff; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
             <p><strong>Identity:</strong> ${identityName}</p>
             <p><strong>Landing Page:</strong> ${landingUrl}</p>
-            <p><strong>CTA:</strong> ${cta}</p>
+            <p><strong>CTAs:</strong> ${selectedCTAs.join(', ')}</p>
             <p><strong>Total Creatives:</strong> ${state.creatives.length} videos</p>
         </div>
     `;
@@ -916,7 +928,7 @@ async function createAd() {
             ad_text: creative.ad_text
         }));
 
-        addLog('info', `Creating ad with ${creativeList.length} creatives`);
+        addLog('info', `Creating ad with ${creativeList.length} creatives and ${state.globalCtaList.length} CTAs`);
 
         const result = await apiRequest('create_smartplus_ad', {
             adgroup_id: state.adGroupId,
@@ -924,7 +936,7 @@ async function createAd() {
             identity_id: state.globalIdentityId,
             identity_type: identityType,
             landing_page_url: state.globalLandingUrl,
-            call_to_action: state.globalCta,
+            call_to_action_list: state.globalCtaList,
             creatives: creativeList
         });
 
@@ -939,6 +951,7 @@ async function createAd() {
             alertMessage += `Ad Group ID: ${state.adGroupId}\n`;
             alertMessage += `Smart+ Ad ID: ${result.smart_plus_ad_id}\n`;
             alertMessage += `Creatives: ${creativeList.length} videos\n`;
+            alertMessage += `CTAs: ${state.globalCtaList.join(', ')}\n`;
 
             alert(alertMessage);
         } else {

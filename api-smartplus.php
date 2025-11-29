@@ -365,7 +365,7 @@ switch ($action) {
     // ==========================================
     // CREATE SMART+ AD
     // POST /open_api/v1.3/smart_plus/ad/create/
-    // Simple format: creative_list = [{video_id, ad_text}, ...]
+    // Format: creative_list = [{creative_info: {video_id, ad_text}}, ...]
     // ==========================================
     case 'create_smartplus_ad':
         $data = $input;
@@ -377,21 +377,21 @@ switch ($action) {
             exit;
         }
 
-        // Build creative_list with simple format: [{video_id, ad_text}, ...]
+        // Build creative_list with proper format: [{creative_info: {video_id, ad_text}}, ...]
         $creativeList = [];
         foreach ($data['creatives'] ?? [] as $creative) {
-            $creativeItem = [];
+            $creativeInfo = [];
 
             if (!empty($creative['video_id'])) {
-                $creativeItem['video_id'] = $creative['video_id'];
+                $creativeInfo['video_id'] = $creative['video_id'];
             }
 
             if (!empty($creative['ad_text'])) {
-                $creativeItem['ad_text'] = $creative['ad_text'];
+                $creativeInfo['ad_text'] = $creative['ad_text'];
             }
 
-            if (!empty($creativeItem)) {
-                $creativeList[] = $creativeItem;
+            if (!empty($creativeInfo)) {
+                $creativeList[] = ['creative_info' => $creativeInfo];
             }
         }
 
@@ -401,9 +401,11 @@ switch ($action) {
             $landingPageList[] = $data['landing_page_url'];
         }
 
-        // Build call_to_action_list as array of strings
+        // Build call_to_action_list as array of strings (supports multiple CTAs)
         $ctaList = [];
-        if (!empty($data['call_to_action'])) {
+        if (!empty($data['call_to_action_list']) && is_array($data['call_to_action_list'])) {
+            $ctaList = $data['call_to_action_list'];
+        } elseif (!empty($data['call_to_action'])) {
             $ctaList[] = $data['call_to_action'];
         }
 
@@ -415,6 +417,8 @@ switch ($action) {
             'landing_page_url_list' => $landingPageList,
             'call_to_action_list' => $ctaList
         ];
+
+        logSmartPlus("Ad params: " . json_encode($adParams));
 
         $result = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);
 

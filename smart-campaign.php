@@ -384,19 +384,58 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                             <button type="button" class="btn-secondary" onclick="openCreateIdentityModal()" style="margin-top: 8px; width: 100%;">+ Create New Identity</button>
                         </div>
                         <div class="form-group">
-                            <label>Call to Action</label>
-                            <select id="global-cta">
-                                <option value="LEARN_MORE">Learn More</option>
-                                <option value="SIGN_UP">Sign Up</option>
-                                <option value="GET_QUOTE">Get Quote</option>
-                                <option value="CONTACT_US">Contact Us</option>
-                                <option value="APPLY_NOW">Apply Now</option>
-                                <option value="DOWNLOAD">Download</option>
-                                <option value="SHOP_NOW">Shop Now</option>
-                                <option value="ORDER_NOW">Order Now</option>
-                                <option value="BOOK_NOW">Book Now</option>
-                                <option value="GET_STARTED">Get Started</option>
-                            </select>
+                            <label>Call to Action (Select multiple)</label>
+                            <div id="cta-checkboxes" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f9f9f9; padding: 12px; border-radius: 6px; max-height: 200px; overflow-y: auto;">
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="LEARN_MORE" checked> Learn More
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="SIGN_UP"> Sign Up
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="GET_QUOTE"> Get Quote
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="CONTACT_US"> Contact Us
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="APPLY_NOW"> Apply Now
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="DOWNLOAD"> Download
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="SHOP_NOW"> Shop Now
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="ORDER_NOW"> Order Now
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="BOOK_NOW"> Book Now
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="GET_STARTED"> Get Started
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="SUBSCRIBE"> Subscribe
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="WATCH_MORE"> Watch More
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="INSTALL_NOW"> Install Now
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="VIEW_NOW"> View Now
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="BUY_TICKETS"> Buy Tickets
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" class="cta-checkbox" value="PLAY_GAME"> Play Game
+                                </label>
+                            </div>
+                            <small style="color: #666;">Select one or more CTAs. TikTok will optimize delivery.</small>
                         </div>
                     </div>
 
