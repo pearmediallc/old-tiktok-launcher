@@ -458,63 +458,14 @@ function prevStep() {
 }
 
 // =====================
-// STEP 1: Create Campaign
+// STEP 1: Save Campaign Settings (NO API call - SPC creates all at once)
 // =====================
-async function createSmartCampaign() {
+function saveCampaignSettings() {
     const campaignName = document.getElementById('campaign-name').value.trim();
+    const budget = parseFloat(document.getElementById('campaign-budget').value) || 50;
 
     if (!campaignName) {
         showToast('Please enter a campaign name', 'error');
-        return;
-    }
-
-    showLoading('Creating Smart+ Campaign...');
-    addLog('info', '=== Creating Smart+ Campaign ===');
-
-    try {
-        const result = await apiRequest('create_campaign', {
-            campaign_name: campaignName
-        });
-
-        if (result.success && result.campaign_id) {
-            state.campaignId = result.campaign_id;
-            state.campaignName = campaignName;
-
-            document.getElementById('display-campaign-id').textContent = result.campaign_id;
-            document.getElementById('adgroup-name').value = campaignName + ' - Ad Group';
-
-            showToast('Campaign created successfully!', 'success');
-            nextStep();
-        } else {
-            showToast(result.message || 'Failed to create campaign', 'error');
-        }
-    } catch (error) {
-        showToast('Error creating campaign: ' + error.message, 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-// =====================
-// STEP 2: Create Ad Group
-// =====================
-async function createSmartAdGroup() {
-    const adGroupName = document.getElementById('adgroup-name').value.trim();
-    const pixelId = document.getElementById('pixel-select').value;
-    const optimizationEvent = document.getElementById('optimization-event').value;
-    const budgetMode = document.getElementById('budget-mode').value;
-    const budget = parseFloat(document.getElementById('budget').value) || 50;
-    const ageGroups = getSelectedAgeGroups();
-    const locationIds = getSelectedLocationIds();
-    const dayparting = getDaypartingData();
-
-    if (!adGroupName) {
-        showToast('Please enter an ad group name', 'error');
-        return;
-    }
-
-    if (!pixelId) {
-        showToast('Please select a pixel', 'error');
         return;
     }
 
@@ -523,55 +474,46 @@ async function createSmartAdGroup() {
         return;
     }
 
-    if (ageGroups.length === 0) {
-        showToast('Please select at least one age group', 'error');
+    // Save to state (no API call yet - SPC creates everything at once)
+    state.campaignName = campaignName;
+    state.budget = budget;
+
+    // Update display
+    const displayNameEl = document.getElementById('display-campaign-name');
+    const displayBudgetEl = document.getElementById('display-budget');
+    if (displayNameEl) displayNameEl.textContent = campaignName;
+    if (displayBudgetEl) displayBudgetEl.textContent = budget;
+
+    addLog('info', `Campaign settings saved: ${campaignName}, Budget: $${budget}`);
+    showToast('Campaign settings saved!', 'success');
+    nextStep();
+}
+
+// =====================
+// STEP 2: Save Ad Group Settings (NO API call - SPC creates all at once)
+// =====================
+function saveAdGroupSettings() {
+    const pixelId = document.getElementById('pixel-select').value;
+    const optimizationEvent = document.getElementById('optimization-event').value;
+    const spcAudienceAge = document.getElementById('spc-audience-age')?.value || '18+';
+    const locationIds = getSelectedLocationIds();
+    const dayparting = getDaypartingData();
+
+    if (!pixelId) {
+        showToast('Please select a pixel', 'error');
         return;
     }
 
-    if (!state.campaignId) {
-        showToast('No campaign found. Please go back and create a campaign.', 'error');
-        return;
-    }
+    // Save to state (no API call yet - SPC creates everything at once)
+    state.pixelId = pixelId;
+    state.optimizationEvent = optimizationEvent;
+    state.spcAudienceAge = spcAudienceAge;
+    state.locationIds = locationIds.length > 0 ? locationIds : ['6252001']; // Default to US
+    state.dayparting = dayparting;
 
-    showLoading('Creating Smart+ Ad Group...');
-    addLog('info', '=== Creating Smart+ Ad Group ===');
-
-    try {
-        const result = await apiRequest('create_adgroup', {
-            campaign_id: state.campaignId,
-            adgroup_name: adGroupName,
-            pixel_id: pixelId,
-            optimization_event: optimizationEvent,
-            budget_mode: budgetMode,
-            budget: budget,
-            age_groups: ageGroups,
-            location_ids: locationIds,
-            dayparting: dayparting
-        });
-
-        if (result.success && result.adgroup_id) {
-            state.adGroupId = result.adgroup_id;
-            state.adGroupName = adGroupName;
-            state.pixelId = pixelId;
-            state.optimizationEvent = optimizationEvent;
-            state.budgetMode = budgetMode;
-            state.budget = budget;
-            state.ageGroups = ageGroups;
-            state.locationIds = locationIds;
-            state.dayparting = dayparting;
-
-            document.getElementById('display-adgroup-id').textContent = result.adgroup_id;
-
-            showToast('Ad Group created successfully!', 'success');
-            nextStep();
-        } else {
-            showToast(result.message || 'Failed to create ad group', 'error');
-        }
-    } catch (error) {
-        showToast('Error creating ad group: ' + error.message, 'error');
-    } finally {
-        hideLoading();
-    }
+    addLog('info', `Ad Group settings saved: Pixel ${pixelId}, Event: ${optimizationEvent}`);
+    showToast('Ad Group settings saved!', 'success');
+    nextStep();
 }
 
 // =====================
@@ -779,6 +721,7 @@ function testLandingUrl() {
 
 // =====================
 // STEP 4: Review & Publish
+// Smart+ SPC creates Campaign + Ad Group + Ads in ONE API call
 // =====================
 function reviewAds() {
     const identityId = document.getElementById('global-identity').value;
@@ -834,18 +777,15 @@ function reviewAds() {
     // Populate review summaries
     document.getElementById('campaign-summary').innerHTML = `
         <p><strong>Campaign Name:</strong> ${state.campaignName}</p>
-        <p><strong>Campaign ID:</strong> ${state.campaignId}</p>
+        <p><strong>Budget:</strong> $${state.budget} (Dynamic Daily)</p>
         <p><strong>Type:</strong> Smart+ Lead Generation</p>
     `;
 
     document.getElementById('adgroup-summary').innerHTML = `
-        <p><strong>Ad Group Name:</strong> ${state.adGroupName}</p>
-        <p><strong>Ad Group ID:</strong> ${state.adGroupId}</p>
-        <p><strong>Budget:</strong> $${state.budget} (${state.budgetMode === 'BUDGET_MODE_DAY' ? 'Daily' : state.budgetMode === 'BUDGET_MODE_TOTAL' ? 'Lifetime' : 'Dynamic Daily'})</p>
         <p><strong>Pixel ID:</strong> ${state.pixelId}</p>
         <p><strong>Optimization Event:</strong> ${state.optimizationEvent}</p>
-        <p><strong>Age Groups:</strong> ${state.ageGroups.join(', ')}</p>
-        <p><strong>Location:</strong> ${state.locationIds.length === 1 && state.locationIds[0] === '6252001' ? 'United States' : state.locationIds.length + ' states'}</p>
+        <p><strong>Age Targeting:</strong> ${state.spcAudienceAge || '18+'}</p>
+        <p><strong>Location:</strong> ${state.locationIds.length === 1 && state.locationIds[0] === '6252001' ? 'United States' : state.locationIds.length + ' locations'}</p>
     `;
 
     let adsSummaryHtml = `
@@ -853,7 +793,7 @@ function reviewAds() {
             <p><strong>Identity:</strong> ${identityName}</p>
             <p><strong>Landing Page:</strong> ${landingUrl}</p>
             <p><strong>CTA:</strong> ${cta}</p>
-            <p><strong>Total Ads:</strong> ${state.ads.length}</p>
+            <p><strong>Total Creatives:</strong> ${state.ads.length}</p>
         </div>
     `;
 
@@ -873,74 +813,71 @@ function reviewAds() {
     nextStep();
 }
 
+// Publish ALL at once using SPC endpoint
 async function publishAll() {
-    showLoading('Publishing Smart+ Ads...');
-    addLog('info', '=== Publishing Smart+ Ads ===');
+    showLoading('Creating Smart+ Campaign...');
+    addLog('info', '=== Creating Smart+ SPC Campaign (All-in-One) ===');
 
-    const results = {
-        success: [],
-        failed: []
-    };
-
-    for (let i = 0; i < state.ads.length; i++) {
-        const ad = state.ads[i];
-
-        try {
-            document.getElementById('loading-text').textContent = `Creating Ad ${i + 1} of ${state.ads.length}...`;
-
-            const result = await apiRequest('create_ad', {
-                adgroup_id: state.adGroupId,
-                ad_name: ad.name,
-                identity_id: state.globalIdentityId,
-                video_id: ad.video_id,
-                image_id: ad.cover_image_id, // Cover image for video
-                ad_text: ad.ad_text,
-                landing_page_url: state.globalLandingUrl,
-                call_to_action: state.globalCta
+    try {
+        // First, create CTA portfolio for dynamic CTA
+        let ctaPortfolioId = null;
+        if (state.globalCta) {
+            addLog('info', 'Creating CTA portfolio...');
+            const ctaResult = await apiRequest('create_cta_portfolio', {
+                cta_values: [state.globalCta]
             });
-
-            if (result.success) {
-                results.success.push({ name: ad.name, ad_id: result.ad_id });
-                addLog('info', `Ad ${i + 1} created: ${result.ad_id}`);
-            } else {
-                results.failed.push({ name: ad.name, error: result.message });
-                addLog('error', `Ad ${i + 1} failed: ${result.message}`);
+            if (ctaResult.success && ctaResult.portfolio_id) {
+                ctaPortfolioId = ctaResult.portfolio_id;
+                addLog('info', `CTA Portfolio created: ${ctaPortfolioId}`);
             }
-        } catch (error) {
-            results.failed.push({ name: ad.name, error: error.message });
-            addLog('error', `Ad ${i + 1} error: ${error.message}`);
         }
-    }
 
-    hideLoading();
+        // Prepare ads array for SPC
+        const adsForSpc = state.ads.map(ad => ({
+            video_id: ad.video_id,
+            image_id: ad.cover_image_id,
+            ad_text: ad.ad_text
+        }));
 
-    // Show results
-    let message = '';
-    if (results.success.length > 0) {
-        message = `Successfully created ${results.success.length} ad(s)!`;
-        if (results.failed.length > 0) {
-            message += ` ${results.failed.length} ad(s) failed.`;
-        }
-        showToast(message, results.failed.length > 0 ? 'warning' : 'success');
-
-        let alertMessage = `Smart+ Campaign Published!\n\n`;
-        alertMessage += `Campaign ID: ${state.campaignId}\n`;
-        alertMessage += `Ad Group ID: ${state.adGroupId}\n\n`;
-        alertMessage += `Ads Created: ${results.success.length}\n`;
-        results.success.forEach(ad => {
-            alertMessage += `  - ${ad.name}: ${ad.ad_id}\n`;
+        // Create the entire campaign with one API call
+        const result = await apiRequest('create_spc_campaign', {
+            campaign_name: state.campaignName,
+            budget: state.budget,
+            pixel_id: state.pixelId,
+            optimization_event: state.optimizationEvent,
+            spc_audience_age: state.spcAudienceAge || '18+',
+            location_ids: state.locationIds,
+            dayparting: state.dayparting,
+            identity_id: state.globalIdentityId,
+            landing_page_url: state.globalLandingUrl,
+            call_to_action_id: ctaPortfolioId,
+            ads: adsForSpc
         });
 
-        if (results.failed.length > 0) {
-            alertMessage += `\nFailed: ${results.failed.length}\n`;
-            results.failed.forEach(ad => {
-                alertMessage += `  - ${ad.name}: ${ad.error}\n`;
-            });
-        }
+        hideLoading();
 
-        alert(alertMessage);
-    } else {
-        showToast('Failed to create ads. Check the logs.', 'error');
+        if (result.success && result.campaign_id) {
+            state.campaignId = result.campaign_id;
+
+            showToast('Smart+ Campaign created successfully!', 'success');
+            addLog('info', `Campaign created: ${result.campaign_id}`);
+
+            let alertMessage = `Smart+ Campaign Published!\n\n`;
+            alertMessage += `Campaign ID: ${result.campaign_id}\n`;
+            alertMessage += `Campaign Name: ${state.campaignName}\n`;
+            alertMessage += `Budget: $${state.budget}/day\n`;
+            alertMessage += `Creatives: ${state.ads.length}\n`;
+            alertMessage += `Landing Page: ${state.globalLandingUrl}\n`;
+
+            alert(alertMessage);
+        } else {
+            showToast('Failed to create campaign: ' + (result.message || 'Unknown error'), 'error');
+            addLog('error', 'Failed to create campaign', result);
+        }
+    } catch (error) {
+        hideLoading();
+        showToast('Error creating campaign: ' + error.message, 'error');
+        addLog('error', 'Error: ' + error.message);
     }
 }
 

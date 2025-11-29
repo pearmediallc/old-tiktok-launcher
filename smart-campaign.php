@@ -80,24 +80,26 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     <input type="text" id="campaign-name" placeholder="Enter campaign name" required>
                 </div>
 
+                <div class="form-group">
+                    <label>Campaign Budget ($ per day)</label>
+                    <input type="number" id="campaign-budget" value="50" min="20" placeholder="50" required>
+                    <small>Minimum $20 budget. Smart+ uses Dynamic Daily Budget with CBO enabled.</small>
+                </div>
+
                 <div class="form-info smart-info">
                     <p><strong>Objective:</strong> Lead Generation</p>
                     <p><strong>Type:</strong> Smart+ Campaign (AI-Optimized)</p>
-                    <p><strong>Note:</strong> Budget is set at Ad Group level for Smart+ campaigns</p>
+                    <p><strong>CBO:</strong> Campaign Budget Optimization is enabled by default</p>
                 </div>
-                <button class="btn-primary" onclick="createSmartCampaign()">Continue to Ad Group →</button>
+                <button class="btn-primary" onclick="saveCampaignSettings()">Continue to Ad Group →</button>
             </div>
 
             <!-- Step 2: Ad Group Creation -->
             <div class="step-content" id="step-2">
-                <h2>Create Smart+ Ad Group</h2>
+                <h2>Smart+ Ad Group Settings</h2>
                 <div class="form-info" style="margin-bottom: 20px; background: #e8f5e9; padding: 12px; border-radius: 6px;">
-                    <p><strong>Campaign ID:</strong> <span id="display-campaign-id">-</span></p>
-                </div>
-
-                <div class="form-group">
-                    <label>Ad Group Name</label>
-                    <input type="text" id="adgroup-name" placeholder="Enter ad group name" required>
+                    <p><strong>Campaign:</strong> <span id="display-campaign-name">-</span></p>
+                    <p><strong>Budget:</strong> $<span id="display-budget">-</span>/day (Dynamic Daily)</p>
                 </div>
 
                 <div class="form-section">
@@ -123,71 +125,15 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 </div>
 
                 <div class="form-section">
-                    <h3>Budget & Schedule</h3>
+                    <h3>Audience Targeting</h3>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Budget Mode</label>
-                            <select id="budget-mode">
-                                <option value="BUDGET_MODE_DAY">Daily Budget</option>
-                                <option value="BUDGET_MODE_DYNAMIC_DAILY_BUDGET" selected>Dynamic Daily Budget (Recommended)</option>
-                                <option value="BUDGET_MODE_TOTAL">Total Budget (Lifetime)</option>
+                            <label>Age Targeting</label>
+                            <select id="spc-audience-age">
+                                <option value="18+" selected>18+ (All adults)</option>
+                                <option value="25+">25+ (Adults 25 and older)</option>
                             </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Ad Group Budget Amount ($)</label>
-                            <input type="number" id="budget" value="50" min="20" placeholder="50" required>
-                            <small>Minimum $20 budget</small>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-section">
-                    <h3>Age Targeting</h3>
-                    <div class="form-group">
-                        <label>Select Age Groups</label>
-                        <div class="age-groups-container">
-                            <div class="age-group-item">
-                                <label>
-                                    <input type="checkbox" name="age_groups" value="AGE_13_17" class="age-checkbox">
-                                    <span>13-17 years</span>
-                                    <span class="age-note">*Restricted in some regions</span>
-                                </label>
-                            </div>
-                            <div class="age-group-item">
-                                <label>
-                                    <input type="checkbox" name="age_groups" value="AGE_18_24" class="age-checkbox" checked>
-                                    <span>18-24 years</span>
-                                </label>
-                            </div>
-                            <div class="age-group-item">
-                                <label>
-                                    <input type="checkbox" name="age_groups" value="AGE_25_34" class="age-checkbox" checked>
-                                    <span>25-34 years</span>
-                                </label>
-                            </div>
-                            <div class="age-group-item">
-                                <label>
-                                    <input type="checkbox" name="age_groups" value="AGE_35_44" class="age-checkbox" checked>
-                                    <span>35-44 years</span>
-                                </label>
-                            </div>
-                            <div class="age-group-item">
-                                <label>
-                                    <input type="checkbox" name="age_groups" value="AGE_45_54" class="age-checkbox" checked>
-                                    <span>45-54 years</span>
-                                </label>
-                            </div>
-                            <div class="age-group-item">
-                                <label>
-                                    <input type="checkbox" name="age_groups" value="AGE_55_100" class="age-checkbox" checked>
-                                    <span>55+ years</span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="age-controls" style="margin-top: 10px;">
-                            <button type="button" class="btn-secondary" onclick="selectAllAges()">Select All</button>
-                            <button type="button" class="btn-secondary" onclick="clearAllAges()">Clear All</button>
-                            <button type="button" class="btn-secondary" onclick="selectDefaultAges()">Default (18+)</button>
+                            <small>Smart+ supports simplified age targeting</small>
                         </div>
                     </div>
                 </div>
@@ -269,7 +215,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
 
                 <div class="button-row">
                     <button class="btn-secondary" onclick="prevStep()">← Back</button>
-                    <button class="btn-primary" onclick="createSmartAdGroup()">Continue to Ads →</button>
+                    <button class="btn-primary" onclick="saveAdGroupSettings()">Continue to Ads →</button>
                 </div>
             </div>
 
