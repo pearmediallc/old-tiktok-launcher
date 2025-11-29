@@ -399,10 +399,10 @@ switch ($action) {
             }
         }
 
-        // Build landing_page_url_list as array of strings
+        // Build landing_page_url_list as array of OBJECTS with landing_page_url key
         $landingPageList = [];
         if (!empty($data['landing_page_url'])) {
-            $landingPageList[] = $data['landing_page_url'];
+            $landingPageList[] = ['landing_page_url' => $data['landing_page_url']];
         }
 
         // Build call_to_action_list as array of strings (supports multiple CTAs)
@@ -625,10 +625,10 @@ switch ($action) {
 
         logSmartPlus("media_info_list: " . json_encode($mediaInfoList));
 
-        // Build landing_page_url_list as array of strings
+        // Build landing_page_url_list as array of OBJECTS with landing_page_url key
         $landingPageUrlList = [];
         if (!empty($data['landing_page_url'])) {
-            $landingPageUrlList[] = $data['landing_page_url'];
+            $landingPageUrlList[] = ['landing_page_url' => $data['landing_page_url']];
         }
 
         // Build call_to_action_list as array of strings (supports multiple CTAs)
