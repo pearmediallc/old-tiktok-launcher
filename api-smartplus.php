@@ -247,13 +247,13 @@ switch ($action) {
         }
 
         // For Smart+ Lead Generation: budget is at AdGroup level
-        // Campaign must use BUDGET_MODE_TOTAL (not BUDGET_MODE_DAY which is dynamic daily budget)
+        // Campaign uses BUDGET_MODE_DYNAMIC_DAILY_BUDGET but no budget value at campaign level
         $campaignParams = [
             'advertiser_id' => $advertiserId,
             'request_id' => generateRequestId(),
             'campaign_name' => $data['campaign_name'],
             'objective_type' => 'LEAD_GENERATION',
-            'budget_mode' => 'BUDGET_MODE_TOTAL',
+            'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
             'operation_status' => 'ENABLE'
         ];
 
@@ -461,14 +461,14 @@ switch ($action) {
 
         // Step 1: Create Campaign
         // For LEAD_GENERATION objective: budget is at AdGroup level
-        // Campaign must use BUDGET_MODE_TOTAL (not BUDGET_MODE_DAY which is dynamic daily budget)
+        // Campaign uses BUDGET_MODE_DYNAMIC_DAILY_BUDGET but no budget value at campaign level
         logSmartPlus("Step 1: Creating Campaign...");
         $campaignParams = [
             'advertiser_id' => $advertiserId,
             'request_id' => generateRequestId(),
             'campaign_name' => $data['campaign_name'],
             'objective_type' => 'LEAD_GENERATION',
-            'budget_mode' => 'BUDGET_MODE_TOTAL',
+            'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
             'operation_status' => 'ENABLE'
         ];
 
