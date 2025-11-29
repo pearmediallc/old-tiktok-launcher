@@ -590,16 +590,24 @@ async function createAdGroup() {
     const locationIds = getSelectedLocationIds();
     const dayparting = getDaypartingData();
 
-    const cboEnabled = state.cboEnabled;
-    const adGroupBudget = !cboEnabled ? (parseFloat(document.getElementById('adgroup-budget')?.value) || 50) : null;
+    // For LEAD_GENERATION objective: budget is ALWAYS at AdGroup level (not campaign)
+    // Get budget from either campaign budget field (if CBO was enabled in step 1) or adgroup budget field
+    let adGroupBudget;
+    if (state.cboEnabled) {
+        // If CBO was "enabled", the budget was entered in campaign budget field but still goes to AdGroup
+        adGroupBudget = state.budget || parseFloat(document.getElementById('campaign-budget')?.value) || 50;
+    } else {
+        // If CBO was disabled, get from adgroup budget field
+        adGroupBudget = parseFloat(document.getElementById('adgroup-budget')?.value) || 50;
+    }
 
     if (!pixelId) {
         showToast('Please select a pixel', 'error');
         return;
     }
 
-    if (!cboEnabled && (!adGroupBudget || adGroupBudget < 20)) {
-        showToast('Minimum ad group budget is $20', 'error');
+    if (!adGroupBudget || adGroupBudget < 20) {
+        showToast('Minimum budget is $20', 'error');
         return;
     }
 
@@ -607,6 +615,7 @@ async function createAdGroup() {
     addLog('info', '=== Creating Smart+ Ad Group ===');
 
     try {
+        // For LEAD_GENERATION: budget ALWAYS goes to AdGroup level
         const result = await apiRequest('create_smartplus_adgroup', {
             campaign_id: state.campaignId,
             adgroup_name: state.campaignName + ' - Ad Group',
@@ -614,8 +623,7 @@ async function createAdGroup() {
             optimization_event: optimizationEvent,
             location_ids: locationIds,
             dayparting: dayparting,
-            budget: adGroupBudget,
-            cbo_enabled: cboEnabled
+            budget: adGroupBudget  // Always at AdGroup level for LEAD_GENERATION
         });
 
         hideLoading();

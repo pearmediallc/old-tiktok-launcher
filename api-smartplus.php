@@ -246,28 +246,16 @@ switch ($action) {
             exit;
         }
 
-        // CBO enabled/disabled - frontend sends cbo_enabled
-        $cboEnabled = $data['cbo_enabled'] ?? true;
-
+        // For Smart+ Lead Generation: budget is at AdGroup level
+        // Campaign must use BUDGET_MODE_TOTAL (not BUDGET_MODE_DAY which is dynamic daily budget)
         $campaignParams = [
             'advertiser_id' => $advertiserId,
             'request_id' => generateRequestId(),
             'campaign_name' => $data['campaign_name'],
             'objective_type' => 'LEAD_GENERATION',
-            'budget_optimize_on' => $cboEnabled,  // CBO toggle
+            'budget_mode' => 'BUDGET_MODE_TOTAL',
             'operation_status' => 'ENABLE'
         ];
-
-        // Only add budget at campaign level if CBO is enabled
-        if ($cboEnabled && !empty($data['budget'])) {
-            $budget = floatval($data['budget']);
-            if ($budget >= 20) {
-                $campaignParams['budget'] = $budget;
-            } else {
-                // Minimum budget is $20
-                $campaignParams['budget'] = 20;
-            }
-        }
 
         logSmartPlus("Campaign params: " . json_encode($campaignParams));
 
@@ -332,12 +320,15 @@ switch ($action) {
 
         // Note: Identity is set at AD level for Smart+, not at adgroup level
 
-        // Add budget if CBO is disabled (budget at adgroup level)
-        $cboEnabled = $data['cbo_enabled'] ?? true;
-        if (!$cboEnabled && !empty($data['budget'])) {
+        // For LEAD_GENERATION objective: budget is ALWAYS at AdGroup level (not campaign)
+        // TikTok API requires budget at adgroup level for this objective
+        if (!empty($data['budget'])) {
             $budget = floatval($data['budget']);
             if ($budget >= 20) {
                 $adgroupParams['budget'] = $budget;
+                logSmartPlus("Setting budget at AdGroup level: $budget");
+            } else {
+                logSmartPlus("WARNING: Budget $budget is less than minimum $20");
             }
         }
 
@@ -469,21 +460,17 @@ switch ($action) {
         ];
 
         // Step 1: Create Campaign
+        // For LEAD_GENERATION objective: budget is at AdGroup level
+        // Campaign must use BUDGET_MODE_TOTAL (not BUDGET_MODE_DAY which is dynamic daily budget)
         logSmartPlus("Step 1: Creating Campaign...");
         $campaignParams = [
             'advertiser_id' => $advertiserId,
             'request_id' => generateRequestId(),
             'campaign_name' => $data['campaign_name'],
             'objective_type' => 'LEAD_GENERATION',
-            'budget_optimize_on' => $data['cbo_enabled'] ?? true,
+            'budget_mode' => 'BUDGET_MODE_TOTAL',
             'operation_status' => 'ENABLE'
         ];
-
-        if (!empty($data['budget']) && ($data['cbo_enabled'] ?? true)) {
-            $campaignParams['budget'] = floatval($data['budget']);
-            // Don't pass budget_mode - let TikTok use the default for Smart+ campaigns
-            // The API will automatically use the appropriate budget mode
-        }
 
         $campaignResult = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
 
@@ -530,9 +517,12 @@ switch ($action) {
             $adgroupParams['optimization_event'] = $data['optimization_event'] ?? 'FORM';
         }
 
-        // Add budget at ad group level if CBO disabled (do NOT send budget_mode)
-        if (!($data['cbo_enabled'] ?? true) && !empty($data['adgroup_budget'])) {
-            $adgroupParams['budget'] = floatval($data['adgroup_budget']);
+        // For LEAD_GENERATION objective: budget is ALWAYS at AdGroup level (not campaign)
+        // Check for adgroup_budget first, then fall back to budget
+        $adgroupBudget = $data['adgroup_budget'] ?? $data['budget'] ?? null;
+        if (!empty($adgroupBudget)) {
+            $adgroupParams['budget'] = floatval($adgroupBudget);
+            logSmartPlus("Setting budget at AdGroup level: " . $adgroupParams['budget']);
         }
 
         // Add dayparting
