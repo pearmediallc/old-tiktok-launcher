@@ -78,64 +78,99 @@ const US_STATES = [
 const SMARTPLUS_API = 'api-smartplus.php';
 const MAIN_API = 'api.php';
 
-// API Request function
+// API Request function with detailed logging
 async function apiRequest(action, data = {}, useMainApi = false) {
     const apiUrl = useMainApi ? MAIN_API : SMARTPLUS_API;
-    addLog('request', `Calling ${action}`, data);
+    const requestBody = { action, ...data };
+
+    // Log full request details
+    addLog('request', `>>> ${action}`, {
+        endpoint: apiUrl,
+        action: action,
+        parameters: data
+    });
 
     try {
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action, ...data })
+            body: JSON.stringify(requestBody)
         });
 
         const result = await response.json();
 
         if (result.success) {
-            addLog('response', `${action} successful`, result);
+            addLog('response', `<<< ${action} SUCCESS`, {
+                status: 'success',
+                response: result
+            });
         } else {
-            addLog('error', `${action} failed: ${result.message}`, result);
+            addLog('error', `<<< ${action} FAILED: ${result.message}`, {
+                status: 'failed',
+                error_code: result.error_code || null,
+                message: result.message,
+                details: result.details || result
+            });
         }
 
         return result;
     } catch (error) {
-        addLog('error', `${action} error: ${error.message}`);
+        addLog('error', `<<< ${action} ERROR: ${error.message}`, {
+            status: 'error',
+            error: error.message,
+            stack: error.stack
+        });
         throw error;
     }
 }
 
-// API Logger Functions
+// API Logger Functions - Shows full details
 function addLog(type, message, details = null) {
     const logsContent = document.getElementById('logs-content');
     if (!logsContent) return;
 
     const logEntry = document.createElement('div');
     logEntry.className = `log-entry log-${type}`;
+    logEntry.style.borderLeft = type === 'error' ? '3px solid #ff4444' :
+                                 type === 'request' ? '3px solid #667eea' :
+                                 type === 'response' ? '3px solid #22c55e' : '3px solid #999';
 
     const now = new Date();
     const time = now.toTimeString().split(' ')[0];
 
     let typeLabel = '';
-    if (type === 'request' || type === 'response' || type === 'error') {
-        typeLabel = `<span class="log-type ${type}">${type.toUpperCase()}</span>`;
+    let typeBg = '';
+    if (type === 'request') {
+        typeLabel = '<span class="log-type" style="background:#667eea;color:white;padding:2px 6px;border-radius:3px;font-size:10px;">REQUEST</span>';
+    } else if (type === 'response') {
+        typeLabel = '<span class="log-type" style="background:#22c55e;color:white;padding:2px 6px;border-radius:3px;font-size:10px;">RESPONSE</span>';
+    } else if (type === 'error') {
+        typeLabel = '<span class="log-type" style="background:#ff4444;color:white;padding:2px 6px;border-radius:3px;font-size:10px;">ERROR</span>';
+    } else {
+        typeLabel = '<span class="log-type" style="background:#999;color:white;padding:2px 6px;border-radius:3px;font-size:10px;">INFO</span>';
     }
 
     logEntry.innerHTML = `
-        <span class="log-time">${time}</span>
-        ${typeLabel}
-        <span class="log-message">${message}</span>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">
+            <span class="log-time" style="color:#666;font-size:11px;">${time}</span>
+            ${typeLabel}
+            <span class="log-message" style="font-weight:500;">${message}</span>
+        </div>
     `;
 
     if (details) {
         const detailsDiv = document.createElement('div');
         detailsDiv.className = 'log-details';
-        detailsDiv.innerHTML = `<pre>${JSON.stringify(details, null, 2)}</pre>`;
+        detailsDiv.style.cssText = 'background:#f5f5f5;padding:10px;border-radius:4px;margin-top:5px;overflow-x:auto;';
+        detailsDiv.innerHTML = `<pre style="margin:0;font-size:11px;white-space:pre-wrap;word-break:break-all;">${JSON.stringify(details, null, 2)}</pre>`;
         logEntry.appendChild(detailsDiv);
     }
 
     logsContent.appendChild(logEntry);
     logsContent.scrollTop = logsContent.scrollHeight;
+
+    // Also log to console for debugging
+    console.log(`[${type.toUpperCase()}] ${message}`, details);
 }
 
 function clearLogs() {

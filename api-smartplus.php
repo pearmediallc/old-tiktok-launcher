@@ -246,22 +246,33 @@ switch ($action) {
             exit;
         }
 
+        // CBO enabled/disabled - frontend sends cbo_enabled
+        $cboEnabled = $data['cbo_enabled'] ?? true;
+
         $campaignParams = [
             'advertiser_id' => $advertiserId,
             'request_id' => generateRequestId(),
             'campaign_name' => $data['campaign_name'],
-            'objective_type' => $data['objective_type'] ?? 'LEAD_GENERATION',
-            'budget_optimize_on' => $data['budget_optimize_on'] ?? true,
+            'objective_type' => 'LEAD_GENERATION',
+            'budget_optimize_on' => $cboEnabled,  // CBO toggle
             'operation_status' => 'ENABLE'
         ];
 
-        // Add budget if provided (do NOT send budget_mode - let TikTok use default)
-        if (!empty($data['budget'])) {
-            $campaignParams['budget'] = floatval($data['budget']);
-            // Note: budget_mode is NOT passed - TikTok API uses BUDGET_MODE_DYNAMIC_DAILY_BUDGET automatically
+        // Only add budget at campaign level if CBO is enabled
+        if ($cboEnabled && !empty($data['budget'])) {
+            $budget = floatval($data['budget']);
+            if ($budget >= 20) {
+                $campaignParams['budget'] = $budget;
+            } else {
+                // Minimum budget is $20
+                $campaignParams['budget'] = 20;
+            }
         }
 
+        logSmartPlus("Campaign params: " . json_encode($campaignParams));
+
         $result = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
+        logSmartPlus("Campaign API response: " . json_encode($result));
 
         if ($result['code'] == 0 && isset($result['data']['campaign_id'])) {
             echo json_encode([
@@ -321,9 +332,13 @@ switch ($action) {
 
         // Note: Identity is set at AD level for Smart+, not at adgroup level
 
-        // Add budget if CBO is disabled (do NOT send budget_mode)
-        if (!empty($data['budget']) && empty($data['budget_optimize_on'])) {
-            $adgroupParams['budget'] = floatval($data['budget']);
+        // Add budget if CBO is disabled (budget at adgroup level)
+        $cboEnabled = $data['cbo_enabled'] ?? true;
+        if (!$cboEnabled && !empty($data['budget'])) {
+            $budget = floatval($data['budget']);
+            if ($budget >= 20) {
+                $adgroupParams['budget'] = $budget;
+            }
         }
 
         // Add dayparting if provided
@@ -331,7 +346,10 @@ switch ($action) {
             $adgroupParams['dayparting'] = $data['dayparting'];
         }
 
+        logSmartPlus("AdGroup params: " . json_encode($adgroupParams));
+
         $result = makeApiCall('/smart_plus/adgroup/create/', $adgroupParams, $accessToken);
+        logSmartPlus("AdGroup API response: " . json_encode($result));
 
         if ($result['code'] == 0 && isset($result['data']['adgroup_id'])) {
             echo json_encode([
