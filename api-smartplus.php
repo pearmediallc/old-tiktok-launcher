@@ -246,15 +246,17 @@ switch ($action) {
             exit;
         }
 
-        // For Smart+ Lead Generation: budget is at AdGroup level
-        // Campaign uses BUDGET_MODE_DYNAMIC_DAILY_BUDGET but no budget value at campaign level
+        // Smart+ Lead Generation Campaign - exact parameters from TikTok docs
+        $budget = floatval($data['budget'] ?? 50);
+
         $campaignParams = [
             'advertiser_id' => $advertiserId,
-            'request_id' => generateRequestId(),
             'campaign_name' => $data['campaign_name'],
             'objective_type' => 'LEAD_GENERATION',
+            'request_id' => generateRequestId(),
             'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
-            'operation_status' => 'ENABLE'
+            'budget' => $budget,
+            'operation_status' => 'DISABLE'
         ];
 
         logSmartPlus("Campaign params: " . json_encode($campaignParams));
@@ -460,16 +462,18 @@ switch ($action) {
         ];
 
         // Step 1: Create Campaign
-        // For LEAD_GENERATION objective: budget is at AdGroup level
-        // Campaign uses BUDGET_MODE_DYNAMIC_DAILY_BUDGET but no budget value at campaign level
+        // Smart+ Lead Generation Campaign - exact parameters from TikTok docs
         logSmartPlus("Step 1: Creating Campaign...");
+        $budget = floatval($data['budget'] ?? 50);
+
         $campaignParams = [
             'advertiser_id' => $advertiserId,
-            'request_id' => generateRequestId(),
             'campaign_name' => $data['campaign_name'],
             'objective_type' => 'LEAD_GENERATION',
+            'request_id' => generateRequestId(),
             'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
-            'operation_status' => 'ENABLE'
+            'budget' => $budget,
+            'operation_status' => 'DISABLE'
         ];
 
         $campaignResult = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
