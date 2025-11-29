@@ -363,8 +363,8 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 </div>
                 <div style="padding: 10px 20px; background: #e8f4f8; border-bottom: 1px solid #eee;">
                     <p style="margin: 0; font-size: 13px; color: #333;">
-                        <strong>For Video Ads:</strong> Select 1 video + 1 image (as cover).
-                        <strong>For Image Ads:</strong> Select 1 image only.
+                        <strong>Multi-Select Videos:</strong> Click multiple videos to create separate ads for each.
+                        <strong>Each ad</strong> will have its own ad text field.
                     </p>
                 </div>
                 <div class="modal-tabs">

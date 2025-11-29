@@ -580,6 +580,7 @@ function addFirstAd() {
         video_cover_url: '',
         cover_image_id: '',
         cover_image_name: '',
+        cover_image_url: '',
         ad_text: ''
     }];
     renderAds();
@@ -594,6 +595,7 @@ function addNewAd() {
         video_cover_url: '',
         cover_image_id: '',
         cover_image_name: '',
+        cover_image_url: '',
         ad_text: ''
     };
     state.ads.push(newAd);
@@ -688,25 +690,13 @@ async function useVideoThumbnail(index) {
         if (result.success && result.data) {
             const video = result.data.find(v => v.video_id === ad.video_id);
             if (video && video.video_cover_url) {
-                // Upload the thumbnail URL as an image
-                const uploadResult = await apiRequest('upload_image_url', {
-                    image_url: video.video_cover_url,
-                    file_name: `thumbnail_${ad.video_id}.jpg`
-                }, true); // Use main API
-
-                if (uploadResult.success && uploadResult.image_id) {
-                    state.ads[index].cover_image_id = uploadResult.image_id;
-                    state.ads[index].cover_image_name = 'Video Thumbnail';
-                    renderAds();
-                    showToast('Video thumbnail set as cover', 'success');
-                } else {
-                    // If upload fails, try to use the video_cover_url directly
-                    // Store it anyway for display purposes
-                    state.ads[index].cover_image_id = ad.video_id + '_cover';
-                    state.ads[index].cover_image_name = 'Video Thumbnail';
-                    showToast('Using video thumbnail', 'success');
-                    renderAds();
-                }
+                // For SPC, we can use the video_cover_url directly as web_uri
+                // No need to upload - just use the existing URL
+                state.ads[index].cover_image_id = ad.video_id + '_cover';
+                state.ads[index].cover_image_name = 'Video Thumbnail';
+                state.ads[index].cover_image_url = video.video_cover_url; // Store URL for SPC API
+                renderAds();
+                showToast('Video thumbnail set as cover', 'success');
             } else {
                 showToast('No thumbnail found for this video', 'error');
             }
@@ -755,6 +745,7 @@ function duplicateAdBulk() {
             video_cover_url: lastAd.video_cover_url,
             cover_image_id: lastAd.cover_image_id,
             cover_image_name: lastAd.cover_image_name,
+            cover_image_url: lastAd.cover_image_url,
             ad_text: lastAd.ad_text
         };
         state.ads.push(newAd);
@@ -897,6 +888,7 @@ async function publishAll() {
         const adsForSpc = state.ads.map(ad => ({
             video_id: ad.video_id,
             image_id: ad.cover_image_id,
+            image_url: ad.cover_image_url || ad.video_cover_url, // web_uri for SPC API
             ad_text: ad.ad_text
         }));
 
@@ -1076,8 +1068,20 @@ function renderMediaGrid(filter = 'all') {
 }
 
 function toggleMediaSelection(media) {
-    // For single selection mode (video or cover image)
-    state.selectedMedia = [{ type: media.type, id: media.id, name: media.name, url: media.url }];
+    if (mediaSelectionType === 'cover') {
+        // Single selection for cover images
+        state.selectedMedia = [{ type: media.type, id: media.id, name: media.name, url: media.url }];
+    } else {
+        // Multiple selection for videos
+        const index = state.selectedMedia.findIndex(m => m.id === media.id);
+        if (index >= 0) {
+            // Already selected - remove it
+            state.selectedMedia.splice(index, 1);
+        } else {
+            // Add to selection
+            state.selectedMedia.push({ type: media.type, id: media.id, name: media.name, url: media.url });
+        }
+    }
 
     renderMediaGrid(mediaSelectionType === 'video' ? 'video' : 'image');
 }
@@ -1086,8 +1090,11 @@ function updateSelectionCounter() {
     const counter = document.getElementById('selection-counter');
     if (counter) {
         if (state.selectedMedia.length > 0) {
-            const item = state.selectedMedia[0];
-            counter.textContent = `Selected: ${item.name}`;
+            if (state.selectedMedia.length === 1) {
+                counter.textContent = `Selected: ${state.selectedMedia[0].name}`;
+            } else {
+                counter.textContent = `${state.selectedMedia.length} items selected`;
+            }
         } else {
             counter.textContent = '';
         }
@@ -1103,21 +1110,51 @@ function filterMedia(filter) {
 function confirmMediaSelection() {
     if (state.currentAdIndex === null) return;
 
-    const selected = state.selectedMedia[0];
-    if (!selected) {
+    if (!state.selectedMedia || state.selectedMedia.length === 0) {
         showToast('Please select media', 'error');
         return;
     }
 
-    if (mediaSelectionType === 'video') {
-        state.ads[state.currentAdIndex].video_id = selected.id;
-        state.ads[state.currentAdIndex].video_name = selected.name;
-        state.ads[state.currentAdIndex].video_cover_url = selected.url || '';
-        showToast('Video selected', 'success');
-    } else if (mediaSelectionType === 'cover') {
+    if (mediaSelectionType === 'cover') {
+        // Single selection for cover image
+        const selected = state.selectedMedia[0];
         state.ads[state.currentAdIndex].cover_image_id = selected.id;
         state.ads[state.currentAdIndex].cover_image_name = selected.name;
+        state.ads[state.currentAdIndex].cover_image_url = selected.url || '';
         showToast('Cover image selected', 'success');
+    } else {
+        // Video selection - handle multiple
+        if (state.selectedMedia.length === 1) {
+            // Single video - update current ad
+            const selected = state.selectedMedia[0];
+            state.ads[state.currentAdIndex].video_id = selected.id;
+            state.ads[state.currentAdIndex].video_name = selected.name;
+            state.ads[state.currentAdIndex].video_cover_url = selected.url || '';
+            showToast('Video selected', 'success');
+        } else {
+            // Multiple videos - update first ad and create new ads for the rest
+            const firstSelected = state.selectedMedia[0];
+            state.ads[state.currentAdIndex].video_id = firstSelected.id;
+            state.ads[state.currentAdIndex].video_name = firstSelected.name;
+            state.ads[state.currentAdIndex].video_cover_url = firstSelected.url || '';
+
+            // Create new ads for remaining videos
+            for (let i = 1; i < state.selectedMedia.length; i++) {
+                const media = state.selectedMedia[i];
+                const newAd = {
+                    name: `Ad ${state.ads.length + 1}`,
+                    video_id: media.id,
+                    video_name: media.name,
+                    video_cover_url: media.url || '',
+                    cover_image_id: '',
+                    cover_image_name: '',
+                    cover_image_url: '',
+                    ad_text: ''
+                };
+                state.ads.push(newAd);
+            }
+            showToast(`${state.selectedMedia.length} videos added as separate ads`, 'success');
+        }
     }
 
     renderAds();

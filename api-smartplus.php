@@ -243,11 +243,15 @@ switch ($action) {
                 ];
             }
 
-            // Add image info (cover) if provided
-            if (!empty($ad['image_id'])) {
+            // Add image info (cover) if provided - SPC API requires web_uri
+            if (!empty($ad['image_url'])) {
                 $mediaInfo['image_info'] = [
-                    ['image_id' => $ad['image_id']]
+                    ['web_uri' => $ad['image_url']]
                 ];
+            } elseif (!empty($ad['image_id'])) {
+                // Fallback: if only image_id is provided, we need to get the URL
+                // For now, skip image_info if no URL available
+                logSmartPlus("Warning: image_id provided without image_url - SPC requires web_uri");
             }
 
             $mediaInfoList[] = ['media_info' => $mediaInfo];
