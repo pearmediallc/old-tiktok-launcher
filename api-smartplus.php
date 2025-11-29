@@ -97,6 +97,72 @@ function uploadImageByUrl($imageUrl, $advertiserId, $accessToken) {
     return ['success' => false, 'error' => $result['message'] ?? 'Unknown error'];
 }
 
+// Get video cover image - find from image library or upload from video cover URL
+function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
+    logSmartPlus("Getting cover image for video: $videoId");
+
+    // First, get video info to get the cover URL
+    $videoResult = makeApiCall('/file/video/ad/info/', [
+        'advertiser_id' => $advertiserId,
+        'video_ids' => json_encode([$videoId])
+    ], $accessToken, 'GET');
+
+    if ($videoResult['code'] != 0 || empty($videoResult['data']['list'])) {
+        logSmartPlus("Failed to get video info for: $videoId");
+        return null;
+    }
+
+    $video = $videoResult['data']['list'][0];
+    $coverUrl = $video['video_cover_url'] ?? null;
+
+    if (!$coverUrl) {
+        logSmartPlus("No cover URL for video: $videoId");
+        return null;
+    }
+
+    // Search for existing image in library that might be the cover
+    $imagesResult = makeApiCall('/file/image/ad/search/', [
+        'advertiser_id' => $advertiserId,
+        'page' => 1,
+        'page_size' => 100
+    ], $accessToken, 'GET');
+
+    if ($imagesResult['code'] == 0 && !empty($imagesResult['data']['list'])) {
+        // Look for an image that matches the video ID pattern in filename
+        $videoIdShort = str_replace('v10033g50000', '', $videoId);
+        foreach ($imagesResult['data']['list'] as $image) {
+            $fileName = $image['file_name'] ?? '';
+            // Check if filename contains part of video ID or is a thumb for this video
+            if (strpos($fileName, $videoIdShort) !== false ||
+                strpos($fileName, 'thumb') !== false && strpos($fileName, substr($videoIdShort, 0, 8)) !== false) {
+                // Only use images with decent resolution (at least 540px)
+                if (($image['width'] ?? 0) >= 540 || ($image['height'] ?? 0) >= 540) {
+                    logSmartPlus("Found matching cover image: " . $image['image_id']);
+                    return $image['image_id'];
+                }
+            }
+        }
+
+        // If no exact match, find any image with good resolution
+        foreach ($imagesResult['data']['list'] as $image) {
+            if (($image['width'] ?? 0) >= 540 && ($image['height'] ?? 0) >= 540 &&
+                ($image['displayable'] ?? false)) {
+                logSmartPlus("Using fallback image: " . $image['image_id']);
+                return $image['image_id'];
+            }
+        }
+    }
+
+    // If no suitable image found, try to upload the cover URL
+    logSmartPlus("No suitable image found, uploading cover URL...");
+    $uploadResult = uploadImageByUrl($coverUrl, $advertiserId, $accessToken);
+    if ($uploadResult['success']) {
+        return $uploadResult['image_id'];
+    }
+
+    return null;
+}
+
 // Make API call to TikTok
 function makeApiCall($endpoint, $params, $accessToken, $method = 'POST') {
     $url = "https://business-api.tiktok.com/open_api/v1.3" . $endpoint;
@@ -378,18 +444,34 @@ switch ($action) {
         }
 
         // Build creative_list with proper format for Smart+ Ads
-        // Format: creative_list = [{creative_info: {video_id, ad_text, ad_format}}]
+        // Format: creative_list = [{creative_info: {video_info: {video_id}, image_info: [{image_id, web_uri}], ad_format}}]
         $creativeList = [];
 
         foreach ($data['creatives'] ?? [] as $creative) {
             if (!empty($creative['video_id'])) {
                 $creativeInfo = [
-                    'video_id' => $creative['video_id'],
+                    'video_info' => [
+                        'video_id' => $creative['video_id']
+                    ],
                     'ad_format' => 'SINGLE_VIDEO'
                 ];
-                if (!empty($creative['ad_text'])) {
-                    $creativeInfo['ad_text'] = $creative['ad_text'];
+
+                // Get video cover image - use provided or auto-find
+                $imageId = $creative['image_id'] ?? null;
+                if (empty($imageId)) {
+                    logSmartPlus("No image_id provided, auto-finding cover for: " . $creative['video_id']);
+                    $imageId = getVideoCoverImage($creative['video_id'], $advertiserId, $accessToken);
                 }
+
+                if (!empty($imageId)) {
+                    $creativeInfo['image_info'] = [[
+                        'image_id' => $imageId,
+                        'web_uri' => $imageId
+                    ]];
+                } else {
+                    logSmartPlus("WARNING: No cover image found for video: " . $creative['video_id']);
+                }
+
                 $creativeList[] = ['creative_info' => $creativeInfo];
             }
         }
@@ -418,6 +500,14 @@ switch ($action) {
             'landing_page_url_list' => $landingPageList,
             'call_to_action_list' => $ctaList
         ];
+
+        // Add ad_configuration with identity for non-spark ads
+        if (!empty($data['identity_id'])) {
+            $adParams['ad_configuration'] = [
+                'identity_id' => $data['identity_id'],
+                'identity_type' => $data['identity_type'] ?? 'CUSTOMIZED_USER'
+            ];
+        }
 
         logSmartPlus("Ad params: " . json_encode($adParams));
 
@@ -594,18 +684,34 @@ switch ($action) {
         logSmartPlus("creative_list input: " . json_encode($creativeList));
 
         // Build creative_list with proper format for Smart+ Ads
-        // Format: creative_list = [{creative_info: {video_id, ad_text, ad_format}}]
+        // Format: creative_list = [{creative_info: {video_info: {video_id}, image_info: [{image_id, web_uri}], ad_format}}]
         $creativeListFormatted = [];
 
         foreach ($creativeList as $creative) {
             if (!empty($creative['video_id'])) {
                 $creativeInfo = [
-                    'video_id' => $creative['video_id'],
+                    'video_info' => [
+                        'video_id' => $creative['video_id']
+                    ],
                     'ad_format' => 'SINGLE_VIDEO'
                 ];
-                if (!empty($creative['ad_text'])) {
-                    $creativeInfo['ad_text'] = $creative['ad_text'];
+
+                // Get video cover image - use provided or auto-find
+                $imageId = $creative['image_id'] ?? null;
+                if (empty($imageId)) {
+                    logSmartPlus("No image_id provided, auto-finding cover for: " . $creative['video_id']);
+                    $imageId = getVideoCoverImage($creative['video_id'], $advertiserId, $accessToken);
                 }
+
+                if (!empty($imageId)) {
+                    $creativeInfo['image_info'] = [[
+                        'image_id' => $imageId,
+                        'web_uri' => $imageId
+                    ]];
+                } else {
+                    logSmartPlus("WARNING: No cover image found for video: " . $creative['video_id']);
+                }
+
                 $creativeListFormatted[] = ['creative_info' => $creativeInfo];
             }
         }
@@ -637,6 +743,14 @@ switch ($action) {
             'landing_page_url_list' => $landingPageUrlList,
             'call_to_action_list' => $ctaList
         ];
+
+        // Add ad_configuration with identity for non-spark ads
+        if (!empty($data['identity_id'])) {
+            $adParams['ad_configuration'] = [
+                'identity_id' => $data['identity_id'],
+                'identity_type' => $data['identity_type'] ?? 'CUSTOMIZED_USER'
+            ];
+        }
 
         logSmartPlus("Ad params: " . json_encode($adParams));
 

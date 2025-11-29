@@ -318,7 +318,8 @@ async function loadMediaLibrary() {
                     type: 'video',
                     id: video.video_id,
                     url: video.video_cover_url || video.preview_url,
-                    name: video.file_name || video.video_id
+                    name: video.file_name || video.video_id,
+                    material_id: video.material_id || null
                 });
             });
         }
@@ -760,10 +761,18 @@ function renderCreativesList() {
 
     state.creatives = state.selectedVideos.map(video => {
         const existing = state.creatives.find(c => c.video_id === video.id);
+        // Find matching image cover from image library (by file_name pattern)
+        const matchingImage = state.mediaLibrary.find(m =>
+            m.type === 'image' &&
+            m.name && video.name &&
+            m.name.includes(video.id.replace('v10033g50000', ''))
+        );
         return {
             video_id: video.id,
             video_name: video.name,
             video_url: video.url,
+            material_id: video.material_id,
+            image_id: matchingImage?.id || null,
             ad_text: existing?.ad_text || ''
         };
     });
@@ -930,7 +939,8 @@ async function createAd() {
 
         const creativeList = state.creatives.map(creative => ({
             video_id: creative.video_id,
-            ad_text: creative.ad_text
+            ad_text: creative.ad_text,
+            image_id: creative.image_id || null
         }));
 
         addLog('info', `Creating ad with ${creativeList.length} creatives and ${state.globalCtaList.length} CTAs`);
