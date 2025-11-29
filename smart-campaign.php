@@ -34,6 +34,85 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             background: linear-gradient(135deg, #fff0f3 0%, #f0ffff 100%);
             border-left: 4px solid #ff0050;
         }
+        .ad-card {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .ad-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .ad-card-header h3 {
+            margin: 0;
+            color: #333;
+            font-size: 18px;
+        }
+        .ad-card .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .media-preview-box {
+            background: #f8f9fa;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .media-preview-box:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        .media-preview-box.has-media {
+            border-style: solid;
+            border-color: #22c55e;
+            background: #f0fdf4;
+        }
+        .media-preview-box .icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        .media-tags {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .media-tag {
+            background: #e0e7ff;
+            color: #4338ca;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .media-tag.video {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .media-tag.image {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .url-input-group {
+            display: flex;
+            gap: 10px;
+        }
+        .url-input-group input {
+            flex: 1;
+        }
+        .url-input-group .btn-test {
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -45,6 +124,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 <div id="advertiser-timezone-info" style="font-size: 0.9rem; color: #666; margin-right: 15px;">
                     <span id="timezone-status">Loading timezone...</span>
                 </div>
+                <button class="btn-secondary" onclick="window.location.href='select-advertiser-oauth.php'" style="margin-right: 10px;">Back</button>
                 <button class="btn-logout" onclick="logout()">Logout</button>
             </div>
         </header>
@@ -102,6 +182,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 <div class="form-info" style="margin-bottom: 20px; background: #e8f5e9; padding: 12px; border-radius: 6px;">
                     <p><strong>Campaign ID:</strong> <span id="display-campaign-id">-</span></p>
                 </div>
+
                 <div class="form-group">
                     <label>Ad Group Name</label>
                     <input type="text" id="adgroup-name" placeholder="Enter ad group name" required>
@@ -109,21 +190,151 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
 
                 <div class="form-section">
                     <h3>Pixel Configuration</h3>
-                    <div class="form-group">
-                        <label>Select Pixel for Form Tracking</label>
-                        <select id="pixel-select">
-                            <option value="">Loading pixels...</option>
-                        </select>
-                        <small>Required for External Website optimization</small>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Select Pixel for Form Tracking</label>
+                            <select id="pixel-select">
+                                <option value="">Loading pixels...</option>
+                            </select>
+                            <small>Required for External Website optimization</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Optimization Event</label>
+                            <select id="optimization-event">
+                                <option value="FORM">Form Submission</option>
+                                <option value="COMPLETE_PAYMENT">Complete Payment</option>
+                                <option value="REGISTRATION">Registration</option>
+                                <option value="CONTACT">Contact</option>
+                            </select>
+                        </div>
                     </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Age Targeting</h3>
                     <div class="form-group">
-                        <label>Optimization Event</label>
-                        <select id="optimization-event">
-                            <option value="FORM">Form Submission</option>
-                            <option value="COMPLETE_PAYMENT">Complete Payment</option>
-                            <option value="REGISTRATION">Registration</option>
-                            <option value="CONTACT">Contact</option>
-                        </select>
+                        <label>Select Age Groups</label>
+                        <div class="age-groups-container">
+                            <div class="age-group-item">
+                                <label>
+                                    <input type="checkbox" name="age_groups" value="AGE_13_17" class="age-checkbox">
+                                    <span>13-17 years</span>
+                                    <span class="age-note">*Restricted in some regions</span>
+                                </label>
+                            </div>
+                            <div class="age-group-item">
+                                <label>
+                                    <input type="checkbox" name="age_groups" value="AGE_18_24" class="age-checkbox" checked>
+                                    <span>18-24 years</span>
+                                </label>
+                            </div>
+                            <div class="age-group-item">
+                                <label>
+                                    <input type="checkbox" name="age_groups" value="AGE_25_34" class="age-checkbox" checked>
+                                    <span>25-34 years</span>
+                                </label>
+                            </div>
+                            <div class="age-group-item">
+                                <label>
+                                    <input type="checkbox" name="age_groups" value="AGE_35_44" class="age-checkbox" checked>
+                                    <span>35-44 years</span>
+                                </label>
+                            </div>
+                            <div class="age-group-item">
+                                <label>
+                                    <input type="checkbox" name="age_groups" value="AGE_45_54" class="age-checkbox" checked>
+                                    <span>45-54 years</span>
+                                </label>
+                            </div>
+                            <div class="age-group-item">
+                                <label>
+                                    <input type="checkbox" name="age_groups" value="AGE_55_100" class="age-checkbox" checked>
+                                    <span>55+ years</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="age-controls">
+                            <button type="button" class="btn-secondary age-btn" onclick="selectAllAges()">Select All</button>
+                            <button type="button" class="btn-secondary age-btn" onclick="clearAllAges()">Clear All</button>
+                            <button type="button" class="btn-secondary age-btn" onclick="selectDefaultAges()">Default (18+)</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Location Targeting</h3>
+                    <div class="form-group">
+                        <label>Select Targeting Method</label>
+                        <div class="location-method-container">
+                            <div class="location-method-item">
+                                <label>
+                                    <input type="radio" name="location_method" value="country" class="location-method-radio" checked onchange="toggleLocationMethod()">
+                                    <span>Target Entire United States</span>
+                                </label>
+                                <small>Target all users in the United States (default)</small>
+                            </div>
+                            <div class="location-method-item">
+                                <label>
+                                    <input type="radio" name="location_method" value="states" class="location-method-radio" onchange="toggleLocationMethod()">
+                                    <span>Target Specific States</span>
+                                </label>
+                                <small>Select specific US states to target</small>
+                            </div>
+                        </div>
+
+                        <div id="country-targeting" class="location-option active">
+                            <div class="location-info">
+                                <p><strong>Target:</strong> United States (Location ID: 6252001)</p>
+                            </div>
+                        </div>
+
+                        <div id="states-targeting" class="location-option" style="display: none;">
+                            <div class="states-selection-container">
+                                <div class="states-controls">
+                                    <button type="button" class="btn-secondary state-btn" onclick="selectAllStates()">Select All States</button>
+                                    <button type="button" class="btn-secondary state-btn" onclick="clearAllStates()">Clear All</button>
+                                    <button type="button" class="btn-secondary state-btn" onclick="selectPopularStates()">Popular States Only</button>
+                                </div>
+                                <div class="states-grid" id="states-grid">
+                                    <!-- States will be populated by JavaScript -->
+                                </div>
+                                <div class="states-summary">
+                                    <p><span id="selected-states-count">50</span> states selected</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Dayparting (Optional)</h3>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="enable-dayparting" onchange="toggleDayparting()">
+                            Enable Dayparting (Select specific hours)
+                        </label>
+                    </div>
+
+                    <div id="dayparting-section" style="display: none;">
+                        <div style="margin-bottom: 15px;">
+                            <button type="button" class="btn-secondary" onclick="selectAllHours()">Select All</button>
+                            <button type="button" class="btn-secondary" onclick="clearAllHours()">Clear All</button>
+                            <button type="button" class="btn-secondary" onclick="selectBusinessHours()">Business Hours (8-17)</button>
+                            <button type="button" class="btn-secondary" onclick="selectPrimeTime()">Prime Time (18-22)</button>
+                        </div>
+                        <div class="dayparting-grid">
+                            <table class="dayparting-table">
+                                <thead>
+                                    <tr>
+                                        <th>Day</th>
+                                        <th colspan="25">Hours (0-24)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dayparting-body">
+                                    <!-- Will be populated by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
@@ -133,8 +344,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                         <p><strong>Promotion Type:</strong> Lead Generation (External Website)</p>
                         <p><strong>Optimization Goal:</strong> Conversions</p>
                         <p><strong>Billing Event:</strong> OCPM</p>
-                        <p><strong>Location:</strong> United States</p>
-                        <p><strong>Targeting:</strong> AI-Optimized by Smart+</p>
+                        <p><strong>Placement:</strong> TikTok</p>
                     </div>
                 </div>
 
@@ -151,17 +361,64 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     <p><strong>Ad Group ID:</strong> <span id="display-adgroup-id">-</span></p>
                 </div>
 
+                <!-- Global Identity Selection -->
+                <div class="form-section">
+                    <h3>Identity (Used for all ads)</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Select Identity</label>
+                            <select id="global-identity">
+                                <option value="">Loading identities...</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="display: flex; align-items: flex-end;">
+                            <button class="btn-secondary" onclick="openCreateIdentityModal()">+ Create New Identity</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Global Landing Page -->
+                <div class="form-section">
+                    <h3>Landing Page (Used for all ads)</h3>
+                    <div class="form-group">
+                        <label>Landing Page URL</label>
+                        <div class="url-input-group">
+                            <input type="url" id="global-landing-url" placeholder="https://example.com/landing-page" required>
+                            <button class="btn-secondary btn-test" onclick="testLandingUrl()">Test URL</button>
+                        </div>
+                        <small>This URL will be used for all ads in this campaign</small>
+                    </div>
+                </div>
+
+                <!-- Global CTA Selection -->
+                <div class="form-section">
+                    <h3>Call to Action</h3>
+                    <div class="form-group">
+                        <label>Select CTA</label>
+                        <select id="global-cta">
+                            <option value="LEARN_MORE">Learn More</option>
+                            <option value="SIGN_UP">Sign Up</option>
+                            <option value="CONTACT_US">Contact Us</option>
+                            <option value="APPLY_NOW">Apply Now</option>
+                            <option value="GET_QUOTE">Get Quote</option>
+                            <option value="DOWNLOAD">Download</option>
+                            <option value="SHOP_NOW">Shop Now</option>
+                            <option value="BOOK_NOW">Book Now</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="ads-container" id="ads-container">
                     <!-- Ad forms will be dynamically added here -->
                 </div>
 
                 <div class="button-row" style="align-items: center; gap: 15px;">
-                    <button class="btn-secondary" onclick="duplicateAd(1)">+ Duplicate Last Ad</button>
+                    <button class="btn-secondary" onclick="addNewAd()">+ Add Another Ad</button>
                     <span style="color: #666;">or</span>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <input type="number" id="bulk-duplicate-count" min="1" max="50" value="5"
                                style="width: 70px; padding: 10px; border: 2px solid #ddd; border-radius: 5px; text-align: center; font-size: 14px;">
-                        <button class="btn-primary" onclick="duplicateAdBulk()">Duplicate Multiple Ads</button>
+                        <button class="btn-primary" onclick="duplicateAdBulk()">Duplicate Last Ad</button>
                     </div>
                 </div>
 
@@ -190,7 +447,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 </div>
 
                 <div class="review-section">
-                    <h3>Ads Summary</h3>
+                    <h3>Ads Summary (<span id="ads-count">0</span> ads)</h3>
                     <div id="ads-summary" class="summary-list">
                         <!-- Will be populated by JavaScript -->
                     </div>
@@ -207,7 +464,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         <div id="media-modal" class="modal">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>Select Media <span id="selection-counter" style="font-size: 14px; color: #667eea; margin-left: 10px; display: none;"></span></h3>
+                    <h3>Select Media <span id="selection-counter" style="font-size: 14px; color: #667eea; margin-left: 10px;"></span></h3>
                     <span class="modal-close" onclick="closeMediaModal()">&times;</span>
                 </div>
                 <div style="padding: 10px 20px; background: #e8f4f8; border-bottom: 1px solid #eee;">
@@ -242,12 +499,6 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                                 <p class="upload-hint">Images or Videos</p>
                             </label>
                         </div>
-                        <div id="upload-progress" style="display: none;">
-                            <div class="progress-bar">
-                                <div class="progress-fill" id="upload-progress-fill"></div>
-                            </div>
-                            <p id="upload-status">Uploading...</p>
-                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -260,7 +511,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         <!-- Loading Overlay -->
         <div id="loading-overlay" class="loading-overlay">
             <div class="spinner"></div>
-            <p>Processing...</p>
+            <p id="loading-text">Processing...</p>
         </div>
 
         <!-- Toast Notification -->
@@ -270,68 +521,21 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         <div id="create-identity-modal" class="modal" style="display: none;">
             <div class="modal-content" style="max-width: 500px;">
                 <div class="modal-header">
-                    <h3>Create new custom identity</h3>
+                    <h3>Create New Custom Identity</h3>
                     <span class="modal-close" onclick="closeCreateIdentityModal()">&times;</span>
                 </div>
                 <div class="modal-body">
-                    <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px;">
-                        <div style="flex-shrink: 0;">
-                            <div id="identity-avatar-preview" style="width: 80px; height: 80px; border-radius: 50%; background: #f0f0f0; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid #ddd;" onclick="selectIdentityAvatar()">
-                                <img id="identity-avatar-img" src="https://sf16-sg.tiktokcdn.com/obj/eden-sg/lm_zkh_rvarpa/ljhwZthlaukjlkulzlp/ads_manager_creation/default-avatar.png"
-                                     alt="Default Avatar"
-                                     style="width: 100%; height: 100%; object-fit: cover;">
-                            </div>
-                            <button type="button" onclick="selectIdentityAvatar()" style="margin-top: 8px; padding: 4px 8px; font-size: 11px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">Change Avatar</button>
-                        </div>
-                        <div style="flex: 1;">
-                            <div class="form-group">
-                                <label>@ Enter a display name</label>
-                                <input type="text" id="identity-display-name" placeholder="Enter a display name" maxlength="40" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
-                                <div style="text-align: right; font-size: 12px; color: #666; margin-top: 5px;">
-                                    <span id="identity-char-count">0</span>/40
-                                </div>
-                            </div>
+                    <div class="form-group">
+                        <label>Display Name</label>
+                        <input type="text" id="identity-display-name" placeholder="Enter display name" maxlength="40" required>
+                        <div style="text-align: right; font-size: 12px; color: #666; margin-top: 5px;">
+                            <span id="identity-char-count">0</span>/40
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn-secondary" onclick="closeCreateIdentityModal()">Cancel</button>
-                    <button class="btn-primary" onclick="createCustomIdentity()" id="create-identity-btn">Create</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Avatar Selection Modal -->
-        <div id="avatar-selection-modal" class="modal" style="display: none;">
-            <div class="modal-content" style="max-width: 700px;">
-                <div class="modal-header">
-                    <h3>Select Avatar Image</h3>
-                    <span class="modal-close" onclick="closeAvatarSelectionModal()">&times;</span>
-                </div>
-                <div class="modal-tabs">
-                    <button class="tab-btn active" onclick="switchAvatarTab('library', event)">TikTok Library</button>
-                    <button class="tab-btn" onclick="switchAvatarTab('upload', event)">Upload New</button>
-                </div>
-                <div class="modal-body">
-                    <div id="avatar-library-tab" class="media-tab active">
-                        <div class="media-grid" id="avatar-library-grid">
-                            <!-- Avatar images will be loaded here -->
-                        </div>
-                    </div>
-                    <div id="avatar-upload-tab" class="media-tab" style="display: none;">
-                        <div class="upload-area" style="text-align: center; padding: 40px; border: 2px dashed #ddd; border-radius: 8px;">
-                            <input type="file" id="avatar-file-input" accept="image/*" style="display: none;" onchange="handleAvatarUpload(event)">
-                            <div onclick="document.getElementById('avatar-file-input').click()" style="cursor: pointer;">
-                                <div style="font-size: 40px; margin-bottom: 10px;">📷</div>
-                                <p>Click to upload avatar image</p>
-                                <p style="font-size: 12px; color: #666;">JPG/PNG, 1:1 aspect ratio recommended</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn-secondary" onclick="closeAvatarSelectionModal()">Cancel</button>
-                    <button class="btn-primary" onclick="confirmAvatarSelection()" id="confirm-avatar-btn" disabled>Select Avatar</button>
+                    <button class="btn-primary" onclick="createCustomIdentity()">Create Identity</button>
                 </div>
             </div>
         </div>

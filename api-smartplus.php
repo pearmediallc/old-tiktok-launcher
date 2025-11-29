@@ -249,11 +249,24 @@ switch ($action) {
         $scheduleStart = date('Y-m-d H:i:s', strtotime('+1 hour'));
         $scheduleEnd = date('Y-m-d H:i:s', strtotime('+1 year'));
 
+        // Build targeting spec
+        $targetingSpec = [];
+
+        // Location targeting
+        $locationIds = $data['location_ids'] ?? ['6252001']; // Default to US
+        $targetingSpec['location_ids'] = $locationIds;
+
+        // Age targeting
+        $ageGroups = $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100'];
+        if (!empty($ageGroups)) {
+            $targetingSpec['age_groups'] = $ageGroups;
+        }
+
         $adGroupParams = [
             'advertiser_id' => $advertiserId,
             'request_id' => generateRequestId(),
             'campaign_id' => $data['campaign_id'],
-            'adgroup_name' => $data['adgroup_name'],
+            'adgroup_name' => $data['adgroup_name'] ?? 'Ad Group',
 
             // Lead Generation settings
             'promotion_type' => 'LEAD_GENERATION',
@@ -265,9 +278,7 @@ switch ($action) {
             'pixel_id' => $data['pixel_id'],
 
             // Targeting
-            'targeting_spec' => [
-                'location_ids' => ['6252001'] // US
-            ],
+            'targeting_spec' => $targetingSpec,
 
             // Schedule
             'schedule_type' => 'SCHEDULE_START_END',
@@ -278,6 +289,13 @@ switch ($action) {
             'billing_event' => 'OCPM',
             'bid_type' => 'BID_TYPE_NO_BID'
         ];
+
+        // Add dayparting if provided
+        if (!empty($data['dayparting'])) {
+            $adGroupParams['dayparting'] = $data['dayparting'];
+        }
+
+        logSmartPlus("Ad Group Params: " . json_encode($adGroupParams));
 
         $result = makeApiCall('/smart_plus/adgroup/create/', $adGroupParams, $accessToken);
 
