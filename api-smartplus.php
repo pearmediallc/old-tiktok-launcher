@@ -202,9 +202,25 @@ switch ($action) {
             exit;
         }
 
-        // Budget (required for Smart+, min $20)
-        $budget = floatval($data['budget'] ?? 50);
-        if ($budget < 20) $budget = 20;
+        // CBO Setting
+        $cboEnabled = isset($data['cbo_enabled']) ? $data['cbo_enabled'] : true;
+
+        // Budget handling based on CBO
+        if ($cboEnabled) {
+            // CBO enabled - budget at campaign level
+            $campaignBudget = floatval($data['budget'] ?? 50);
+            if ($campaignBudget < 20) $campaignBudget = 20;
+            $adGroupBudget = null;
+            $adGroupBudgetMode = null;
+        } else {
+            // CBO disabled - budget at ad group level
+            $campaignBudget = null;
+            $adGroupBudget = floatval($data['adgroup_budget'] ?? 50);
+            if ($adGroupBudget < 20) $adGroupBudget = 20;
+            $adGroupBudgetMode = $data['adgroup_budget_mode'] ?? 'BUDGET_MODE_DAY';
+        }
+
+        logSmartPlus("CBO Enabled: " . ($cboEnabled ? 'true' : 'false') . ", Campaign Budget: $campaignBudget, Ad Group Budget: $adGroupBudget");
 
         // Schedule
         $scheduleStart = date('Y-m-d H:i:s', strtotime('+1 hour'));
@@ -283,10 +299,6 @@ switch ($action) {
             'placement_type' => 'PLACEMENT_TYPE_NORMAL',
             'placements' => ['PLACEMENT_TIKTOK'],
 
-            // Budget (required for Smart+ - CBO is on by default)
-            'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
-            'budget' => $budget,
-
             // Schedule
             'schedule_type' => 'SCHEDULE_START_END',
             'schedule_start_time' => $scheduleStart,
@@ -295,6 +307,23 @@ switch ($action) {
             // Bid
             'bid_type' => 'BID_TYPE_NO_BID',
             'billing_event' => 'OCPM',
+        ];
+
+        // Add budget based on CBO setting
+        if ($cboEnabled) {
+            // CBO enabled - budget at campaign level
+            $spcParams['budget_mode'] = 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET';
+            $spcParams['budget'] = $campaignBudget;
+        } else {
+            // CBO disabled - budget at ad group level
+            $spcParams['budget_mode'] = $adGroupBudgetMode;
+            $spcParams['budget'] = $adGroupBudget;
+            // Note: For SPC endpoint, even with CBO disabled, budget might need to be specified
+            // The endpoint may not support CBO toggle - budget is always required
+        }
+
+        // Add remaining params
+        $spcParams += [
 
             // Landing page
             'landing_page_urls' => [

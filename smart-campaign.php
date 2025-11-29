@@ -80,16 +80,28 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     <input type="text" id="campaign-name" placeholder="Enter campaign name" required>
                 </div>
 
-                <div class="form-group">
-                    <label>Campaign Budget ($ per day)</label>
-                    <input type="number" id="campaign-budget" value="50" min="20" placeholder="50" required>
-                    <small>Minimum $20 budget. Smart+ uses Dynamic Daily Budget with CBO enabled.</small>
+                <div class="form-section">
+                    <h3>Budget Optimization</h3>
+                    <div class="feature-toggle">
+                        <label>
+                            <input type="checkbox" id="cbo-enabled" checked onchange="toggleCBOBudget()">
+                            <span>Campaign Budget Optimization (CBO)</span>
+                        </label>
+                        <small>Enable to set budget at campaign level. When disabled, budget is set at ad group level.</small>
+                    </div>
+
+                    <div id="campaign-budget-section" style="margin-top: 15px;">
+                        <div class="form-group">
+                            <label>Campaign Daily Budget ($)</label>
+                            <input type="number" id="campaign-budget" value="50" min="20" placeholder="50">
+                            <small>Minimum $20 daily budget for campaigns</small>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-info smart-info">
                     <p><strong>Objective:</strong> Lead Generation</p>
                     <p><strong>Type:</strong> Smart+ Campaign (AI-Optimized)</p>
-                    <p><strong>CBO:</strong> Campaign Budget Optimization is enabled by default</p>
                 </div>
                 <button class="btn-primary" onclick="saveCampaignSettings()">Continue to Ad Group →</button>
             </div>
@@ -99,7 +111,32 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 <h2>Smart+ Ad Group Settings</h2>
                 <div class="form-info" style="margin-bottom: 20px; background: #e8f5e9; padding: 12px; border-radius: 6px;">
                     <p><strong>Campaign:</strong> <span id="display-campaign-name">-</span></p>
-                    <p><strong>Budget:</strong> $<span id="display-budget">-</span>/day (Dynamic Daily)</p>
+                    <p id="display-budget-info"><strong>Budget:</strong> $<span id="display-budget">-</span>/day (Campaign Level - CBO Enabled)</p>
+                </div>
+
+                <div class="form-section">
+                    <h3>Budget & Schedule</h3>
+                    <div id="adgroup-budget-section" style="display: none;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Budget Mode</label>
+                                <select id="budget-mode">
+                                    <option value="BUDGET_MODE_DAY">Daily Budget</option>
+                                    <option value="BUDGET_MODE_DYNAMIC_DAILY_BUDGET">Dynamic Daily Budget (Recommended)</option>
+                                    <option value="BUDGET_MODE_TOTAL">Total Budget (Lifetime)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Ad Group Budget Amount ($)</label>
+                                <input type="number" id="adgroup-budget" placeholder="50" min="20" value="50">
+                                <small>Budget is set at ad group level when CBO is disabled</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="cbo-budget-note" style="padding: 15px; background: #e8f5e9; border-radius: 6px; margin-bottom: 15px;">
+                        <p style="margin: 0; color: #2e7d32;"><strong>✓ Campaign Budget Optimization is enabled</strong></p>
+                        <small>Budget is managed at campaign level. Ad group budget is not required.</small>
+                    </div>
                 </div>
 
                 <div class="form-section">

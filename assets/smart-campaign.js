@@ -175,6 +175,9 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeLocationTargeting();
     addFirstAd();
 
+    // Initialize CBO state (default is enabled)
+    state.cboEnabled = true;
+
     // Update timezone status
     const statusElement = document.getElementById('timezone-status');
     if (statusElement) {
@@ -191,6 +194,36 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Toggle CBO budget section
+function toggleCBOBudget() {
+    const cboEnabled = document.getElementById('cbo-enabled').checked;
+    const campaignBudgetSection = document.getElementById('campaign-budget-section');
+    const adGroupBudgetSection = document.getElementById('adgroup-budget-section');
+    const cboBudgetNote = document.getElementById('cbo-budget-note');
+    const displayBudgetInfo = document.getElementById('display-budget-info');
+
+    // Store CBO state
+    state.cboEnabled = cboEnabled;
+
+    if (cboEnabled) {
+        // CBO enabled: show campaign budget, hide ad group budget
+        if (campaignBudgetSection) campaignBudgetSection.style.display = 'block';
+        if (adGroupBudgetSection) adGroupBudgetSection.style.display = 'none';
+        if (cboBudgetNote) cboBudgetNote.style.display = 'block';
+        if (displayBudgetInfo) {
+            displayBudgetInfo.innerHTML = '<strong>Budget:</strong> $<span id="display-budget">-</span>/day (Campaign Level - CBO Enabled)';
+        }
+    } else {
+        // CBO disabled: hide campaign budget, show ad group budget
+        if (campaignBudgetSection) campaignBudgetSection.style.display = 'none';
+        if (adGroupBudgetSection) adGroupBudgetSection.style.display = 'block';
+        if (cboBudgetNote) cboBudgetNote.style.display = 'none';
+        if (displayBudgetInfo) {
+            displayBudgetInfo.innerHTML = '<strong>Budget:</strong> Set at Ad Group level (CBO Disabled)';
+        }
+    }
+}
 
 // Load Pixels
 async function loadPixels() {
@@ -462,29 +495,33 @@ function prevStep() {
 // =====================
 function saveCampaignSettings() {
     const campaignName = document.getElementById('campaign-name').value.trim();
-    const budget = parseFloat(document.getElementById('campaign-budget').value) || 50;
+    const cboEnabled = document.getElementById('cbo-enabled')?.checked ?? true;
+    const campaignBudget = cboEnabled ? (parseFloat(document.getElementById('campaign-budget').value) || 50) : null;
 
     if (!campaignName) {
         showToast('Please enter a campaign name', 'error');
         return;
     }
 
-    if (budget < 20) {
+    // Validate budget only when CBO is enabled
+    if (cboEnabled && campaignBudget < 20) {
         showToast('Minimum budget is $20', 'error');
         return;
     }
 
     // Save to state (no API call yet - SPC creates everything at once)
     state.campaignName = campaignName;
-    state.budget = budget;
+    state.cboEnabled = cboEnabled;
+    state.budget = campaignBudget;
 
     // Update display
     const displayNameEl = document.getElementById('display-campaign-name');
     const displayBudgetEl = document.getElementById('display-budget');
     if (displayNameEl) displayNameEl.textContent = campaignName;
-    if (displayBudgetEl) displayBudgetEl.textContent = budget;
+    if (displayBudgetEl && cboEnabled) displayBudgetEl.textContent = campaignBudget;
 
-    addLog('info', `Campaign settings saved: ${campaignName}, Budget: $${budget}`);
+    const budgetLog = cboEnabled ? `Budget: $${campaignBudget} (Campaign Level)` : 'Budget: Ad Group Level';
+    addLog('info', `Campaign settings saved: ${campaignName}, CBO: ${cboEnabled ? 'Enabled' : 'Disabled'}, ${budgetLog}`);
     showToast('Campaign settings saved!', 'success');
     nextStep();
 }
@@ -499,8 +536,19 @@ function saveAdGroupSettings() {
     const locationIds = getSelectedLocationIds();
     const dayparting = getDaypartingData();
 
+    // Get ad group budget if CBO is disabled
+    const cboEnabled = state.cboEnabled;
+    const adGroupBudgetMode = document.getElementById('budget-mode')?.value || 'BUDGET_MODE_DAY';
+    const adGroupBudget = !cboEnabled ? (parseFloat(document.getElementById('adgroup-budget')?.value) || 50) : null;
+
     if (!pixelId) {
         showToast('Please select a pixel', 'error');
+        return;
+    }
+
+    // Validate ad group budget when CBO is disabled
+    if (!cboEnabled && (!adGroupBudget || adGroupBudget < 20)) {
+        showToast('Minimum ad group budget is $20', 'error');
         return;
     }
 
@@ -511,7 +559,12 @@ function saveAdGroupSettings() {
     state.locationIds = locationIds.length > 0 ? locationIds : ['6252001']; // Default to US
     state.dayparting = dayparting;
 
-    addLog('info', `Ad Group settings saved: Pixel ${pixelId}, Event: ${optimizationEvent}`);
+    // Save ad group budget settings
+    state.adGroupBudgetMode = adGroupBudgetMode;
+    state.adGroupBudget = adGroupBudget;
+
+    const budgetLog = cboEnabled ? 'Budget at Campaign Level' : `Ad Group Budget: $${adGroupBudget} (${adGroupBudgetMode})`;
+    addLog('info', `Ad Group settings saved: Pixel ${pixelId}, Event: ${optimizationEvent}, ${budgetLog}`);
     showToast('Ad Group settings saved!', 'success');
     nextStep();
 }
@@ -774,16 +827,24 @@ function reviewAds() {
     const identity = state.identities.find(i => i.identity_id === identityId);
     const identityName = identity ? (identity.display_name || identity.identity_name) : identityId;
 
+    // Determine budget display based on CBO setting
+    const cboEnabled = state.cboEnabled;
+    const budgetDisplay = cboEnabled
+        ? `$${state.budget}/day (Campaign Level - CBO Enabled)`
+        : `$${state.adGroupBudget}/day (Ad Group Level - CBO Disabled)`;
+
     // Populate review summaries
     document.getElementById('campaign-summary').innerHTML = `
         <p><strong>Campaign Name:</strong> ${state.campaignName}</p>
-        <p><strong>Budget:</strong> $${state.budget} (Dynamic Daily)</p>
+        <p><strong>CBO:</strong> ${cboEnabled ? 'Enabled' : 'Disabled'}</p>
+        ${cboEnabled ? `<p><strong>Campaign Budget:</strong> $${state.budget}/day</p>` : ''}
         <p><strong>Type:</strong> Smart+ Lead Generation</p>
     `;
 
     document.getElementById('adgroup-summary').innerHTML = `
         <p><strong>Pixel ID:</strong> ${state.pixelId}</p>
         <p><strong>Optimization Event:</strong> ${state.optimizationEvent}</p>
+        ${!cboEnabled ? `<p><strong>Ad Group Budget:</strong> $${state.adGroupBudget}/day (${state.adGroupBudgetMode})</p>` : ''}
         <p><strong>Age Targeting:</strong> ${state.spcAudienceAge || '18+'}</p>
         <p><strong>Location:</strong> ${state.locationIds.length === 1 && state.locationIds[0] === '6252001' ? 'United States' : state.locationIds.length + ' locations'}</p>
     `;
@@ -839,10 +900,21 @@ async function publishAll() {
             ad_text: ad.ad_text
         }));
 
+        // Determine budget based on CBO setting
+        const cboEnabled = state.cboEnabled;
+        const campaignBudget = cboEnabled ? state.budget : null;
+        const adGroupBudget = !cboEnabled ? state.adGroupBudget : null;
+        const adGroupBudgetMode = !cboEnabled ? state.adGroupBudgetMode : null;
+
+        addLog('info', `CBO: ${cboEnabled ? 'Enabled' : 'Disabled'}, Campaign Budget: ${campaignBudget}, Ad Group Budget: ${adGroupBudget}`);
+
         // Create the entire campaign with one API call
         const result = await apiRequest('create_spc_campaign', {
             campaign_name: state.campaignName,
-            budget: state.budget,
+            cbo_enabled: cboEnabled,
+            budget: campaignBudget,
+            adgroup_budget: adGroupBudget,
+            adgroup_budget_mode: adGroupBudgetMode,
             pixel_id: state.pixelId,
             optimization_event: state.optimizationEvent,
             spc_audience_age: state.spcAudienceAge || '18+',
@@ -862,10 +934,12 @@ async function publishAll() {
             showToast('Smart+ Campaign created successfully!', 'success');
             addLog('info', `Campaign created: ${result.campaign_id}`);
 
+            const budgetInfo = cboEnabled ? `$${campaignBudget}/day (Campaign Level)` : `$${adGroupBudget}/day (Ad Group Level)`;
             let alertMessage = `Smart+ Campaign Published!\n\n`;
             alertMessage += `Campaign ID: ${result.campaign_id}\n`;
             alertMessage += `Campaign Name: ${state.campaignName}\n`;
-            alertMessage += `Budget: $${state.budget}/day\n`;
+            alertMessage += `Budget: ${budgetInfo}\n`;
+            alertMessage += `CBO: ${cboEnabled ? 'Enabled' : 'Disabled'}\n`;
             alertMessage += `Creatives: ${state.ads.length}\n`;
             alertMessage += `Landing Page: ${state.globalLandingUrl}\n`;
 
