@@ -897,13 +897,13 @@ async function publishAll() {
         addLog('info', `Creatives: ${adsForSmartPlus.length} videos`);
 
         // Create the entire campaign using the orchestrated API call
+        // Note: budget_mode is NOT sent - TikTok API uses BUDGET_MODE_DYNAMIC_DAILY_BUDGET automatically
         const result = await apiRequest('create_full_smartplus', {
             campaign_name: state.campaignName,
             cbo_enabled: cboEnabled,
             budget: campaignBudget,
-            budget_mode: 'BUDGET_MODE_DAY', // LEAD_GENERATION doesn't support DYNAMIC_DAILY_BUDGET
+            // Do NOT send budget_mode - let TikTok use default
             adgroup_budget: adGroupBudget,
-            adgroup_budget_mode: adGroupBudgetMode,
             pixel_id: state.pixelId,
             optimization_event: state.optimizationEvent,
             location_ids: state.locationIds,
