@@ -259,46 +259,19 @@ async function loadIdentities() {
             state.identities = result.data.list;
             select.innerHTML = '<option value="">Select identity...</option>';
 
-            // Separate identities by type for better organization
-            const ttUserIdentities = state.identities.filter(i => i.identity_type === 'TT_USER' || i.identity_type === 'AUTH_CODE' || i.identity_type === 'BC_AUTH_TT');
-            const customIdentities = state.identities.filter(i => i.identity_type === 'CUSTOMIZED_USER');
+            // All identity types work with Smart+ (identity is set at ad level)
+            state.identities.forEach(identity => {
+                const option = document.createElement('option');
+                option.value = identity.identity_id;
+                option.textContent = `${identity.display_name || identity.identity_name} (${identity.identity_type || 'CUSTOMIZED_USER'})`;
+                select.appendChild(option);
+            });
 
-            // Add TT_USER identities first (required for Smart+)
-            if (ttUserIdentities.length > 0) {
-                const optgroup1 = document.createElement('optgroup');
-                optgroup1.label = '✓ Linked TikTok Accounts (for Smart+)';
-                ttUserIdentities.forEach(identity => {
-                    const option = document.createElement('option');
-                    option.value = identity.identity_id;
-                    option.textContent = `${identity.display_name || identity.identity_name} (${identity.identity_type})`;
-                    optgroup1.appendChild(option);
-                });
-                select.appendChild(optgroup1);
-            }
-
-            // Add custom identities (not for Smart+)
-            if (customIdentities.length > 0) {
-                const optgroup2 = document.createElement('optgroup');
-                optgroup2.label = '⚠️ Custom Identities (NOT for Smart+)';
-                customIdentities.forEach(identity => {
-                    const option = document.createElement('option');
-                    option.value = identity.identity_id;
-                    option.textContent = `${identity.display_name || identity.identity_name} (CUSTOMIZED_USER)`;
-                    optgroup2.appendChild(option);
-                });
-                select.appendChild(optgroup2);
-            }
-
-            addLog('info', `Loaded ${state.identities.length} identities (${ttUserIdentities.length} linked TikTok, ${customIdentities.length} custom)`);
-
-            // Show warning if no TT_USER identities
-            if (ttUserIdentities.length === 0) {
-                addLog('warning', 'No linked TikTok accounts found. Smart+ campaigns require TT_USER, AUTH_CODE, or BC_AUTH_TT identities.');
-            }
+            addLog('info', `Loaded ${state.identities.length} identities`);
         } else {
-            select.innerHTML = '<option value="">No identities found - Link TikTok account first</option>';
+            select.innerHTML = '<option value="">No identities found - Create one</option>';
             state.identities = [];
-            addLog('warning', 'No identities found. Please link a TikTok account in TikTok Ads Manager.');
+            addLog('warning', 'No identities found. Create a custom identity or link a TikTok account.');
         }
     } catch (error) {
         console.error('Error loading identities:', error);
@@ -902,21 +875,14 @@ async function publishAll() {
     try {
         // Get identity type from selected identity
         const identity = state.identities.find(i => i.identity_id === state.globalIdentityId);
-        const identityType = identity?.identity_type || 'TT_USER';
-
-        // Validate identity type - Smart+ requires TT_USER, AUTH_CODE, or BC_AUTH_TT
-        if (identityType === 'CUSTOMIZED_USER') {
-            hideLoading();
-            showToast('Smart+ requires TT_USER, AUTH_CODE, or BC_AUTH_TT identity. CUSTOMIZED_USER is not supported. Please link a TikTok account.', 'error');
-            addLog('error', 'Invalid identity type for Smart+: CUSTOMIZED_USER');
-            return;
-        }
+        const identityType = identity?.identity_type || 'CUSTOMIZED_USER';
 
         // Prepare ads array with proper structure
         const adsForSmartPlus = state.ads.map((ad, index) => ({
             name: ad.name || `Ad ${index + 1}`,
             video_id: ad.video_id,
-            image_url: ad.cover_image_url || ad.video_cover_url, // web_uri for cover image
+            image_id: ad.cover_image_id || '', // For getting fresh URL from library
+            image_url: ad.cover_image_url || ad.video_cover_url, // Fallback web_uri for cover image
             ad_text: ad.ad_text
         }));
 
@@ -926,15 +892,16 @@ async function publishAll() {
         const adGroupBudget = !cboEnabled ? state.adGroupBudget : null;
         const adGroupBudgetMode = !cboEnabled ? state.adGroupBudgetMode : null;
 
-        addLog('info', `Identity Type: ${identityType}`);
+        addLog('info', `Identity: ${identity?.display_name || identity?.identity_name} (${identityType})`);
         addLog('info', `CBO: ${cboEnabled ? 'Enabled' : 'Disabled'}, Campaign Budget: ${campaignBudget}, Ad Group Budget: ${adGroupBudget}`);
+        addLog('info', `Creatives: ${adsForSmartPlus.length} videos`);
 
         // Create the entire campaign using the orchestrated API call
         const result = await apiRequest('create_full_smartplus', {
             campaign_name: state.campaignName,
             cbo_enabled: cboEnabled,
             budget: campaignBudget,
-            budget_mode: 'BUDGET_MODE_DAY',
+            budget_mode: 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
             adgroup_budget: adGroupBudget,
             adgroup_budget_mode: adGroupBudgetMode,
             pixel_id: state.pixelId,
@@ -955,16 +922,16 @@ async function publishAll() {
             state.adGroupId = result.adgroup_id;
 
             showToast('Smart+ Campaign created successfully!', 'success');
-            addLog('info', `Campaign created: ${result.campaign_id}, AdGroup: ${result.adgroup_id}`);
+            addLog('info', `Campaign created: ${result.campaign_id}, AdGroup: ${result.adgroup_id}, Smart+ Ad: ${result.smart_plus_ad_id}`);
 
             const budgetInfo = cboEnabled ? `$${campaignBudget}/day (Campaign Level)` : `$${adGroupBudget}/day (Ad Group Level)`;
             let alertMessage = `Smart+ Campaign Published!\n\n`;
             alertMessage += `Campaign ID: ${result.campaign_id}\n`;
             alertMessage += `Ad Group ID: ${result.adgroup_id}\n`;
+            alertMessage += `Smart+ Ad ID: ${result.smart_plus_ad_id || 'N/A'}\n`;
             alertMessage += `Campaign Name: ${state.campaignName}\n`;
             alertMessage += `Budget: ${budgetInfo}\n`;
-            alertMessage += `CBO: ${cboEnabled ? 'Enabled' : 'Disabled'}\n`;
-            alertMessage += `Ads Created: ${result.ads_created}/${result.ads_total}\n`;
+            alertMessage += `Creatives: ${result.ads_created}\n`;
             alertMessage += `Landing Page: ${state.globalLandingUrl}\n`;
 
             alert(alertMessage);

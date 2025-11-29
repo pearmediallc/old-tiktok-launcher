@@ -45,6 +45,58 @@ function generateRequestId() {
     return (string)(time() . rand(1000, 9999));
 }
 
+// Get fresh image URL by searching the image library
+// This returns a fresh signed URL that won't be expired
+function getFreshImageUrl($imageId, $advertiserId, $accessToken) {
+    logSmartPlus("Getting fresh URL for image: $imageId");
+
+    // Search for the image in the library to get fresh signed URL
+    $result = makeApiCall('/file/image/ad/search/', [
+        'advertiser_id' => $advertiserId,
+        'page' => 1,
+        'page_size' => 100
+    ], $accessToken, 'GET');
+
+    if ($result['code'] == 0 && isset($result['data']['list'])) {
+        foreach ($result['data']['list'] as $image) {
+            if ($image['image_id'] === $imageId) {
+                logSmartPlus("Found fresh URL for image: " . $image['image_url']);
+                return [
+                    'success' => true,
+                    'image_id' => $image['image_id'],
+                    'image_url' => $image['image_url']
+                ];
+            }
+        }
+    }
+
+    logSmartPlus("Image not found in library: $imageId");
+    return ['success' => false, 'error' => 'Image not found'];
+}
+
+// Upload image by URL to get accessible image for Smart+ ads
+function uploadImageByUrl($imageUrl, $advertiserId, $accessToken) {
+    logSmartPlus("Uploading image by URL: $imageUrl");
+
+    $result = makeApiCall('/file/image/ad/upload/', [
+        'advertiser_id' => $advertiserId,
+        'upload_type' => 'UPLOAD_BY_URL',
+        'image_url' => $imageUrl
+    ], $accessToken);
+
+    if ($result['code'] == 0 && isset($result['data']['image_id'])) {
+        logSmartPlus("Image uploaded: " . $result['data']['image_id']);
+        return [
+            'success' => true,
+            'image_id' => $result['data']['image_id'],
+            'image_url' => $result['data']['image_url'] ?? ''
+        ];
+    }
+
+    logSmartPlus("Image upload failed: " . ($result['message'] ?? 'Unknown error'));
+    return ['success' => false, 'error' => $result['message'] ?? 'Unknown error'];
+}
+
 // Make API call to TikTok
 function makeApiCall($endpoint, $params, $accessToken, $method = 'POST') {
     $url = "https://business-api.tiktok.com/open_api/v1.3" . $endpoint;
@@ -462,8 +514,11 @@ switch ($action) {
         logSmartPlus("Campaign created: $campaignId");
 
         // Step 2: Create Ad Group
+        // NOTE: Identity is NOT set at ad group level for Smart+
+        // Identity is set at AD level in ad_configuration and creative_info
         logSmartPlus("Step 2: Creating Ad Group...");
         $scheduleStart = date('Y-m-d H:i:s', strtotime('+1 hour'));
+        $scheduleEnd = date('Y-m-d H:i:s', strtotime('+1 year'));
 
         $adgroupParams = [
             'advertiser_id' => $advertiserId,
@@ -475,13 +530,13 @@ switch ($action) {
             'optimization_goal' => 'CONVERT',
             'billing_event' => 'OCPM',
             'bid_type' => 'BID_TYPE_NO_BID',
-            'schedule_type' => 'SCHEDULE_FROM_NOW',
+            'schedule_type' => 'SCHEDULE_START_END',
             'schedule_start_time' => $scheduleStart,
+            'schedule_end_time' => $scheduleEnd,
             'operation_status' => 'ENABLE',
-            'identity_id' => $data['identity_id'],
-            'identity_type' => $data['identity_type'] ?? 'TT_USER',
             'targeting_spec' => [
-                'location_ids' => $data['location_ids'] ?? ['6252001']
+                'location_ids' => $data['location_ids'] ?? ['6252001'],
+                'spc_audience_age' => 'OVER_EIGHTEEN'
             ]
         ];
 
@@ -520,16 +575,19 @@ switch ($action) {
         logSmartPlus("Ad Group created: $adgroupId");
 
         // Step 3: Create Ads
+        // Identity is set in BOTH ad_configuration AND creative_info for Smart+
         logSmartPlus("Step 3: Creating Ads...");
         $ads = $data['ads'] ?? [];
+        $identityType = $data['identity_type'] ?? 'CUSTOMIZED_USER';
+        $identityId = $data['identity_id'];
 
-        foreach ($ads as $index => $ad) {
-            $creativeList = [];
-
+        // Build creative_list with ALL videos/images
+        $creativeList = [];
+        foreach ($ads as $ad) {
             $creativeInfo = [
                 'ad_format' => 'SINGLE_VIDEO',
-                'identity_id' => $data['identity_id'],
-                'identity_type' => $data['identity_type'] ?? 'TT_USER'
+                'identity_id' => $identityId,
+                'identity_type' => $identityType
             ];
 
             // Add video
@@ -539,65 +597,108 @@ switch ($action) {
                 ];
             }
 
-            // Add cover image (web_uri required)
-            if (!empty($ad['image_url'])) {
+            // Add cover image - get fresh URL
+            // Priority: 1) Use image_id to get fresh URL, 2) Upload image_url to get fresh URL
+            $imageResult = null;
+
+            // If we have an image_id, try to get fresh URL from library
+            if (!empty($ad['image_id'])) {
+                $imageResult = getFreshImageUrl($ad['image_id'], $advertiserId, $accessToken);
+            }
+
+            // If no image_id or not found, try uploading the image_url
+            if ((!$imageResult || !$imageResult['success']) && !empty($ad['image_url'])) {
+                $imageResult = uploadImageByUrl($ad['image_url'], $advertiserId, $accessToken);
+            }
+
+            // Set image_info with fresh URL
+            if ($imageResult && $imageResult['success'] && !empty($imageResult['image_url'])) {
+                $creativeInfo['image_info'] = [
+                    [
+                        'image_id' => $imageResult['image_id'],
+                        'web_uri' => $imageResult['image_url']
+                    ]
+                ];
+            } elseif (!empty($ad['image_url'])) {
+                // Last resort: use original URL (may fail if expired)
                 $creativeInfo['image_info'] = [
                     ['web_uri' => $ad['image_url']]
                 ];
             }
 
             $creativeList[] = ['creative_info' => $creativeInfo];
+        }
 
-            $adParams = [
-                'advertiser_id' => $advertiserId,
-                'adgroup_id' => $adgroupId,
-                'ad_name' => $ad['name'] ?? 'Ad ' . ($index + 1),
-                'operation_status' => 'ENABLE',
-                'creative_list' => $creativeList,
-                'ad_text_list' => [
-                    ['ad_text' => $ad['ad_text'] ?? '']
-                ],
-                'landing_page_url_list' => [
-                    ['landing_page_url' => $data['landing_page_url']]
-                ]
+        // Build ad_text_list from all ads
+        $adTextList = [];
+        foreach ($ads as $ad) {
+            if (!empty($ad['ad_text'])) {
+                $adTextList[] = ['ad_text' => $ad['ad_text']];
+            }
+        }
+        // Ensure at least one ad text
+        if (empty($adTextList)) {
+            $adTextList[] = ['ad_text' => 'Check it out!'];
+        }
+
+        // Create single Smart+ Ad with all creatives
+        $adParams = [
+            'advertiser_id' => $advertiserId,
+            'adgroup_id' => $adgroupId,
+            'ad_name' => $data['campaign_name'] . ' - Ad',
+            'operation_status' => 'ENABLE',
+            // ad_configuration contains identity at ad level
+            'ad_configuration' => [
+                'identity_id' => $identityId,
+                'identity_type' => $identityType
+            ],
+            'creative_list' => $creativeList,
+            'ad_text_list' => $adTextList,
+            'landing_page_url_list' => [
+                ['landing_page_url' => $data['landing_page_url']]
+            ]
+        ];
+
+        // Add CTA
+        if (!empty($data['call_to_action'])) {
+            $adParams['call_to_action_list'] = [
+                ['call_to_action' => $data['call_to_action']]
             ];
+        }
 
-            // Add CTA
-            if (!empty($data['call_to_action'])) {
-                $adParams['call_to_action_list'] = [
-                    ['call_to_action' => $data['call_to_action']]
-                ];
-            }
+        $adResult = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);
 
-            $adResult = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);
-
-            if ($adResult['code'] == 0 && isset($adResult['data']['ad_id'])) {
-                $results['ads'][] = [
-                    'success' => true,
-                    'ad_id' => $adResult['data']['ad_id'],
-                    'name' => $ad['name'] ?? 'Ad ' . ($index + 1)
-                ];
-                logSmartPlus("Ad created: " . $adResult['data']['ad_id']);
-            } else {
-                $results['ads'][] = [
-                    'success' => false,
-                    'name' => $ad['name'] ?? 'Ad ' . ($index + 1),
-                    'error' => $adResult['message'] ?? 'Unknown error'
-                ];
-                logSmartPlus("Failed to create ad: " . ($adResult['message'] ?? 'Unknown error'));
-            }
+        if ($adResult['code'] == 0 && isset($adResult['data']['smart_plus_ad_id'])) {
+            $smartPlusAdId = $adResult['data']['smart_plus_ad_id'];
+            $results['ads'][] = [
+                'success' => true,
+                'smart_plus_ad_id' => $smartPlusAdId,
+                'name' => $data['campaign_name'] . ' - Ad'
+            ];
+            logSmartPlus("Smart+ Ad created: $smartPlusAdId with " . count($creativeList) . " creatives");
+        } else {
+            $results['ads'][] = [
+                'success' => false,
+                'name' => $data['campaign_name'] . ' - Ad',
+                'error' => $adResult['message'] ?? 'Unknown error',
+                'details' => $adResult
+            ];
+            logSmartPlus("Failed to create ad: " . ($adResult['message'] ?? 'Unknown error'));
         }
 
         // Return results
-        $successCount = count(array_filter($results['ads'], fn($a) => $a['success']));
+        $adsCreated = !empty($results['ads'][0]['success']) ? count($creativeList) : 0;
         echo json_encode([
-            'success' => true,
+            'success' => !empty($results['ads'][0]['success']),
             'campaign_id' => $campaignId,
             'adgroup_id' => $adgroupId,
-            'ads_created' => $successCount,
+            'smart_plus_ad_id' => $results['ads'][0]['smart_plus_ad_id'] ?? null,
+            'ads_created' => $adsCreated,
             'ads_total' => count($ads),
             'results' => $results,
-            'message' => "Smart+ Campaign created: Campaign ID $campaignId, Ad Group ID $adgroupId, $successCount/" . count($ads) . " ads created"
+            'message' => !empty($results['ads'][0]['success'])
+                ? "Smart+ Campaign created: Campaign ID $campaignId, Ad Group ID $adgroupId, $adsCreated creatives"
+                : "Failed to create ad: " . ($results['ads'][0]['error'] ?? 'Unknown error')
         ]);
         break;
 
