@@ -377,25 +377,19 @@ switch ($action) {
             exit;
         }
 
-        // Build media_info_list with proper format for Smart+ Ads
-        // Format: [{media_info: {video_info: {video_id: "xxx"}}}]
-        $mediaInfoList = [];
-        $adTextList = [];
+        // Build creative_info_list with proper format for Smart+ Ads
+        // Format: [{creative_info: {video_id, ad_text}}]
+        $creativeInfoList = [];
 
         foreach ($data['creatives'] ?? [] as $creative) {
             if (!empty($creative['video_id'])) {
-                $mediaInfoList[] = [
-                    'media_info' => [
-                        'video_info' => [
-                            'video_id' => $creative['video_id']
-                        ]
-                    ]
+                $creativeInfo = [
+                    'video_id' => $creative['video_id']
                 ];
-            }
-
-            // Collect ad texts as objects with ad_text key
-            if (!empty($creative['ad_text'])) {
-                $adTextList[] = ['ad_text' => $creative['ad_text']];
+                if (!empty($creative['ad_text'])) {
+                    $creativeInfo['ad_text'] = $creative['ad_text'];
+                }
+                $creativeInfoList[] = ['creative_info' => $creativeInfo];
             }
         }
 
@@ -419,15 +413,10 @@ switch ($action) {
             'advertiser_id' => $advertiserId,
             'adgroup_id' => $data['adgroup_id'],
             'ad_name' => $data['ad_name'] ?? 'Smart+ Ad',
-            'media_info_list' => $mediaInfoList,
+            'creative_info_list' => $creativeInfoList,
             'landing_page_url_list' => $landingPageList,
             'call_to_action_list' => $ctaList
         ];
-
-        // Add ad_text_list if we have any
-        if (!empty($adTextList)) {
-            $adParams['ad_text_list'] = $adTextList;
-        }
 
         logSmartPlus("Ad params: " . json_encode($adParams));
 
@@ -603,29 +592,23 @@ switch ($action) {
 
         logSmartPlus("creative_list input: " . json_encode($creativeList));
 
-        // Build media_info_list with proper format for Smart+ Ads
-        // Format: [{media_info: {video_info: {video_id: "xxx"}}}]
-        $mediaInfoList = [];
-        $adTextList = [];
+        // Build creative_info_list with proper format for Smart+ Ads
+        // Format: [{creative_info: {video_id, ad_text}}]
+        $creativeInfoList = [];
 
         foreach ($creativeList as $creative) {
             if (!empty($creative['video_id'])) {
-                $mediaInfoList[] = [
-                    'media_info' => [
-                        'video_info' => [
-                            'video_id' => $creative['video_id']
-                        ]
-                    ]
+                $creativeInfo = [
+                    'video_id' => $creative['video_id']
                 ];
-            }
-
-            // Collect ad texts as objects with ad_text key
-            if (!empty($creative['ad_text'])) {
-                $adTextList[] = ['ad_text' => $creative['ad_text']];
+                if (!empty($creative['ad_text'])) {
+                    $creativeInfo['ad_text'] = $creative['ad_text'];
+                }
+                $creativeInfoList[] = ['creative_info' => $creativeInfo];
             }
         }
 
-        logSmartPlus("media_info_list: " . json_encode($mediaInfoList));
+        logSmartPlus("creative_info_list: " . json_encode($creativeInfoList));
 
         // Build landing_page_url_list as array of OBJECTS with landing_page_url key
         $landingPageUrlList = [];
@@ -643,20 +626,15 @@ switch ($action) {
             $ctaList[] = ['call_to_action' => $data['call_to_action']];
         }
 
-        // Create Smart+ Ad with media_info_list structure
+        // Create Smart+ Ad with creative_info_list structure
         $adParams = [
             'advertiser_id' => $advertiserId,
             'adgroup_id' => $adgroupId,
             'ad_name' => $data['campaign_name'] . ' - Ad',
-            'media_info_list' => $mediaInfoList,
+            'creative_info_list' => $creativeInfoList,
             'landing_page_url_list' => $landingPageUrlList,
             'call_to_action_list' => $ctaList
         ];
-
-        // Add ad_text_list if we have any
-        if (!empty($adTextList)) {
-            $adParams['ad_text_list'] = $adTextList;
-        }
 
         logSmartPlus("Ad params: " . json_encode($adParams));
 
