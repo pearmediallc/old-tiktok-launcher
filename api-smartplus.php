@@ -182,6 +182,7 @@ switch ($action) {
     // ==========================================
     // CREATE SMART+ CAMPAIGN
     // POST /open_api/v1.3/smart_plus/campaign/create/
+    // Note: Budget is set at Ad Group level, NOT campaign level
     // ==========================================
     case 'create_campaign':
         $data = $input;
@@ -194,16 +195,12 @@ switch ($action) {
             exit;
         }
 
-        $budget = floatval($data['budget'] ?? 50);
-        if ($budget < 20) $budget = 20;
-
+        // Smart+ Campaign - budget is at ad group level, not campaign level
         $campaignParams = [
             'advertiser_id' => $advertiserId,
             'request_id' => generateRequestId(),
             'campaign_name' => $data['campaign_name'],
-            'objective_type' => 'LEAD_GENERATION',
-            'budget' => $budget,
-            'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET'
+            'objective_type' => 'LEAD_GENERATION'
         ];
 
         $result = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
@@ -226,6 +223,7 @@ switch ($action) {
     // ==========================================
     // CREATE SMART+ AD GROUP
     // POST /open_api/v1.3/smart_plus/adgroup/create/
+    // Budget is set here at Ad Group level
     // ==========================================
     case 'create_adgroup':
         $data = $input;
@@ -245,6 +243,11 @@ switch ($action) {
             echo json_encode(['success' => false, 'message' => 'Pixel ID is required']);
             exit;
         }
+
+        // Budget at ad group level
+        $budget = floatval($data['budget'] ?? 50);
+        if ($budget < 20) $budget = 20;
+        $budgetMode = $data['budget_mode'] ?? 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET';
 
         $scheduleStart = date('Y-m-d H:i:s', strtotime('+1 hour'));
         $scheduleEnd = date('Y-m-d H:i:s', strtotime('+1 year'));
@@ -267,6 +270,10 @@ switch ($action) {
             'request_id' => generateRequestId(),
             'campaign_id' => $data['campaign_id'],
             'adgroup_name' => $data['adgroup_name'] ?? 'Ad Group',
+
+            // Budget at Ad Group level
+            'budget' => $budget,
+            'budget_mode' => $budgetMode,
 
             // Lead Generation settings
             'promotion_type' => 'LEAD_GENERATION',

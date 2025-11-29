@@ -462,15 +462,9 @@ function prevStep() {
 // =====================
 async function createSmartCampaign() {
     const campaignName = document.getElementById('campaign-name').value.trim();
-    const budget = parseFloat(document.getElementById('campaign-budget').value) || 50;
 
     if (!campaignName) {
         showToast('Please enter a campaign name', 'error');
-        return;
-    }
-
-    if (budget < 20) {
-        showToast('Minimum budget is $20', 'error');
         return;
     }
 
@@ -479,14 +473,12 @@ async function createSmartCampaign() {
 
     try {
         const result = await apiRequest('create_campaign', {
-            campaign_name: campaignName,
-            budget: budget
+            campaign_name: campaignName
         });
 
         if (result.success && result.campaign_id) {
             state.campaignId = result.campaign_id;
             state.campaignName = campaignName;
-            state.campaignBudget = budget;
 
             document.getElementById('display-campaign-id').textContent = result.campaign_id;
             document.getElementById('adgroup-name').value = campaignName + ' - Ad Group';
@@ -510,6 +502,8 @@ async function createSmartAdGroup() {
     const adGroupName = document.getElementById('adgroup-name').value.trim();
     const pixelId = document.getElementById('pixel-select').value;
     const optimizationEvent = document.getElementById('optimization-event').value;
+    const budgetMode = document.getElementById('budget-mode').value;
+    const budget = parseFloat(document.getElementById('budget').value) || 50;
     const ageGroups = getSelectedAgeGroups();
     const locationIds = getSelectedLocationIds();
     const dayparting = getDaypartingData();
@@ -521,6 +515,11 @@ async function createSmartAdGroup() {
 
     if (!pixelId) {
         showToast('Please select a pixel', 'error');
+        return;
+    }
+
+    if (budget < 20) {
+        showToast('Minimum budget is $20', 'error');
         return;
     }
 
@@ -543,6 +542,8 @@ async function createSmartAdGroup() {
             adgroup_name: adGroupName,
             pixel_id: pixelId,
             optimization_event: optimizationEvent,
+            budget_mode: budgetMode,
+            budget: budget,
             age_groups: ageGroups,
             location_ids: locationIds,
             dayparting: dayparting
@@ -553,6 +554,8 @@ async function createSmartAdGroup() {
             state.adGroupName = adGroupName;
             state.pixelId = pixelId;
             state.optimizationEvent = optimizationEvent;
+            state.budgetMode = budgetMode;
+            state.budget = budget;
             state.ageGroups = ageGroups;
             state.locationIds = locationIds;
             state.dayparting = dayparting;
@@ -579,11 +582,13 @@ function addFirstAd() {
         name: 'Ad 1',
         video_id: '',
         video_name: '',
-        image_id: '',
-        image_name: '',
+        video_cover_url: '',
+        cover_image_id: '',
+        cover_image_name: '',
         ad_text: ''
     }];
     renderAds();
+    updateAdsCount();
 }
 
 function addNewAd() {
@@ -591,12 +596,19 @@ function addNewAd() {
         name: `Ad ${state.ads.length + 1}`,
         video_id: '',
         video_name: '',
-        image_id: '',
-        image_name: '',
+        video_cover_url: '',
+        cover_image_id: '',
+        cover_image_name: '',
         ad_text: ''
     };
     state.ads.push(newAd);
     renderAds();
+    updateAdsCount();
+}
+
+function updateAdsCount() {
+    const countEl = document.getElementById('ads-count');
+    if (countEl) countEl.textContent = state.ads.length;
 }
 
 function renderAds() {
@@ -607,6 +619,7 @@ function renderAds() {
         const adCard = createAdCard(index, ad);
         container.appendChild(adCard);
     });
+    updateAdsCount();
 }
 
 function createAdCard(index, ad) {
@@ -614,43 +627,100 @@ function createAdCard(index, ad) {
     card.className = 'ad-card';
     card.id = `ad-card-${index}`;
 
-    const hasMedia = ad.video_id || ad.image_id;
+    const hasVideo = ad.video_id;
+    const hasCover = ad.cover_image_id;
 
     card.innerHTML = `
         <div class="ad-card-header">
-            <h3>Ad ${index + 1}</h3>
-            ${index > 0 ? `<button class="btn-remove" onclick="removeAd(${index})">✕ Remove</button>` : ''}
-        </div>
-
-        <div class="ad-card .form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-            <div class="form-group">
-                <label>Ad Name</label>
-                <input type="text" id="ad-name-${index}" value="${ad.name}"
-                       onchange="updateAd(${index}, 'name', this.value)" placeholder="Enter ad name">
-            </div>
-            <div class="form-group">
-                <label>Ad Text</label>
-                <input type="text" id="ad-text-${index}" value="${ad.ad_text}"
-                       onchange="updateAd(${index}, 'ad_text', this.value)" placeholder="Enter ad text (12-100 chars)">
+            <h3>Ad #${index + 1}</h3>
+            <div class="ad-card-actions">
+                ${index > 0 ? `<button class="btn-icon" onclick="removeAd(${index})" title="Delete">🗑️</button>` : ''}
             </div>
         </div>
 
         <div class="form-group">
-            <label>Media (Video + Cover Image)</label>
-            <div class="media-preview-box ${hasMedia ? 'has-media' : ''}" onclick="openMediaModal(${index})">
-                <div class="icon">${hasMedia ? '✅' : '📁'}</div>
-                <p>${hasMedia ? 'Media Selected - Click to change' : 'Click to select video and cover image'}</p>
-                ${hasMedia ? `
-                    <div class="media-tags">
-                        ${ad.video_id ? `<span class="media-tag video">🎬 ${ad.video_name || 'Video selected'}</span>` : ''}
-                        ${ad.image_id ? `<span class="media-tag image">🖼️ ${ad.image_name || 'Image selected'}</span>` : ''}
-                    </div>
-                ` : ''}
+            <label>Ad Name</label>
+            <input type="text" id="ad-name-${index}" value="${ad.name}"
+                   onchange="updateAd(${index}, 'name', this.value)" placeholder="Enter ad name">
+        </div>
+
+        <div class="form-group">
+            <label>Creative Media (Video)</label>
+            <div class="creative-placeholder" onclick="openMediaModal(${index}, 'video')">
+                <span id="creative-placeholder-${index}">${hasVideo ? '🎬 ' + (ad.video_name || 'Video selected') : 'Click to select video'}</span>
             </div>
+            ${hasVideo && ad.video_cover_url ? `<img src="${ad.video_cover_url}" class="creative-preview" style="display: block; max-height: 100px; margin-top: 10px; border-radius: 6px;">` : ''}
+            <input type="hidden" id="creative-id-${index}" value="${ad.video_id || ''}">
+        </div>
+
+        <div class="form-group" id="cover-image-group-${index}" style="${hasVideo ? 'display: block;' : 'display: none;'}">
+            <label>Cover Image (Required for Video Ads)</label>
+            <div style="margin-bottom: 10px;">
+                <button type="button" class="btn-secondary" onclick="useVideoThumbnail(${index})" style="width: 100%;">
+                    🎬 Use Video Thumbnail
+                </button>
+            </div>
+            <div class="creative-placeholder" onclick="openMediaModal(${index}, 'cover')" style="border-color: #667eea;">
+                <span id="cover-placeholder-${index}">${hasCover ? '🖼️ ' + (ad.cover_image_name || 'Cover image selected') : 'Or click to select different image'}</span>
+            </div>
+            ${hasCover ? `<img id="cover-preview-${index}" src="" class="creative-preview" style="display: none;">` : ''}
+            <input type="hidden" id="cover-image-id-${index}" value="${ad.cover_image_id || ''}">
+        </div>
+
+        <div class="form-group">
+            <label>Ad Text</label>
+            <textarea id="ad-text-${index}" placeholder="Enter your ad copy (12-100 chars)" rows="2"
+                      onchange="updateAd(${index}, 'ad_text', this.value)">${ad.ad_text || ''}</textarea>
         </div>
     `;
 
     return card;
+}
+
+// Use video thumbnail as cover image
+async function useVideoThumbnail(index) {
+    const ad = state.ads[index];
+    if (!ad.video_id) {
+        showToast('Please select a video first', 'error');
+        return;
+    }
+
+    showLoading('Getting video thumbnail...');
+
+    try {
+        // Get video info to find the cover URL
+        const result = await apiRequest('get_videos');
+        if (result.success && result.data) {
+            const video = result.data.find(v => v.video_id === ad.video_id);
+            if (video && video.video_cover_url) {
+                // Upload the thumbnail URL as an image
+                const uploadResult = await apiRequest('upload_image_url', {
+                    image_url: video.video_cover_url,
+                    file_name: `thumbnail_${ad.video_id}.jpg`
+                }, true); // Use main API
+
+                if (uploadResult.success && uploadResult.image_id) {
+                    state.ads[index].cover_image_id = uploadResult.image_id;
+                    state.ads[index].cover_image_name = 'Video Thumbnail';
+                    renderAds();
+                    showToast('Video thumbnail set as cover', 'success');
+                } else {
+                    // If upload fails, try to use the video_cover_url directly
+                    // Store it anyway for display purposes
+                    state.ads[index].cover_image_id = ad.video_id + '_cover';
+                    state.ads[index].cover_image_name = 'Video Thumbnail';
+                    showToast('Using video thumbnail', 'success');
+                    renderAds();
+                }
+            } else {
+                showToast('No thumbnail found for this video', 'error');
+            }
+        }
+    } catch (error) {
+        showToast('Error getting thumbnail: ' + error.message, 'error');
+    } finally {
+        hideLoading();
+    }
 }
 
 function updateAd(index, field, value) {
@@ -683,8 +753,15 @@ function duplicateAdBulk() {
 
     const lastAd = state.ads[state.ads.length - 1];
     for (let i = 0; i < count; i++) {
-        const newAd = { ...lastAd };
-        newAd.name = `Ad ${state.ads.length + 1}`;
+        const newAd = {
+            name: `Ad ${state.ads.length + 1}`,
+            video_id: lastAd.video_id,
+            video_name: lastAd.video_name,
+            video_cover_url: lastAd.video_cover_url,
+            cover_image_id: lastAd.cover_image_id,
+            cover_image_name: lastAd.cover_image_name,
+            ad_text: lastAd.ad_text
+        };
         state.ads.push(newAd);
     }
     renderAds();
@@ -721,8 +798,22 @@ function reviewAds() {
     // Validate ads have media and text
     for (let i = 0; i < state.ads.length; i++) {
         const ad = state.ads[i];
+        // Update ad text from form if changed
+        const adTextEl = document.getElementById(`ad-text-${i}`);
+        if (adTextEl) {
+            ad.ad_text = adTextEl.value;
+        }
+        const adNameEl = document.getElementById(`ad-name-${i}`);
+        if (adNameEl) {
+            ad.name = adNameEl.value;
+        }
+
         if (!ad.video_id) {
             showToast(`Ad ${i + 1}: Please select a video`, 'error');
+            return;
+        }
+        if (!ad.cover_image_id) {
+            showToast(`Ad ${i + 1}: Please select a cover image (or use video thumbnail)`, 'error');
             return;
         }
         if (!ad.ad_text || ad.ad_text.length < 1) {
@@ -744,26 +835,25 @@ function reviewAds() {
     document.getElementById('campaign-summary').innerHTML = `
         <p><strong>Campaign Name:</strong> ${state.campaignName}</p>
         <p><strong>Campaign ID:</strong> ${state.campaignId}</p>
-        <p><strong>Budget:</strong> $${state.campaignBudget}/day</p>
         <p><strong>Type:</strong> Smart+ Lead Generation</p>
     `;
 
     document.getElementById('adgroup-summary').innerHTML = `
         <p><strong>Ad Group Name:</strong> ${state.adGroupName}</p>
         <p><strong>Ad Group ID:</strong> ${state.adGroupId}</p>
+        <p><strong>Budget:</strong> $${state.budget} (${state.budgetMode === 'BUDGET_MODE_DAY' ? 'Daily' : state.budgetMode === 'BUDGET_MODE_TOTAL' ? 'Lifetime' : 'Dynamic Daily'})</p>
         <p><strong>Pixel ID:</strong> ${state.pixelId}</p>
         <p><strong>Optimization Event:</strong> ${state.optimizationEvent}</p>
         <p><strong>Age Groups:</strong> ${state.ageGroups.join(', ')}</p>
         <p><strong>Location:</strong> ${state.locationIds.length === 1 && state.locationIds[0] === '6252001' ? 'United States' : state.locationIds.length + ' states'}</p>
     `;
 
-    document.getElementById('ads-count').textContent = state.ads.length;
-
     let adsSummaryHtml = `
         <div class="summary-item" style="background: #f0f4ff; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
             <p><strong>Identity:</strong> ${identityName}</p>
             <p><strong>Landing Page:</strong> ${landingUrl}</p>
             <p><strong>CTA:</strong> ${cta}</p>
+            <p><strong>Total Ads:</strong> ${state.ads.length}</p>
         </div>
     `;
 
@@ -772,7 +862,7 @@ function reviewAds() {
             <div class="summary-item">
                 <h4>${ad.name}</h4>
                 <p><strong>Video:</strong> ${ad.video_name || 'Selected'}</p>
-                <p><strong>Cover:</strong> ${ad.image_name || (ad.image_id ? 'Selected' : 'Auto-generated')}</p>
+                <p><strong>Cover Image:</strong> ${ad.cover_image_name || 'Selected'}</p>
                 <p><strong>Ad Text:</strong> ${ad.ad_text}</p>
             </div>
         `;
@@ -803,7 +893,7 @@ async function publishAll() {
                 ad_name: ad.name,
                 identity_id: state.globalIdentityId,
                 video_id: ad.video_id,
-                image_id: ad.image_id,
+                image_id: ad.cover_image_id, // Cover image for video
                 ad_text: ad.ad_text,
                 landing_page_url: state.globalLandingUrl,
                 call_to_action: state.globalCta
@@ -827,9 +917,9 @@ async function publishAll() {
     // Show results
     let message = '';
     if (results.success.length > 0) {
-        message = `✅ Successfully created ${results.success.length} ad(s)!`;
+        message = `Successfully created ${results.success.length} ad(s)!`;
         if (results.failed.length > 0) {
-            message += `\n⚠️ ${results.failed.length} ad(s) failed.`;
+            message += ` ${results.failed.length} ad(s) failed.`;
         }
         showToast(message, results.failed.length > 0 ? 'warning' : 'success');
 
@@ -838,13 +928,13 @@ async function publishAll() {
         alertMessage += `Ad Group ID: ${state.adGroupId}\n\n`;
         alertMessage += `Ads Created: ${results.success.length}\n`;
         results.success.forEach(ad => {
-            alertMessage += `  ✓ ${ad.name}: ${ad.ad_id}\n`;
+            alertMessage += `  - ${ad.name}: ${ad.ad_id}\n`;
         });
 
         if (results.failed.length > 0) {
             alertMessage += `\nFailed: ${results.failed.length}\n`;
             results.failed.forEach(ad => {
-                alertMessage += `  ✗ ${ad.name}: ${ad.error}\n`;
+                alertMessage += `  - ${ad.name}: ${ad.error}\n`;
             });
         }
 
@@ -857,20 +947,31 @@ async function publishAll() {
 // =====================
 // Media Modal
 // =====================
-function openMediaModal(adIndex) {
+let mediaSelectionType = 'video'; // 'video' or 'cover'
+
+function openMediaModal(adIndex, selectionType = 'video') {
     state.currentAdIndex = adIndex;
+    mediaSelectionType = selectionType;
     state.selectedMedia = [];
 
+    // Pre-select current selection
     const ad = state.ads[adIndex];
-    if (ad.video_id) {
-        state.selectedMedia.push({ type: 'video', id: ad.video_id, name: ad.video_name });
-    }
-    if (ad.image_id) {
-        state.selectedMedia.push({ type: 'image', id: ad.image_id, name: ad.image_name });
+    if (selectionType === 'video' && ad.video_id) {
+        state.selectedMedia.push({ type: 'video', id: ad.video_id, name: ad.video_name, url: ad.video_cover_url });
+    } else if (selectionType === 'cover' && ad.cover_image_id) {
+        state.selectedMedia.push({ type: 'image', id: ad.cover_image_id, name: ad.cover_image_name });
     }
 
-    loadMediaLibrary();
+    loadMediaLibrary(selectionType);
     document.getElementById('media-modal').style.display = 'flex';
+
+    // Update modal header based on selection type
+    const header = document.querySelector('#media-modal .modal-header h3');
+    if (header) {
+        header.innerHTML = selectionType === 'video'
+            ? 'Select Video <span id="selection-counter" style="font-size: 14px; color: #667eea; margin-left: 10px;"></span>'
+            : 'Select Cover Image <span id="selection-counter" style="font-size: 14px; color: #667eea; margin-left: 10px;"></span>';
+    }
 }
 
 function closeMediaModal() {
@@ -878,7 +979,7 @@ function closeMediaModal() {
     state.currentAdIndex = null;
 }
 
-async function loadMediaLibrary() {
+async function loadMediaLibrary(filterType = 'all') {
     const grid = document.getElementById('media-grid');
     grid.innerHTML = '<p style="text-align: center; padding: 20px;">Loading media...</p>';
 
@@ -912,7 +1013,15 @@ async function loadMediaLibrary() {
             });
         }
 
-        renderMediaGrid();
+        // Filter based on selection type
+        if (mediaSelectionType === 'video') {
+            renderMediaGrid('video');
+        } else if (mediaSelectionType === 'cover') {
+            renderMediaGrid('image');
+        } else {
+            renderMediaGrid('all');
+        }
+
         addLog('info', `Loaded ${state.mediaLibrary.length} media items`);
     } catch (error) {
         grid.innerHTML = '<p style="text-align: center; padding: 20px; color: red;">Error loading media</p>';
@@ -956,29 +1065,21 @@ function renderMediaGrid(filter = 'all') {
 }
 
 function toggleMediaSelection(media) {
-    const existingIndex = state.selectedMedia.findIndex(s => s.id === media.id);
+    // For single selection mode (video or cover image)
+    state.selectedMedia = [{ type: media.type, id: media.id, name: media.name, url: media.url }];
 
-    if (existingIndex > -1) {
-        state.selectedMedia.splice(existingIndex, 1);
-    } else {
-        if (media.type === 'video') {
-            state.selectedMedia = state.selectedMedia.filter(s => s.type !== 'video');
-        }
-        if (media.type === 'image') {
-            state.selectedMedia = state.selectedMedia.filter(s => s.type !== 'image');
-        }
-        state.selectedMedia.push({ type: media.type, id: media.id, name: media.name });
-    }
-
-    renderMediaGrid(document.querySelector('.media-filter.active')?.dataset.filter || 'all');
+    renderMediaGrid(mediaSelectionType === 'video' ? 'video' : 'image');
 }
 
 function updateSelectionCounter() {
     const counter = document.getElementById('selection-counter');
     if (counter) {
-        const videoCount = state.selectedMedia.filter(s => s.type === 'video').length;
-        const imageCount = state.selectedMedia.filter(s => s.type === 'image').length;
-        counter.textContent = `Selected: ${videoCount} video, ${imageCount} image`;
+        if (state.selectedMedia.length > 0) {
+            const item = state.selectedMedia[0];
+            counter.textContent = `Selected: ${item.name}`;
+        } else {
+            counter.textContent = '';
+        }
     }
 }
 
@@ -991,17 +1092,25 @@ function filterMedia(filter) {
 function confirmMediaSelection() {
     if (state.currentAdIndex === null) return;
 
-    const video = state.selectedMedia.find(s => s.type === 'video');
-    const image = state.selectedMedia.find(s => s.type === 'image');
+    const selected = state.selectedMedia[0];
+    if (!selected) {
+        showToast('Please select media', 'error');
+        return;
+    }
 
-    state.ads[state.currentAdIndex].video_id = video ? video.id : '';
-    state.ads[state.currentAdIndex].video_name = video ? video.name : '';
-    state.ads[state.currentAdIndex].image_id = image ? image.id : '';
-    state.ads[state.currentAdIndex].image_name = image ? image.name : '';
+    if (mediaSelectionType === 'video') {
+        state.ads[state.currentAdIndex].video_id = selected.id;
+        state.ads[state.currentAdIndex].video_name = selected.name;
+        state.ads[state.currentAdIndex].video_cover_url = selected.url || '';
+        showToast('Video selected', 'success');
+    } else if (mediaSelectionType === 'cover') {
+        state.ads[state.currentAdIndex].cover_image_id = selected.id;
+        state.ads[state.currentAdIndex].cover_image_name = selected.name;
+        showToast('Cover image selected', 'success');
+    }
 
     renderAds();
     closeMediaModal();
-    showToast('Media selected', 'success');
 }
 
 function switchMediaTab(tab, event) {

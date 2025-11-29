@@ -34,85 +34,6 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             background: linear-gradient(135deg, #fff0f3 0%, #f0ffff 100%);
             border-left: 4px solid #ff0050;
         }
-        .ad-card {
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-        .ad-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
-        }
-        .ad-card-header h3 {
-            margin: 0;
-            color: #333;
-            font-size: 18px;
-        }
-        .ad-card .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        .media-preview-box {
-            background: #f8f9fa;
-            border: 2px dashed #ddd;
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .media-preview-box:hover {
-            border-color: #667eea;
-            background: #f0f4ff;
-        }
-        .media-preview-box.has-media {
-            border-style: solid;
-            border-color: #22c55e;
-            background: #f0fdf4;
-        }
-        .media-preview-box .icon {
-            font-size: 32px;
-            margin-bottom: 10px;
-        }
-        .media-tags {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-top: 10px;
-        }
-        .media-tag {
-            background: #e0e7ff;
-            color: #4338ca;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-        .media-tag.video {
-            background: #dcfce7;
-            color: #166534;
-        }
-        .media-tag.image {
-            background: #fef3c7;
-            color: #92400e;
-        }
-        .url-input-group {
-            display: flex;
-            gap: 10px;
-        }
-        .url-input-group input {
-            flex: 1;
-        }
-        .url-input-group .btn-test {
-            white-space: nowrap;
-        }
     </style>
 </head>
 <body>
@@ -122,7 +43,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             <h1>🚀 TikTok Campaign Launcher <span class="smart-badge">Smart+</span></h1>
             <div class="header-info">
                 <div id="advertiser-timezone-info" style="font-size: 0.9rem; color: #666; margin-right: 15px;">
-                    <span id="timezone-status">Loading timezone...</span>
+                    <span id="timezone-status">Loading...</span>
                 </div>
                 <button class="btn-secondary" onclick="window.location.href='select-advertiser-oauth.php'" style="margin-right: 10px;">Back</button>
                 <button class="btn-logout" onclick="logout()">Logout</button>
@@ -159,19 +80,10 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     <input type="text" id="campaign-name" placeholder="Enter campaign name" required>
                 </div>
 
-                <div class="form-section">
-                    <h3>Campaign Budget</h3>
-                    <div class="form-group">
-                        <label>Daily Budget ($)</label>
-                        <input type="number" id="campaign-budget" value="50" min="20" placeholder="50">
-                        <small>Minimum $20 daily budget. Smart+ uses dynamic daily budget allocation.</small>
-                    </div>
-                </div>
-
                 <div class="form-info smart-info">
                     <p><strong>Objective:</strong> Lead Generation</p>
                     <p><strong>Type:</strong> Smart+ Campaign (AI-Optimized)</p>
-                    <p><strong>Budget Mode:</strong> Dynamic Daily Budget</p>
+                    <p><strong>Note:</strong> Budget is set at Ad Group level for Smart+ campaigns</p>
                 </div>
                 <button class="btn-primary" onclick="createSmartCampaign()">Continue to Ad Group →</button>
             </div>
@@ -206,6 +118,25 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                                 <option value="REGISTRATION">Registration</option>
                                 <option value="CONTACT">Contact</option>
                             </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Budget & Schedule</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Budget Mode</label>
+                            <select id="budget-mode">
+                                <option value="BUDGET_MODE_DAY">Daily Budget</option>
+                                <option value="BUDGET_MODE_DYNAMIC_DAILY_BUDGET" selected>Dynamic Daily Budget (Recommended)</option>
+                                <option value="BUDGET_MODE_TOTAL">Total Budget (Lifetime)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Ad Group Budget Amount ($)</label>
+                            <input type="number" id="budget" value="50" min="20" placeholder="50" required>
+                            <small>Minimum $20 budget</small>
                         </div>
                     </div>
                 </div>
@@ -253,10 +184,10 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                                 </label>
                             </div>
                         </div>
-                        <div class="age-controls">
-                            <button type="button" class="btn-secondary age-btn" onclick="selectAllAges()">Select All</button>
-                            <button type="button" class="btn-secondary age-btn" onclick="clearAllAges()">Clear All</button>
-                            <button type="button" class="btn-secondary age-btn" onclick="selectDefaultAges()">Default (18+)</button>
+                        <div class="age-controls" style="margin-top: 10px;">
+                            <button type="button" class="btn-secondary" onclick="selectAllAges()">Select All</button>
+                            <button type="button" class="btn-secondary" onclick="clearAllAges()">Clear All</button>
+                            <button type="button" class="btn-secondary" onclick="selectDefaultAges()">Default (18+)</button>
                         </div>
                     </div>
                 </div>
@@ -264,44 +195,32 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 <div class="form-section">
                     <h3>Location Targeting</h3>
                     <div class="form-group">
-                        <label>Select Targeting Method</label>
                         <div class="location-method-container">
-                            <div class="location-method-item">
-                                <label>
-                                    <input type="radio" name="location_method" value="country" class="location-method-radio" checked onchange="toggleLocationMethod()">
-                                    <span>Target Entire United States</span>
-                                </label>
-                                <small>Target all users in the United States (default)</small>
-                            </div>
-                            <div class="location-method-item">
-                                <label>
-                                    <input type="radio" name="location_method" value="states" class="location-method-radio" onchange="toggleLocationMethod()">
-                                    <span>Target Specific States</span>
-                                </label>
-                                <small>Select specific US states to target</small>
-                            </div>
+                            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                                <input type="radio" name="location_method" value="country" checked onchange="toggleLocationMethod()">
+                                <span>Target Entire United States</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="radio" name="location_method" value="states" onchange="toggleLocationMethod()">
+                                <span>Target Specific States</span>
+                            </label>
                         </div>
 
-                        <div id="country-targeting" class="location-option active">
-                            <div class="location-info">
+                        <div id="country-targeting" style="margin-top: 10px;">
+                            <div class="form-info">
                                 <p><strong>Target:</strong> United States (Location ID: 6252001)</p>
                             </div>
                         </div>
 
-                        <div id="states-targeting" class="location-option" style="display: none;">
-                            <div class="states-selection-container">
-                                <div class="states-controls">
-                                    <button type="button" class="btn-secondary state-btn" onclick="selectAllStates()">Select All States</button>
-                                    <button type="button" class="btn-secondary state-btn" onclick="clearAllStates()">Clear All</button>
-                                    <button type="button" class="btn-secondary state-btn" onclick="selectPopularStates()">Popular States Only</button>
-                                </div>
-                                <div class="states-grid" id="states-grid">
-                                    <!-- States will be populated by JavaScript -->
-                                </div>
-                                <div class="states-summary">
-                                    <p><span id="selected-states-count">50</span> states selected</p>
-                                </div>
+                        <div id="states-targeting" style="display: none; margin-top: 10px;">
+                            <div style="margin-bottom: 10px;">
+                                <button type="button" class="btn-secondary" onclick="selectAllStates()">Select All States</button>
+                                <button type="button" class="btn-secondary" onclick="clearAllStates()">Clear All</button>
                             </div>
+                            <div class="states-grid" id="states-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; max-height: 300px; overflow-y: auto; padding: 10px; background: #f9f9f9; border-radius: 6px;">
+                                <!-- States will be populated by JavaScript -->
+                            </div>
+                            <p style="margin-top: 10px;"><span id="selected-states-count">0</span> states selected</p>
                         </div>
                     </div>
                 </div>
@@ -319,8 +238,8 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                         <div style="margin-bottom: 15px;">
                             <button type="button" class="btn-secondary" onclick="selectAllHours()">Select All</button>
                             <button type="button" class="btn-secondary" onclick="clearAllHours()">Clear All</button>
-                            <button type="button" class="btn-secondary" onclick="selectBusinessHours()">Business Hours (8-17)</button>
-                            <button type="button" class="btn-secondary" onclick="selectPrimeTime()">Prime Time (18-22)</button>
+                            <button type="button" class="btn-secondary" onclick="selectBusinessHours()">Business Hours</button>
+                            <button type="button" class="btn-secondary" onclick="selectPrimeTime()">Prime Time</button>
                         </div>
                         <div class="dayparting-grid">
                             <table class="dayparting-table">
@@ -361,64 +280,56 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     <p><strong>Ad Group ID:</strong> <span id="display-adgroup-id">-</span></p>
                 </div>
 
-                <!-- Global Identity Selection -->
-                <div class="form-section">
-                    <h3>Identity (Used for all ads)</h3>
-                    <div class="form-row">
+                <!-- Global Settings for All Ads -->
+                <div class="form-section" style="background: #f8f9ff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #667eea;">
+                    <h3 style="margin-top: 0; color: #667eea;">Global Settings (Applied to All Ads)</h3>
+
+                    <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                         <div class="form-group">
-                            <label>Select Identity</label>
-                            <select id="global-identity">
-                                <option value="">Loading identities...</option>
+                            <label>Identity</label>
+                            <select id="global-identity" required>
+                                <option value="">Select identity...</option>
+                            </select>
+                            <button type="button" class="btn-secondary" onclick="openCreateIdentityModal()" style="margin-top: 8px; width: 100%;">+ Create New Identity</button>
+                        </div>
+                        <div class="form-group">
+                            <label>Call to Action</label>
+                            <select id="global-cta">
+                                <option value="LEARN_MORE">Learn More</option>
+                                <option value="SIGN_UP">Sign Up</option>
+                                <option value="GET_QUOTE">Get Quote</option>
+                                <option value="CONTACT_US">Contact Us</option>
+                                <option value="APPLY_NOW">Apply Now</option>
+                                <option value="DOWNLOAD">Download</option>
+                                <option value="SHOP_NOW">Shop Now</option>
+                                <option value="ORDER_NOW">Order Now</option>
+                                <option value="BOOK_NOW">Book Now</option>
+                                <option value="GET_STARTED">Get Started</option>
                             </select>
                         </div>
-                        <div class="form-group" style="display: flex; align-items: flex-end;">
-                            <button class="btn-secondary" onclick="openCreateIdentityModal()">+ Create New Identity</button>
-                        </div>
                     </div>
-                </div>
 
-                <!-- Global Landing Page -->
-                <div class="form-section">
-                    <h3>Landing Page (Used for all ads)</h3>
                     <div class="form-group">
                         <label>Landing Page URL</label>
-                        <div class="url-input-group">
-                            <input type="url" id="global-landing-url" placeholder="https://example.com/landing-page" required>
-                            <button class="btn-secondary btn-test" onclick="testLandingUrl()">Test URL</button>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="url" id="global-landing-url" placeholder="https://example.com/landing-page" required style="flex: 1;">
+                            <button type="button" class="btn-secondary" onclick="testLandingUrl()">Test URL</button>
                         </div>
-                        <small>This URL will be used for all ads in this campaign</small>
                     </div>
                 </div>
 
-                <!-- Global CTA Selection -->
-                <div class="form-section">
-                    <h3>Call to Action</h3>
-                    <div class="form-group">
-                        <label>Select CTA</label>
-                        <select id="global-cta">
-                            <option value="LEARN_MORE">Learn More</option>
-                            <option value="SIGN_UP">Sign Up</option>
-                            <option value="CONTACT_US">Contact Us</option>
-                            <option value="APPLY_NOW">Apply Now</option>
-                            <option value="GET_QUOTE">Get Quote</option>
-                            <option value="DOWNLOAD">Download</option>
-                            <option value="SHOP_NOW">Shop Now</option>
-                            <option value="BOOK_NOW">Book Now</option>
-                        </select>
-                    </div>
-                </div>
-
+                <h3>Ads (<span id="ads-count">0</span>)</h3>
                 <div class="ads-container" id="ads-container">
                     <!-- Ad forms will be dynamically added here -->
                 </div>
 
                 <div class="button-row" style="align-items: center; gap: 15px;">
-                    <button class="btn-secondary" onclick="addNewAd()">+ Add Another Ad</button>
+                    <button class="btn-secondary" onclick="addNewAd()">+ Add New Ad</button>
                     <span style="color: #666;">or</span>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <input type="number" id="bulk-duplicate-count" min="1" max="50" value="5"
                                style="width: 70px; padding: 10px; border: 2px solid #ddd; border-radius: 5px; text-align: center; font-size: 14px;">
-                        <button class="btn-primary" onclick="duplicateAdBulk()">Duplicate Last Ad</button>
+                        <button class="btn-primary" onclick="duplicateAdBulk()">Duplicate Multiple Ads</button>
                     </div>
                 </div>
 
@@ -447,7 +358,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 </div>
 
                 <div class="review-section">
-                    <h3>Ads Summary (<span id="ads-count">0</span> ads)</h3>
+                    <h3>Ads Summary</h3>
                     <div id="ads-summary" class="summary-list">
                         <!-- Will be populated by JavaScript -->
                     </div>
