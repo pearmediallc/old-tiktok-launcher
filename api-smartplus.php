@@ -493,9 +493,8 @@ switch ($action) {
 
         if (!empty($data['budget']) && ($data['cbo_enabled'] ?? true)) {
             $campaignParams['budget'] = floatval($data['budget']);
-            // For LEAD_GENERATION, use BUDGET_MODE_DAY (daily) or BUDGET_MODE_TOTAL (lifetime)
-            // BUDGET_MODE_DYNAMIC_DAILY_BUDGET is NOT supported for LEAD_GENERATION
-            $campaignParams['budget_mode'] = $data['budget_mode'] ?? 'BUDGET_MODE_DAY';
+            // Don't pass budget_mode - let TikTok use the default for Smart+ campaigns
+            // The API will automatically use the appropriate budget mode
         }
 
         $campaignResult = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
