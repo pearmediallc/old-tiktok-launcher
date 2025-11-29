@@ -405,12 +405,14 @@ switch ($action) {
             $landingPageList[] = ['landing_page_url' => $data['landing_page_url']];
         }
 
-        // Build call_to_action_list as array of strings (supports multiple CTAs)
+        // Build call_to_action_list as array of OBJECTS with call_to_action key
         $ctaList = [];
         if (!empty($data['call_to_action_list']) && is_array($data['call_to_action_list'])) {
-            $ctaList = $data['call_to_action_list'];
+            foreach ($data['call_to_action_list'] as $cta) {
+                $ctaList[] = ['call_to_action' => $cta];
+            }
         } elseif (!empty($data['call_to_action'])) {
-            $ctaList[] = $data['call_to_action'];
+            $ctaList[] = ['call_to_action' => $data['call_to_action']];
         }
 
         $adParams = [
@@ -631,12 +633,14 @@ switch ($action) {
             $landingPageUrlList[] = ['landing_page_url' => $data['landing_page_url']];
         }
 
-        // Build call_to_action_list as array of strings (supports multiple CTAs)
+        // Build call_to_action_list as array of OBJECTS with call_to_action key
         $ctaList = [];
         if (!empty($data['call_to_action_list']) && is_array($data['call_to_action_list'])) {
-            $ctaList = $data['call_to_action_list'];
+            foreach ($data['call_to_action_list'] as $cta) {
+                $ctaList[] = ['call_to_action' => $cta];
+            }
         } elseif (!empty($data['call_to_action'])) {
-            $ctaList[] = $data['call_to_action'];
+            $ctaList[] = ['call_to_action' => $data['call_to_action']];
         }
 
         // Create Smart+ Ad with media_info_list structure
