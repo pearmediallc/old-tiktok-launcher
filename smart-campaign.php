@@ -384,58 +384,23 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                             <button type="button" class="btn-secondary" onclick="openCreateIdentityModal()" style="margin-top: 8px; width: 100%;">+ Create New Identity</button>
                         </div>
                         <div class="form-group">
-                            <label>Call to Action (Select multiple)</label>
-                            <div id="cta-checkboxes" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f9f9f9; padding: 12px; border-radius: 6px; max-height: 200px; overflow-y: auto;">
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="LEARN_MORE" checked> Learn More
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="SIGN_UP"> Sign Up
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="GET_QUOTE"> Get Quote
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="CONTACT_US"> Contact Us
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="APPLY_NOW"> Apply Now
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="DOWNLOAD"> Download
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="SHOP_NOW"> Shop Now
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="ORDER_NOW"> Order Now
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="BOOK_NOW"> Book Now
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="GET_STARTED"> Get Started
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="SUBSCRIBE"> Subscribe
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="WATCH_MORE"> Watch More
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="INSTALL_NOW"> Install Now
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="VIEW_NOW"> View Now
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="BUY_TICKETS"> Buy Tickets
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" class="cta-checkbox" value="PLAY_GAME"> Play Game
-                                </label>
+                            <label>Dynamic CTA Portfolio <span style="color: #ff0050;">*</span></label>
+                            <div style="background: #fff3f5; border: 1px solid #ff0050; border-radius: 6px; padding: 10px; margin-bottom: 10px;">
+                                <p style="margin: 0; font-size: 13px; color: #333;">
+                                    <strong>Required for Lead Generation:</strong> TikTok requires a Dynamic CTA Portfolio for Smart+ Lead Gen ads.
+                                </p>
                             </div>
-                            <small style="color: #666;">Select 1-3 CTAs (maximum 3). TikTok will optimize delivery.</small>
+                            <select id="cta-portfolio-select" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="">Loading portfolios...</option>
+                            </select>
+                            <div style="margin-top: 10px; display: flex; gap: 10px;">
+                                <button type="button" class="btn-secondary" onclick="useFrequentlyUsedCTAs()" style="flex: 1;">Use Frequently Used CTAs</button>
+                                <button type="button" class="btn-secondary" onclick="openCreatePortfolioModal()" style="flex: 1;">+ Create New Portfolio</button>
+                            </div>
+                            <div id="selected-portfolio-info" style="display: none; margin-top: 10px; padding: 10px; background: #e8f5e9; border-radius: 6px;">
+                                <p style="margin: 0; font-weight: 600; color: #2e7d32;"><span id="portfolio-name-display"></span></p>
+                                <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">CTAs: <span id="portfolio-ctas-display"></span></p>
+                            </div>
                         </div>
                     </div>
 
@@ -590,6 +555,68 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 <div class="modal-footer">
                     <button class="btn-secondary" onclick="closeCreateIdentityModal()">Cancel</button>
                     <button class="btn-primary" onclick="createCustomIdentity()">Create Identity</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create CTA Portfolio Modal -->
+        <div id="create-portfolio-modal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-width: 600px;">
+                <div class="modal-header">
+                    <h3>Create New CTA Portfolio</h3>
+                    <span class="modal-close" onclick="closeCreatePortfolioModal()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Portfolio Name</label>
+                        <input type="text" id="portfolio-name-input" placeholder="Enter portfolio name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Select CTAs (1-5 required)</label>
+                        <div id="portfolio-cta-checkboxes" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f9f9f9; padding: 12px; border-radius: 6px; max-height: 250px; overflow-y: auto;">
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" class="portfolio-cta-checkbox" value="LEARN_MORE" checked> Learn More
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" class="portfolio-cta-checkbox" value="SIGN_UP"> Sign Up
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" class="portfolio-cta-checkbox" value="GET_QUOTE" checked> Get Quote
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" class="portfolio-cta-checkbox" value="CONTACT_US"> Contact Us
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" class="portfolio-cta-checkbox" value="APPLY_NOW"> Apply Now
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" class="portfolio-cta-checkbox" value="DOWNLOAD"> Download
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" class="portfolio-cta-checkbox" value="SHOP_NOW"> Shop Now
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" class="portfolio-cta-checkbox" value="ORDER_NOW"> Order Now
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" class="portfolio-cta-checkbox" value="BOOK_NOW"> Book Now
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" class="portfolio-cta-checkbox" value="GET_STARTED"> Get Started
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" class="portfolio-cta-checkbox" value="SUBSCRIBE"> Subscribe
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" class="portfolio-cta-checkbox" value="WATCH_MORE"> Watch More
+                            </label>
+                        </div>
+                        <small style="color: #666;">Select 1-5 CTAs for your portfolio. TikTok will dynamically optimize which CTA to show.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="closeCreatePortfolioModal()">Cancel</button>
+                    <button class="btn-primary" onclick="createCtaPortfolio()">Create Portfolio</button>
                 </div>
             </div>
         </div>

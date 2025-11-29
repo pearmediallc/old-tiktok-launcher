@@ -16,7 +16,10 @@ let state = {
     identities: [],
     mediaLibrary: [],
     selectedVideos: [],
-    cboEnabled: true
+    cboEnabled: true,
+    ctaPortfolios: [],
+    selectedPortfolioId: null,
+    selectedPortfolioName: null
 };
 
 // US States with TikTok location IDs
@@ -204,6 +207,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadPixels();
     loadIdentities();
     loadMediaLibrary();
+    loadCtaPortfolios();
     initializeDayparting();
     initializeLocationTargeting();
 
@@ -299,6 +303,182 @@ async function loadIdentities() {
     } catch (error) {
         console.error('Error loading identities:', error);
         state.identities = [];
+    }
+}
+
+// Load CTA Portfolios
+async function loadCtaPortfolios() {
+    try {
+        const result = await apiRequest('get_cta_portfolios');
+        const select = document.getElementById('cta-portfolio-select');
+
+        if (result.success && result.data && result.data.portfolios) {
+            state.ctaPortfolios = result.data.portfolios;
+            select.innerHTML = '<option value="">Select a CTA portfolio...</option>';
+
+            state.ctaPortfolios.forEach(portfolio => {
+                const option = document.createElement('option');
+                option.value = portfolio.creative_portfolio_id;
+                // Extract CTA names from portfolio_content
+                const ctaNames = (portfolio.portfolio_content || [])
+                    .map(c => c.asset_content.replace(/_/g, ' '))
+                    .join(', ');
+                option.textContent = `${portfolio.portfolio_name} (${ctaNames || 'CTAs'})`;
+                option.dataset.ctas = ctaNames;
+                option.dataset.name = portfolio.portfolio_name;
+                select.appendChild(option);
+            });
+
+            // Add event listener for portfolio selection
+            select.addEventListener('change', onPortfolioSelect);
+
+            addLog('info', `Loaded ${state.ctaPortfolios.length} CTA portfolios`);
+        } else {
+            select.innerHTML = '<option value="">No portfolios found - Create one below</option>';
+            state.ctaPortfolios = [];
+        }
+    } catch (error) {
+        console.error('Error loading portfolios:', error);
+        const select = document.getElementById('cta-portfolio-select');
+        select.innerHTML = '<option value="">Error loading portfolios</option>';
+        state.ctaPortfolios = [];
+    }
+}
+
+// On portfolio selection
+function onPortfolioSelect() {
+    const select = document.getElementById('cta-portfolio-select');
+    const selectedOption = select.options[select.selectedIndex];
+    const infoDiv = document.getElementById('selected-portfolio-info');
+    const nameDisplay = document.getElementById('portfolio-name-display');
+    const ctasDisplay = document.getElementById('portfolio-ctas-display');
+
+    if (select.value) {
+        state.selectedPortfolioId = select.value;
+        state.selectedPortfolioName = selectedOption.dataset.name || 'CTA Portfolio';
+
+        nameDisplay.textContent = state.selectedPortfolioName;
+        ctasDisplay.textContent = selectedOption.dataset.ctas || 'Dynamic CTAs';
+        infoDiv.style.display = 'block';
+
+        addLog('info', `Selected portfolio: ${state.selectedPortfolioName} (ID: ${state.selectedPortfolioId})`);
+    } else {
+        state.selectedPortfolioId = null;
+        state.selectedPortfolioName = null;
+        infoDiv.style.display = 'none';
+    }
+}
+
+// Use Frequently Used CTAs (auto-creates or fetches existing)
+async function useFrequentlyUsedCTAs() {
+    showLoading('Setting up frequently used CTAs...');
+    addLog('info', 'Getting or creating frequently used CTA portfolio');
+
+    try {
+        const result = await apiRequest('get_or_create_frequently_used_cta_portfolio');
+
+        if (result.success && result.data && result.data.portfolio_id) {
+            const portfolioId = result.data.portfolio_id;
+            const portfolioName = result.data.portfolio_name || 'Frequently Used CTAs';
+
+            state.selectedPortfolioId = portfolioId;
+            state.selectedPortfolioName = portfolioName;
+
+            // Reload portfolios and select the new one
+            await loadCtaPortfolios();
+
+            const select = document.getElementById('cta-portfolio-select');
+            select.value = portfolioId;
+            onPortfolioSelect();
+
+            hideLoading();
+            showToast('Frequently Used CTAs portfolio ready!', 'success');
+            addLog('info', `Portfolio ready: ${portfolioName} (ID: ${portfolioId})`);
+        } else {
+            hideLoading();
+            showToast('Failed to create portfolio: ' + (result.message || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        showToast('Error: ' + error.message, 'error');
+    }
+}
+
+// Open Create Portfolio Modal
+function openCreatePortfolioModal() {
+    document.getElementById('portfolio-name-input').value = '';
+    // Uncheck all except default
+    document.querySelectorAll('.portfolio-cta-checkbox').forEach(cb => {
+        cb.checked = cb.value === 'LEARN_MORE' || cb.value === 'GET_QUOTE';
+    });
+    document.getElementById('create-portfolio-modal').style.display = 'flex';
+}
+
+// Close Create Portfolio Modal
+function closeCreatePortfolioModal() {
+    document.getElementById('create-portfolio-modal').style.display = 'none';
+}
+
+// Create CTA Portfolio
+async function createCtaPortfolio() {
+    const portfolioName = document.getElementById('portfolio-name-input').value.trim();
+
+    if (!portfolioName) {
+        showToast('Please enter a portfolio name', 'error');
+        return;
+    }
+
+    // Get selected CTAs
+    const selectedCTAs = [];
+    document.querySelectorAll('.portfolio-cta-checkbox:checked').forEach(cb => {
+        selectedCTAs.push({
+            asset_content: cb.value,
+            asset_ids: [0]  // Required format for TikTok API
+        });
+    });
+
+    if (selectedCTAs.length === 0) {
+        showToast('Please select at least one CTA', 'error');
+        return;
+    }
+
+    if (selectedCTAs.length > 5) {
+        showToast('Maximum 5 CTAs allowed per portfolio', 'error');
+        return;
+    }
+
+    showLoading('Creating CTA portfolio...');
+    addLog('info', `Creating portfolio: ${portfolioName} with ${selectedCTAs.length} CTAs`);
+
+    try {
+        const result = await apiRequest('create_cta_portfolio', {
+            portfolio_name: portfolioName,
+            portfolio_content: selectedCTAs
+        });
+
+        if (result.success && result.portfolio_id) {
+            state.selectedPortfolioId = result.portfolio_id;
+            state.selectedPortfolioName = portfolioName;
+
+            closeCreatePortfolioModal();
+
+            // Reload portfolios and select the new one
+            await loadCtaPortfolios();
+
+            const select = document.getElementById('cta-portfolio-select');
+            select.value = result.portfolio_id;
+            onPortfolioSelect();
+
+            hideLoading();
+            showToast('Portfolio created successfully!', 'success');
+            addLog('info', `Portfolio created: ${portfolioName} (ID: ${result.portfolio_id})`);
+        } else {
+            hideLoading();
+            showToast('Failed to create portfolio: ' + (result.message || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        showToast('Error: ' + error.message, 'error');
     }
 }
 
@@ -817,13 +997,10 @@ function testLandingUrl() {
     }
 }
 
-// Get selected CTAs from checkboxes
+// Get selected CTAs from checkboxes (Legacy - kept for compatibility)
 function getSelectedCTAs() {
-    const selectedCTAs = [];
-    document.querySelectorAll('.cta-checkbox:checked').forEach(cb => {
-        selectedCTAs.push(cb.value);
-    });
-    return selectedCTAs;
+    // Now using portfolio-based CTAs instead
+    return [];
 }
 
 // =====================
@@ -837,7 +1014,7 @@ function reviewAds() {
 
     const identityId = document.getElementById('global-identity').value;
     const landingUrl = document.getElementById('global-landing-url').value.trim();
-    const selectedCTAs = getSelectedCTAs();
+    const portfolioId = document.getElementById('cta-portfolio-select').value;
 
     if (!identityId) {
         showToast('Please select an identity', 'error');
@@ -849,13 +1026,8 @@ function reviewAds() {
         return;
     }
 
-    if (selectedCTAs.length === 0) {
-        showToast('Please select at least one Call to Action', 'error');
-        return;
-    }
-
-    if (selectedCTAs.length > 3) {
-        showToast('Maximum 3 CTAs allowed. Please deselect some.', 'error');
+    if (!portfolioId) {
+        showToast('Please select a CTA Portfolio (required for Lead Generation)', 'error');
         return;
     }
 
@@ -881,10 +1053,17 @@ function reviewAds() {
 
     state.globalIdentityId = identityId;
     state.globalLandingUrl = landingUrl;
-    state.globalCtaList = selectedCTAs;
+    state.selectedPortfolioId = portfolioId;
 
     const identity = state.identities.find(i => i.identity_id === identityId);
     const identityName = identity ? (identity.display_name || identity.identity_name) : identityId;
+
+    // Get portfolio info for display
+    const portfolio = state.ctaPortfolios.find(p => p.creative_portfolio_id === portfolioId);
+    const portfolioName = portfolio ? portfolio.portfolio_name : 'CTA Portfolio';
+    const portfolioCTAs = portfolio && portfolio.portfolio_content
+        ? portfolio.portfolio_content.map(c => c.asset_content.replace(/_/g, ' ')).join(', ')
+        : 'Dynamic CTAs';
 
     // Populate review summaries
     document.getElementById('campaign-summary').innerHTML = `
@@ -903,7 +1082,8 @@ function reviewAds() {
         <div class="summary-item" style="background: #f0f4ff; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
             <p><strong>Identity:</strong> ${identityName}</p>
             <p><strong>Landing Page:</strong> ${landingUrl}</p>
-            <p><strong>CTAs:</strong> ${selectedCTAs.join(', ')}</p>
+            <p><strong>CTA Portfolio:</strong> ${portfolioName}</p>
+            <p><strong>Dynamic CTAs:</strong> ${portfolioCTAs}</p>
             <p><strong>Total Creatives:</strong> ${state.creatives.length} videos</p>
         </div>
     `;
@@ -930,6 +1110,11 @@ async function createAd() {
         return;
     }
 
+    if (!state.selectedPortfolioId) {
+        showToast('CTA Portfolio is required. Please go back and select one.', 'error');
+        return;
+    }
+
     showLoading('Creating Smart+ Ad...');
     addLog('info', '=== Creating Smart+ Ad ===');
 
@@ -943,7 +1128,11 @@ async function createAd() {
             image_id: creative.image_id || null
         }));
 
-        addLog('info', `Creating ad with ${creativeList.length} creatives and ${state.globalCtaList.length} CTAs`);
+        // Get portfolio info for logging
+        const portfolio = state.ctaPortfolios.find(p => p.creative_portfolio_id === state.selectedPortfolioId);
+        const portfolioName = portfolio ? portfolio.portfolio_name : 'CTA Portfolio';
+
+        addLog('info', `Creating ad with ${creativeList.length} creatives and portfolio: ${portfolioName} (${state.selectedPortfolioId})`);
 
         const result = await apiRequest('create_smartplus_ad', {
             adgroup_id: state.adGroupId,
@@ -951,7 +1140,7 @@ async function createAd() {
             identity_id: state.globalIdentityId,
             identity_type: identityType,
             landing_page_url: state.globalLandingUrl,
-            call_to_action_list: state.globalCtaList,
+            call_to_action_id: state.selectedPortfolioId,  // Use portfolio ID instead of call_to_action_list
             creatives: creativeList
         });
 
@@ -966,7 +1155,7 @@ async function createAd() {
             alertMessage += `Ad Group ID: ${state.adGroupId}\n`;
             alertMessage += `Smart+ Ad ID: ${result.smart_plus_ad_id}\n`;
             alertMessage += `Creatives: ${creativeList.length} videos\n`;
-            alertMessage += `CTAs: ${state.globalCtaList.join(', ')}\n`;
+            alertMessage += `CTA Portfolio: ${portfolioName}\n`;
 
             alert(alertMessage);
         } else {
