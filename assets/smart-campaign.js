@@ -901,7 +901,7 @@ async function publishAll() {
             campaign_name: state.campaignName,
             cbo_enabled: cboEnabled,
             budget: campaignBudget,
-            budget_mode: 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
+            budget_mode: 'BUDGET_MODE_DAY', // LEAD_GENERATION doesn't support DYNAMIC_DAILY_BUDGET
             adgroup_budget: adGroupBudget,
             adgroup_budget_mode: adGroupBudgetMode,
             pixel_id: state.pixelId,

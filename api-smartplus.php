@@ -493,8 +493,9 @@ switch ($action) {
 
         if (!empty($data['budget']) && ($data['cbo_enabled'] ?? true)) {
             $campaignParams['budget'] = floatval($data['budget']);
-            // Smart+ only supports BUDGET_MODE_DYNAMIC_DAILY_BUDGET or BUDGET_MODE_TOTAL
-            $campaignParams['budget_mode'] = 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET';
+            // For LEAD_GENERATION, use BUDGET_MODE_DAY (daily) or BUDGET_MODE_TOTAL (lifetime)
+            // BUDGET_MODE_DYNAMIC_DAILY_BUDGET is NOT supported for LEAD_GENERATION
+            $campaignParams['budget_mode'] = $data['budget_mode'] ?? 'BUDGET_MODE_DAY';
         }
 
         $campaignResult = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
