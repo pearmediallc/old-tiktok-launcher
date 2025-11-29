@@ -40,9 +40,9 @@ function logSmartPlus($message) {
     file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND);
 }
 
-// Generate unique request ID
+// Generate unique request ID (must be numeric string for TikTok API)
 function generateRequestId() {
-    return uniqid('req_', true);
+    return (string)(time() . rand(1000, 9999));
 }
 
 // Make API call to TikTok
@@ -441,7 +441,8 @@ switch ($action) {
 
         if (!empty($data['budget']) && ($data['cbo_enabled'] ?? true)) {
             $campaignParams['budget'] = floatval($data['budget']);
-            $campaignParams['budget_mode'] = $data['budget_mode'] ?? 'BUDGET_MODE_DAY';
+            // Smart+ only supports BUDGET_MODE_DYNAMIC_DAILY_BUDGET or BUDGET_MODE_TOTAL
+            $campaignParams['budget_mode'] = 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET';
         }
 
         $campaignResult = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
