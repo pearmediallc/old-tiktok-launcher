@@ -1,12 +1,12 @@
 <?php
 /**
  * Smart+ Campaign API
- * Uses TikTok Business API /campaign/spc/create/ endpoint
+ * Uses TikTok Business API Smart+ endpoints:
+ * - /smart_plus/campaign/create/
+ * - /smart_plus/adgroup/create/
+ * - /smart_plus/ad/create/
  *
- * Documentation: https://business-api.tiktok.com/portal/docs?id=1802962795549761
- *
- * Smart+ Campaigns (SPC) create campaign, ad group, and ads in ONE API call.
- * CBO is enabled by default - budget MUST be provided.
+ * Documentation: https://github.com/tiktok/tiktok-business-api-sdk
  */
 
 session_start();
@@ -38,6 +38,11 @@ function logSmartPlus($message) {
     $logFile = $logDir . '/smartplus_' . date('Y-m-d') . '.log';
     $timestamp = date('Y-m-d H:i:s');
     file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND);
+}
+
+// Generate unique request ID
+function generateRequestId() {
+    return uniqid('req_', true);
 }
 
 // Make API call to TikTok
@@ -107,25 +112,26 @@ switch ($action) {
         break;
 
     // ==========================================
-    // GET IDENTITIES (CUSTOMIZED_USER)
+    // GET IDENTITIES - All types for Smart+
     // ==========================================
     case 'get_identities':
+        // For Smart+, we need TT_USER, AUTH_CODE, or BC_AUTH_TT identities
+        // NOT CUSTOMIZED_USER (that's only for regular campaigns)
+        $allIdentities = [];
+
+        // Get TT_USER identities
         $result = makeApiCall('/identity/get/', [
-            'advertiser_id' => $advertiserId,
-            'identity_type' => 'CUSTOMIZED_USER'
+            'advertiser_id' => $advertiserId
         ], $accessToken, 'GET');
 
         if ($result['code'] == 0 && isset($result['data']['identity_list'])) {
-            echo json_encode([
-                'success' => true,
-                'data' => ['list' => $result['data']['identity_list']]
-            ]);
-        } else {
-            echo json_encode([
-                'success' => false,
-                'message' => $result['message'] ?? 'Failed to get identities'
-            ]);
+            $allIdentities = $result['data']['identity_list'];
         }
+
+        echo json_encode([
+            'success' => true,
+            'data' => ['list' => $allIdentities]
+        ]);
         break;
 
     // ==========================================
@@ -175,22 +181,236 @@ switch ($action) {
         break;
 
     // ==========================================
-    // CREATE SMART+ CAMPAIGN (ALL-IN-ONE)
-    // POST /open_api/v1.3/campaign/spc/create/
-    // Creates campaign, ad group, and ads in ONE call
+    // CREATE SMART+ CAMPAIGN
+    // POST /open_api/v1.3/smart_plus/campaign/create/
     // ==========================================
-    case 'create_spc_campaign':
+    case 'create_smartplus_campaign':
         $data = $input;
 
-        logSmartPlus("=== CREATING SMART+ SPC CAMPAIGN (ALL-IN-ONE) ===");
+        logSmartPlus("=== CREATING SMART+ CAMPAIGN ===");
 
-        // Validate required fields
         if (empty($data['campaign_name'])) {
             echo json_encode(['success' => false, 'message' => 'Campaign name is required']);
             exit;
         }
-        if (empty($data['pixel_id'])) {
-            echo json_encode(['success' => false, 'message' => 'Pixel ID is required']);
+
+        $campaignParams = [
+            'advertiser_id' => $advertiserId,
+            'request_id' => generateRequestId(),
+            'campaign_name' => $data['campaign_name'],
+            'objective_type' => $data['objective_type'] ?? 'LEAD_GENERATION',
+            'budget_optimize_on' => $data['budget_optimize_on'] ?? true,
+            'operation_status' => 'ENABLE'
+        ];
+
+        // Add budget if CBO is enabled
+        if (!empty($data['budget'])) {
+            $campaignParams['budget'] = floatval($data['budget']);
+            $campaignParams['budget_mode'] = $data['budget_mode'] ?? 'BUDGET_MODE_DAY';
+        }
+
+        $result = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
+
+        if ($result['code'] == 0 && isset($result['data']['campaign_id'])) {
+            echo json_encode([
+                'success' => true,
+                'campaign_id' => $result['data']['campaign_id'],
+                'message' => 'Smart+ Campaign created successfully'
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to create campaign: ' . ($result['message'] ?? 'Unknown error'),
+                'error_code' => $result['code'] ?? null,
+                'details' => $result
+            ]);
+        }
+        break;
+
+    // ==========================================
+    // CREATE SMART+ AD GROUP
+    // POST /open_api/v1.3/smart_plus/adgroup/create/
+    // ==========================================
+    case 'create_smartplus_adgroup':
+        $data = $input;
+
+        logSmartPlus("=== CREATING SMART+ AD GROUP ===");
+
+        if (empty($data['campaign_id'])) {
+            echo json_encode(['success' => false, 'message' => 'Campaign ID is required']);
+            exit;
+        }
+
+        // Schedule times
+        $scheduleStart = date('Y-m-d H:i:s', strtotime('+1 hour'));
+
+        $adgroupParams = [
+            'advertiser_id' => $advertiserId,
+            'request_id' => generateRequestId(),
+            'campaign_id' => $data['campaign_id'],
+            'adgroup_name' => $data['adgroup_name'] ?? $data['campaign_name'] . ' Ad Group',
+            'promotion_type' => $data['promotion_type'] ?? 'LEAD_GENERATION',
+            'optimization_goal' => $data['optimization_goal'] ?? 'CONVERT',
+            'billing_event' => $data['billing_event'] ?? 'OCPM',
+            'schedule_type' => 'SCHEDULE_FROM_NOW',
+            'schedule_start_time' => $scheduleStart,
+            'operation_status' => 'ENABLE',
+            'targeting_spec' => [
+                'location_ids' => $data['location_ids'] ?? ['6252001']
+            ]
+        ];
+
+        // Add pixel if provided
+        if (!empty($data['pixel_id'])) {
+            $adgroupParams['pixel_id'] = $data['pixel_id'];
+            $adgroupParams['optimization_event'] = $data['optimization_event'] ?? 'FORM';
+        }
+
+        // Add identity - MUST be TT_USER, AUTH_CODE, or BC_AUTH_TT for Smart+
+        if (!empty($data['identity_id'])) {
+            $adgroupParams['identity_id'] = $data['identity_id'];
+            $adgroupParams['identity_type'] = $data['identity_type'] ?? 'TT_USER';
+        }
+
+        // Add budget if CBO is disabled
+        if (!empty($data['budget']) && empty($data['budget_optimize_on'])) {
+            $adgroupParams['budget'] = floatval($data['budget']);
+            $adgroupParams['budget_mode'] = $data['budget_mode'] ?? 'BUDGET_MODE_DAY';
+        }
+
+        // Add dayparting if provided
+        if (!empty($data['dayparting'])) {
+            $adgroupParams['dayparting'] = $data['dayparting'];
+        }
+
+        $result = makeApiCall('/smart_plus/adgroup/create/', $adgroupParams, $accessToken);
+
+        if ($result['code'] == 0 && isset($result['data']['adgroup_id'])) {
+            echo json_encode([
+                'success' => true,
+                'adgroup_id' => $result['data']['adgroup_id'],
+                'message' => 'Smart+ Ad Group created successfully'
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to create ad group: ' . ($result['message'] ?? 'Unknown error'),
+                'error_code' => $result['code'] ?? null,
+                'details' => $result
+            ]);
+        }
+        break;
+
+    // ==========================================
+    // CREATE SMART+ AD
+    // POST /open_api/v1.3/smart_plus/ad/create/
+    // ==========================================
+    case 'create_smartplus_ad':
+        $data = $input;
+
+        logSmartPlus("=== CREATING SMART+ AD ===");
+
+        if (empty($data['adgroup_id'])) {
+            echo json_encode(['success' => false, 'message' => 'Ad Group ID is required']);
+            exit;
+        }
+
+        // Build creative list
+        $creativeList = [];
+        foreach ($data['creatives'] ?? [] as $creative) {
+            $creativeInfo = [
+                'ad_format' => 'SINGLE_VIDEO',
+                'identity_id' => $data['identity_id'],
+                'identity_type' => $data['identity_type'] ?? 'TT_USER'
+            ];
+
+            // Add video info
+            if (!empty($creative['video_id'])) {
+                $creativeInfo['video_info'] = [
+                    'video_id' => $creative['video_id']
+                ];
+            }
+
+            // Add image info (cover image) - uses web_uri
+            if (!empty($creative['image_url'])) {
+                $creativeInfo['image_info'] = [
+                    ['web_uri' => $creative['image_url']]
+                ];
+            }
+
+            $creativeList[] = ['creative_info' => $creativeInfo];
+        }
+
+        // Build ad text list
+        $adTextList = [];
+        foreach ($data['ad_texts'] ?? [] as $text) {
+            if (!empty($text)) {
+                $adTextList[] = ['ad_text' => $text];
+            }
+        }
+
+        // Build landing page list
+        $landingPageList = [];
+        if (!empty($data['landing_page_url'])) {
+            $landingPageList[] = ['landing_page_url' => $data['landing_page_url']];
+        }
+
+        // Build CTA list
+        $ctaList = [];
+        if (!empty($data['call_to_action'])) {
+            $ctaList[] = ['call_to_action' => $data['call_to_action']];
+        }
+
+        $adParams = [
+            'advertiser_id' => $advertiserId,
+            'adgroup_id' => $data['adgroup_id'],
+            'ad_name' => $data['ad_name'] ?? 'Smart+ Ad',
+            'operation_status' => 'ENABLE'
+        ];
+
+        if (!empty($creativeList)) {
+            $adParams['creative_list'] = $creativeList;
+        }
+        if (!empty($adTextList)) {
+            $adParams['ad_text_list'] = $adTextList;
+        }
+        if (!empty($landingPageList)) {
+            $adParams['landing_page_url_list'] = $landingPageList;
+        }
+        if (!empty($ctaList)) {
+            $adParams['call_to_action_list'] = $ctaList;
+        }
+
+        $result = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);
+
+        if ($result['code'] == 0 && isset($result['data']['ad_id'])) {
+            echo json_encode([
+                'success' => true,
+                'ad_id' => $result['data']['ad_id'],
+                'message' => 'Smart+ Ad created successfully'
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to create ad: ' . ($result['message'] ?? 'Unknown error'),
+                'error_code' => $result['code'] ?? null,
+                'details' => $result
+            ]);
+        }
+        break;
+
+    // ==========================================
+    // CREATE FULL SMART+ CAMPAIGN (Campaign + AdGroup + Ads)
+    // Orchestrates all three API calls
+    // ==========================================
+    case 'create_full_smartplus':
+        $data = $input;
+
+        logSmartPlus("=== CREATING FULL SMART+ CAMPAIGN ===");
+
+        // Validate required fields
+        if (empty($data['campaign_name'])) {
+            echo json_encode(['success' => false, 'message' => 'Campaign name is required']);
             exit;
         }
         if (empty($data['identity_id'])) {
@@ -202,176 +422,186 @@ switch ($action) {
             exit;
         }
 
-        // CBO Setting
-        $cboEnabled = isset($data['cbo_enabled']) ? $data['cbo_enabled'] : true;
+        $results = [
+            'campaign' => null,
+            'adgroup' => null,
+            'ads' => []
+        ];
 
-        // Budget handling based on CBO
-        if ($cboEnabled) {
-            // CBO enabled - budget at campaign level
-            $campaignBudget = floatval($data['budget'] ?? 50);
-            if ($campaignBudget < 20) $campaignBudget = 20;
-            $adGroupBudget = null;
-            $adGroupBudgetMode = null;
-        } else {
-            // CBO disabled - budget at ad group level
-            $campaignBudget = null;
-            $adGroupBudget = floatval($data['adgroup_budget'] ?? 50);
-            if ($adGroupBudget < 20) $adGroupBudget = 20;
-            $adGroupBudgetMode = $data['adgroup_budget_mode'] ?? 'BUDGET_MODE_DAY';
+        // Step 1: Create Campaign
+        logSmartPlus("Step 1: Creating Campaign...");
+        $campaignParams = [
+            'advertiser_id' => $advertiserId,
+            'request_id' => generateRequestId(),
+            'campaign_name' => $data['campaign_name'],
+            'objective_type' => 'LEAD_GENERATION',
+            'budget_optimize_on' => $data['cbo_enabled'] ?? true,
+            'operation_status' => 'ENABLE'
+        ];
+
+        if (!empty($data['budget']) && ($data['cbo_enabled'] ?? true)) {
+            $campaignParams['budget'] = floatval($data['budget']);
+            $campaignParams['budget_mode'] = $data['budget_mode'] ?? 'BUDGET_MODE_DAY';
         }
 
-        logSmartPlus("CBO Enabled: " . ($cboEnabled ? 'true' : 'false') . ", Campaign Budget: $campaignBudget, Ad Group Budget: $adGroupBudget");
+        $campaignResult = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
 
-        // Schedule
+        if ($campaignResult['code'] != 0 || !isset($campaignResult['data']['campaign_id'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to create campaign: ' . ($campaignResult['message'] ?? 'Unknown error'),
+                'step' => 'campaign',
+                'details' => $campaignResult
+            ]);
+            exit;
+        }
+
+        $campaignId = $campaignResult['data']['campaign_id'];
+        $results['campaign'] = $campaignId;
+        logSmartPlus("Campaign created: $campaignId");
+
+        // Step 2: Create Ad Group
+        logSmartPlus("Step 2: Creating Ad Group...");
         $scheduleStart = date('Y-m-d H:i:s', strtotime('+1 hour'));
-        $scheduleEnd = date('Y-m-d H:i:s', strtotime('+1 year'));
 
-        // Build media_info_list from ads
-        $mediaInfoList = [];
+        $adgroupParams = [
+            'advertiser_id' => $advertiserId,
+            'request_id' => generateRequestId(),
+            'campaign_id' => $campaignId,
+            'adgroup_name' => $data['campaign_name'] . ' - Ad Group',
+            'promotion_type' => 'LEAD_GENERATION',
+            'promotion_target_type' => 'EXTERNAL_WEBSITE',
+            'optimization_goal' => 'CONVERT',
+            'billing_event' => 'OCPM',
+            'bid_type' => 'BID_TYPE_NO_BID',
+            'schedule_type' => 'SCHEDULE_FROM_NOW',
+            'schedule_start_time' => $scheduleStart,
+            'operation_status' => 'ENABLE',
+            'identity_id' => $data['identity_id'],
+            'identity_type' => $data['identity_type'] ?? 'TT_USER',
+            'targeting_spec' => [
+                'location_ids' => $data['location_ids'] ?? ['6252001']
+            ]
+        ];
+
+        // Add pixel
+        if (!empty($data['pixel_id'])) {
+            $adgroupParams['pixel_id'] = $data['pixel_id'];
+            $adgroupParams['optimization_event'] = $data['optimization_event'] ?? 'FORM';
+        }
+
+        // Add budget at ad group level if CBO disabled
+        if (!($data['cbo_enabled'] ?? true) && !empty($data['adgroup_budget'])) {
+            $adgroupParams['budget'] = floatval($data['adgroup_budget']);
+            $adgroupParams['budget_mode'] = $data['adgroup_budget_mode'] ?? 'BUDGET_MODE_DAY';
+        }
+
+        // Add dayparting
+        if (!empty($data['dayparting'])) {
+            $adgroupParams['dayparting'] = $data['dayparting'];
+        }
+
+        $adgroupResult = makeApiCall('/smart_plus/adgroup/create/', $adgroupParams, $accessToken);
+
+        if ($adgroupResult['code'] != 0 || !isset($adgroupResult['data']['adgroup_id'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to create ad group: ' . ($adgroupResult['message'] ?? 'Unknown error'),
+                'step' => 'adgroup',
+                'campaign_id' => $campaignId,
+                'details' => $adgroupResult
+            ]);
+            exit;
+        }
+
+        $adgroupId = $adgroupResult['data']['adgroup_id'];
+        $results['adgroup'] = $adgroupId;
+        logSmartPlus("Ad Group created: $adgroupId");
+
+        // Step 3: Create Ads
+        logSmartPlus("Step 3: Creating Ads...");
         $ads = $data['ads'] ?? [];
 
-        foreach ($ads as $ad) {
-            $mediaInfo = [
-                'identity_type' => 'CUSTOMIZED_USER',
-                'identity_id' => $data['identity_id']
+        foreach ($ads as $index => $ad) {
+            $creativeList = [];
+
+            $creativeInfo = [
+                'ad_format' => 'SINGLE_VIDEO',
+                'identity_id' => $data['identity_id'],
+                'identity_type' => $data['identity_type'] ?? 'TT_USER'
             ];
 
-            // Add video info if provided
+            // Add video
             if (!empty($ad['video_id'])) {
-                $mediaInfo['video_info'] = [
+                $creativeInfo['video_info'] = [
                     'video_id' => $ad['video_id']
                 ];
             }
 
-            // Add image info (cover) if provided - SPC API requires web_uri
+            // Add cover image (web_uri required)
             if (!empty($ad['image_url'])) {
-                $mediaInfo['image_info'] = [
+                $creativeInfo['image_info'] = [
                     ['web_uri' => $ad['image_url']]
                 ];
-            } elseif (!empty($ad['image_id'])) {
-                // Fallback: if only image_id is provided, we need to get the URL
-                // For now, skip image_info if no URL available
-                logSmartPlus("Warning: image_id provided without image_url - SPC requires web_uri");
             }
 
-            $mediaInfoList[] = ['media_info' => $mediaInfo];
-        }
+            $creativeList[] = ['creative_info' => $creativeInfo];
 
-        // If no ads provided, create one with just the identity
-        if (empty($mediaInfoList)) {
-            $mediaInfoList[] = [
-                'media_info' => [
-                    'identity_type' => 'CUSTOMIZED_USER',
-                    'identity_id' => $data['identity_id']
+            $adParams = [
+                'advertiser_id' => $advertiserId,
+                'adgroup_id' => $adgroupId,
+                'ad_name' => $ad['name'] ?? 'Ad ' . ($index + 1),
+                'operation_status' => 'ENABLE',
+                'creative_list' => $creativeList,
+                'ad_text_list' => [
+                    ['ad_text' => $ad['ad_text'] ?? '']
+                ],
+                'landing_page_url_list' => [
+                    ['landing_page_url' => $data['landing_page_url']]
                 ]
             ];
-        }
 
-        // Build title_list from ad texts
-        $titleList = [];
-        foreach ($ads as $ad) {
-            if (!empty($ad['ad_text'])) {
-                $titleList[] = ['title' => $ad['ad_text']];
+            // Add CTA
+            if (!empty($data['call_to_action'])) {
+                $adParams['call_to_action_list'] = [
+                    ['call_to_action' => $data['call_to_action']]
+                ];
+            }
+
+            $adResult = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);
+
+            if ($adResult['code'] == 0 && isset($adResult['data']['ad_id'])) {
+                $results['ads'][] = [
+                    'success' => true,
+                    'ad_id' => $adResult['data']['ad_id'],
+                    'name' => $ad['name'] ?? 'Ad ' . ($index + 1)
+                ];
+                logSmartPlus("Ad created: " . $adResult['data']['ad_id']);
+            } else {
+                $results['ads'][] = [
+                    'success' => false,
+                    'name' => $ad['name'] ?? 'Ad ' . ($index + 1),
+                    'error' => $adResult['message'] ?? 'Unknown error'
+                ];
+                logSmartPlus("Failed to create ad: " . ($adResult['message'] ?? 'Unknown error'));
             }
         }
-        if (empty($titleList)) {
-            $titleList[] = ['title' => $data['ad_text'] ?? ''];
-        }
 
-        // Build SPC params
-        $spcParams = [
-            'advertiser_id' => $advertiserId,
-
-            // Campaign settings
-            'objective_type' => 'LEAD_GENERATION',
-            'campaign_name' => $data['campaign_name'],
-
-            // Promotion settings
-            'promotion_type' => 'LEAD_GENERATION',
-            'promotion_target_type' => 'EXTERNAL_WEBSITE',
-
-            // Optimization
-            'optimization_goal' => 'CONVERT',
-            'optimization_event' => $data['optimization_event'] ?? 'FORM',
-            'pixel_id' => $data['pixel_id'],
-
-            // Audience targeting
-            'spc_audience_age' => $data['spc_audience_age'] ?? '18+',
-            'location_ids' => $data['location_ids'] ?? ['6252001'],
-
-            // Placement
-            'placement_type' => 'PLACEMENT_TYPE_NORMAL',
-            'placements' => ['PLACEMENT_TIKTOK'],
-
-            // Schedule
-            'schedule_type' => 'SCHEDULE_START_END',
-            'schedule_start_time' => $scheduleStart,
-            'schedule_end_time' => $scheduleEnd,
-
-            // Bid
-            'bid_type' => 'BID_TYPE_NO_BID',
-            'billing_event' => 'OCPM',
-        ];
-
-        // Add budget based on CBO setting
-        if ($cboEnabled) {
-            // CBO enabled - budget at campaign level
-            $spcParams['budget_mode'] = 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET';
-            $spcParams['budget'] = $campaignBudget;
-        } else {
-            // CBO disabled - budget at ad group level
-            $spcParams['budget_mode'] = $adGroupBudgetMode;
-            $spcParams['budget'] = $adGroupBudget;
-            // Note: For SPC endpoint, even with CBO disabled, budget might need to be specified
-            // The endpoint may not support CBO toggle - budget is always required
-        }
-
-        // Add remaining params
-        $spcParams += [
-
-            // Landing page
-            'landing_page_urls' => [
-                ['landing_page_url' => $data['landing_page_url']]
-            ],
-
-            // Creative
-            'media_info_list' => $mediaInfoList,
-            'title_list' => $titleList
-        ];
-
-        // Add CTA if provided
-        if (!empty($data['call_to_action_id'])) {
-            $spcParams['call_to_action_id'] = $data['call_to_action_id'];
-        }
-
-        // Add dayparting if provided
-        if (!empty($data['dayparting'])) {
-            $spcParams['dayparting'] = $data['dayparting'];
-        }
-
-        logSmartPlus("SPC Params: " . json_encode($spcParams));
-
-        $result = makeApiCall('/campaign/spc/create/', $spcParams, $accessToken);
-
-        if ($result['code'] == 0 && isset($result['data']['campaign_id'])) {
-            echo json_encode([
-                'success' => true,
-                'campaign_id' => $result['data']['campaign_id'],
-                'data' => $result['data'],
-                'message' => 'Smart+ Campaign created successfully'
-            ]);
-        } else {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Failed to create Smart+ Campaign: ' . ($result['message'] ?? 'Unknown error'),
-                'error_code' => $result['code'] ?? null,
-                'details' => $result
-            ]);
-        }
+        // Return results
+        $successCount = count(array_filter($results['ads'], fn($a) => $a['success']));
+        echo json_encode([
+            'success' => true,
+            'campaign_id' => $campaignId,
+            'adgroup_id' => $adgroupId,
+            'ads_created' => $successCount,
+            'ads_total' => count($ads),
+            'results' => $results,
+            'message' => "Smart+ Campaign created: Campaign ID $campaignId, Ad Group ID $adgroupId, $successCount/" . count($ads) . " ads created"
+        ]);
         break;
 
     // ==========================================
-    // CREATE CUSTOM IDENTITY
+    // CREATE CUSTOM IDENTITY (for regular campaigns)
     // ==========================================
     case 'create_identity':
         $data = $input;
@@ -403,67 +633,6 @@ switch ($action) {
             echo json_encode([
                 'success' => false,
                 'message' => $result['message'] ?? 'Failed to create identity'
-            ]);
-        }
-        break;
-
-    // ==========================================
-    // CREATE CTA PORTFOLIO (for Dynamic CTA)
-    // ==========================================
-    case 'create_cta_portfolio':
-        $ctaValues = $input['cta_values'] ?? ['LEARN_MORE'];
-
-        // Map CTA values to TikTok asset IDs
-        $ctaAssetMap = [
-            'LEARN_MORE' => ['202156', '202150'],
-            'GET_QUOTE' => ['201804', '202152'],
-            'SIGN_UP' => ['202106', '202011'],
-            'CONTACT_US' => ['202142', '201766'],
-            'APPLY_NOW' => ['201963', '201489'],
-            'DOWNLOAD' => ['201774', '201745'],
-            'SHOP_NOW' => ['202020', '201973'],
-            'ORDER_NOW' => ['201821', '201820'],
-            'BOOK_NOW' => ['202160', '201769'],
-            'GET_STARTED' => ['202117', '202158']
-        ];
-
-        $portfolioContent = [];
-        foreach ($ctaValues as $cta) {
-            $ctaKey = strtoupper(str_replace(' ', '_', $cta));
-            if (isset($ctaAssetMap[$ctaKey])) {
-                $portfolioContent[] = [
-                    'asset_content' => ucwords(strtolower(str_replace('_', ' ', $ctaKey))),
-                    'asset_ids' => $ctaAssetMap[$ctaKey]
-                ];
-            }
-        }
-
-        if (empty($portfolioContent)) {
-            $portfolioContent = [
-                ['asset_content' => 'Learn more', 'asset_ids' => ['202156', '202150']]
-            ];
-        }
-
-        $portfolioParams = [
-            'advertiser_id' => $advertiserId,
-            'creative_portfolio_type' => 'CTA',
-            'portfolio_name' => 'Smart+ CTA - ' . date('M d H:i'),
-            'portfolio_content' => $portfolioContent
-        ];
-
-        $result = makeApiCall('/creative/portfolio/create/', $portfolioParams, $accessToken);
-
-        if ($result['code'] == 0) {
-            $portfolioId = $result['data']['creative_portfolio_id'] ?? $result['data']['portfolio_id'] ?? null;
-            echo json_encode([
-                'success' => true,
-                'portfolio_id' => $portfolioId,
-                'message' => 'CTA Portfolio created'
-            ]);
-        } else {
-            echo json_encode([
-                'success' => false,
-                'message' => $result['message'] ?? 'Failed to create CTA portfolio'
             ]);
         }
         break;

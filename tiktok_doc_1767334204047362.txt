@@ -1,0 +1,11 @@
+Discover API Products
+Solutions
+Docs
+Support
+Blog
+EN
+Log in
+TikTok is asking advertisers targeting EU users to confirm that their ads will comply with TikTok's Politics, Governments, and Elections Advertising Policy. If you haven't confirmed compliance with the policy by January 10th, 2026, you might not be able to manage your campaigns via API. We encourage you to complete the confirmation as soon as possible. See details(API website article).
+© 2025 TikTok for Business
+Terms & policies
+Privacy & cookie policy

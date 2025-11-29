@@ -1,1362 +1,173 @@
 
-Before you start
-Request
-List of values for discount_currency or minimum_purchase_currency
+Create a Smart+ Lead Generation Campaign with optimization location as Instant Form
+Prerequisites
+Steps
 Example
-Response
+Create a Smart+ Lead Generation Campaign with optimization location as Website
+Steps
 Example
-Create a Smart+ Campaign
-Use this endpoint to create a Smart+ Campaign.
+Destination as URL
+Destination as Custom Page
+Create Smart+ Lead Generation Campaigns
+This article walks you through the steps to create Smart+ Lead Generation Campaigns.
 
-Important
+Based on your preference for the optimization location, you can create a Smart+ Lead Generation Campaign with optimization location as Instant Form or Website. For detailed instructions on creating each type, refer to their respective sections: "Create a Smart+ Lead Generation Campaign with optimization location as Instant Form" and "Create a Smart+ Lead Generation Campaign with optimization location as Website".
 
-Upgraded Smart+ API:
-We are actively upgrading the Smart+ API to deliver enhanced capabilities and performance. The new Upgraded Smart+ API is expected to launch by the end of October, with an Alpha Test currently open.
-Join the Alpha Test: If you wish to begin integrating with the new Upgraded Smart+ API, please reach out to your TikTok representative or submit a support ticket to express your interest.
-Legacy API Deprecation: This Legacy Smart+ API endpoint is scheduled for deprecation on March 31, 2026. We strongly encourage you to plan your migration to the Upgraded Smart+ API.
-Before you start
-Check whether your ad account has reached the Smart+ Campaign quota by using /campaign/spc/quota/get/.
+Create a Smart+ Lead Generation Campaign with optimization location as Instant Form
+Prerequisites
+Ensure that you have an existing Instant Form within your ad account.
 
-If you are unable to create new Smart+ Campaigns because you have reached the quota limit, use /campaign/spc/quota/get/ to identify active Smart+ Campaigns. You can then pause some of the active campaigns to free up quota using /campaign/status/update/.
+To create an Instant Form, use Instant Page Editor SDK and set businessType to 1. Then call /page/get/ to get the page ID of the Instant Form through page_id.
+Steps
+Note that the following requirements must be met. To find a complete list of parameters, see /campaign/spc/create/.
 
-Request
-Endpoint https://business-api.tiktok.com/open_api/v1.3/campaign/spc/create/
+Note
+Smart+ Lead Generation ad groups cannot be used in /split_test/create/ to create split test groups.
 
-Method POST
+Setting	Requirement	Parameter	How to configure the parameter
+Advertising objective	Lead generation	objective_type	LEAD_GENERATION
+Campaign setup	Smart+ Campaign	N/A	N/A
+Campaigns created through /campaign/spc/create/ are all Smart+ Campaigns.
+Campaign name	Specify a valid name	campaign_name	Pass a valid value
+Special ad categories
+(Optional)	Enabled or disabled
 
-Header
+Note: This setting is only supported for advertisers who are registered in the US or Canada.
 
-Field	Data Type	Description
-Access-Token
-Required
-string
-Authorized access token. For details, see Authentication.
-Content-Type
-Required
-string
-Request message type
-Allowed format: application/json.
-Parameters
+special_industries	Pass valid values or not passed
+Campaign Budget Optimization (CBO)	N/A
 
-Field	Data Type	Description
-advertiser_id
-Required
-string
-Advertiser ID.
-operation_status
-string
-The status of the campaign when created.
+Note: CBO is enabled by default for Smart+ Campaigns.
 
-Enum values:
-ENABLE: The campaign is enabled when created.
-DISABLE: The campaign is disabled when created.
-Default value: ENABLE.
+N/A	N/A
 
-If you want to update the status of the campaign after creation, use the /campaign/status/update endpoint.
-objective_type
-Required
-string
-Advertising objective.
+Note: If you retrieve Smart+ Campaigns via /campaign/get/, the returned budget_optimize_on will be true.
 
-Currently, we support APP_PROMOTION, WEB_CONVERSIONS, and LEAD_GENERATION.
+Optimization location (Promotion type)	Instant Form	promotion_type	LEAD_GENERATION
+promotion_target_type	INSTANT_PAGE
+Deep funnel optimization
+(Optional)	Enabled or disabled
 
-To learn about the detailed steps for creating Smart+ Lead Generation Campaigns, see Create Smart+ Lead Generation Campaigns.
-spc_type
-string
-Valid only when objective_type is WEB_CONVERSIONS.
-
-The web campaign type.
-
-Enum values:
-WEB_ALL_IN_ONE: Smart+ Web Campaign, where the supported optimization goals include Conversion, Value, Click and Landing page view.
-UNSET(to-be-deprecated): Smart Performance Web Campaign, where the supported optimization goals are limited to Conversion, Value, and Click.
-Default value: UNSET.
-
-To learn about the detailed steps for creating Smart+ Web Campaigns, see Create Smart+ Web Campaigns.
-
-Note:
-
-Smart Performance Web Campaigns will be deprecated in the next API version. To ensure a smooth API integration, we recommend that you upgrade to Smart+ Web Campaigns as soon as possible. Smart+ Web Campaigns are a new AI-powered automation solution that leverages machine learning to drive business outcomes for advertisers.
-Once set, this field cannot be updated.
-web_all_in_one_catalog_status
-string
-Valid only when spc_type is WEB_ALL_IN_ONE.
-
-The status of catalog in the Smart+ Web Campaign.
-
-Enum values:
-OPEN: enabled. Smart+ Web Campaigns with catalog enabled are Smart+ Catalog Ads. To learn about the detailed steps for creating Smart+ Catalog Ads, see Create Smart+ Catalog Ads.
-UNSET: disabled. Smart+ Web Campaigns with catalog disabled are regular Smart+ Web Campaigns. To learn about the detailed steps for creating regular Smart+ Web Campaigns, see Create a regular Smart+ Web Campaign.
-Default value: UNSET.
-app_promotion_type
-Conditional
-string
-Required when objective_type is APP_PROMOTION.
-
-App promotion type.
-
-Currently, we only support APP_INSTALL.
-virtual_objective_type
-string
-The new objective type.
-
-Enum value: SALES.
-
-Use this field to create a campaign with the Sales objective, the combined objective for Website Conversions and Product Sales objectives. Learn more about the Sales objective.
-sales_destination
-Conditional
-string
-Required and valid only when virtual_objective_type is specified.
-
-Sales destination, the destination where you want to drive your sales.
-
-Enum values:
-WEBSITE: Website. Drive sales on your website.
-WEB_AND_APP: Website and app. Drive sales on both your website and your app.
-When sales_destination is set to WEB_AND_APP, you need to set web_all_in_one_catalog_status to OPEN.
-To learn about how to create Smart+ Campaigns with this setting, see Create Smart+ Catalog Ads with Website and App Optimization.
-
-Note: Creating Smart+ Catalog Ads with Website and App Optimization (with sales_destination set to WEB_AND_APP) is currently an allowlist-only feature. If you would like to access it, please contact your TikTok representative.
-
-campaign_type
-string
-Campaign type.
-
-Enum values: REGULAR_CAMPAIGN, IOS14_CAMPAIGN.
-Default value: REGULAR_CAMPAIGN.
-campaign_app_profile_page_state
-string
-Whether to use app profile page to optimize delivery.
-
-Enum values: ON, OFF.
-Default value: OFF.
-
-Note:
-
-You can use the field only when objective_type is APP_PROMOTIONand your campaign is an iOS 14 Dedicated Campaign. Otherwise, an error will occur.
-When ON is selected, pass in the page_id of App Profile Page.
-To create an App Profile Page, use Instant Page Editor SDK and set businessType to 4.
-is_advanced_dedicated_campaign
-boolean
-Whether the campaign is an Advanced Dedicated Campaign. Advanced Dedicated Campaigns leverage advanced delivery models that benefit from real-time signals.
-
-Enum values: true, false.
-Default value: false.
-
-To learn about how to create such campaigns, see Create Advanced Dedicated Campaigns.
-
-Note: Once set, this field cannot be updated.
-
-disable_skan_campaign
-boolean
-Valid only when the following conditions are all met:
-objective_type is APP_PROMOTION.
-app_promotion_type is APP_INSTALL.
-campaign_type is IOS14_CAMPAIGN.
-app_id is set to the ID of an iOS app that is eligible for Advanced Dedicated Campaigns. To confirm whether an app is eligible for Advanced Dedicated Campaigns, use /app/list/ and check the returned advanced_dedicated_campaign_allowed.
-
-Whether to disable SKAN (SKAdNetwork) attribution, Apple's conversion attribution solution for iOS campaigns
-
-Enum values:
-true: To disable SKAN attribution. The campaign will not be bound by Dedicated Campaign quota limits and you will be able to retrieve Self Attribution Network (SAN) metrics for the campaign. However, you cannot retrieve SKAN reporting metrics for the campaign. Learn more about SAN integration.
-For a Dedicated Campaign using an app that is eligible for Advanced Dedicated Campaigns, you need to enable SKAN attribution or Advanced Dedicated Campaign or both. You cannot disable SKAN attribution and Advanced Dedicated Campaign simultaneously.
-false: To enable SKAN attribution. The campaign will be bound by Dedicated Campaign quota limits and you will be able to retrieve SKAN metrics for the campaign.
-If you enable Advanced Dedicated Campaign by setting is_advanced_dedicated_campaign to true simultaneously, you'll be able to retrieve both SAN and SKAN reporting metrics for the campaign.
-
-Note:
-
-Disabling SKAN attribution for Dedicated Campaigns is currently an allowlist-only feature. If you would like to access it, please contact your TikTok representative.
-If you are allowlisted for disabling SKAN attribution for Dedicated Campaigns, you cannot set bid_type to BID_TYPE_CUSTOM when the following conditions are all met:
-is_advanced_dedicated_campaign is false.
-disable_skan_campaign is false.
-optimization_goal is INSTALL or IN_APP_EVENT.
-Once set, this field cannot be updated.
-Getting access to Advanced Dedicated Campaign requires the app to meet certain criteria. If your app is ineligible for Advanced Dedicated Campaign, reach out to your TikTok representative. Your TikTok representative will be able to provide troubleshooting support to help your app get access to Advanced Dedicated Campaign.
-campaign_name
-Required
-string
-Campaign name.
-special_industries
-string[]
-Ad categories. Enum values:
-HOUSING: Ads for real estate listings, homeowners insurance, mortgage loans or other related opportunities.
-EMPLOYMENT: Ads for job offers, internships, professional certification programs or other related opportunities.
-CREDIT: Ads for credit card offers, auto loans, long-term financing or other related opportunities.
-Note:
-Once you've specified the industry type, the system will adjust your target options to help you comply with advertising policies. See Ad targeting for details.
-This field is only supported for advertisers who are registered in the US or Canada.
-product_source
-Conditional
-string
-Required when web_all_in_one_catalog_status is OPEN.
-
-Product source where you want to get products for promotion.
-
-Enum value: CATALOG (catalog).
-catalog_id
-Conditional
-string
-Required when web_all_in_one_catalog_status is OPEN.
-
-The ID of the catalog to use in the Smart+ Catalog Ads.
-Currently, you can only specify an E-commerce catalog.
-
-To retrieve the E-commerce catalogs within your Business Center, use /catalog/get/.
-catalog_authorized_bc_id
-Conditional
-string
-Required when web_all_in_one_catalog_status is OPEN.
-
-The ID of the Business Center that the catalog (catalog_id) belongs to.
-product_specific_type
-Conditional
-string
-Required when web_all_in_one_catalog_status is OPEN.
-
-Different dimensions to choose products.
-
-Enum values:
-ALL: Allow TikTok to dynamically choose from all products.
-PRODUCT_SET: Specify a product set. TikTok will dynamically choose products from this set.
-CUSTOMIZED_PRODUCTS: Specify a customized number of products.
-
-If this field is set to ALL, you don't need to input product_set_id and product_ids.
-If this field is set to PRODUCT_SET, you need to pass in product_set_id.
-If this field is set to CUSTOMIZED_PRODUCTS, product_ids is required.
-product_set_id
-Conditional
-string
-Required when product_specific_type is PRODUCT_SET.
-
-The ID of a product set.
-
-To retrieve the product sets within your ad account, use /catalog/set/get/.
-To create a product set, use /catalog/set/create/.
-product_ids
-Conditional
-string[]
-Required when product_specific_type is CUSTOMIZED_PRODUCTS.
-
-The product IDs of the catalog products.
-
-Max size: 20.
-
-To retrieve the product ID (product_id) of each catalog product, use /catalog/product/get/.
-promotion_type
-Required
-string
-Promotion type (Optimization location). You can decide where you'd like to promote your products using this field.
-
-Currently, we support APP_ANDROID, APP_IOS, WEBSITE, and LEAD_GENERATION.
-
-When objective_type is APP_PROMOTION, set this field to APP_ANDROID or APP_IOS.
-When objective_type is WEB_CONVERSIONS, set this field to WEBSITE.
-When objective_type is LEAD_GENERATION, set this field to LEAD_GENERATION.
-app_id
-Conditional
-string
-Required when objective_type is APP_PROMOTION and app_promotion_type is APP_INSTALL.
-
-The App ID of the app to promote.
-
-You can get app_id by using the /app/list/ endpoint.
-promotion_website_type
-string
-Valid only when objective_type is WEB_CONVERSIONS and spc_type is UNSET or not passed.
-
-TikTok Instant Page type.
-
-Currently, we only support TIKTOK_NATIVE_PAGE(To use TikTok Instant Page).
-
-If you want to use TikTok Instant Page in your ads, you need to pass page_id of the TikTok Instant Page and pixel_id is not supported.
-promotion_target_type
-Conditional
-string
-Required when objective_type is LEAD_GENERATION.
-
-The optimization location for Lead Generation objective.
-
-Enum values:
-INSTANT_PAGE: Instant Form. To create a fast-loading in-app TikTok Instant Form to collect more leads.
-EXTERNAL_WEBSITE: Website Form. To use a landing page that has the Website Form or the TikTok Instant Page that redirects to the website with the Website Form to collect more leads.
-optimization_goal
-Required
-string
-The measurable results you'd like to drive with your campaigns.
-
-Currently, we support CLICK, INSTALL, IN_APP_EVENT, VALUE, CONVERT, TRAFFIC_LANDING_PAGE_VIEW, and LEAD_GENERATION.
-
-To find the detailed description for each optimization goal, see Enumeration - Optimization Goal.
-pixel_id
-Conditional
-string
-Required when optimization_goal is set to CONVERT or VALUE.
-Not supported when optimization_goal is not set to CONVERT or VALUE.
-
-Pixel ID.
-
-To obtain the list of Pixel IDs within your ad account, use /pixel/list/.
-optimization_event
-Conditional
-string
-Required in any of the following scenarios:
-pixel_id is specified.
-pixel_id is not specified and optimization_goal is IN_APP_EVENT or VALUE.
-
-Conversion event.
-
-For the supported app and pixel events, see Conversion events.
-To find out the supported events for your app, use /app/optimization_event/.
-app_config
-Conditional
-object[]
-Required when sales_destination is WEB_AND_APP.
-
-Details of the app or apps to promote.
-
-Max size: 2.
-
-You can specify any of the following in this field:
-an Android app
-an iOS app
-an Android app and an iOS app
-app_id
-Conditional
-string
-Required when app_config is specified.
-
-The App ID of the app to promote.
-
-To obtain the list of App IDs within your ad account, use /app/list/ and check the returned app_id.
-deep_funnel_optimization_status
-string
-Valid only when promotion_type is LEAD_GENERATION.
-
-The status of deep funnel optimization.
-Deep funnel optimization optimizes both your upper funnel events and deeper funnel events. You can select a secondary event alongside the primary optimization event, which can help improve campaign effectiveness.
-
-Enum values:
-ON: To enable deep funnel optimization.
-OFF: To disable deep funnel optimization.
-Default value: OFF.
-
-To learn about how to configure deep funnel optimization for Smart+ Lead Generation Campaigns, see Create Smart+ Lead Generation Campaigns.
+With deep funnel optimization, you can select a secondary event alongside the primary optimization event, which can help improve campaign effectiveness.	deep_funnel_optimization_status
+deep_funnel_event_source
+deep_funnel_event_source_id
+deep_funnel_optimization_event	
+To enable deep funnel optimization, set deep_funnel_optimization_status to ON and pass deep_funnel_event_source, deep_funnel_event_source_id, and deep_funnel_optimization_event.
+To disable deep funnel optimization, set deep_funnel_optimization_status to OFF or leave deep_funnel_optimization_status unspecified. Do not pass deep_funnel_event_source, deep_funnel_event_source_id, and deep_funnel_optimization_event.
 
 Note:
 
 Deep funnel optimization with CRM events is currently an allowlist-only feature. If you would like to access it, please contact your TikTok representative.
 Deep funnel optimization with Pixel or Offline events is generally available.
-deep_funnel_event_source
-Conditional
-string
-Required when deep_funnel_optimization_status is ON.
-
-The event source type.
-
-Enum values:
-PIXEL: Pixel.
-OFFLINE: Offline Event Set.
-CRM: CRM Event Set.
-deep_funnel_event_source_id
-Conditional
-string
-Required when deep_funnel_optimization_status is ON.
-
-Event Source ID.
-
-When deep_funnel_event_source is PIXEL, specify a Pixel ID via this field.
-To obtain a list of Pixels, use /pixel/list/.
-When deep_funnel_event_source is OFFLINE, specify an Offline Event Set ID via this field.
-To obtain a list of Offline Event Set IDs, use /offline/get/.
-When deep_funnel_event_source is CRM, specify a CRM Event Set ID via this field.
-To obtain a list of CRM Event Set IDs, use /crm/list/.
-deep_funnel_optimization_event
-Conditional
-string
-Required when deep_funnel_optimization_status is ON.
-
-Deep funnel optimization event.
-
-To find out the supported values for Standard Events available for Pixels, Offline Event Sets, and CRM Event Sets, see the "Event name for ad creation" column in Supported Pixel events.
-To find the list of optimization events for a Pixel, use /pixel/list/ and check the returned optimization_event.
-
-Example: SHOPPING.
-bid_type
-string
-Bidding strategy that determines how the system manages your cost per result, spends your budget, and how it delivers campaigns.
-
-Enum values:
-BID_TYPE_NO_BID: Maximum Delivery.
-BID_TYPE_CUSTOM: Cost Cap (or Target CPA).
-bid_price
-Conditional
-float
-Required when the following conditions are met:
-spc_type is WEB_ALL_IN_ONE
-optimization_goal is CLICK
-bid_type is BID_TYPE_CUSTOM
-
-The target cost per click. The system will aim to get the most results while keeping the average cost per result around or lower than the specified amount.
-
-bid_price needs to be lower than budget. See Bidding-Bidding limits to learn more about the bid verification mechanism.
-conversion_bid_price
-Conditional
-float
-Required when the following conditions are met:
-spc_type is WEB_ALL_IN_ONE
-optimization_goal is CONVERT or TRAFFIC_LANDING_PAGE_VIEW
-bid_type is BID_TYPE_CUSTOM
-
-The target cost per conversion or cost per landing page view. The system will aim to get the most results while keeping the average cost per result around or lower than the specified amount.
-
-conversion_bid_price needs to be lower than budget. See Bidding-Bidding limits to learn more about the bid verification mechanism.
-deep_bid_type
-string
-Bidding strategy for in-app events.
-
-Currently, we only support DEFAULT, AEO, VO_MIN_ROAS (supported only for Smart+ Web Campaigns), and VO_HIGHEST_VALUE in this field.
-
-For the descriptions of supported values, see Enumeration - Deep Event Bidding Strategy.
-roas_bid
-Conditional
-float
-Required when deep_bid_type is VO_MIN_ROAS.
-
-Target ROAS for Value-Based Optimization.
-
-Value range: 0.01-1,000.
-vbo_window
-string
-The time window of the specified bidding strategy for VBO IAA (Value-Based Optimization for in-app advertising) or VBO IAP (Value-Based Optimization for in-app purchase).
-
-Enum values:
-SEVEN_DAYS: The first seven days (day 7).
-ZERO_DAY: The current day (day 0).
-Default value: SEVEN_DAYS.
-
-When the Minimum ROAS (Target ROAS) bidding strategy is used, this field represents the window type of the target ROAS value (Day 7 ROAS or Day 0 ROAS). The system will aim to keep your average ROAS of the seventh day or of the current day around or higher than the target ROAS value, regardless of your budget.
-When the Highest Value bidding strategy is used, this field represents the Highest Value window type (Day 7 Highest Value or Day 0 Highest Value). The system will aim to spend your budget fully and maximize the value of results within the first seven days or within the current day.
-
-To learn more about how to use VBO IAA for your ad groups, see Enable VBO for App.
-
-Note:
-
-VBO IAP and VBO IAA in different scenarios are currently allowlist-only features. If you would like to access them, please contact your TikTok representative.
-Day 0 or day 7 bidding (vbo_window is ZERO_DAY or SEVEN_DAYS) for VBO IAP in Advanced Dedicated Campaign or Android campaign scenarios are currently allowlist-only features. If you would like to access them, please contact your TikTok representative.
-Day 0 or day 7 bidding (vbo_window is ZERO_DAY or SEVEN_DAYS) for VBO IAA in Advanced Dedicated Campaign or Android campaign scenarios are currently allowlist-only features. If you would like to access them, please contact your TikTok representative.
-Once set, this field cannot be updated.
-click_attribution_window
-string
-Click-through window. This attribution window is the time between when a person clicks your ad and then takes an action.
-Use this field to define the timeframe during which conversions can be attributed to the Smart+ Campaign.
-
-Enum values:
-OFF: Off.
-ONE_DAY: 1-day click.
-SEVEN_DAYS: 7-day click.
-FOURTEEN_DAYS: 14-day click.
-TWENTY_EIGHT_DAYS: 28-day click.
-
-To learn about the allowed values of this field for different advertising objective scenarios, refer to Attribution window and event count.
-
-Note:
-
-If you want to manually configure the attribution windows, you need to pass at least click_attribution_window and view_attribution_window simultaneously, and optionally engaged_view_attribution_window. Note that the engaged_view_attribution_window, once passed, must be accompanied by click_attribution_window and view_attribution_window.
-If you don't manually pass click_attribution_window, engaged_view_attribution_window, view_attribution_window and attribution_event_count, then default settings, if any, will be used. To confirm whether a default setting is used when you don't manually pass this field, use /adgroup/get/.
-Once set, this field cannot be updated.
-engaged_view_attribution_window
-string
-Engaged view-through window. This attribution window is the time after someone watches at least 6 seconds of your video ad that a conversion is counted.
-Use this field to define the timeframe during which conversions can be attributed to the Smart+ Campaign.
-
-Enum values:
-ONE_DAY: 1-day engaged view.
-SEVEN_DAYS: 7-day engaged view.
-FOURTEEN_DAYS: 14-day engaged view.
-TWENTY_EIGHT_DAYS: 28-day engaged view.
-
-To learn about the allowed values of this field for different advertising objective scenarios, refer to Attribution window and event count.
-
-Note:
-
-If you want to manually configure the attribution windows, you need to pass at least click_attribution_window and view_attribution_window simultaneously, and optionally engaged_view_attribution_window. Note that the engaged_view_attribution_window, once passed, must be accompanied by click_attribution_window and view_attribution_window.
-If you don't manually pass click_attribution_window, engaged_view_attribution_window, view_attribution_window and attribution_event_count, then default settings, if any, will be used. To confirm whether a default setting is used when you don't manually pass this field, use /adgroup/get/.
-Once set, this field cannot be updated.
-view_attribution_window
-string
-View-through window. This attribution window is the time between when a person views your ad and then takes an action.
-Use this field to define the timeframe during which conversions can be attributed to the Smart+ Campaign.
-
-Enum values:
-OFF: Off.
-ONE_DAY: 1-day view.
-SEVEN_DAYS: 7-day view.
-
-To learn about the allowed values of this field for different advertising objective scenarios, refer to Attribution window and event count.
-
-Note:
-
-If you want to manually configure the attribution windows, you need to pass at least click_attribution_window and view_attribution_window simultaneously, and optionally engaged_view_attribution_window. Note that the engaged_view_attribution_window, once passed, must be accompanied by click_attribution_window and view_attribution_window.
-If you don't manually pass click_attribution_window, engaged_view_attribution_window, view_attribution_window and attribution_event_count, then default settings, if any, will be used. To confirm whether a default setting is used when you don't manually pass this field, use /adgroup/get/.
-Once set, this field cannot be updated.
-attribution_event_count
-string
-Event count (Statistic type).
-The way that people's actions are counted after only viewing or clicking an ad.
-
-Enum values:
-UNSET: Unset.
-EVERY: Every. To count multiple events from someone as separate conversions.
-ONCE: Once. To count multiple events from someone as 1 conversion.
-
-To learn about the allowed values of this field for different advertising objective scenarios, refer to Attribution window and event count.
-
-Note:
-
-If you don't manually pass click_attribution_window, engaged_view_attribution_window, view_attribution_window and attribution_event_count, then default settings, if any, will be used. To confirm whether a default setting is used when you don't manually pass this field, use /adgroup/get/.
-Once set, this field cannot be updated.
-billing_event
-Required
-string
-Events that you want to pay for.
-
-For enum values, see Enumeration - Billing Event.
-
-Currently, we only support OCPM and CPC.
-location_ids
-Required
-string[]
-IDs of the locations that you want to target.
-
-To get the available locations and corresponding IDs based on your placement and objective, use the /tool/targeting/search/ or /tool/region/ endpoint.
-To get the list of location IDs, see Location IDs.
-
-Note:
-If you add the US as your target location, then you can not remove the US after campaign creation.
-
-languages
-string[]
-Codes of the languages that you want to target.
-
-For the list of language codes supported, see Enumeration - Language Code.
-gender
-string
-Gender that you want to target.
-
-Enum values: GENDER_FEMALE, GENDER_MALE, GENDER_UNLIMITED
-Default value: GENDER_UNLIMITED.
-
-Note: The field is currently an allowlist-only feature. If you would like to access it, please contact your TikTok representative.
-
-spc_audience_age
-string
-The age group that the campaign targets.
-
-Enum value:
-18+: 18+.
-25+: 25+.
-The value 25+ is only available when objective_type is LEAD_GENERATION.
-
-Default value: 18+.
-exclude_age_under_eighteen
-boolean
-Exclude the group aged under eighteen.
-
-Note: Starting from September 21st, 2023, you can no longer target the audience aged under eighteen. The only supported value is true.
-
-excluded_audience_ids
-string[]
-List of audience ID to be excluded.
-
-You can get audience IDs by using the /dmp/custom_audience/list/ endpoint.
-placement_type
-string
-The placement strategy that decides where your campaigns will be shown.
-
-PLACEMENT_TYPE_NORMAL: Select Placement. You can choose the apps to deliver your ads on.
-PLACEMENT_TYPE_AUTOMATIC: Automatic placement. TikTok's ad system will use smart calculations to give you the best combination of ad placements across all apps.
-Default value: PLACEMENT_TYPE_NORMAL.
-
-For Smart+ Android App Campaigns (with promotion_type as APP_ANDROID), automated placement selection is a key feature.
-The system will automatically configure placements for your Smart+ Android App Campaigns based on your other settings and select high-quality traffic from various placements to deliver better results. If provided, the parameters placement_type and placements will be ignored overwritten as PLACEMENT_TYPE_AUTOMATIC and ["PLACEMENT_TIKTOK","PLACEMENT_PANGLE"] separately.
-To retrieve the exact placement setting of a Smart+ App Campaign, use /campaign/spc/get/.
-For Smart+ iOS App Campaigns (with promotion_type as APP_IOS), automated placement selection is a key feature.
-Starting June 30th, 2025, the system will automatically configure placements for your Smart+ iOS App Campaigns based on your other settings and select high-quality traffic from various placements to deliver better results. If provided after June 30th, 2025, the parameters placement_type and placements will be ignored overwritten as PLACEMENT_TYPE_AUTOMATIC and ["PLACEMENT_TIKTOK","PLACEMENT_PANGLE"] separately.
-To retrieve the exact placement setting of a Smart+ App Campaign, use /campaign/spc/get/.
-For Smart+ Web Campaigns, automated placement selection is a key feature. The system will automatically configure placements based on your other settings and select high-quality traffic from various placements to deliver better results. If provided, the parameters placement_type and placements will be ignored. To retrieve the exact placement setting of a Smart+ Web Campaign, use /campaign/spc/get/.
-If the targeted locations (location_ids) of the campaign are all not supported for Pangle placement, the returned placement_type will be PLACEMENT_TYPE_NORMAL and placements will be ["PLACEMENT_TIKTOK"].
-If one or more targeted locations (location_ids) of the campaign are supported for Pangle placement, the returned placement_type will be PLACEMENT_TYPE_AUTOMATIC and placements will be ["PLACEMENT_TIKTOK","PLACEMENT_PANGLE"].
-For Smart+ Lead Generation Campaigns (with promotion_type as LEAD_GENERATION), manually configure the placement as TikTok. Set placement_type to PLACEMENT_TYPE_NORMAL and placements to ["PLACEMENT_TIKTOK"].
-
-Note:
-
-placement_type can not be updated after the campaign creation.
-If you want to opt out of the Pangle placement, contact your TikTok representative.
-placements
-string[]
-The apps where you want to deliver your ads.
-
-Currently, we support PLACEMENT_TIKTOK.
-
-For Smart+ Android App Campaigns (with promotion_type as APP_ANDROID), automated placement selection is a key feature. The system will automatically configure placements for your Smart+ Android App campaigns based on your other settings and select high-quality traffic from various placements to deliver better results. If provided, the parameters placement_type and placements will be ignored overwritten as PLACEMENT_TYPE_AUTOMATIC and ["PLACEMENT_TIKTOK","PLACEMENT_PANGLE"] separately. To retrieve the exact placement setting of a Smart+ App Campaign, use /campaign/spc/get/.
-For Smart+ iOS App Campaigns (with promotion_type as APP_IOS), automated placement selection is a key feature. Starting June 30th, 2025, the system will automatically configure placements for your Smart+ iOS App campaigns based on your other settings and select high-quality traffic from various placements to deliver better results. If provided after June 30th, 2025, the parameters placement_type and placements will be ignored overwritten as PLACEMENT_TYPE_AUTOMATIC and ["PLACEMENT_TIKTOK","PLACEMENT_PANGLE"] separately. To retrieve the exact placement setting of a Smart+ App Campaign, use /campaign/spc/get/.
-For Smart+ Web Campaigns, automated placement selection is a key feature. The system will automatically configure placements based on your other settings and select high-quality traffic from various placements to deliver better results. If provided, the parameters placement_type and placements will be ignored. To retrieve the exact placement setting of a Smart+ Web Campaign, use /campaign/spc/get/.
-If the targeted locations (location_ids) of the campaign are all not supported for Pangle placement, the returned placement_type will be PLACEMENT_TYPE_NORMAL and placements will be ["PLACEMENT_TIKTOK"].
-If one or more targeted locations (location_ids) of the campaign are supported for Pangle placement, the returned placement_type will be PLACEMENT_TYPE_AUTOMATIC and placements will be ["PLACEMENT_TIKTOK","PLACEMENT_PANGLE"].
-For Smart+ Lead Generation Campaigns (with promotion_type as LEAD_GENERATION), manually configure the placement as TikTok. Set placement_type to PLACEMENT_TYPE_NORMAL and placements to ["PLACEMENT_TIKTOK"].
-
-Note:
-
-placements can not be updated after the campaign creation.
-comment_disabled
-boolean
-Whether to allow comments on your campaigns on TikTok.
-
-Default value: false.
-share_disabled
-boolean
-Whether to disable sharing of the campaign to third-party platforms.
-
-Supported values: true, false.
-video_download_disabled
-boolean
-Whether users can download your video ads on TikTok(can not be updated once created).
-
-Default value: false.
-blocked_pangle_app_ids
-string[]
-Pangle app block ID list.
-
-You can get an ID via the app_package_id field returned by Get Pangle block list.
-
-Do not specify this field when you set placements only as PLACEMENT_TIKTOK.
-budget_mode
-string
-Budget mode.
-
-Enum values: BUDGET_MODE_DAY, BUDGET_MODE_DYNAMIC_DAILY_BUDGET.
-Default value: BUDGET_MODE_DAY.
-
-To learn about how to set budget modes, see Budget.
-
-Note:
-Currently, this field cannot be updated after creation.
-For Smart+ Lead Generation Campaigns, the only supported value is BUDGET_MODE_DYNAMIC_DAILY_BUDGET.
-budget
-Required
-float
-Campaign budget.
-
-To learn about the minimum budget and how to set budget modes, see Budget.
-To directly see the daily budget value range for a currency, see Currency-Daily budget value range.
+Optimization goal	Form submission	optimization_goal	LEAD_GENERATION
+Placement	TikTok placement including search result	placement_type	PLACEMENT_TYPE_NORMAL
+placements	["PLACEMENT_TIKTOK"]
+
+Note: The Automatic Search Placement is enabled by default.
+
+User comment
+(Optional)	Enabled or disabled	comment_disabled	Pass valid values or not passed
+Video download
+(Optional)	Enabled or disabled	share_disabled	Pass valid values or not passed
+Video sharing
+(Optional)	Enabled or disabled	video_download_disabled	Pass valid values or not passed
+Audience targeting
+· Location	Enabled	location_ids	Pass valid values
+Audience targeting
+· Language (Optional)	Enabled or disabled	languages	Pass valid values or not passed
+Audience targeting
+· Gender (Optional)	Supported with allowlist
+
+Note: Gender targeting in Smart+ Campaigns is currently an allowlist-only feature. If you would like to access it, please contact your TikTok representative.
+
+gender	Pass valid values or not passed
+Audience targeting
+· Age	Any of the following options:
+18+
+25+
+spc_audience_age	Any of the following values:
+18+
+25+
+Audience targeting
+· Exclude audience
+(Optional)	Enabled or disabled	excluded_audience_ids	Pass valid values or not passed
+Budget mode	Dynamic daily budget	budget_mode	BUDGET_MODE_DYNAMIC_DAILY_BUDGET
+Schedule type	Any of the following types:
+Run campaign continuously after the scheduled start time
+Run campaign between the scheduled start time and end time
 schedule_type
-Required
-string
-Schedule type.
-
-Currently, we support SCHEDULE_START_END and SCHEDULE_FROM_NOW.
 schedule_start_time
-Required
-string
-Schedule start time, in the format ofYYYY-MM-DD HH:MM:SS (UTC+0).
+schedule_end_time	
+To run the campaign continuously after the scheduled start time, set schedule_type to SCHEDULE_FROM_NOW and specify schedule_start_time. Do not pass schedule_end_time.
+To run the campaign between the scheduled start time and end time, set schedule_type to SCHEDULE_START_END and specify both schedule_start_time and schedule_end_time.
+Bid strategy	Any of the following types:
+Maximum Delivery
+Cost Cap (or Target CPA)
+bid_type
+conversion_bid_price	Set bid_type to BID_TYPE_CUSTOM or BID_TYPE_NO_BID.
+If bid_type is BID_TYPE_CUSTOM, pass conversion_bid_price at the same time.
+bid_price
+deep_bid_type
+roas_bid	Not passed
+Billing event	oCPM	billing_event	OCPM
+Identity	Any of the following options:
+Authorized User
+TikTok User
+TikTok Account User in Business Center
+identity_type	Any of the following values:
+AUTH_CODE
+TT_USER
+BC_AUTH_TT
 
-The start time can be up to 12 hours earlier than the current time, but cannot be later than 2028-01-01 00:00:00.
-schedule_end_time
-Conditional
-string
-Schedule end time, in the format ofYYYY-MM-DD HH:MM:SS (UTC+0).
+Note: Pass values to identity_type and identity_id within the media_info object.
 
-The end time cannot be later than 2038-01-01 00:00:00.
-dayparting
-string
-Ad delivery arrangement, in the format of a string that consists of 48 x 7 characters. Each character is mapped to a 30-minute timeframe from Monday to Sunday. Each character can be set to either 0 or 1. 1 represents delivery in the 30-minute timeframe, and 0 stands for non-delivery in the 30-minute timeframe. The first character is mapped to 0:01-0:30 of Monday; The second character is mapped to 0:31-1:00 of Monday, and the last character represents 23:31-0:00 Sunday.
-
-Note: If not specified, all-0, or all-1 are considered as full-time delivery.
-
-identity_type
-Conditional
-string
-Required when you are not using Spark Ads (tiktok_item_id).
-
-Identity type for non-Spark Ads.
-
-Enum value: CUSTOMIZED_USER.
-Default value: CUSTOMIZED_USER.
-identity_id
-Conditional
-string
-Required when you are not using Spark Ads (tiktok_item_id).
-
-Identity ID for non-Spark Ads.
-media_info_list
-Required
-object[]
-List of media information.
-
-Max size: 30.
-media_info
-Required
-object
-Material information.
+identity_id	Pass a valid value.
+To get the list of identities under your ad account, use /identity/get/.
+identity_authorized_bc_id	Pass a valid value when identity_type is BC_AUTH_TT
+Destination	Instant Form	page_list	Specify the page ID of an Instant Form.
+To obtain the page ID of an Instant Form, set business_type to LEAD_GEN in /page/get/.
+To create an Instant Form, use Instant Page Editor SDK and set businessType to 1.
+landing_page_urls	Not passed
+Ad creative	
+For Authorized User identity, or Spark Ads PULL with TikTok User or TikTok Account User in Business Center identity, specify one to 30 TikTok posts.
 video_info
-Conditional
-object
-Required for the following types of ads:
-Non-Spark Ad Single Video ads.
-Spark Ad Single Video ads through Spark Ads Push.
-
-Video information.
-video_id
-Conditional
-string
-Required when video_info is passed.
-
-Video ID.
-
-You can get the video ID when you upload a video using the /file/video/ad/upload/ endpoint.
-
-Note:: To ensure a smooth integration journey, we recommend that you use /file/video/ad/upload/ (upload_type = UPLOAD_BY_VIDEO_ID) to bind video ID with your advertiser ID.
-
-file_name
-string
-Video name.
 image_info
-Conditional
-object[]
-Required for the following types of ads:
-Non-Spark Ad Single Video ads. You need to specify a video cover.
-Spark Ad Single Video ads through Spark Ads Push. You need to specify a video cover.
-Non-Spark Ad Standard Carousel ads, which are only supported for Smart+ Web Campaigns. You need to specify one to 35 carousel images.
-Spark Ad Standard Carousel ads through Spark Ads Push, which are only supported for Smart+ Web Campaigns. You need to specify one to 35 carousel images.
-Not supported for Catalog Carousel ads.
-
-Image information.
-web_uri
-Conditional
-string
-Required when image_info is passed.
-
-Image ID.
-
-To upload an image and obtain the image ID, use /file/image/ad/upload/.
-To search for images within your ad account, use /file/image/ad/search/.
-
-The image to be used in Single Video ads should meet the following requirement: The aspect ratio of the image is the same as the video.
-The images to be used in Standard Carousel Ads should meet the following requirements at the same time:
-Specifications:
-File Type: JPG, JPEG, or PNG.
-Image Resolution: a maximum of 1242 x 2340 pixels or 2340 x 1242 pixels.
-Aspect Ratio: a maximum of 9:20 or 20:9.
-File Size: within 50 MB.
-The value of the parameter is_carousel_usable returned from /file/image/ad/search/ for the image is true.
-music_info
-Conditional
-object
-Required for the following scenarios:
-When you create Standard Carousel Ads, including:
-Non-Spark Ad Standard Carousel ads
-Spark Ad Standard Carousel ads through Spark Ads Push
-Spark Ad Standard Carousel ads through Spark Ads Pull
-When objective_type is WEB_CONVERSIONS and catalog_creative_toggle is true. The system will automatically generate catalog carousel ads. To learn about how to ensure that the catalog carousel format is available, see Customize ad format combinations in Smart+ Catalog Ads.
-
-Music information.
-music_id
-Conditional
-string
-Required when music_info is passed.
-
-The ID of the piece of music to use in the Carousel Ads.
-
-To obtain a valid music ID for Standard Carousel Ads, you can do any of the following:
-Filter the pieces of music for Standard Carousel Ads under an ad account by specifying music_scene as CAROUSEL_ADS in /file/music/get/.
-Upload a piece of customized music for Standard Carousel Ads to an ad account through any of the following methods:
-Specifying music_scene as CAROUSEL_ADS and passing music_file and music_signature in /file/music/upload/.
-Specifying music_scene as CAROUSEL_ADS, specifying upload_type as UPLOAD_BY_FILE_ID, and passing file_id in /file/music/upload/.
-To obtain a valid music ID for Catalog Carousel Ads, you can do any of the following:
-Filter the pieces of music for Catalog Carousel Ads under an ad account by specifying music_scene as CATALOG_CAROUSEL in /file/music/get/.
-Upload a piece of customized music for Catalog Carousel Ads to an ad account through any of the following methods:
-Specifying music_scene as CATALOG_CAROUSEL and passing music_file and music_signature in /file/music/upload/.
-Specifying music_scene as CATALOG_CAROUSEL, specifying upload_type as UPLOAD_BY_FILE_ID, and passing file_id in /file/music/upload/.
-aigc_disclosure_type
-string
-Valid only when identity_type is CUSTOMIZED_USER.
-
-Whether to turn on the AIGC (Artificial Intelligence Generated Content) self-disclosure toggle to indicate the ad contains AI-generated content. After the toggle is turned on, your ad will carry an "Advertiser labeled as Al-generated" label when viewed in full.
-
-Enum values:
-SELF_DISCLOSURE: To turn on the toggle to declare that the ad contains AI-generated content.
-NOT_DECLARED: To not declare that the ad contains AI-generated content.
-Default value: NOT_DECLARED.
-
-To learn about the supported advertising objectives and ad formats for the toggle and the detailed steps for using the toggle, see AIGC self-disclosure toggle.
-
-Note:
-
-You can only update this field when you update the video (video_id).
-tiktok_item_id
-Conditional
-string
-Required when you create Spark Ads through Spark Ads Pull, including:
-Spark Ad Single Video ads through Spark Ads Pull. You need to specify a TikTok video post.
-Spark Ad Standard Carousel ads through Spark Ads Pull. You need to specify a TikTok photo post.
-
-The ID of the TikTok post to be used as an ad (Spark Ad).
-
-Pass in the item_id you get from the response of the /tt_video/info/ and /identity/video/get/ endpoints.
-
-When you pass in tiktok_item_id, you don't need to pass in the objects image_info, video_info, and title_list.
-
-Note: By using Spark Ads, you confirm that you have the rights to use the music in the videos for commercial purposes.
-
-identity_type
-Conditional
-string
-Required when you use Spark Ads.
-
-Identity type for Spark Ads.
-
-Enum values: AUTH_CODE, TT_USER, BC_AUTH_TT.
-For details about identities, see Identities.
-identity_id
-Conditional
-string
-Required when you use Spark Ads.
-
-Identity ID for Spark Ads.
-identity_authorized_bc_id
-Conditional
-string
-Required when identity_type is BC_AUTH_TT.
-
-ID of the Business Center that a TikTok Account User in Business Center identity is associated with.
-dark_post_status
-string
-Valid only when you create Spark Ads through Spark Ads Push.
-
-The status of the "Ads-only mode" for your creatives.
-
-Enum values:
-ON: Enable the ads-only mode to limit your posts to paid traffic.
-OFF: Disable the ads-only mode. The post will appear on your TikTok profile and will be eligible to receive organic traffic.
-
-Default value: OFF.
-catalog_creative_toggle
-boolean
-Valid only when web_all_in_one_catalog_status is OPEN.
-
-Whether to enable auto-selection of creatives from your catalog.
-
-Supported values: true, false.
-Default value: false.
-
-If you set this field to true, music_info is required and the system will use catalog creatives to automatically generate ads in diverse formats such as catalog video, catalog carousel, and single video. For detailed configuration options and requirements, see Customize ad format combinations in Smart+ Catalog Ads.
 title_list
-Conditional
-object[]
-List of ad titles (also called ad texts).
-Ad titles are shown to your audience as part of your ad creative, to deliver the message you intend to communicate to them.
-
-When you pass in tiktok_item_id, you don't need to pass in the objects image_info, video_info, and title_list.
-title
-Conditional
-string
-Required when title_list is passed.
-
-Ad title (ad text).
-call_to_action_id
-string
-The ID of the CTA portfolio that you want to use in your ads. A CTA portfolio is a group of auto-optimized CTAs.
-
-For details about auto-optimized CTAs, see CTA recommendations > Dynamic CTAs.
-call_to_action_list
-object[]
-Call-to-action list.
-
-Note: This field is not supported for Smart+ Lead Generation Campaigns.
-call_to_action
-Conditional
-string
-Required when call_to_action_list is passed.
-
-Call-to-action text.
-
-For enum values, see Enumeration - Call-to-action.
-product_info
-object
-Additional product information. This information will be used to create ad variations to help achieve advertising goals such as standing out, building trust, or boosting performance.
-promo_info_list
-object[]
-Valid only in regular Smart+ Web Campaigns.
-
-Details of promo codes and offers.
-Promo codes and offers can help boost your ad performance. Make sure your codes and offers are active, accurate, and ready to use at checkout.
-
-Max size: 10.
-discount_type
-Conditional
-string
-Required when promo_info_list is specified.
-
-Discount type.
-
-Enum values:
-PERCENTAGE: Percentage off discount.
-CASH: Cash off discount.
-discount_value
-Conditional
-float
-Required when promo_info_list is specified.
-
-Discount value.
-
-When discount_type is PERCENTAGE, specify an integer between 1-100.
-When discount_type is CASH, specify a float greater than 0.
-discount_currency
-Conditional
-string
-Required when discount_type is CASH.
-
-Discount currency.
-
-For enum values, see List of values for discount_currency or minimum_purchase_currency.
-promo_code
-string
-The promo code.
-
-For promo codes that require shoppers to enter a code at checkout, specify the code through this field.
-For offers that apply automatically, omit this field.
-
-Length limit: 30 characters long and cannot contain emoji. Each word in Chinese or Japanese counts as two characters, while each letter in English counts as one character.
-
-Note: Promo codes exclusive to TikTok often perform best.
-
-minimum_purchase_type
-string
-Minimum purchase type.
-
-Enum values:
-QUANTITY: Minimum quantity.
-SUBTOTAL: Minimum subtotal.
-minimum_purchase_value
-Conditional
-float
-Required when minimum_purchase_type is specified.
-
-Minimum purchase value.
-When minimum_purchase_type is QUANTITY, specify an integer that is 0 or greater.
-When minimum_purchase_type is SUBTOTAL, specify a float greater than 0.
-minimum_purchase_currency
-Conditional
-string
-Required when minimum_purchase_type is SUBTOTAL.
-
-Minimum purchase currency.
-
-For enum values, see List of values for discount_currency or minimum_purchase_currency.
-valid_start_time
-string
-Valid start time (UTC+0) for the promo code or offer, in the format of YYYY-MM-DD HH:MM:SS.
-valid_end_time
-string
-Valid end time (UTC+0) for the promo code or offer, in the format of YYYY-MM-DD HH:MM:SS.
-
-The valid_end_time should be later than the current time.
-If you specify valid_end_time, provide valid_start_time at the same time.
-card_list
-object[]
-Creative portfolio ID list.
-
-Size range: 0-1.
-card_id
-string
-Creative portfolio ID.
-
-Pass the ID of one of the following creative portfolio types:
-call-to-action text.
-Website info card.
-Display Card.
-Download Card.
-Countdown Sticker.
-Gift Code Sticker.
-Pop-up Showcase.
+tiktok_item_id	
+If identity_type within the media_info object is TT_USER or BC_AUTH_TT, you can create the campaign through Spark Ads PULL:
+Spark Ads PULL: Specify one to 30 TikTok posts through tiktok_item_id. Do not pass video_info, image_info, and title_list.
+To learn more about Spark Ads, see Create Spark Ads.
+If identity_type within the media_info object is AUTH_CODE, specify one to 30 TikTok posts through tiktok_item_id. Do not pass video_info, image_info, and title_list.
+Interactive add-ons
+(Optional)	Disabled or enabled with the following type:
+Display Card
+card_list	Not passed or specify the ID of the following creative portfolio type:
+Display Card
 
 To create a creative portfolio, use /creative/portfolio/create/.
-To learn about how to get the ID of a Display Card, Website info card, or Download Card portfolio, see Cards.
-To learn about how to get the ID of a Countdown Sticker or Giftcode Sticker portfolio, see Stickers.
-To learn about how to get the ID of a Pop-out Showcase portfolio, see Premium Add-ons.
-automatic_add_on_enabled
-boolean
-Valid only when web_all_in_one_catalog_status is OPEN.
+To learn about how to get the ID of a Display Card portfolio, see Cards.
+Call to action	Dynamic	call_to_action_id	Specify a valid value.
 
-Whether to enable auto-selection of interactive add-ons.
-
-Supported values: true, false.
-Default value: false.
-
-If you set this field to true, the system will automatically apply the most suitable interactive add-ons to your ads. To learn more about this setting, see the instructions for this field in Create Smart+ Catalog Ads.
-page_list
-object[]
-Page ID list.
-
-Size range: 0-1.
-page_id
-string
-Page ID.
-
-To obtain pages within your ad account, use /page/get/.
-To create instant pages, use Instant Page Editor SDK.
-deeplink
-string
-The specific location where you want your audience to go if they have your app installed.
-
-If you pass this field, you should also provide the deeplink_type field.
-deeplink_type
-string
-The deeplink type.
-
-Currently, we only support DEFERRED_DEEPLINK.
-
-If you pass this field, you should also provide the deeplink field.
-landing_page_urls
-object[]
-Landing page URL list.
-
-Before you use this field, please be aware of the following two modes.
-Single landing page mode:
-In this mode, all videos/TikTok posts have the same landing page. When you create a campaign in single landing page mode, the size range of this field is 0-1. Additionally, you don't need to specify video_id or tiktok_item_id in this object array.
-Multiple landing page mode:
-This mode can only be used when objective_type = WEB_CONVERSIONS, promotion_type is WEBSITE and spc_type is UNSET or not passed. In this mode, each video/TikTok post corresponds to a landing page URL. When you create a campaign in multiple landing page mode, the size range of this field is 0-30, and the size must be equal to the number of videos. For instance, if creating a campaign with three videos (three objects in media_info_list), you must specify three objects in landing_page_urls. Additionally, you need to specify: either video_id when creating a non-Spark Ad, or tiktok_item_id when creating a Spark Ad.
-
-Note: Multiple landing page mode is currently an allowlist-only feature. If you would like to access it, please contact your TikTok representative.
-landing_page_url
-Conditional
-string
-Required when landing_page_urls is passed.
-
-Landing page URL.
-video_id
-Conditional
-string
-Required when creating a non-Spark Ad campaign in multiple landing page mode.
-You don't need this field when creating a campaign in single landing page mode.
-
-Video ID.
-
-Pass the video_id that you specified in the video_info object.
-tiktok_item_id
-Conditional
-string
-Required when creating a Spark Ad in multiple landing page mode.
-You don't need this field when creating a campaign in single landing page mode.
-
-The ID of the TikTok post to be used as an ad (Spark Ad).
-
-Pass the tiktok_item_id that you specified in the media_info object.
-utm_params
-object[]
-Valid when objective_type is WEB_CONVERSIONS.
-
-A list of URL parameters.
-
-Max size: 14.
-
-If you set landing_page_url to a URL that already includes URL parameters, you can optionally pass utm_params at the same time to store the URL parameters used in the URL. In such cases, you need to ensure that utm_params exactly matches the used URL parameters. The URL parameters will not be automatically appended to the landing_page_url upon ad delivery.
-key
-string
-The supported UTM parameters are:
-utm_source: The app, site, etc., that brings traffic to your website. For example: TikTok.
-utm_medium: The advertising or marketing medium. For example: cpm, cpc, banner, and video.
-utm_content: The creative content used for promotion. For example: ad name, CTA text, asset, and color.
-utm_campaign: The individual campaign name, slogan, or promo code. For example: BlackFridayProm.
-
-Note that UTM parameters are case-sensitive.
-
-Length limit when you specify a custom parameter: 100 characters.
-value
-string
-The value of the URL parameter.
-
-You can specify a custom value or the name of a macro.
-
-The supported macros are:
-__CAMPAIGN_NAME__: This will be replaced by your campaign name.
-__CAMPAIGN_ID__: This will be replaced by your campaign ID.
-__AID_NAME__: This will be replaced by your ad group name.
-__AID__: This will be replaced by your ad group ID.
-__CID_NAME__: This will be replaced by your ad name.
-__CID__: This will be replaced by your ad ID.
-__PLACEMENT__: This will be replaced by your placement.
-
-Length limit when you specify a custom value: 600 characters.
-disclaimer_info
-object
-Valid only when sales_destination is WEB_AND_APP.
-
-Details of the disclaimer.
-disclaimer_type
-string
-The type of disclaimer that you want to add to the ad.
-
-Enum values:
-TEXT_LINK: clickable disclaimers.
-TEXT_ONLY: text-only disclaimers.
-
-See Include disclaimers in ads to learn about how to configure disclaimer settings.
-
-Note:
-
-The disclaimer feature only supports TikTok placement.
-Once added to your ads, the disclaimer cannot be deleted.
-disclaimer_text
-Conditional
-object
-Required when disclaimer_type is TEXT_ONLY.
-
-The text-only disclaimer that you want to add to the ad.
-text
-string
-The disclaimer text.
-
-Length limit: 90 characters.
-disclaimer_clickable_texts
-Conditional
-object[]
-Required when disclaimer_type is TEXT_LINK.
-
-The clickable disclaimer or clickable disclaimers that you want to add to the ad.
-
-Max size: 3.
-
-If you use multiple clickable disclaimers, both the overall length for all the texts you pass in and the length of individual text need to be no more than 40 characters.
-text
-string
-The disclaimer text.
-
-Length limit: 40 characters.
-url
-string
-The URL for the clickable disclaimer. When users tap each text, they will be redirected to the URL and see more disclaimer details.
-tracking_app_id
-string
-Valid when objective_type is WEB_CONVERSIONS.
-
-The ID of the App that you want to measure.
-You can use this field to measure offsite app events.
-
-To get a list of App IDs, use /app/list/.
-impression_tracking_url
-string
-Default Impression Tracking URL. URL generated by your data partner to track impression events in your ads. Generally you can find and copy the URL from their platform.
-
-If the partner ID for the App (app_id specified at the ad group level ) that you want to track is 44 (TikTok Business SDK) or 49 (TikTok App API), you don't need to pass in this field. If you do, this field will be ignored. You can obtain the partner ID of an App through partner_id returned from /app/list/ or /app/info/.
-If self-attribution has been enabled for the App (app_id specified at the ad group level ) that you want to track and the partner ID for the App is not 44 (TikTok Business SDK) or 49 (TikTok App API), you don't need to pass in this field because this field will default to the Default Impression Tracking URL you have configured for the App, and updates to the URL are not supported. You can check whether self-attribution has been enabled for the App through self_attribution_enabled returned from /app/list/ or /app/info/.
-click_tracking_url
-string
-Click Tracking URL. URL generated by your data partner to track click events in your ads. Generally you can find and copy the URL from their platform.
-
-If the partner ID for the App (app_id specified at the ad group level ) that you want to track is 44 (TikTok Business SDK) or 49 (TikTok App API), you don't need to pass in this field. If you do, this field will be ignored. You can obtain the partner ID of an App through partner_id returned from /app/list/ or /app/info/.
-If self-attribution has been enabled for the App (app_id specified at the ad group level ) that you want to track and the partner ID for the App is not 44 (TikTok Business SDK) or 49 (TikTok App API), you don't need to pass in this field because this field will default to the Click Tracking URL you have configured for the App, and updates to the URL are not supported. You can check whether self-attribution has been enabled for the App through self_attribution_enabled returned from /app/list/ or /app/info/.
-Note: click_tracking_url can not be updated if your app info already contains the click monitoring URL.
-
-app_tracking_info_list
-object[]
-Valid only when sales_destination is WEB_AND_APP.
-
-Details of Third-party tracking settings.
-
-Max size: 4.
-app_type
-Conditional
-string
-Required when app_tracking_info_list is specified.
-
-App type.
-
-Enum values:
-APP_ANDROID: Android App.
-APP_IOS: iOS App.
-app_id
-Conditional
-string
-Required when app_tracking_info_list is specified.
-
-The App ID of the App.
-
-When app_type is APP_ANDROID, specify the App ID for an Android App.
-When app_type is APP_IOS, specify the App ID for an iOS App.
-impression_tracking_url
-Conditional
-string
-When app_type is specified, specify either impression_tracking_url or click_tracking_url or both.
-
-Impression tracking URL.
-
-When app_type is APP_ANDROID, specify an impression tracking URL for Android.
-When app_type is APP_IOS, specify an impression tracking URL for Android.
-click_tracking_url
-Conditional
-string
-When app_type is specified, specify either impression_tracking_url or click_tracking_url or both.
-
-Click tracking URL.
-
-When app_type is APP_ANDROID, specify a click tracking URL for Android.
-When app_type is APP_IOS, specify a click tracking URL for Android.
-List of values for discount_currency or minimum_purchase_currency
-The following table lists the enum values for discount_currency or minimum_purchase_currency.
-
-Value for discount_currency
-or minimum_purchase_currency	Currency
-AED
-UAE Dirham
-ARS
-Argentine Peso
-AUD
-Australian Dollar
-BDT
-Bangladesh Taka
-BHD
-Bahraini Dinar
-BOB
-Bolivian Boliviano
-BRL
-Brazilian Real
-BYN
-Belarusian Ruble
-CAD
-Canadian Dollar
-CHF
-Swiss Franc
-CLP
-Chilean Peso
-CNY
-Chinese Yuan
-COP
-Colombian Peso
-CRC
-Costa Rican Colón
-CZK
-Czech Republic Koruna
-DKK
-Danish Krone
-DZD
-Algerian Dinar
-EGP
-Egyptian Pound
-EUR
-Euro
-GBP
-British Pound
-GTQ
-Guatemalan Quetzal
-HKD
-Hong Kong Dollar
-HNL
-Honduran Lempira
-HUF
-Hungarian Forint
-IDR
-Indonesian Rupiah
-ILS
-New Israeli Shekel
-INR
-Indian Rupee
-IQD
-Iraqi Dinar
-ISK
-Icelandic Króna
-JOD
-Jordanian Dinar
-JPY
-Japanese Yen
-KES
-Kenyan Shilling
-KHR
-Cambodian Riel
-KRW
-South Korean Won
-KWD
-Kuwaiti Dinar
-KZT
-Tenge
-LBP
-Lebanese Pound
-LKR
-Sri Lanka Rupee
-MAD
-Moroccan Dirham
-MOP
-Pataca
-MXN
-Mexican Peso
-MYR
-Malaysian Ringgit
-NGN
-Nigerian Naira
-NIO
-Nicaraguan Cordoba
-NOK
-Norwegian Krone
-NZD
-New Zealand Dollar
-OMR
-Rial Omani
-PEN
-Peruvian Sol
-PHP
-Philippine Piso
-PKR
-Pakistan Rupee
-PLN
-Polish ZŁOty
-PYG
-Paraguayan Guarani
-QAR
-Qatari Rial
-RON
-Romanian Leu
-RSD
-Serbian Dinar
-RUB
-Russian Ruble
-SAR
-Saudi Riyal
-SEK
-Krona
-SGD
-Singapore Dollar
-THB
-Thai Baht
-TRY
-Turkish Lira
-TWD
-New Taiwan Dollar
-UAH
-Hryvnia
-USD
-US Dollar
-UYU
-Peso Uruguayo
-VEF
-Venezuelan Bolívar
-VND
-Vietnamese Dong
-ZAR
-South African Rand
+To learn about how to create Dynamic CTAs, see Dynamic CTAs.
+call_to_action_list	Not passed
 Example
-curl --location  --request POST 'https://business-api.tiktok.com/open_api/v1.3/campaign/spc/create/' \
+Request
+
+curl --location --request POST 'https://business-api.tiktok.com/open_api/v1.3/campaign/spc/create/' \
 --header 'Access-Token: {{Access-Token}}' \
 --header 'Content-Type: application/json' \
 --data '{
     "advertiser_id": "{{advertiser_id}}",
-    "operation_status": "ENABLE",
-    "objective_type": "APP_PROMOTION",
-    "app_promotion_type": "APP_INSTALL",
-    "campaign_type": "REGULAR_CAMPAIGN",
+    "objective_type": "LEAD_GENERATION",
     "campaign_name": "{{campaign_name}}",
-    "promotion_type": "APP_ANDROID",
-    "app_id": "{{app_id}}",
-    "placement_type": "PLACEMENT_TYPE_AUTOMATIC",
+    "promotion_type": "LEAD_GENERATION",
+    "promotion_target_type": "INSTANT_PAGE",
+    "optimization_goal": "LEAD_GENERATION",
+    "spc_audience_age": "25+",
+    "placement_type": "PLACEMENT_TYPE_NORMAL",
+    "placements": [
+        "PLACEMENT_TIKTOK"
+    ],
     "location_ids": [
         "6252001"
     ],
@@ -1365,859 +176,619 @@ curl --location  --request POST 'https://business-api.tiktok.com/open_api/v1.3/c
     "schedule_type": "SCHEDULE_START_END",
     "schedule_start_time": "{{schedule_start_time}}",
     "schedule_end_time": "{{schedule_end_time}}",
-    "optimization_goal": "INSTALL",
-    "bid_type": "BID_TYPE_NO_BID",
+    "bid_type": "BID_TYPE_CUSTOM",
+    "conversion_bid_price": {{conversion_bid_price}},
     "billing_event": "OCPM",
-    "identity_type": "CUSTOMIZED_USER",
-    "identity_id": "{{identity_id}}",
+    "page_list": [
+        {
+            "page_id": "{{page_id}}"
+        }
+    ],
     "media_info_list": [
         {
             "media_info": {
-                "video_info": {
-                    "video_id": "{{video_id}}",
-                    "file_name": "{{file_name}}"
-                },
-                "image_info": [
-                    {
-                        "web_uri": "{{web_uri}}"
-                    }
-                ]
+                "identity_type": "AUTH_CODE",
+                "identity_id": "{{identity_id}}",
+                "tiktok_item_id": "{{tiktok_item_id}}"
             }
-        }
-    ],
-    "title_list": [
-        {
-            "title": "{{title}}"
         }
     ],
     "call_to_action_id": "{{call_to_action_id}}"
 }'
 Response
-Field	Data Type	Description
-code
-number
-Response code. For the complete list of response codes and descriptions, see Appendix - Return Codes.
-message
-string
-The response message. For details, see Appendix - Return Codes.
-request_id
-string
-The log id of a request, which uniquely identifies the request.
-data
-object
-Returned data.
-advertiser_id
-string
-Advertiser ID.
-campaign_id
-string
-Campaign ID.
-operation_status
-string
-The status of the campaign.
 
-Enum values:
-ENABLE : The campaign is enabled.
-DISABLE : The campaign is disabled.
-campaign_secondary_status
-string
-Campaign status (Secondary status).
-
-For the supported campaign secondary statuses for a certain primary status, see Supported secondary statuses for a primary status.
-It is equal to secondary_status in /campaign/get/.
-is_smart_performance_campaign
-boolean
-Whether the campaign is an automated campaign type.
-
-Supported values:
-true: The campaign is either a Smart+ Campaign or a Smart Performance Web Campaign.
-false: The campaign is a standard campaign type.
-
-Note: If is_smart_performance_campaign is true and objective_type is WEB_CONVERSIONS, you can confirm whether the web campaign is a Smart+ Web Campaign or Smart Performance Web Campaign by checking the returned spc_type.
-
-objective_type
-string
-Advertising objective.
-
-Currently, we support APP_PROMOTION,WEB_CONVERSIONS, and LEAD_GENERATION.
-spc_type
-string
-The web campaign type.
-
-Enum values:
-WEB_ALL_IN_ONE: Smart+ Web Campaign, where the supported optimization goals include Conversion, Value, Click and Landing page view.
-UNSET: Smart Performance Web Campaign, where the supported optimization goals are limited to Conversion, Value, and Click.
-web_all_in_one_catalog_status
-string
-The status of catalog in the Smart+ Web Campaign.
-
-Enum values:
-OPEN: enabled.
-UNSET: disabled.
-app_promotion_type
-string
-App promotion type.
-
-Currently, we only support APP_INSTALL.
-virtual_objective_type
-string
-The new objective type.
-
-Enum value: SALES.
-
-Use this field to create a campaign with the Sales objective, the combined objective for Website Conversions and Product Sales objectives. Learn more about the Sales objective.
-sales_destination
-string
-Sales destination, the destination where you want to drive your sales.
-
-Enum values:
-WEBSITE: Website. Drive sales on your website.
-WEB_AND_APP: Website and app. Drive sales on both your website and your app.
-campaign_type
-string
-Campaign Type.
-
-Currently, we support REGULAR_CAMPAIGN and IOS14_CAMPAIGN.
-campaign_app_profile_page_state
-string
-Indicates the status of the App Profile Page.
-
-Enum values: INVALID, UNSET, ON, OFF.
-is_advanced_dedicated_campaign
-boolean
-Whether the campaign is an Advanced Dedicated Campaign. Advanced Dedicated Campaigns leverage advanced delivery models that benefit from real-time signals.
-
-Enum values: true, false.
-disable_skan_campaign
-boolean
-Whether to disable SKAN (SKAdNetwork) attribution, Apple's conversion attribution solution for iOS campaigns.
-
-Enum values:
-true: To disable SKAN attribution. The campaign will not be bound by Dedicated Campaign quota limits and you will be able to retrieve Self Attribution Network (SAN) metrics for the campaign. However, you cannot retrieve SKAN reporting metrics for the campaign. Learn more about SAN integration.
-false: To enable SKAN attribution. The campaign will be bound by Dedicated Campaign quota limits and you will be able to retrieve SKAN metrics for the campaign.
-bid_align_type
-string
-The attribution type for the Dedicated Campaign. The type determines which attribution network the target CPA (conversion_bid_price) or ROAS (roas_bid) is based on.
-
-Enum values:
-SAN: SAN.
-SKAN: SKAN.
-campaign_name
-string
-Campaign name.
-special_industries
-string[]
-Ad categories.
-
-Enum values:
-HOUSING: Ads for real estate listings, homeowners insurance, mortgage loans or other related opportunities.
-EMPLOYMENT: Ads for job offers, internships, professional certification programs or other related opportunities.
-CREDIT: Ads for credit card offers, auto loans, long-term financing or other related opportunities.
-adgroup_secondary_status
-string
-Ad group status (Secondary status).
-
-For the supported adgroup secondary statuses for a certain primary status, see Supported secondary statuses for a primary status.
-It is equal to secondary_status in /adgroup/get/.
-product_source
-string
-Product source where you want to get products for promotion.
-
-Enum value: CATALOG (catalog).
-catalog_id
-string
-The ID of the catalog to use in the Smart+ Catalog Ads.
-catalog_authorized_bc_id
-string
-The ID of the Business Center that the catalog (catalog_id) belongs to.
-product_specific_type
-string
-Different dimensions to choose products.
-
-Enum values:
-ALL: Allow TikTok to dynamically choose from all products.
-PRODUCT_SET: Specify a product set. TikTok will dynamically choose products from this set.
-CUSTOMIZED_PRODUCTS: Specify a customized number of products.
-product_set_id
-string
-The ID of a product set.
-product_ids
-string[]
-The product IDs of the catalog products.
-promotion_type
-string
-Promotion type (Optimization location) and you can decide where you'd like to promote your products using this field. For value definitions, see Enumerations - Promotion Type.
-app_id
-string
-The App ID of the app to promote.
-
-You can get app_id by using the /app/list/ endpoint.
-app_type
-string
-The type of the promoted app.
-
-Currently, we support APP_ANDROID and APP_IOS.
-promotion_website_type
-string
-TikTok Instant Page type.
-
-Currently, we only support TIKTOK_NATIVE_PAGE(To use TikTok Instant Page).
-promotion_target_type
-string
-The optimization location for Lead Generation objective.
-
-Enum values:
-INSTANT_PAGE: Instant Form. To create a fast-loading in-app TikTok Instant Form to collect more leads.
-EXTERNAL_WEBSITE: Website Form. To use a landing page that has the Website Form or the TikTok Instant Page that redirects to the website with the Website Form to collect more leads.
-optimization_goal
-string
-The measurable results that you'd like to drive your ads with.
-
-For enum values, see Enumeration - Optimization Goal.
-pixel_id
-string
-Pixel ID.
-optimization_event
-string
-Conversion event for the ad group.
-
-See Conversion events for more.
-app_config
-object[]
-Returned when sales_destination is WEB_AND_APP.
-
-Details of the app or apps to promote.
-app_id
-string
-The App ID of the app to promote.
-deep_funnel_optimization_status
-string
-The status of deep funnel optimization.
-With deep funnel optimization, you can select a secondary event alongside the primary optimization event, which can help improve campaign effectiveness.  
-
-Enum values:  
-ON: enabled.  
-OFF: disabled.  
-deep_funnel_event_source
-string
-Returned when deep_funnel_optimization_status is ON.  
-
-The event source type.
-
-Enum values:
-PIXEL: Pixel.  
-OFFLINE: Offline Event Set.
-CRM: CRM Event Set.
-deep_funnel_event_source_id
-string
-Returned when deep_funnel_optimization_status is ON.
-
-Event Source ID.  
-
-When deep_funnel_event_source is PIXEL , this field represents a Pixel ID.
-When deep_funnel_event_source is OFFLINE, this field represents an Offline Event Set ID.  
-When deep_funnel_event_source is CRM, this field represents a CRM Event Set ID.
-deep_funnel_optimization_event
-string
-Returned when deep_funnel_optimization_status is ON.  
-
-Deep funnel optimization event.  
-
-Example: SHOPPING.
-bid_type
-string
-Bidding strategy.
-
-For enum values and their descriptions, see Enumeration - Bidding Strategy.
-bid_price
-float
-The target cost per click. The system will aim to get the most results while keeping the average cost per result around or lower than the specified amount.
-conversion_bid_price
-float
-The target cost per conversion or cost per landing page view. The system will aim to get the most results while keeping the average cost per result around or lower than the specified amount.
-deep_bid_type
-string
-Bidding strategy for in-app events.
-
-For enum values and their descriptions, see Enumeration - Deep Event Bidding Strategy.
-roas_bid
-float
-Target ROAS for Value-Based Optimization.
-incentive_offer_type
-string
-The type of incentive offer applicable to the Smart+ Campaign.
-
-If your campaign meets the eligibility criteria, but underperforms against certain CPA or Minimum ROAS thresholds you will be reimbursed with part of the gap with ad credits within the same ad account.
-
-To learn more about the incentive offer eligibility criteria and the calculation of incentive amount, see Smart+ Incentive Offer (Cost Cap/Minimum ROAS/Target ROAS).
-
-Enum values:
-INELIGIBLE: The campaign is ineligible for any incentive offer.
-COST_CAP_AND_MIN_ROAS: Ads groups within the campaign that use the Cost Cap or Minimum ROAS/Target ROAS bidding strategy are eligible for the incentive offer.
-vbo_window
-string
-The time window of the specified bidding strategy for VBO IAA (Value-Based Optimization for in-app advertising) or VBO IAP (Value-Based Optimization for in-app purchase).
-
-Enum values:
-SEVEN_DAYS: The first seven days (day 7).
-ZERO_DAY: The current day (day 0).
-click_attribution_window
-string
-Click-through window. This attribution window is the time between when a person clicks your ad and then takes an action.
-
-Enum values:
-OFF: Off.
-ONE_DAY: 1-day click.
-SEVEN_DAYS: 7-day click.
-FOURTEEN_DAYS: 14-day click.
-TWENTY_EIGHT_DAYS: 28-day click.
-engaged_view_attribution_window
-string
-Engaged view-through window. This attribution window is the time after someone watches at least 6 seconds of your video ad that a conversion is counted.
-
-Enum values:
-ONE_DAY: 1-day engaged view.
-SEVEN_DAYS: 7-day engaged view.
-FOURTEEN_DAYS: 14-day engaged view.
-TWENTY_EIGHT_DAYS: 28-day engaged view.
-view_attribution_window
-string
-View-through window. This attribution window is the time between when a person views your ad and then takes an action.
-
-Enum values:
-OFF: Off.
-ONE_DAY: 1-day view.
-SEVEN_DAYS: 7-day view.
-attribution_event_count
-string
-Event count (Statistic type).
-The way that people's actions are counted after only viewing or clicking an ad.
-
-Enum values:
-UNSET: Unset.
-EVERY: Every. To count multiple events from someone as separate conversions.
-ONCE: Once. To count multiple events from someone as 1 conversion.
-billing_event
-string
-Bid method. See Enumerations - Bid method for optional values.
-location_ids
-string[]
-IDs of the locations that you want to target.
-
-Use Get locations to get available locations.
-languages
-string[]
-Codes of the languages that you want to target. For the list of language codes supported, see Enumerations - Language Code.
-gender
-string
-Gender that you want to target.
-
-Enum values: GENDER_FEMALE, GENDER_MALE, GENDER_UNLIMITED.
-spc_audience_age
-string
-The age group that the campaign targets.
-
-Enum values: 18+, 25+.
-exclude_age_under_eighteen
-boolean
-Whether to exclude the group aged under eighteen.
-excluded_audience_ids
-string[]
-List of audience IDs to be excluded.
-placement_type
-string
-The placement strategy that decides where your ads will be shown.
-
-Currently, we support PLACEMENT_TYPE_NORMAL and PLACEMENT_TYPE_AUTOMATIC.
-placements
-string[]
-The apps where you want to deliver your ads.
-
-Currently, we support PLACEMENT_TIKTOK and PLACEMENT_PANGLE.
-comment_disabled
-boolean
-Whether to allow comments on your ads on TikTok.
-share_disabled
-boolean
-Whether sharing to third-party platforms is disabled for ads in this ad group.
-video_download_disabled
-boolean
-Whether users can download your video ads on TikTok.
-blocked_pangle_app_ids
-string[]
-Pangle app block ID list.
-brand_safety_type
-string
-Inventory filter tier for the Smart+ Campaign.
-
-Enum values:
-EXPANDED_INVENTORY: Expanded inventory. Your ads will not appear next to explicitly inappropriate content, but they may appear next to content that features mature themes.
-STANDARD_INVENTORY: Standard inventory. Your ads will appear next to content that is appropriate for most brands.
-LIMITED_INVENTORY: Limited inventory. Your ads will not appear next to content that contains mature themes.
-NO_BRAND_SAFETY: Full inventory without using any brand safety solution, which means your ads may appear next to some content featuring mature themes.
-
-Note: The setting is automatically applied based on your Brand Safety Hub configurations. To retrieve the details of such settings for your ad account, use /tiktok_inventory_filters/get/.
-
-category_exclusion_ids
-string[]
-The ID list of content categories that you want to avoid showing the Smart+ Campaign next to.
-
-To obtain the details of these content categories based on category IDs, use /tool/content_exclusion/info/.
-
-Note: The setting is automatically applied based on your Brand Safety Hub configurations. To retrieve the details of such settings for your ad account, use /tiktok_inventory_filters/get/.
-
-budget_mode
-string
-Budget mode.
-
-See Enumerations-Budget Mode.
-budget
-float
-Campaign budget.
-scheduled_budget
-float
-Scheduled campaign budget for the next day.
-
-A value not equal to 0 means the scheduled budget is set and the value represents the budget; a value of 0 means the scheduled budget is not set.
-schedule_type
-string
-Schedule type.
-
-Currently, we support SCHEDULE_START_END and SCHEDULE_FROM_NOW.
-schedule_start_time
-string
-Ad delivery start time, in the format ofYYYY-MM-DD HH:MM:SS (UTC+0).
-schedule_end_time
-string
-Ad delivery end time, in the format ofYYYY-MM-DD HH:MM:SS (UTC+0).
-dayparting
-string
-Ad delivery arrangement, in the format of a string that consists of 48 x 7 characters. Each character is mapped to a 30-minute timeframe from Monday to Sunday. Each character can be set to either 0 or 1. 1 represents delivery in the 30-minute timeframe, and 0 stands for non-delivery in the 30-minute timeframe. The first character is mapped to 0:01-0:30 of Monday; The second character is mapped to 0:31-1:00 of Monday, and the last character represents 23:31-0:00 Sunday.
-Note: Not specified, all-0, or all-1 are considered as full-time delivery.
-
-skip_learning_phase
-boolean
-Whether to skip the learning phase.
-identity_id
-string
-Identity ID when you are not using Spark Ads.
-identity_type
-string
-Identity type when you are not using Spark Ads.
-
-Enum value: CUSTOMIZED_USER.
-app_download_url
-string
-App download link.
-app_name
-string
-The display name of the app download ad.
-media_info_list
-object[]
-List of media information.
-media_info
-object
-Material information.
-video_info
-object
-Video information.
-video_id
-string
-Video ID.
-file_name
-string
-Video name.
-image_info
-object[]
-Image information.
-web_uri
-string
-Image ID.
-music_info
-object
-Music information.
-music_id
-string
-The ID of the piece of music to use in the Carousel Ads.
-aigc_disclosure_type
-string
-Whether to turn on the AIGC (Artificial Intelligence Generated Content) self-disclosure toggle to indicate the ad contains AI-generated content. After the toggle is turned on, your ad will carry an "Advertiser labeled as Al-generated" label when viewed in full.
-
-Enum values:
-SELF_DISCLOSURE: To turn on the toggle to declare that the ad contains AI-generated content.
-NOT_DECLARED: To not declare that the ad contains AI-generated content.
-tiktok_item_id
-string
-The ID of the TikTok post to be used as an ad (Spark Ad).
-identity_id
-string
-Identity ID when you use Spark Ads.
-identity_type
-string
-Identity type when you use Spark Ads.
-
-Enum values: AUTH_CODE, TT_USER, BC_AUTH_TT.
-For details about identities, see Identities.
-identity_authorized_bc_id
-string
-Returned when identity_type is BC_AUTH_TT.
-
-ID of the Business Center that a TikTok Account User in Business Center identity is associated with.
-dark_post_status
-string
-The status of the "Ads-only mode" for your creatives.
-
-Enum values:
-ON: Enable the ads-only mode to limit your posts to paid traffic.
-OFF: Disable the ads-only mode. The post will appear on your TikTok profile and will be eligible to receive organic traffic.
-catalog_creative_toggle
-boolean
-Whether to enable auto-selection of creatives from your catalog.
-
-Supported values: true, false.
-
-If you set this field to true, the system will use catalog creatives to automatically generate ads in diverse formats such as catalog video, catalog carousel, and single video.
-title_list
-object[]
-List of ad titles (also called ad texts). Ad titles are shown to your audience as part of your ad creative, to deliver the message you intend to communicate to them.
-title
-string
-Ad title (ad text).
-call_to_action_id
-string
-The ID of the CTA portfolio that you want to use in your ads.
-call_to_action_list
-object[]
-Call-to-action list.
-call_to_action
-string
-Call-to-action text. For enum values, see Enumeration - Call-to-action.
-product_info
-object
-Additional product information. This information will be used to create ad variations to help achieve advertising goals such as standing out, building trust, or boosting performance.
-promo_info_list
-object[]
-Valid only in regular Smart+ Web Campaigns.
-
-Details of promo codes and offers.
-Promo codes and offers can help boost your ad performance. Make sure your codes and offers are active, accurate, and ready to use at checkout.
-discount_type
-string
-Returned when promo_info_list is specified.
-
-Discount type.
-
-Enum values:
-PERCENTAGE: Percentage off discount.
-CASH: Cash off discount.
-discount_value
-string
-Returned when promo_info_list is specified.
-
-Discount value.
-
-When discount_type is PERCENTAGE, this field will be an integer between 1-100.
-When discount_type is CASH, this field will be a float greater than 0.
-discount_currency
-string
-Returned when discount_type is CASH.
-
-Discount currency.
-
-For enum values, see List of values for discount_currency or minimum_purchase_currency.
-minimum_purchase_type
-string
-Minimum purchase type.
-
-Enum values:
-QUANTITY: Minimum quantity.
-SUBTOTAL: Minimum subtotal.
-minimum_purchase_value
-float
-Returned when minimum_purchase_type is specified.
-
-Minimum purchase value.
-
-When minimum_purchase_type is QUANTITY, this field will be an integer that is 0 or greater.
-When minimum_purchase_type is SUBTOTAL, this field will be a float greater than 0.
-minimum_purchase_currency
-string
-Returned when minimum_purchase_type is SUBTOTAL.
-
-Minimum purchase currency.
-
-For enum values, see List of values for discount_currency or minimum_purchase_currency.
-valid_start_time
-string
-Valid start time (UTC+0) for the promo code or offer, in the format of YYYY-MM-DD HH:MM:SS.
-valid_end_time
-string
-Valid end time (UTC+0) for the promo code or offer, in the format of YYYY-MM-DD HH:MM:SS.
-card_list
-object[]
-Creative portfolio ID list.
-card_id
-string
-Creative portfolio ID.
-automatic_add_on_enabled
-boolean
-Whether to enable auto-selection of interactive add-ons.
-
-Supported values: true, false.
-
-If you set this field to true, the system will automatically apply the most suitable interactive add-ons to your ads.
-page_list
-object[]
-Page ID list.
-page_id
-string
-Page ID.
-deeplink
-string
-The specific location where you want your audience to go if they have your app installed.
-deeplink_type
-string
-The deeplink type.
-landing_page_urls
-object[]
-Landing page URL list.
-landing_page_url
-string
-Landing page URL.
-video_id
-string
-Returned when the campaign is in multiple landing page mode.
-
-Video ID.
-tiktok_item_id
-string
-Returned when the campaign is in multiple landing page mode.
-
-The ID of the TikTok post to be used as an ad (Spark Ad).
-utm_params
-object[]
-A list of URL parameters.
-URL parameters are snippets of code that can be added to the end of the URLs to help you track clicks across different channels and understand how visitors interact with a website through third-party analytics platforms. They consist of key-value pairs that are specified through key and value.
-key
-string
-The URL parameter.
-The parameter can be a custom parameter or a UTM parameter.
-
-The supported UTM parameters are:
-utm_source: The app, site, etc., that brings traffic to your website. For example: TikTok.
-utm_medium: The advertising or marketing medium. For example: cpm, cpc, banner, and video.
-utm_content: The creative content used for promotion. For example: ad name, CTA text, asset, and color.
-utm_campaign: The individual campaign name, slogan, or promo code. For example: BlackFridayProm.
-
-Note that UTM parameters are case-sensitive.
-value
-string
-The value of the URL parameter.
-The value can be a custom value or the name of a macro.
-
-The supported macros are:
-__CAMPAIGN_NAME__: This will be replaced by your campaign name.
-__CAMPAIGN_ID__: This will be replaced by your campaign ID.
-__AID_NAME__: This will be replaced by your ad group name.
-__AID__: This will be replaced by your ad group ID.
-__CID_NAME__: This will be replaced by your ad name.
-__CID__: This will be replaced by your ad ID.
-__PLACEMENT__: This will be replaced by your placement.
-disclaimer_info
-object
-Details of the disclaimer.
-disclaimer_type
-string
-The type of disclaimer that you want to add to the ad.
-
-Enum values:
-TEXT_LINK: clickable disclaimers.
-TEXT_ONLY: text-only disclaimers.
-disclaimer_text
-object
-Returned when disclaimer_type is TEXT_ONLY.
-
-The text-only disclaimer that you want to add to the ad.
-text
-string
-The disclaimer text.
-
-Length limit: 90 characters.
-disclaimer_clickable_texts
-object[]
-Returned when disclaimer_type is TEXT_LINK.
-
-The clickable disclaimer or clickable disclaimers that you want to add to the ad.
-text
-string
-The disclaimer text.
-
-Length limit: 40 characters.
-url
-string
-The URL for the clickable disclaimer. When users tap each text, they will be redirected to the URL and see more disclaimer details.
-tracking_app_id
-string
-The ID of the app that is measured.
-impression_tracking_url
-string
-Default Impression Tracking URL.
-click_tracking_url
-string
-Click Tracking URL.
-app_tracking_info_list
-object[]
-Details of Third-party tracking settings.
-app_type
-string
-Returned when app_tracking_info_list is specified.
-
-App type.
-
-Enum values:
-APP_ANDROID: Android App.
-APP_IOS: iOS App.
-app_id
-string
-Returned when app_tracking_info_list is specified.
-
-The App ID of the App.
-
-When app_type is APP_ANDROID, this field represents the App ID for an Android App.
-When app_type is APP_IOS, this field represents the App ID for an iOS App.
-impression_tracking_url
-string
-Impression tracking URL.
-
-When app_type is APP_ANDROID, this field represents an impression tracking URL for Android.
-When app_type is APP_IOS, this field represents an impression tracking URL for Android.
-click_tracking_url
-string
-Click tracking URL.
-
-When app_type is APP_ANDROID, this field represents a click tracking URL for Android.
-When app_type is APP_IOS, this field represents a click tracking URL for Android.
-create_time
-string
-The time when the campaign was created, in the format ofYYYY-MM-DD HH:MM:SS (UTC+0).
-modify_time
-string
-The time when the campaign was modified, in the format ofYYYY-MM-DD HH:MM:SS (UTC+0).
-Example
 HTTPS/1.1 200 OK
 {
     "code": 0,
     "message": "OK",
     "request_id": "{{request_id}}",
     "data": {
-        "pixel_id": null,
+        "click_tracking_url": null,
         "carousel_image_index": null,
-        "deeplink": "",
-        "adgroup_secondary_status": "ADGROUP_STATUS_AUDIT",
+        "optimization_event": "FORM",
+        "catalog_id": null,
+        "bid_type": "BID_TYPE_CUSTOM",
+        "comment_disabled": false,
+        "app_id": null,
+        "optimization_goal": "LEAD_GENERATION",
+        "bid_price": null,
+        "is_advanced_dedicated_campaign": false,
+        "create_time": "{{create_time}}",
+        "exclude_age_under_eighteen": true,
+        "engaged_view_attribution_window": null,
+        "blocked_pangle_app_ids": null,
+        "deeplink_type": null,
+        "scheduled_budget": 0,
+        "conversion_bid_price": {{conversion_bid_price}},
+        "advertiser_id": "{{advertiser_id}}",
+        "impression_tracking_url": null,
+        "deep_bid_type": null,
+        "video_download_disabled": false,
+        "catalog_creative_toggle": null,
+        "promotion_type": "LEAD_GENERATION",
+        "schedule_type": "SCHEDULE_START_END",
+        "share_disabled": false,
+        "schedule_start_time": "{{schedule_start_time}}",
+        "campaign_app_profile_page_state": null,
+        "promotion_target_type": "INSTANT_PAGE",
         "gender": "GENDER_UNLIMITED",
+        "app_download_url": null,
+        "schedule_end_time": "{{schedule_end_time}}",
+        "placement_type": "PLACEMENT_TYPE_NORMAL",
         "special_industries": null,
+        "web_all_in_one_catalog_status": null,
+        "billing_event": "OCPM",
+        "call_to_action_list": [],
+        "click_attribution_window": "SEVEN_DAYS",
+        "product_source": null,
+        "spc_audience_age": "25+",
+        "identity_type": null,
         "location_ids": [
             "6252001"
         ],
-        "schedule_end_time": "{{schedule_end_time}}",
-        "excluded_audience_ids": null,
-        "shopping_ads_fallback_type": null,
-        "promotion_type": "APP_ANDROID",
-        "product_ids": null,
-        "automatic_add_on_enabled": null,
-        "budget": {{budget}},
-        "skip_learning_phase": true,
-        "impression_tracking_url": null,
-        "share_disabled": false,
-        "deep_bid_type": "DEFAULT",
-        "engaged_view_attribution_window": "SEVEN_DAYS",
-        "conversion_bid_price": null,
-        "is_advanced_dedicated_campaign": false,
-        "promotion_website_type": null,
-        "schedule_type": "SCHEDULE_START_END",
-        "attribution_event_count": "ONCE",
-        "campaign_app_profile_page_state": "UNSET",
-        "product_set_id": null,
-        "roas_bid": null,
-        "call_to_action_id": "{{call_to_action_id}}",
-        "app_promotion_type": "APP_INSTALL",
-        "languages": [],
+        "campaign_secondary_status": "CAMPAIGN_STATUS_ENABLE",
         "is_smart_performance_campaign": true,
-        "call_to_action_list": [],
-        "click_tracking_url": null,
-        "modify_time": "{{modify_time}}",
-        "bid_price": null,
+        "campaign_type": null,
+        "roas_bid": null,
+        "operation_status": "ENABLE",
+        "app_promotion_type": null,
+        "bid_align_type": null,
+        "campaign_name": "{{campaign_name}}",
+        "attribution_event_count": "ONCE",
+        "skip_learning_phase": true,
+        "campaign_id": "{{campaign_id}}",
+        "identity_id": null,
+        "catalog_authorized_bc_id": null,
         "media_info_list": [
             {
                 "media_info": {
-                    "video_info": {
-                        "video_id": "{{video_id}}",
-                        "file_name": "{{file_name}}"
-                    },
-                    "identity_type": null,
                     "aigc_disclosure_type": null,
+                    "identity_type": "AUTH_CODE",
+                    "tiktok_item_id": "{{tiktok_item_id}}",
+                    "image_info": null,
+                    "identity_id": "{{identity_id}}",
                     "music_info": null,
-                    "tiktok_item_id": null,
-                    "image_info": [
-                        {
-                            "web_uri": "{{web_uri}}"
-                        }
-                    ],
-                    "identity_id": null
+                    "identity_authorized_bc_id": "0",
+                    "video_info": null
                 }
             }
         ],
-        "catalog_creative_toggle": null,
-        "advertiser_id": "{{advertiser_id}}",
-        "app_id": "{{app_id}}",
-        "identity_type": "CUSTOMIZED_USER",
-        "card_list": null,
-        "campaign_secondary_status": "CAMPAIGN_STATUS_ENABLE",
-        "page_list": null,
-        "scheduled_budget": 0,
-        "bid_type": "BID_TYPE_NO_BID",
+        "modify_time": "{{modify_time}}",
+        "spc_type": "UNSET",
         "placements": [
-            "PLACEMENT_TIKTOK",
-            "PLACEMENT_PANGLE"
+            "PLACEMENT_TIKTOK"
         ],
-        "app_download_url": "{{app_download_url}}",
-        "view_attribution_window": "ONE_DAY",
-        "create_time": "{{create_time}",
-        "dayparting": 
-"111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
-        "product_specific_type": null,
-        "catalog_authorized_bc_id": null,
-        "schedule_start_time": "{{schedule_start_time}}",
-        "comment_disabled": false,
-        "campaign_type": "REGULAR_CAMPAIGN",
-        "deeplink_type": null,
-        "campaign_id": "{{campaign_id}}",
-        "product_source": null,
-        "blocked_pangle_app_ids": null,
-        "carousel_image_labels": null,
-        "billing_event": "OCPM",
-        "campaign_name": "{{campaign_name}}",
-        "app_name": "{{app_name}}",
-        "optimization_goal": "INSTALL",
-        "video_download_disabled": false,
-        "operation_status": "ENABLE",
-        "click_attribution_window": "SEVEN_DAYS",
+        "budget_mode": "BUDGET_MODE_DYNAMIC_DAILY_BUDGET",
+        "card_list": null,
+        "vbo_window": null,
+        "budget": {{budget}},
         "title_list": [
             {
-                "title": "{{title}}"
+                "title": ""
             }
         ],
+        "automatic_add_on_enabled": null,
+        "app_name": null,
+        "disable_skan_campaign": null,
+        "excluded_audience_ids": null,
+        "product_specific_type": null,
+        "objective_type": "LEAD_GENERATION",
+        "promotion_website_type": null,
+        "app_type": null,
+        "languages": [],
+        "dayparting": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+        "view_attribution_window": "ONE_DAY",
+        "page_list": [
+            {
+                "page_id": "{{page_id}}"
+            }
+        ],
+        "adgroup_secondary_status": "ADGROUP_STATUS_AUDIT",
+        "call_to_action_id": "{{call_to_action_id}}",
         "landing_page_urls": null,
-        "spc_audience_age": "18+",
-        "app_type": "APP_ANDROID",
-        "spc_type": "UNSET",
-        "web_all_in_one_catalog_status": null,
-        "optimization_event": "ACTIVE",
-        "objective_type": "APP_PROMOTION",
-        "placement_type": "PLACEMENT_TYPE_AUTOMATIC",
+        "product_ids": null,
+        "pixel_id": "{{pixel_id}}",
+        "shopping_ads_fallback_type": null,
+        "product_set_id": null,
+        "carousel_image_labels": null,
+        "deeplink": null
+    }
+}
+Create a Smart+ Lead Generation Campaign with optimization location as Website
+Steps
+Note that the following requirements must be met. To find a complete list of parameters, see /campaign/spc/create/.
+
+Note
+Smart+ Lead Generation ad groups cannot be used in /split_test/create/ to create split test groups.
+
+Setting	Requirement	Parameter	How to configure the parameter
+Advertising objective	Lead generation	objective_type	LEAD_GENERATION
+Campaign setup	Smart+ Campaign	N/A	N/A
+Campaigns created through /campaign/spc/create/ are all Smart+ Campaigns.
+Campaign name	Specify a valid name	campaign_name	Pass a valid value
+Special ad categories
+(Optional)	Enabled or disabled
+
+Note: This setting is only supported for advertisers who are registered in the US or Canada.
+
+special_industries	Pass valid values or not passed
+Campaign Budget Optimization (CBO)	N/A
+
+Note: CBO is enabled by default for Smart+ Campaigns.
+
+N/A	N/A
+
+Note: If you retrieve Smart+ Campaigns via /campaign/get/, the returned budget_optimize_on will be true.
+
+Optimization location (Promotion type)	Website	promotion_type	LEAD_GENERATION
+promotion_target_type	EXTERNAL_WEBSITE
+Deep funnel optimization
+(Optional)	Enabled or disabled
+
+With deep funnel optimization, you can select a secondary event alongside the primary optimization event, which can help improve campaign effectiveness.	deep_funnel_optimization_status
+deep_funnel_event_source
+deep_funnel_event_source_id
+deep_funnel_optimization_event	
+To enable deep funnel optimization, set deep_funnel_optimization_status to ON and pass deep_funnel_event_source, deep_funnel_event_source_id, and deep_funnel_optimization_event.
+To disable deep funnel optimization, set deep_funnel_optimization_status to OFF or leave deep_funnel_optimization_status unspecified. Do not pass deep_funnel_event_source, deep_funnel_event_source_id, and deep_funnel_optimization_event.
+
+Note:
+
+Deep funnel optimization with CRM events is currently an allowlist-only feature. If you would like to access it, please contact your TikTok representative.
+Deep funnel optimization with Pixel or Offline events is generally available.
+Optimization goal	Conversion	optimization_goal	CONVERT
+Pixel	Enabled	pixel_id	Specify a valid value.
+To obtain the list of Pixels within your ad account, use /pixel/list/.
+Optimization event	Enabled	optimization_event	Specify a valid value.
+To obtain the optimization events that have been configured for a Pixel, use /pixel/list/.
+See Conversion events - Pixel events for enum values.
+Placement	TikTok placement including search result	placement_type	PLACEMENT_TYPE_NORMAL
+placements	["PLACEMENT_TIKTOK"]
+
+Note: The Automatic Search Placement is enabled by default.
+
+User comment
+(Optional)	Enabled or disabled	comment_disabled	Pass valid values or not passed
+Video download
+(Optional)	Enabled or disabled	share_disabled	Pass valid values or not passed
+Video sharing
+(Optional)	Enabled or disabled	video_download_disabled	Pass valid values or not passed
+Audience targeting
+· Location	Enabled	location_ids	Pass valid values
+Audience targeting
+· Language (Optional)	Enabled or disabled	languages	Pass valid values or not passed
+Audience targeting
+· Gender (Optional)	Supported with allowlist
+
+Note: Gender targeting in Smart+ Campaigns is currently an allowlist-only feature. If you would like to access it, please contact your TikTok representative.
+
+gender	Pass valid values or not passed
+Audience targeting
+· Age	Any of the following options:
+18+
+25+
+spc_audience_age	Any of the following values:
+18+
+25+
+Audience targeting
+· Exclude audience
+(Optional)	Enabled or disabled	excluded_audience_ids	Pass valid values or not passed
+Budget mode	Dynamic daily budget	budget_mode	BUDGET_MODE_DYNAMIC_DAILY_BUDGET
+Schedule type	Any of the following types:
+Run campaign continuously after the scheduled start time
+Run campaign between the scheduled start time and end time
+schedule_type
+schedule_start_time
+schedule_end_time	
+To run the campaign continuously after the scheduled start time, set schedule_type to SCHEDULE_FROM_NOW and specify schedule_start_time. Do not pass schedule_end_time.
+To run the campaign between the scheduled start time and end time, set schedule_type to SCHEDULE_START_END and specify both schedule_start_time and schedule_end_time.
+Bid strategy	Any of the following types:
+Maximum Delivery
+Cost Cap (or Target CPA)
+bid_type
+conversion_bid_price	Set bid_type to BID_TYPE_CUSTOM or BID_TYPE_NO_BID.
+If bid_type is BID_TYPE_CUSTOM, pass conversion_bid_price at the same time.
+bid_price
+deep_bid_type
+roas_bid	Not passed
+Billing event	oCPM	billing_event	OCPM
+Identity	Any of the following options:
+Authorized User
+TikTok User
+TikTok Account User in Business Center
+identity_type	Any of the following values:
+AUTH_CODE
+TT_USER
+BC_AUTH_TT
+
+Note: Pass values to identity_type and identity_id within the media_info object.
+
+identity_id	Pass a valid value.
+To get the list of identities under your ad account, use /identity/get/.
+identity_authorized_bc_id	Pass a valid value when identity_type is BC_AUTH_TT
+Destination	Any of the following options:
+URL
+Custom Page
+landing_page_urls
+page_list	
+To specify Destination as URL, specify the landing page URL of the website that has the Website Form via landing_page_urls.
+To specify Destination as Custom Page, specify the TikTok Instant Page that redirects to the website that has the Website Form via page_list.
+To create a TikTok Instant Page, you can use Instant Page Editor SDK and set businessType to 6.
+After you create a TikTok Instant Page, call /page/get/ to get the page ID.
+Ad creative	
+For Authorized User identity, or Spark Ads PULL with TikTok User or TikTok Account User in Business Center identity, specify one to 30 TikTok posts.
+video_info
+image_info
+title_list
+tiktok_item_id	
+If identity_type within the media_info object is TT_USER or BC_AUTH_TT, you can create the campaign through Spark Ads PULL:
+Spark Ads PULL: Specify one to 30 TikTok posts through tiktok_item_id. Do not pass video_info, image_info, and title_list.
+To learn more about Spark Ads, see Create Spark Ads.
+If identity_type within the media_info object is AUTH_CODE, specify one to 30 TikTok posts through tiktok_item_id. Do not pass video_info, image_info, and title_list.
+Interactive add-ons
+(Optional)	Disabled or enabled with the following type:
+Display Card
+card_list	Not passed or specify the ID of the following creative portfolio type:
+Display Card
+
+To create a creative portfolio, use /creative/portfolio/create/.
+To learn about how to get the ID of a Display Card portfolio, see Cards.
+Call to action	Dynamic	call_to_action_id	Specify a valid value.
+
+To learn about how to create Dynamic CTAs, see Dynamic CTAs.
+call_to_action_list	Not passed
+Example
+Destination as URL
+Request
+
+curl --location --request POST 'https://business-api.tiktok.com/open_api/v1.3/campaign/spc/create/' \
+--header 'Access-Token: {{Access-Token}}' \
+--header 'Content-Type: application/json' \
+--data '{
+    "advertiser_id": "{{advertiser_id}}",
+    "objective_type": "LEAD_GENERATION",
+    "campaign_name": "{{campaign_name}}",
+    "promotion_type": "LEAD_GENERATION",
+    "promotion_target_type": "EXTERNAL_WEBSITE",
+    "optimization_goal": "CONVERT",
+    "pixel_id": "{{pixel_id}}",
+    "optimization_event": "ON_WEB_DETAIL",
+    "spc_audience_age": "25+",
+    "placement_type": "PLACEMENT_TYPE_NORMAL",
+    "placements": [
+        "PLACEMENT_TIKTOK"
+    ],
+    "location_ids": [
+        "6252001"
+    ],
+    "budget_mode": "BUDGET_MODE_DYNAMIC_DAILY_BUDGET",
+    "budget": {{budget}},
+    "schedule_type": "SCHEDULE_START_END",
+    "schedule_start_time": "{{schedule_start_time}}",
+    "schedule_end_time": "{{schedule_end_time}}",
+    "bid_type": "BID_TYPE_CUSTOM",
+    "conversion_bid_price":{{conversion_bid_price}},
+    "billing_event": "OCPM",
+    "landing_page_urls": [
+        {
+            "landing_page_url": "{{landing_page_url}}"
+        }
+    ],
+    "media_info_list": [
+        {
+            "media_info": {
+                "identity_type": "AUTH_CODE",
+                "identity_id": "{{identity_id}}",
+                "tiktok_item_id": "{{tiktok_item_id}}"
+            }
+        }
+    ],
+    "call_to_action_id": "{{call_to_action_id}}"
+}'
+Response
+
+HTTPS/1.1 200 OK
+{
+    "code": 0,
+    "message": "OK",
+    "request_id": "{{request_id}}",
+    "data": {
+        "click_tracking_url": null,
+        "carousel_image_index": null,
+        "optimization_event": "ON_WEB_DETAIL",
+        "catalog_id": null,
+        "bid_type": "BID_TYPE_CUSTOM",
+        "comment_disabled": false,
+        "app_id": null,
+        "optimization_goal": "CONVERT",
+        "bid_price": null,
+        "is_advanced_dedicated_campaign": false,
+        "create_time": "{{create_time}}",
         "exclude_age_under_eighteen": true,
-        "identity_id": "{{identity_id}}",
+        "engaged_view_attribution_window": "OFF",
+        "blocked_pangle_app_ids": null,
+        "deeplink_type": null,
+        "scheduled_budget": 0,
+        "conversion_bid_price": {{conversion_bid_price}},
+        "advertiser_id": "75960823018",
+        "impression_tracking_url": null,
+        "deep_bid_type": null,
+        "video_download_disabled": false,
+        "catalog_creative_toggle": null,
+        "promotion_type": "LEAD_GENERATION",
+        "schedule_type": "SCHEDULE_START_END",
+        "share_disabled": false,
+        "schedule_start_time": "{{schedule_start_time}}",
+        "campaign_app_profile_page_state": null,
+        "promotion_target_type": "EXTERNAL_WEBSITE",
+        "gender": "GENDER_UNLIMITED",
+        "app_download_url": null,
+        "schedule_end_time": "{{schedule_end_time}}",
+        "placement_type": "PLACEMENT_TYPE_NORMAL",
+        "special_industries": null,
+        "web_all_in_one_catalog_status": null,
+        "billing_event": "OCPM",
+        "call_to_action_list": [],
+        "click_attribution_window": "SEVEN_DAYS",
+        "product_source": null,
+        "spc_audience_age": "25+",
+        "identity_type": null,
+        "location_ids": [
+            "6252001"
+        ],
+        "campaign_secondary_status": "CAMPAIGN_STATUS_ENABLE",
+        "is_smart_performance_campaign": true,
+        "campaign_type": null,
+        "roas_bid": null,
+        "operation_status": "ENABLE",
+        "app_promotion_type": null,
+        "bid_align_type": null,
+        "campaign_name": "{{campaign_name}}",
+        "attribution_event_count": "EVERY",
+        "skip_learning_phase": true,
+        "campaign_id": "{{campaign_id}}",
+        "identity_id": null,
+        "catalog_authorized_bc_id": null,
+        "media_info_list": [
+            {
+                "media_info": {
+                    "aigc_disclosure_type": null,
+                    "identity_type": "AUTH_CODE",
+                    "tiktok_item_id": "{{tiktok_item_id}}",
+                    "image_info": null,
+                    "identity_id": "{{identity_id}}",
+                    "music_info": null,
+                    "identity_authorized_bc_id": "0",
+                    "video_info": null
+                }
+            }
+        ],
+        "modify_time": "{{modify_time}}",
+        "spc_type": "UNSET",
+        "placements": [
+            "PLACEMENT_TIKTOK"
+        ],
         "budget_mode": "BUDGET_MODE_DYNAMIC_DAILY_BUDGET",
+        "card_list": null,
+        "vbo_window": null,
+        "budget": {{budget}},
+        "title_list": [
+            {
+                "title": ""
+            }
+        ],
+        "automatic_add_on_enabled": null,
+        "app_name": null,
+        "disable_skan_campaign": null,
+        "excluded_audience_ids": null,
+        "product_specific_type": null,
+        "objective_type": "LEAD_GENERATION",
+        "promotion_website_type": null,
+        "app_type": null,
+        "languages": [],
+        "dayparting": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+        "view_attribution_window": "ONE_DAY",
+        "page_list": null,
+        "adgroup_secondary_status": "ADGROUP_STATUS_AUDIT",
+        "call_to_action_id": "{{call_to_action_id}}",
+        "landing_page_urls": [
+            {
+                "tiktok_item_id": null,
+                "video_id": null,
+                "landing_page_url": "{{landing_page_url}}"
+            }
+        ],
+        "product_ids": null,
+        "pixel_id": "{{pixel_id}}",
+        "shopping_ads_fallback_type": null,
+        "product_set_id": null,
+        "carousel_image_labels": null,
+        "deeplink": null
+    }
+}
+Destination as Custom Page
+Request
+
+curl --location --request POST 'https://business-api.tiktok.com/open_api/v1.3/campaign/spc/create/' \
+--header 'Access-Token: {{Access-Token}}' \
+--header 'Content-Type: application/json' \
+--data '{
+    "advertiser_id": "{{advertiser_id}}",
+    "objective_type": "LEAD_GENERATION",
+    "campaign_name": "{{campaign_name}}",
+    "promotion_type": "LEAD_GENERATION",
+    "promotion_target_type": "EXTERNAL_WEBSITE",
+    "optimization_goal": "CONVERT",
+    "pixel_id": "{{pixel_id}}",
+    "optimization_event": "ON_WEB_DETAIL",
+    "spc_audience_age": "25+",
+    "placement_type": "PLACEMENT_TYPE_NORMAL",
+    "placements": [
+        "PLACEMENT_TIKTOK"
+    ],
+    "location_ids": [
+        "6252001"
+    ],
+    "budget_mode": "BUDGET_MODE_DYNAMIC_DAILY_BUDGET",
+    "budget": {{budget}},
+    "schedule_type": "SCHEDULE_START_END",
+    "schedule_start_time": "{{schedule_start_time}}",
+    "schedule_end_time": "{{schedule_end_time}}",
+    "bid_type": "BID_TYPE_CUSTOM",
+    "conversion_bid_price": {{conversion_bid_price}},
+    "billing_event": "OCPM",
+    "page_list": [
+        {
+            "page_id": "{{page_id}}"
+        }
+    ],
+    "media_info_list": [
+        {
+            "media_info": {
+                "identity_type": "AUTH_CODE",
+                "identity_id": "{{identity_id}}",
+                "tiktok_item_id": "{{tiktok_item_id}}"
+            }
+        }
+    ],
+    "call_to_action_id": "{{call_to_action_id}}"
+}'
+Response
+
+HTTPS/1.1 200 OK
+{
+    "code": 0,
+    "message": "OK",
+    "request_id": "{{request_id}}",
+    "data": {
+        "skip_learning_phase": true,
+        "product_specific_type": null,
+        "disable_skan_campaign": null,
+        "dayparting": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+        "app_id": null,
+        "exclude_age_under_eighteen": true,
+        "objective_type": "LEAD_GENERATION",
+        "pixel_id": "{{pixel_id}}",
+        "video_download_disabled": false,
+        "spc_type": "UNSET",
+        "deeplink_type": null,
+        "identity_id": null,
+        "optimization_event": "ON_WEB_DETAIL",
+        "shopping_ads_fallback_type": null,
+        "bid_align_type": null,
+        "schedule_type": "SCHEDULE_START_END",
+        "automatic_add_on_enabled": null,
+        "roas_bid": null,
+        "call_to_action_list": [],
+        "modify_time": "{{modify_time}}",
+        "schedule_start_time": "{{schedule_start_time}}",
+        "location_ids": [
+            "6252001"
+        ],
+        "optimization_goal": "CONVERT",
+        "promotion_type": "LEAD_GENERATION",
+        "scheduled_budget": 0,
+        "promotion_target_type": "EXTERNAL_WEBSITE",
+        "promotion_website_type": null,
+        "product_source": null,
+        "impression_tracking_url": null,
+        "catalog_authorized_bc_id": null,
+        "app_name": null,
+        "engaged_view_attribution_window": "OFF",
+        "budget_mode": "BUDGET_MODE_DYNAMIC_DAILY_BUDGET",
+        "deeplink": null,
+        "app_download_url": null,
+        "view_attribution_window": "ONE_DAY",
+        "vbo_window": null,
+        "gender": "GENDER_UNLIMITED",
+        "bid_type": "BID_TYPE_CUSTOM",
+        "campaign_type": null,
+        "bid_price": null,
+        "landing_page_urls": null,
+        "operation_status": "ENABLE",
+        "excluded_audience_ids": null,
+        "advertiser_id": "{{advertiser_id}}",
+        "app_type": null,
+        "carousel_image_index": null,
+        "spc_audience_age": "25+",
+        "share_disabled": false,
+        "click_attribution_window": "SEVEN_DAYS",
+        "blocked_pangle_app_ids": null,
+        "placement_type": "PLACEMENT_TYPE_NORMAL",
+        "page_list": [
+            {
+                "page_id": "{{page_id}}"
+            }
+        ],
+        "catalog_creative_toggle": null,
+        "schedule_end_time": "{{schedule_end_time}}",
+        "card_list": null,
+        "special_industries": null,
+        "campaign_app_profile_page_state": null,
+        "billing_event": "OCPM",
+        "languages": [],
+        "click_tracking_url": null,
+        "product_ids": null,
+        "web_all_in_one_catalog_status": null,
+        "app_promotion_type": null,
+        "product_set_id": null,
+        "comment_disabled": false,
+        "campaign_secondary_status": "CAMPAIGN_STATUS_ENABLE",
+        "is_advanced_dedicated_campaign": false,
+        "placements": [
+            "PLACEMENT_TIKTOK"
+        ],
+        "budget": {{budget}},
+        "identity_type": null,
+        "deep_bid_type": null,
+        "carousel_image_labels": null,
+        "media_info_list": [
+            {
+                "media_info": {
+                    "identity_type": "AUTH_CODE",
+                    "identity_id": "{{identity_id}}",
+                    "tiktok_item_id": "{{tiktok_item_id}}",
+                    "identity_authorized_bc_id": "0",
+                    "image_info": null,
+                    "aigc_disclosure_type": null,
+                    "music_info": null,
+                    "video_info": null
+                }
+            }
+        ],
+        "call_to_action_id": "{{call_to_action_id}}",
+        "adgroup_secondary_status": "ADGROUP_STATUS_AUDIT",
+        "title_list": [
+            {
+                "title": ""
+            }
+        ],
+        "attribution_event_count": "EVERY",
+        "conversion_bid_price": {{conversion_bid_price}},
+        "campaign_name": "{{campaign_name}}",
+        "campaign_id": "{{campaign_id}}",
+        "is_smart_performance_campaign": true,
+        "create_time": "{{create_time}}",
         "catalog_id": null
     }
 }
