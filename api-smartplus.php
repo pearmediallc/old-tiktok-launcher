@@ -101,7 +101,7 @@ function uploadImageByUrl($imageUrl, $advertiserId, $accessToken) {
 function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
     logSmartPlus("Getting cover image for video: $videoId");
 
-    // First, get video info to get the cover URL
+    // First, get video info to get the cover URL and dimensions
     $videoResult = makeApiCall('/file/video/ad/info/', [
         'advertiser_id' => $advertiserId,
         'video_ids' => json_encode([$videoId])
@@ -114,11 +114,18 @@ function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
 
     $video = $videoResult['data']['list'][0];
     $coverUrl = $video['video_cover_url'] ?? null;
+    $videoWidth = $video['width'] ?? 0;
+    $videoHeight = $video['height'] ?? 0;
 
     if (!$coverUrl) {
         logSmartPlus("No cover URL for video: $videoId");
         return null;
     }
+
+    // Calculate video aspect ratio (portrait = height > width, landscape = width > height)
+    $isPortrait = $videoHeight > $videoWidth;
+    $videoAspectRatio = $videoWidth > 0 ? $videoHeight / $videoWidth : 0;
+    logSmartPlus("Video dimensions: {$videoWidth}x{$videoHeight}, aspect ratio: $videoAspectRatio, portrait: " . ($isPortrait ? 'yes' : 'no'));
 
     // Search for existing image in library that might be the cover
     $imagesResult = makeApiCall('/file/image/ad/search/', [
@@ -128,38 +135,51 @@ function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
     ], $accessToken, 'GET');
 
     if ($imagesResult['code'] == 0 && !empty($imagesResult['data']['list'])) {
-        // Look for an image that matches the video ID pattern in filename
+        // Look for an image that matches the video ID pattern in filename AND has matching aspect ratio
         $videoIdShort = str_replace('v10033g50000', '', $videoId);
         foreach ($imagesResult['data']['list'] as $image) {
             $fileName = $image['file_name'] ?? '';
+            $imgWidth = $image['width'] ?? 0;
+            $imgHeight = $image['height'] ?? 0;
+
             // Check if filename contains part of video ID or is a thumb for this video
             if (strpos($fileName, $videoIdShort) !== false ||
-                strpos($fileName, 'thumb') !== false && strpos($fileName, substr($videoIdShort, 0, 8)) !== false) {
-                // Only use images with decent resolution (at least 540px)
-                if (($image['width'] ?? 0) >= 540 || ($image['height'] ?? 0) >= 540) {
-                    logSmartPlus("Found matching cover image: " . $image['image_id']);
+                (strpos($fileName, 'thumb') !== false && strpos($fileName, substr($videoIdShort, 0, 8)) !== false)) {
+
+                // Verify aspect ratio matches (portrait video needs portrait image)
+                $imgIsPortrait = $imgHeight > $imgWidth;
+                if ($imgIsPortrait === $isPortrait && $imgWidth >= 540) {
+                    logSmartPlus("Found matching cover image with correct aspect: " . $image['image_id'] . " ({$imgWidth}x{$imgHeight})");
                     return $image['image_id'];
                 }
             }
         }
 
-        // If no exact match, find any image with good resolution
+        // If no exact match, find any image with matching aspect ratio and good resolution
         foreach ($imagesResult['data']['list'] as $image) {
-            if (($image['width'] ?? 0) >= 540 && ($image['height'] ?? 0) >= 540 &&
+            $imgWidth = $image['width'] ?? 0;
+            $imgHeight = $image['height'] ?? 0;
+            $imgIsPortrait = $imgHeight > $imgWidth;
+
+            // Match orientation and ensure decent resolution
+            if ($imgIsPortrait === $isPortrait &&
+                $imgWidth >= 540 && $imgHeight >= 540 &&
                 ($image['displayable'] ?? false)) {
-                logSmartPlus("Using fallback image: " . $image['image_id']);
+                logSmartPlus("Using fallback image with matching aspect: " . $image['image_id'] . " ({$imgWidth}x{$imgHeight})");
                 return $image['image_id'];
             }
         }
     }
 
-    // If no suitable image found, try to upload the cover URL
-    logSmartPlus("No suitable image found, uploading cover URL...");
+    // If no suitable image found, upload the video's own cover URL (guaranteed to match)
+    logSmartPlus("No matching aspect ratio image found, uploading video cover URL...");
     $uploadResult = uploadImageByUrl($coverUrl, $advertiserId, $accessToken);
     if ($uploadResult['success']) {
+        logSmartPlus("Uploaded video cover as image: " . $uploadResult['image_id']);
         return $uploadResult['image_id'];
     }
 
+    logSmartPlus("Failed to upload video cover");
     return null;
 }
 
