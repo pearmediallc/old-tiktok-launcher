@@ -215,7 +215,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     <p><strong>Objective:</strong> Lead Generation</p>
                     <p><strong>Type:</strong> Smart+ Campaign (AI-Optimized)</p>
                 </div>
-                <button class="btn-primary" onclick="saveCampaignSettings()">Continue to Ad Group →</button>
+                <button class="btn-primary" onclick="createCampaign()">Create Campaign →</button>
             </div>
 
             <!-- Step 2: Ad Group Creation -->
@@ -223,7 +223,8 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 <h2>Smart+ Ad Group Settings</h2>
                 <div class="form-info" style="margin-bottom: 20px; background: #e8f5e9; padding: 12px; border-radius: 6px;">
                     <p><strong>Campaign:</strong> <span id="display-campaign-name">-</span></p>
-                    <p id="display-budget-info"><strong>Budget:</strong> $<span id="display-budget">-</span>/day (Campaign Level - CBO Enabled)</p>
+                    <p><strong>Campaign ID:</strong> <span id="display-campaign-id" style="color: #22c55e; font-weight: bold;">-</span></p>
+                    <p id="display-budget-info"><strong>Budget:</strong> $<span id="display-budget">-</span>/day (Campaign Level)</p>
                 </div>
 
                 <div class="form-section">
@@ -364,13 +365,17 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
 
                 <div class="button-row">
                     <button class="btn-secondary" onclick="prevStep()">← Back</button>
-                    <button class="btn-primary" onclick="saveAdGroupSettings()">Continue to Ads →</button>
+                    <button class="btn-primary" onclick="createAdGroup()">Create Ad Group →</button>
                 </div>
             </div>
 
             <!-- Step 3: Ads Creation -->
             <div class="step-content" id="step-3">
                 <h2>Create Smart+ Ad</h2>
+                <div class="form-info" style="margin-bottom: 20px; background: #e8f5e9; padding: 12px; border-radius: 6px;">
+                    <p><strong>Campaign ID:</strong> <span id="display-campaign-id-step3" style="color: #22c55e; font-weight: bold;">-</span></p>
+                    <p><strong>Ad Group ID:</strong> <span id="display-adgroup-id" style="color: #22c55e; font-weight: bold;">-</span></p>
+                </div>
                 <div class="form-info smart-info" style="margin-bottom: 20px;">
                     <p><strong>Smart+ Ad:</strong> Select multiple videos below. All videos will be combined into ONE ad with multiple creatives.</p>
                 </div>
@@ -474,7 +479,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
 
                 <div class="button-row">
                     <button class="btn-secondary" onclick="prevStep()">← Back</button>
-                    <button class="btn-success" onclick="publishAll()">✓ Publish All Ads</button>
+                    <button class="btn-success" onclick="createAd()">✓ Create Ad & Publish</button>
                 </div>
             </div>
         </div>

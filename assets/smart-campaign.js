@@ -1,6 +1,5 @@
 // Smart+ Campaign JavaScript
-// Uses /smart_plus/ endpoints for campaign, adgroup, and ad creation
-// Flow: Campaign -> AdGroup -> Ad (with multiple creatives in creative_list)
+// Flow: Step 1 CREATES Campaign -> Step 2 CREATES AdGroup -> Step 4 CREATES Ad
 
 // Global state
 let state = {
@@ -9,13 +8,10 @@ let state = {
     campaignName: null,
     campaignBudget: null,
     adGroupId: null,
-    adGroupName: null,
     pixelId: null,
     optimizationEvent: null,
-    ageGroups: [],
     locationIds: [],
     dayparting: null,
-    // Creatives array - each creative has video_id and ad_text
     creatives: [],
     identities: [],
     mediaLibrary: [],
@@ -70,7 +66,6 @@ const US_STATES = [
     { id: '4436296', name: 'Mississippi', abbr: 'MS' },
     { id: '4331987', name: 'Louisiana', abbr: 'LA' },
     { id: '4544379', name: 'Oklahoma', abbr: 'OK' },
-    { id: '4099753', name: 'Arkansas', abbr: 'AR' },
     { id: '4273857', name: 'Kentucky', abbr: 'KY' },
     { id: '5090174', name: 'New Hampshire', abbr: 'NH' },
     { id: '5224323', name: 'Rhode Island', abbr: 'RI' },
@@ -177,17 +172,14 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeDayparting();
     initializeLocationTargeting();
 
-    // Initialize CBO state (default is enabled)
     state.cboEnabled = true;
 
-    // Update timezone status
     const statusElement = document.getElementById('timezone-status');
     if (statusElement) {
         statusElement.innerHTML = '<span style="color: #22c55e;">✓</span> Smart+ Campaign Mode';
         statusElement.style.color = '#22c55e';
     }
 
-    // Character counter for identity name
     const identityInput = document.getElementById('identity-display-name');
     const charCounter = document.getElementById('identity-char-count');
     if (identityInput && charCounter) {
@@ -205,7 +197,6 @@ function toggleCBOBudget() {
     const cboBudgetNote = document.getElementById('cbo-budget-note');
     const displayBudgetInfo = document.getElementById('display-budget-info');
 
-    // Store CBO state
     state.cboEnabled = cboEnabled;
 
     if (cboEnabled) {
@@ -213,14 +204,14 @@ function toggleCBOBudget() {
         if (adGroupBudgetSection) adGroupBudgetSection.style.display = 'none';
         if (cboBudgetNote) cboBudgetNote.style.display = 'block';
         if (displayBudgetInfo) {
-            displayBudgetInfo.innerHTML = '<strong>Budget:</strong> $<span id="display-budget">-</span>/day (Campaign Level - CBO Enabled)';
+            displayBudgetInfo.innerHTML = '<strong>Budget:</strong> $<span id="display-budget">-</span>/day (Campaign Level)';
         }
     } else {
         if (campaignBudgetSection) campaignBudgetSection.style.display = 'none';
         if (adGroupBudgetSection) adGroupBudgetSection.style.display = 'block';
         if (cboBudgetNote) cboBudgetNote.style.display = 'none';
         if (displayBudgetInfo) {
-            displayBudgetInfo.innerHTML = '<strong>Budget:</strong> Set at Ad Group level (CBO Disabled)';
+            displayBudgetInfo.innerHTML = '<strong>Budget:</strong> Set at Ad Group level';
         }
     }
 }
@@ -267,7 +258,7 @@ async function loadIdentities() {
 
             addLog('info', `Loaded ${state.identities.length} identities`);
         } else {
-            select.innerHTML = '<option value="">No identities found - Create one</option>';
+            select.innerHTML = '<option value="">No identities found</option>';
             state.identities = [];
         }
     } catch (error) {
@@ -276,7 +267,7 @@ async function loadIdentities() {
     }
 }
 
-// Load Media Library (Videos and Images)
+// Load Media Library
 async function loadMediaLibrary() {
     try {
         const [videosResult, imagesResult] = await Promise.all([
@@ -308,9 +299,7 @@ async function loadMediaLibrary() {
             });
         }
 
-        addLog('info', `Loaded ${state.mediaLibrary.length} media items (${state.mediaLibrary.filter(m => m.type === 'video').length} videos, ${state.mediaLibrary.filter(m => m.type === 'image').length} images)`);
-
-        // Render video grid for selection
+        addLog('info', `Loaded ${state.mediaLibrary.length} media items`);
         renderVideoSelectionGrid();
     } catch (error) {
         console.error('Error loading media:', error);
@@ -319,7 +308,7 @@ async function loadMediaLibrary() {
 }
 
 // =====================
-// Location Targeting Functions
+// Location Targeting
 // =====================
 function initializeLocationTargeting() {
     const grid = document.getElementById('states-grid');
@@ -358,16 +347,6 @@ function clearAllStates() {
     updateStatesCount();
 }
 
-function selectPopularStates() {
-    const popular = ['CA', 'TX', 'FL', 'NY', 'PA', 'IL', 'OH', 'GA', 'NC', 'MI'];
-    document.querySelectorAll('.state-checkbox').forEach(cb => {
-        const stateName = cb.dataset.name;
-        const stateItem = US_STATES.find(s => s.name === stateName);
-        cb.checked = stateItem && popular.includes(stateItem.abbr);
-    });
-    updateStatesCount();
-}
-
 function updateStatesCount() {
     const count = document.querySelectorAll('.state-checkbox:checked').length;
     const countEl = document.getElementById('selected-states-count');
@@ -388,7 +367,7 @@ function getSelectedLocationIds() {
 }
 
 // =====================
-// Dayparting Functions
+// Dayparting
 // =====================
 function initializeDayparting() {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -399,7 +378,6 @@ function initializeDayparting() {
 
     days.forEach((day, dayIndex) => {
         const tr = document.createElement('tr');
-
         const dayCell = document.createElement('td');
         dayCell.innerHTML = `<strong>${day}</strong>`;
         tr.appendChild(dayCell);
@@ -507,9 +485,9 @@ function prevStep() {
 }
 
 // =====================
-// STEP 1: Save Campaign Settings
+// STEP 1: CREATE CAMPAIGN (Actually creates via API)
 // =====================
-function saveCampaignSettings() {
+async function createCampaign() {
     const campaignName = document.getElementById('campaign-name').value.trim();
     const cboEnabled = document.getElementById('cbo-enabled')?.checked ?? true;
     const campaignBudget = cboEnabled ? (parseFloat(document.getElementById('campaign-budget').value) || 50) : null;
@@ -524,24 +502,54 @@ function saveCampaignSettings() {
         return;
     }
 
-    state.campaignName = campaignName;
-    state.cboEnabled = cboEnabled;
-    state.budget = campaignBudget;
+    showLoading('Creating Campaign...');
+    addLog('info', '=== Creating Smart+ Campaign ===');
 
-    const displayNameEl = document.getElementById('display-campaign-name');
-    const displayBudgetEl = document.getElementById('display-budget');
-    if (displayNameEl) displayNameEl.textContent = campaignName;
-    if (displayBudgetEl && cboEnabled) displayBudgetEl.textContent = campaignBudget;
+    try {
+        const result = await apiRequest('create_smartplus_campaign', {
+            campaign_name: campaignName,
+            budget: campaignBudget,
+            cbo_enabled: cboEnabled
+        });
 
-    addLog('info', `Campaign settings saved: ${campaignName}, Budget: $${campaignBudget}`);
-    showToast('Campaign settings saved!', 'success');
-    nextStep();
+        hideLoading();
+
+        if (result.success && result.campaign_id) {
+            state.campaignId = result.campaign_id;
+            state.campaignName = campaignName;
+            state.cboEnabled = cboEnabled;
+            state.budget = campaignBudget;
+
+            // Update display
+            const displayNameEl = document.getElementById('display-campaign-name');
+            const displayBudgetEl = document.getElementById('display-budget');
+            const displayCampaignIdEl = document.getElementById('display-campaign-id');
+
+            if (displayNameEl) displayNameEl.textContent = campaignName;
+            if (displayBudgetEl && cboEnabled) displayBudgetEl.textContent = campaignBudget;
+            if (displayCampaignIdEl) displayCampaignIdEl.textContent = result.campaign_id;
+
+            showToast(`Campaign created! ID: ${result.campaign_id}`, 'success');
+            addLog('info', `Campaign created: ${result.campaign_id}`);
+            nextStep();
+        } else {
+            showToast('Failed to create campaign: ' + (result.message || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        showToast('Error creating campaign: ' + error.message, 'error');
+    }
 }
 
 // =====================
-// STEP 2: Save Ad Group Settings
+// STEP 2: CREATE AD GROUP (Actually creates via API with campaign_id)
 // =====================
-function saveAdGroupSettings() {
+async function createAdGroup() {
+    if (!state.campaignId) {
+        showToast('Campaign not created yet. Please go back and create campaign first.', 'error');
+        return;
+    }
+
     const pixelId = document.getElementById('pixel-select').value;
     const optimizationEvent = document.getElementById('optimization-event').value;
     const locationIds = getSelectedLocationIds();
@@ -560,20 +568,53 @@ function saveAdGroupSettings() {
         return;
     }
 
-    state.pixelId = pixelId;
-    state.optimizationEvent = optimizationEvent;
-    state.locationIds = locationIds.length > 0 ? locationIds : ['6252001'];
-    state.dayparting = dayparting;
-    state.adGroupBudget = adGroupBudget;
+    showLoading('Creating Ad Group...');
+    addLog('info', '=== Creating Smart+ Ad Group ===');
 
-    addLog('info', `Ad Group settings saved: Pixel ${pixelId}, Event: ${optimizationEvent}`);
-    showToast('Ad Group settings saved!', 'success');
-    nextStep();
+    try {
+        const result = await apiRequest('create_smartplus_adgroup', {
+            campaign_id: state.campaignId,
+            adgroup_name: state.campaignName + ' - Ad Group',
+            pixel_id: pixelId,
+            optimization_event: optimizationEvent,
+            location_ids: locationIds,
+            dayparting: dayparting,
+            budget: adGroupBudget,
+            cbo_enabled: cboEnabled
+        });
+
+        hideLoading();
+
+        if (result.success && result.adgroup_id) {
+            state.adGroupId = result.adgroup_id;
+            state.pixelId = pixelId;
+            state.optimizationEvent = optimizationEvent;
+            state.locationIds = locationIds;
+            state.dayparting = dayparting;
+            state.adGroupBudget = adGroupBudget;
+
+            // Update display
+            const displayAdGroupIdEl = document.getElementById('display-adgroup-id');
+            if (displayAdGroupIdEl) displayAdGroupIdEl.textContent = result.adgroup_id;
+
+            // Also update campaign ID in step 3
+            const displayCampaignIdStep3 = document.getElementById('display-campaign-id-step3');
+            if (displayCampaignIdStep3) displayCampaignIdStep3.textContent = state.campaignId;
+
+            showToast(`Ad Group created! ID: ${result.adgroup_id}`, 'success');
+            addLog('info', `Ad Group created: ${result.adgroup_id}`);
+            nextStep();
+        } else {
+            showToast('Failed to create ad group: ' + (result.message || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        showToast('Error creating ad group: ' + error.message, 'error');
+    }
 }
 
 // =====================
 // STEP 3: Select Videos and Create Creatives
-// Each creative = {video_id, ad_text}
 // =====================
 function renderVideoSelectionGrid() {
     const container = document.getElementById('video-selection-grid');
@@ -638,7 +679,6 @@ function updateSelectedVideosCount() {
     if (countEl) countEl.textContent = state.selectedVideos.length;
 }
 
-// Render creatives list - each video gets an ad_text input
 function renderCreativesList() {
     const container = document.getElementById('creatives-list');
     if (!container) return;
@@ -651,7 +691,6 @@ function renderCreativesList() {
     container.innerHTML = '';
 
     state.selectedVideos.forEach((video, index) => {
-        // Find existing creative data if any
         const existingCreative = state.creatives.find(c => c.video_id === video.id);
         const adText = existingCreative?.ad_text || '';
 
@@ -679,7 +718,6 @@ function renderCreativesList() {
         container.appendChild(item);
     });
 
-    // Update state.creatives to match selectedVideos
     state.creatives = state.selectedVideos.map(video => {
         const existing = state.creatives.find(c => c.video_id === video.id);
         return {
@@ -731,9 +769,14 @@ function testLandingUrl() {
 }
 
 // =====================
-// STEP 4: Review & Publish
+// STEP 4: Review & Publish (Creates Ad)
 // =====================
 function reviewAds() {
+    if (!state.adGroupId) {
+        showToast('Ad Group not created yet. Please go back and create ad group first.', 'error');
+        return;
+    }
+
     const identityId = document.getElementById('global-identity').value;
     const landingUrl = document.getElementById('global-landing-url').value.trim();
     const cta = document.getElementById('global-cta').value;
@@ -756,7 +799,6 @@ function reviewAds() {
         }
     });
 
-    // Validate creatives
     if (state.creatives.length === 0) {
         showToast('Please select at least one video', 'error');
         return;
@@ -769,28 +811,26 @@ function reviewAds() {
         }
     }
 
-    // Store global values
     state.globalIdentityId = identityId;
     state.globalLandingUrl = landingUrl;
     state.globalCta = cta;
 
-    // Get identity name
     const identity = state.identities.find(i => i.identity_id === identityId);
     const identityName = identity ? (identity.display_name || identity.identity_name) : identityId;
 
     // Populate review summaries
     document.getElementById('campaign-summary').innerHTML = `
         <p><strong>Campaign Name:</strong> ${state.campaignName}</p>
+        <p><strong>Campaign ID:</strong> ${state.campaignId}</p>
         <p><strong>CBO:</strong> ${state.cboEnabled ? 'Enabled' : 'Disabled'}</p>
-        ${state.cboEnabled ? `<p><strong>Campaign Budget:</strong> $${state.budget}/day</p>` : ''}
-        <p><strong>Type:</strong> Smart+ Lead Generation</p>
+        ${state.cboEnabled ? `<p><strong>Budget:</strong> $${state.budget}/day</p>` : ''}
     `;
 
     document.getElementById('adgroup-summary').innerHTML = `
+        <p><strong>Ad Group ID:</strong> ${state.adGroupId}</p>
         <p><strong>Pixel ID:</strong> ${state.pixelId}</p>
         <p><strong>Optimization Event:</strong> ${state.optimizationEvent}</p>
         ${!state.cboEnabled ? `<p><strong>Ad Group Budget:</strong> $${state.adGroupBudget}/day</p>` : ''}
-        <p><strong>Location:</strong> ${state.locationIds.length === 1 && state.locationIds[0] === '6252001' ? 'United States' : state.locationIds.length + ' locations'}</p>
     `;
 
     let adsSummaryHtml = `
@@ -798,7 +838,7 @@ function reviewAds() {
             <p><strong>Identity:</strong> ${identityName}</p>
             <p><strong>Landing Page:</strong> ${landingUrl}</p>
             <p><strong>CTA:</strong> ${cta}</p>
-            <p><strong>Total Creatives:</strong> ${state.creatives.length} videos in ONE ad</p>
+            <p><strong>Total Creatives:</strong> ${state.creatives.length} videos</p>
         </div>
     `;
 
@@ -817,67 +857,57 @@ function reviewAds() {
     nextStep();
 }
 
-// Publish - Creates Campaign -> AdGroup -> Ad (with all creatives in creative_list)
-async function publishAll() {
-    showLoading('Creating Smart+ Campaign...');
-    addLog('info', '=== Creating Smart+ Campaign ===');
+// Create Ad (Final step - actually creates the ad)
+async function createAd() {
+    if (!state.adGroupId) {
+        showToast('Ad Group not created. Please complete previous steps.', 'error');
+        return;
+    }
+
+    showLoading('Creating Smart+ Ad...');
+    addLog('info', '=== Creating Smart+ Ad ===');
 
     try {
         const identity = state.identities.find(i => i.identity_id === state.globalIdentityId);
         const identityType = identity?.identity_type || 'CUSTOMIZED_USER';
 
-        // Build creative_list: each creative has video_id and ad_text
         const creativeList = state.creatives.map(creative => ({
             video_id: creative.video_id,
             ad_text: creative.ad_text
         }));
 
-        addLog('info', `Identity: ${identity?.display_name || identity?.identity_name} (${identityType})`);
-        addLog('info', `Creatives: ${creativeList.length} videos in ONE ad`);
-        addLog('info', 'creative_list: ' + JSON.stringify(creativeList));
+        addLog('info', `Creating ad with ${creativeList.length} creatives`);
 
-        // Call the orchestrated API - Campaign -> AdGroup -> Ad
-        const result = await apiRequest('create_full_smartplus', {
-            campaign_name: state.campaignName,
-            cbo_enabled: state.cboEnabled,
-            budget: state.budget,
-            adgroup_budget: state.adGroupBudget,
-            pixel_id: state.pixelId,
-            optimization_event: state.optimizationEvent,
-            location_ids: state.locationIds,
-            dayparting: state.dayparting,
+        const result = await apiRequest('create_smartplus_ad', {
+            adgroup_id: state.adGroupId,
+            ad_name: state.campaignName + ' - Ad',
             identity_id: state.globalIdentityId,
             identity_type: identityType,
             landing_page_url: state.globalLandingUrl,
             call_to_action: state.globalCta,
-            // Send creative_list directly - array of {video_id, ad_text}
-            creative_list: creativeList
+            creatives: creativeList
         });
 
         hideLoading();
 
-        if (result.success && result.campaign_id) {
-            state.campaignId = result.campaign_id;
-            state.adGroupId = result.adgroup_id;
-
-            showToast('Smart+ Campaign created successfully!', 'success');
-            addLog('info', `Campaign: ${result.campaign_id}, AdGroup: ${result.adgroup_id}, Ad: ${result.smart_plus_ad_id}`);
+        if (result.success && result.smart_plus_ad_id) {
+            showToast('Smart+ Ad created successfully!', 'success');
+            addLog('info', `Smart+ Ad created: ${result.smart_plus_ad_id}`);
 
             let alertMessage = `Smart+ Campaign Published!\n\n`;
-            alertMessage += `Campaign ID: ${result.campaign_id}\n`;
-            alertMessage += `Ad Group ID: ${result.adgroup_id}\n`;
-            alertMessage += `Smart+ Ad ID: ${result.smart_plus_ad_id || 'N/A'}\n`;
+            alertMessage += `Campaign ID: ${state.campaignId}\n`;
+            alertMessage += `Ad Group ID: ${state.adGroupId}\n`;
+            alertMessage += `Smart+ Ad ID: ${result.smart_plus_ad_id}\n`;
             alertMessage += `Creatives: ${creativeList.length} videos\n`;
 
             alert(alertMessage);
         } else {
-            const errorStep = result.step ? ` (Step: ${result.step})` : '';
-            showToast('Failed: ' + (result.message || 'Unknown error') + errorStep, 'error');
-            addLog('error', 'Failed to create campaign', result);
+            showToast('Failed to create ad: ' + (result.message || 'Unknown error'), 'error');
+            addLog('error', 'Failed to create ad', result);
         }
     } catch (error) {
         hideLoading();
-        showToast('Error: ' + error.message, 'error');
+        showToast('Error creating ad: ' + error.message, 'error');
         addLog('error', 'Error: ' + error.message);
     }
 }
