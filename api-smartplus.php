@@ -492,13 +492,26 @@ switch ($action) {
             $ctaList[] = ['call_to_action' => $data['call_to_action']];
         }
 
+        // Build ad_text_list from creatives - each ad_text becomes a separate item
+        $adTextList = [];
+        foreach ($data['creatives'] ?? [] as $creative) {
+            if (!empty($creative['ad_text'])) {
+                $adTextList[] = ['ad_text' => $creative['ad_text']];
+            }
+        }
+        // Ensure at least one ad_text
+        if (empty($adTextList)) {
+            $adTextList[] = ['ad_text' => 'Check it out!'];
+        }
+
         $adParams = [
             'advertiser_id' => $advertiserId,
             'adgroup_id' => $data['adgroup_id'],
             'ad_name' => $data['ad_name'] ?? 'Smart+ Ad',
             'creative_list' => $creativeList,
             'landing_page_url_list' => $landingPageList,
-            'call_to_action_list' => $ctaList
+            'call_to_action_list' => $ctaList,
+            'ad_text_list' => $adTextList
         ];
 
         // Add ad_configuration with identity for non-spark ads
@@ -734,6 +747,18 @@ switch ($action) {
             $ctaList[] = ['call_to_action' => $data['call_to_action']];
         }
 
+        // Build ad_text_list from creatives - each ad_text becomes a separate item
+        $adTextList = [];
+        foreach ($creativeList as $creative) {
+            if (!empty($creative['ad_text'])) {
+                $adTextList[] = ['ad_text' => $creative['ad_text']];
+            }
+        }
+        // Ensure at least one ad_text
+        if (empty($adTextList)) {
+            $adTextList[] = ['ad_text' => 'Check it out!'];
+        }
+
         // Create Smart+ Ad with creative_list structure
         $adParams = [
             'advertiser_id' => $advertiserId,
@@ -741,7 +766,8 @@ switch ($action) {
             'ad_name' => $data['campaign_name'] . ' - Ad',
             'creative_list' => $creativeListFormatted,
             'landing_page_url_list' => $landingPageUrlList,
-            'call_to_action_list' => $ctaList
+            'call_to_action_list' => $ctaList,
+            'ad_text_list' => $adTextList
         ];
 
         // Add ad_configuration with identity for non-spark ads
