@@ -539,29 +539,23 @@ switch ($action) {
         $results['adgroup'] = $adgroupId;
         logSmartPlus("Ad Group created: $adgroupId");
 
-        // Step 3: Create Ads
-        // Using simple creative_list format: [{video_id, ad_text}, ...]
-        logSmartPlus("Step 3: Creating Ads...");
-        $ads = $data['ads'] ?? [];
+        // Step 3: Create Ad with creative_list
+        // Format: creative_list = [{video_id, ad_text}, ...]
+        logSmartPlus("Step 3: Creating Ad with creatives...");
 
-        // Build creative_list with simple format: just video_id and ad_text per creative
-        $creativeList = [];
-        foreach ($ads as $ad) {
-            $creative = [];
+        // Get creative_list directly from frontend (or from ads for backwards compat)
+        $creativeList = $data['creative_list'] ?? [];
 
-            // Add video_id
-            if (!empty($ad['video_id'])) {
-                $creative['video_id'] = $ad['video_id'];
+        // Backwards compatibility: if no creative_list, try to build from ads
+        if (empty($creativeList) && !empty($data['ads'])) {
+            foreach ($data['ads'] as $ad) {
+                if (!empty($ad['video_id'])) {
+                    $creativeList[] = [
+                        'video_id' => $ad['video_id'],
+                        'ad_text' => $ad['ad_text'] ?? 'Check it out!'
+                    ];
+                }
             }
-
-            // Add ad_text
-            if (!empty($ad['ad_text'])) {
-                $creative['ad_text'] = $ad['ad_text'];
-            } else {
-                $creative['ad_text'] = 'Check it out!';
-            }
-
-            $creativeList[] = $creative;
         }
 
         // Ensure at least one creative
@@ -574,6 +568,8 @@ switch ($action) {
             ]);
             exit;
         }
+
+        logSmartPlus("creative_list: " . json_encode($creativeList));
 
         // Build landing_page_url_list as array of strings
         $landingPageUrlList = [];
@@ -618,17 +614,16 @@ switch ($action) {
         }
 
         // Return results
-        $adsCreated = !empty($results['ads'][0]['success']) ? count($creativeList) : 0;
+        $creativesCount = count($creativeList);
         echo json_encode([
             'success' => !empty($results['ads'][0]['success']),
             'campaign_id' => $campaignId,
             'adgroup_id' => $adgroupId,
             'smart_plus_ad_id' => $results['ads'][0]['smart_plus_ad_id'] ?? null,
-            'ads_created' => $adsCreated,
-            'ads_total' => count($ads),
+            'creatives_count' => $creativesCount,
             'results' => $results,
             'message' => !empty($results['ads'][0]['success'])
-                ? "Smart+ Campaign created: Campaign ID $campaignId, Ad Group ID $adgroupId, $adsCreated creatives"
+                ? "Smart+ Campaign created: Campaign $campaignId, AdGroup $adgroupId, Ad with $creativesCount creatives"
                 : "Failed to create ad: " . ($results['ads'][0]['error'] ?? 'Unknown error')
         ]);
         break;

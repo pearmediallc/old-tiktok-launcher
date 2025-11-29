@@ -34,6 +34,118 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             background: linear-gradient(135deg, #fff0f3 0%, #f0ffff 100%);
             border-left: 4px solid #ff0050;
         }
+        /* Video Selection Grid */
+        .video-select-item {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: white;
+        }
+        .video-select-item:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .video-select-item.selected {
+            border-color: #22c55e;
+            background: #f0fff4;
+        }
+        .video-select-item .video-preview {
+            position: relative;
+            height: 100px;
+            background: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .video-select-item .video-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .video-select-item .video-badge {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .video-select-item .selected-badge {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: #22c55e;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 50%;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .video-select-item .video-name {
+            padding: 8px;
+            font-size: 12px;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* Creative Items */
+        .creative-item {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .creative-item .creative-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .creative-item .creative-video-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .creative-item .creative-thumbnail {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+        .creative-item .creative-number {
+            font-weight: 600;
+            color: #667eea;
+        }
+        .creative-item .creative-video-name {
+            color: #666;
+            font-size: 13px;
+        }
+        .creative-item .btn-remove {
+            background: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .creative-item .creative-body {
+            padding: 15px;
+        }
+        .creative-item .creative-body textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+        }
     </style>
 </head>
 <body>
@@ -258,14 +370,14 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
 
             <!-- Step 3: Ads Creation -->
             <div class="step-content" id="step-3">
-                <h2>Create Smart+ Ads</h2>
-                <div class="form-info" style="margin-bottom: 20px; background: #e8f5e9; padding: 12px; border-radius: 6px;">
-                    <p><strong>Ad Group ID:</strong> <span id="display-adgroup-id">-</span></p>
+                <h2>Create Smart+ Ad</h2>
+                <div class="form-info smart-info" style="margin-bottom: 20px;">
+                    <p><strong>Smart+ Ad:</strong> Select multiple videos below. All videos will be combined into ONE ad with multiple creatives.</p>
                 </div>
 
-                <!-- Global Settings for All Ads -->
+                <!-- Global Settings -->
                 <div class="form-section" style="background: #f8f9ff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #667eea;">
-                    <h3 style="margin-top: 0; color: #667eea;">Global Settings (Applied to All Ads)</h3>
+                    <h3 style="margin-top: 0; color: #667eea;">Ad Settings</h3>
 
                     <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                         <div class="form-group">
@@ -301,18 +413,31 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     </div>
                 </div>
 
-                <h3>Ads (<span id="ads-count">0</span>)</h3>
-                <div class="ads-container" id="ads-container">
-                    <!-- Ad forms will be dynamically added here -->
+                <!-- Video Selection Grid -->
+                <div class="form-section">
+                    <h3>Select Videos (<span id="selected-videos-count">0</span> selected)</h3>
+                    <div style="margin-bottom: 15px;">
+                        <button class="btn-secondary" onclick="selectAllVideos()">Select All</button>
+                        <button class="btn-secondary" onclick="clearVideoSelection()">Clear Selection</button>
+                    </div>
+                    <div id="video-selection-grid" class="video-selection-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; max-height: 400px; overflow-y: auto; padding: 10px; background: #f9f9f9; border-radius: 8px;">
+                        <!-- Videos will be loaded here -->
+                        <p style="text-align: center; padding: 20px; color: #666;">Loading videos...</p>
+                    </div>
                 </div>
 
-                <div class="button-row" style="align-items: center; gap: 15px;">
-                    <button class="btn-secondary" onclick="addNewAd()">+ Add New Ad</button>
-                    <span style="color: #666;">or</span>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <input type="number" id="bulk-duplicate-count" min="1" max="50" value="5"
-                               style="width: 70px; padding: 10px; border: 2px solid #ddd; border-radius: 5px; text-align: center; font-size: 14px;">
-                        <button class="btn-primary" onclick="duplicateAdBulk()">Duplicate Multiple Ads</button>
+                <!-- Creatives List (Ad Text for each video) -->
+                <div class="form-section">
+                    <h3>Creatives (Ad Text for Each Video)</h3>
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label>Apply Same Ad Text to All</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="global-ad-text" placeholder="Enter ad text to apply to all videos" style="flex: 1;">
+                            <button type="button" class="btn-secondary" onclick="applyAdTextToAll()">Apply to All</button>
+                        </div>
+                    </div>
+                    <div id="creatives-list" style="display: flex; flex-direction: column; gap: 15px;">
+                        <p style="text-align: center; padding: 20px; color: #666;">Select videos above to add creatives</p>
                     </div>
                 </div>
 
