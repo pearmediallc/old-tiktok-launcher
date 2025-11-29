@@ -845,6 +845,11 @@ function reviewAds() {
         return;
     }
 
+    if (selectedCTAs.length > 3) {
+        showToast('Maximum 3 CTAs allowed. Please deselect some.', 'error');
+        return;
+    }
+
     // Update ad texts from form
     state.creatives.forEach(creative => {
         const textarea = document.getElementById(`ad-text-${creative.video_id}`);

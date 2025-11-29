@@ -393,9 +393,9 @@ switch ($action) {
                 ];
             }
 
-            // Collect ad texts separately
+            // Collect ad texts as objects with ad_text key
             if (!empty($creative['ad_text'])) {
-                $adTextList[] = $creative['ad_text'];
+                $adTextList[] = ['ad_text' => $creative['ad_text']];
             }
         }
 
@@ -619,9 +619,9 @@ switch ($action) {
                 ];
             }
 
-            // Collect ad texts separately
+            // Collect ad texts as objects with ad_text key
             if (!empty($creative['ad_text'])) {
-                $adTextList[] = $creative['ad_text'];
+                $adTextList[] = ['ad_text' => $creative['ad_text']];
             }
         }
 

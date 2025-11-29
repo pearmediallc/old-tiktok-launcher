@@ -435,7 +435,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                                     <input type="checkbox" class="cta-checkbox" value="PLAY_GAME"> Play Game
                                 </label>
                             </div>
-                            <small style="color: #666;">Select one or more CTAs. TikTok will optimize delivery.</small>
+                            <small style="color: #666;">Select 1-3 CTAs (maximum 3). TikTok will optimize delivery.</small>
                         </div>
                     </div>
 
