@@ -378,13 +378,14 @@ switch ($action) {
         }
 
         // Build creative_list with proper format for Smart+ Ads
-        // Format: creative_list = [{creative_info: {video_id, ad_text}}]
+        // Format: creative_list = [{creative_info: {video_id, ad_text, ad_format}}]
         $creativeList = [];
 
         foreach ($data['creatives'] ?? [] as $creative) {
             if (!empty($creative['video_id'])) {
                 $creativeInfo = [
-                    'video_id' => $creative['video_id']
+                    'video_id' => $creative['video_id'],
+                    'ad_format' => 'SINGLE_VIDEO'
                 ];
                 if (!empty($creative['ad_text'])) {
                     $creativeInfo['ad_text'] = $creative['ad_text'];
@@ -593,13 +594,14 @@ switch ($action) {
         logSmartPlus("creative_list input: " . json_encode($creativeList));
 
         // Build creative_list with proper format for Smart+ Ads
-        // Format: creative_list = [{creative_info: {video_id, ad_text}}]
+        // Format: creative_list = [{creative_info: {video_id, ad_text, ad_format}}]
         $creativeListFormatted = [];
 
         foreach ($creativeList as $creative) {
             if (!empty($creative['video_id'])) {
                 $creativeInfo = [
-                    'video_id' => $creative['video_id']
+                    'video_id' => $creative['video_id'],
+                    'ad_format' => 'SINGLE_VIDEO'
                 ];
                 if (!empty($creative['ad_text'])) {
                     $creativeInfo['ad_text'] = $creative['ad_text'];
