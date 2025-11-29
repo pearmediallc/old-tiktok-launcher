@@ -849,7 +849,7 @@ switch ($action) {
         logSmartPlus("=== Fetching CTA Portfolios from Database ===");
 
         try {
-            require_once __DIR__ . '/includes/Database.php';
+            require_once __DIR__ . '/database/Database.php';
             $db = Database::getInstance();
 
             // Fetch all portfolios for this advertiser from database
@@ -938,7 +938,7 @@ switch ($action) {
 
             // Save to database
             try {
-                require_once __DIR__ . '/includes/Database.php';
+                require_once __DIR__ . '/database/Database.php';
                 $db = Database::getInstance();
 
                 $portfolioData = [
@@ -978,7 +978,7 @@ switch ($action) {
         logSmartPlus("=== Get or Create Frequently Used CTA Portfolio ===");
 
         try {
-            require_once __DIR__ . '/includes/Database.php';
+            require_once __DIR__ . '/database/Database.php';
             $db = Database::getInstance();
 
             // Check if portfolio already exists
