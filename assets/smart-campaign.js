@@ -524,15 +524,14 @@ function prevStep() {
 // =====================
 async function createCampaign() {
     const campaignName = document.getElementById('campaign-name').value.trim();
-    const cboEnabled = document.getElementById('cbo-enabled')?.checked ?? true;
-    const campaignBudget = cboEnabled ? (parseFloat(document.getElementById('campaign-budget').value) || 50) : null;
+    const campaignBudget = parseFloat(document.getElementById('campaign-budget').value) || 50;
 
     if (!campaignName) {
         showToast('Please enter a campaign name', 'error');
         return;
     }
 
-    if (cboEnabled && campaignBudget < 20) {
+    if (campaignBudget < 20) {
         showToast('Minimum budget is $20', 'error');
         return;
     }
@@ -543,8 +542,7 @@ async function createCampaign() {
     try {
         const result = await apiRequest('create_smartplus_campaign', {
             campaign_name: campaignName,
-            budget: campaignBudget,
-            cbo_enabled: cboEnabled
+            budget: campaignBudget
         });
 
         hideLoading();
@@ -552,7 +550,6 @@ async function createCampaign() {
         if (result.success && result.campaign_id) {
             state.campaignId = result.campaign_id;
             state.campaignName = campaignName;
-            state.cboEnabled = cboEnabled;
             state.budget = campaignBudget;
 
             // Update display
@@ -561,7 +558,7 @@ async function createCampaign() {
             const displayCampaignIdEl = document.getElementById('display-campaign-id');
 
             if (displayNameEl) displayNameEl.textContent = campaignName;
-            if (displayBudgetEl && cboEnabled) displayBudgetEl.textContent = campaignBudget;
+            if (displayBudgetEl) displayBudgetEl.textContent = campaignBudget;
             if (displayCampaignIdEl) displayCampaignIdEl.textContent = result.campaign_id;
 
             showToast(`Campaign created! ID: ${result.campaign_id}`, 'success');

@@ -193,27 +193,18 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 </div>
 
                 <div class="form-section">
-                    <h3>Budget Optimization</h3>
-                    <div class="feature-toggle">
-                        <label>
-                            <input type="checkbox" id="cbo-enabled" checked onchange="toggleCBOBudget()">
-                            <span>Campaign Budget Optimization (CBO)</span>
-                        </label>
-                        <small>Enable to set budget at campaign level. When disabled, budget is set at ad group level.</small>
-                    </div>
-
-                    <div id="campaign-budget-section" style="margin-top: 15px;">
-                        <div class="form-group">
-                            <label>Campaign Daily Budget ($)</label>
-                            <input type="number" id="campaign-budget" value="50" min="20" placeholder="50">
-                            <small>Minimum $20 daily budget for campaigns</small>
-                        </div>
+                    <h3>Budget</h3>
+                    <div class="form-group">
+                        <label>Daily Budget ($)</label>
+                        <input type="number" id="campaign-budget" value="50" min="20" placeholder="50">
+                        <small>Minimum $20 daily budget. Default: $50</small>
                     </div>
                 </div>
 
                 <div class="form-info smart-info">
                     <p><strong>Objective:</strong> Lead Generation</p>
                     <p><strong>Type:</strong> Smart+ Campaign (AI-Optimized)</p>
+                    <p><strong>Budget Mode:</strong> Dynamic Daily Budget</p>
                 </div>
                 <button class="btn-primary" onclick="createCampaign()">Create Campaign →</button>
             </div>
