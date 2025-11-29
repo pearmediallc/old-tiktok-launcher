@@ -247,17 +247,19 @@ switch ($action) {
         }
 
         // Smart+ Lead Generation Campaign - exact parameters from TikTok docs
-        $budget = floatval($data['budget'] ?? 50);
-
         $campaignParams = [
             'advertiser_id' => $advertiserId,
             'campaign_name' => $data['campaign_name'],
             'objective_type' => 'LEAD_GENERATION',
             'request_id' => generateRequestId(),
             'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
-            'budget' => $budget,
-            'operation_status' => 'DISABLE'
+            'operation_status' => 'ENABLE'
         ];
+
+        // Only add budget if provided
+        if (!empty($data['budget'])) {
+            $campaignParams['budget'] = floatval($data['budget']);
+        }
 
         logSmartPlus("Campaign params: " . json_encode($campaignParams));
 
@@ -464,7 +466,6 @@ switch ($action) {
         // Step 1: Create Campaign
         // Smart+ Lead Generation Campaign - exact parameters from TikTok docs
         logSmartPlus("Step 1: Creating Campaign...");
-        $budget = floatval($data['budget'] ?? 50);
 
         $campaignParams = [
             'advertiser_id' => $advertiserId,
@@ -472,9 +473,13 @@ switch ($action) {
             'objective_type' => 'LEAD_GENERATION',
             'request_id' => generateRequestId(),
             'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
-            'budget' => $budget,
-            'operation_status' => 'DISABLE'
+            'operation_status' => 'ENABLE'
         ];
+
+        // Only add budget if provided
+        if (!empty($data['budget'])) {
+            $campaignParams['budget'] = floatval($data['budget']);
+        }
 
         $campaignResult = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
 
