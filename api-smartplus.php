@@ -377,9 +377,9 @@ switch ($action) {
             exit;
         }
 
-        // Build creative_info_list with proper format for Smart+ Ads
-        // Format: [{creative_info: {video_id, ad_text}}]
-        $creativeInfoList = [];
+        // Build creative_list with proper format for Smart+ Ads
+        // Format: creative_list = [{creative_info: {video_id, ad_text}}]
+        $creativeList = [];
 
         foreach ($data['creatives'] ?? [] as $creative) {
             if (!empty($creative['video_id'])) {
@@ -389,7 +389,7 @@ switch ($action) {
                 if (!empty($creative['ad_text'])) {
                     $creativeInfo['ad_text'] = $creative['ad_text'];
                 }
-                $creativeInfoList[] = ['creative_info' => $creativeInfo];
+                $creativeList[] = ['creative_info' => $creativeInfo];
             }
         }
 
@@ -413,7 +413,7 @@ switch ($action) {
             'advertiser_id' => $advertiserId,
             'adgroup_id' => $data['adgroup_id'],
             'ad_name' => $data['ad_name'] ?? 'Smart+ Ad',
-            'creative_info_list' => $creativeInfoList,
+            'creative_list' => $creativeList,
             'landing_page_url_list' => $landingPageList,
             'call_to_action_list' => $ctaList
         ];
@@ -592,9 +592,9 @@ switch ($action) {
 
         logSmartPlus("creative_list input: " . json_encode($creativeList));
 
-        // Build creative_info_list with proper format for Smart+ Ads
-        // Format: [{creative_info: {video_id, ad_text}}]
-        $creativeInfoList = [];
+        // Build creative_list with proper format for Smart+ Ads
+        // Format: creative_list = [{creative_info: {video_id, ad_text}}]
+        $creativeListFormatted = [];
 
         foreach ($creativeList as $creative) {
             if (!empty($creative['video_id'])) {
@@ -604,11 +604,11 @@ switch ($action) {
                 if (!empty($creative['ad_text'])) {
                     $creativeInfo['ad_text'] = $creative['ad_text'];
                 }
-                $creativeInfoList[] = ['creative_info' => $creativeInfo];
+                $creativeListFormatted[] = ['creative_info' => $creativeInfo];
             }
         }
 
-        logSmartPlus("creative_info_list: " . json_encode($creativeInfoList));
+        logSmartPlus("creative_list formatted: " . json_encode($creativeListFormatted));
 
         // Build landing_page_url_list as array of OBJECTS with landing_page_url key
         $landingPageUrlList = [];
@@ -626,12 +626,12 @@ switch ($action) {
             $ctaList[] = ['call_to_action' => $data['call_to_action']];
         }
 
-        // Create Smart+ Ad with creative_info_list structure
+        // Create Smart+ Ad with creative_list structure
         $adParams = [
             'advertiser_id' => $advertiserId,
             'adgroup_id' => $adgroupId,
             'ad_name' => $data['campaign_name'] . ' - Ad',
-            'creative_info_list' => $creativeInfoList,
+            'creative_list' => $creativeListFormatted,
             'landing_page_url_list' => $landingPageUrlList,
             'call_to_action_list' => $ctaList
         ];
