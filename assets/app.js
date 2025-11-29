@@ -672,12 +672,31 @@ function toggleDayparting() {
 // Toggle CBO budget section
 function toggleCBOBudget() {
     const cboEnabled = document.getElementById('cbo-enabled').checked;
-    const budgetSection = document.getElementById('campaign-budget-section');
-    
+    const campaignBudgetSection = document.getElementById('campaign-budget-section');
+    const adGroupBudgetSection = document.getElementById('adgroup-budget-section');
+    const cboBudgetNote = document.getElementById('cbo-budget-note');
+
+    // Store CBO state for later use
+    state.cboEnabled = cboEnabled;
+
     if (cboEnabled) {
-        budgetSection.style.display = 'block';
+        // CBO enabled: show campaign budget, hide ad group budget
+        campaignBudgetSection.style.display = 'block';
+        if (adGroupBudgetSection) {
+            adGroupBudgetSection.style.display = 'none';
+        }
+        if (cboBudgetNote) {
+            cboBudgetNote.style.display = 'block';
+        }
     } else {
-        budgetSection.style.display = 'none';
+        // CBO disabled: hide campaign budget, show ad group budget
+        campaignBudgetSection.style.display = 'none';
+        if (adGroupBudgetSection) {
+            adGroupBudgetSection.style.display = 'block';
+        }
+        if (cboBudgetNote) {
+            cboBudgetNote.style.display = 'none';
+        }
     }
 }
 
@@ -856,8 +875,11 @@ async function createAdGroup() {
         ? document.getElementById('pixel-manual-input').value.trim()
         : document.getElementById('lead-gen-form-id').value.trim();
 
+    // Check if CBO is enabled (budget at campaign level, not ad group)
+    const cboEnabled = state.cboEnabled || document.getElementById('cbo-enabled')?.checked;
+
     const budgetMode = document.getElementById('budget-mode').value;
-    const budget = parseFloat(document.getElementById('budget').value);
+    const budget = cboEnabled ? null : parseFloat(document.getElementById('budget').value);
     const startDate = document.getElementById('start-date').value;
     const bidPrice = parseFloat(document.getElementById('bid-price').value);
 
@@ -866,6 +888,8 @@ async function createAdGroup() {
     console.log('Pixel ID:', pixelId);
     console.log('Pixel ID type:', typeof pixelId);
     console.log('Pixel ID length:', pixelId ? pixelId.length : 0);
+    console.log('CBO Enabled:', cboEnabled);
+    console.log('Budget:', budget);
     console.log('Dropdown value:', document.getElementById('lead-gen-form-id').value);
     console.log('Manual input value:', document.getElementById('pixel-manual-input').value);
     console.log('================================');
@@ -880,15 +904,22 @@ async function createAdGroup() {
     // Validate location targeting
     const selectedLocationIds = getSelectedLocationIds();
     console.log('Validation - selectedLocationIds:', selectedLocationIds);
-    
+
     if (!selectedLocationIds || selectedLocationIds.length === 0) {
         showToast('Please select locations for targeting or upload a location file', 'error');
         return;
     }
 
-    if (!adGroupName || !pixelId || !budget || !startDate) {
+    // Validation - budget is only required when CBO is disabled
+    if (!adGroupName || !pixelId || !startDate) {
         showToast('Please fill in all required fields', 'error');
         console.error('Missing fields - Pixel ID:', pixelId);
+        return;
+    }
+
+    // Validate budget only when CBO is disabled
+    if (!cboEnabled && (!budget || budget < 20)) {
+        showToast('Minimum budget is $20', 'error');
         return;
     }
 
@@ -896,11 +927,6 @@ async function createAdGroup() {
     if (!/^\d+$/.test(pixelId)) {
         showToast('Pixel ID must be numeric (e.g., 1234567890)', 'error');
         console.error('Invalid pixel ID format:', pixelId);
-        return;
-    }
-
-    if (budget < 20) {
-        showToast('Minimum budget is $20', 'error');
         return;
     }
 
@@ -957,9 +983,7 @@ async function createAdGroup() {
             age_groups: selectedAgeGroups,  // User-selected age groups
             gender: 'GENDER_UNLIMITED',  // All genders
 
-            // BUDGET AND SCHEDULE (use campaign's budget mode if set, otherwise use ad group's)
-            budget_mode: state.campaignBudgetMode || budgetMode,  // Use campaign's budget mode if available
-            budget: budget,
+            // SCHEDULE
             schedule_type: 'SCHEDULE_FROM_NOW',  // Start from specified time, end 10 years later
             schedule_start_time: scheduleStartTime,  // UTC datetime string (will be converted to Unix timestamp by backend)
 
@@ -969,6 +993,18 @@ async function createAdGroup() {
             // DAYPARTING (optional)
             ...getDaypartingData()
         };
+
+        // BUDGET - Only include at ad group level when CBO is disabled
+        if (cboEnabled) {
+            // When CBO is enabled, budget is at campaign level - use INFINITE mode for ad group
+            params.budget_mode = 'BUDGET_MODE_INFINITE';
+            console.log('CBO enabled - budget at campaign level, ad group budget mode: INFINITE');
+        } else {
+            // When CBO is disabled, budget is at ad group level
+            params.budget_mode = budgetMode;
+            params.budget = budget;
+            console.log('CBO disabled - budget at ad group level:', budget);
+        }
 
         // Set bidding type based on whether bid price is provided
         if (bidPrice && bidPrice > 0) {
@@ -2885,7 +2921,7 @@ function getFilteredMedia() {
 // Select media from library
 function selectMedia(media) {
     const mediaId = media.video_id || media.image_id || media.id;
-    
+
     // For cover image selection, only allow single selection
     if (state.currentSelectionType === 'cover') {
         // Only allow images for cover selection
@@ -2893,26 +2929,35 @@ function selectMedia(media) {
             showToast('Please select an image for the cover', 'error');
             return;
         }
-        
+
         // Single selection for cover
         state.selectedMedia = [media];
-        
+
         // Update UI - clear all selections and select only this one
         document.querySelectorAll('.media-item').forEach(item => {
             item.classList.remove('selected');
         });
         document.querySelector(`.media-item[data-id="${mediaId}"]`)?.classList.add('selected');
     } else {
-        // For primary media, single selection
-        state.selectedMedia = [media];
-        
-        // Update UI - clear all selections and select only this one
-        document.querySelectorAll('.media-item').forEach(item => {
-            item.classList.remove('selected');
-        });
-        document.querySelector(`.media-item[data-id="${mediaId}"]`)?.classList.add('selected');
+        // For primary media, allow multiple selection
+        const mediaItem = document.querySelector(`.media-item[data-id="${mediaId}"]`);
+        const isAlreadySelected = state.selectedMedia.some(m =>
+            (m.video_id || m.image_id || m.id) === mediaId
+        );
+
+        if (isAlreadySelected) {
+            // Deselect if already selected
+            state.selectedMedia = state.selectedMedia.filter(m =>
+                (m.video_id || m.image_id || m.id) !== mediaId
+            );
+            mediaItem?.classList.remove('selected');
+        } else {
+            // Add to selection
+            state.selectedMedia.push(media);
+            mediaItem?.classList.add('selected');
+        }
     }
-    
+
     // Update selection counter
     updateSelectionCounter();
 }
@@ -2936,10 +2981,10 @@ function confirmMediaSelection() {
 
     const adIndex = state.currentAdIndex;
     const selectionType = state.currentSelectionType;
-    const selectedMedia = state.selectedMedia[0]; // Single selection
 
     if (selectionType === 'cover') {
-        // Handle cover image selection
+        // Handle cover image selection (single selection only)
+        const selectedMedia = state.selectedMedia[0];
         if (selectedMedia.type !== 'image') {
             showToast('Please select an image for the cover', 'error');
             return;
@@ -2947,18 +2992,18 @@ function confirmMediaSelection() {
 
         const coverImageId = selectedMedia.image_id;
         document.getElementById(`cover-image-id-${adIndex}`).value = coverImageId;
-        
+
         // Update cover placeholder
         const coverPlaceholder = document.getElementById(`cover-placeholder-${adIndex}`);
         const coverContainer = coverPlaceholder.parentElement;
-        
+
         coverContainer.classList.add('has-media');
         if (selectedMedia.url) {
             coverContainer.style.backgroundImage = `url(${selectedMedia.url})`;
             coverContainer.style.backgroundSize = 'cover';
             coverContainer.style.backgroundPosition = 'center';
         }
-        
+
         coverPlaceholder.innerHTML = `
             <div class="media-selected-info">
                 <div class="media-type-badge">🖼️</div>
@@ -2967,79 +3012,106 @@ function confirmMediaSelection() {
 
         closeMediaModal();
         showToast('Cover image selected successfully', 'success');
-        
+
     } else {
-        // Handle primary media selection
-        const mediaId = selectedMedia.video_id || selectedMedia.image_id;
-        if (!mediaId) {
-            showToast('Invalid media selection', 'error');
-            return;
-        }
+        // Handle primary media selection - supports multiple selection
+        if (state.selectedMedia.length === 1) {
+            // Single selection - update current ad
+            const selectedMedia = state.selectedMedia[0];
+            updateAdWithMedia(adIndex, selectedMedia);
+            closeMediaModal();
 
-        document.getElementById(`creative-id-${adIndex}`).value = mediaId;
-        document.getElementById(`creative-type-${adIndex}`).value = selectedMedia.type;
-
-        // Store video data for thumbnail access
-        if (selectedMedia.type === 'video') {
-            if (!state.selectedVideoData) {
-                state.selectedVideoData = {};
-            }
-            state.selectedVideoData[mediaId] = selectedMedia;
-        }
-
-        // Update primary media placeholder
-        const placeholder = document.getElementById(`creative-placeholder-${adIndex}`);
-        const placeholderContainer = placeholder.parentElement;
-        
-        placeholderContainer.classList.add('has-media');
-        
-        // Show or hide cover image field based on media type
-        const coverImageGroup = document.getElementById(`cover-image-group-${adIndex}`);
-        
-        if (selectedMedia.type === 'video') {
-            // Show cover image field for video
-            if (coverImageGroup) {
-                coverImageGroup.style.display = 'block';
-            }
-            
-            const previewUrl = selectedMedia.preview_url || selectedMedia.thumbnail_url || selectedMedia.video_cover_url;
-            if (previewUrl) {
-                placeholderContainer.style.backgroundImage = `url(${previewUrl})`;
-                placeholderContainer.style.backgroundSize = 'cover';
+            if (selectedMedia.type === 'video') {
+                showToast('Video selected. Now select a cover image below.', 'info');
             } else {
-                placeholderContainer.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                showToast('Media selected successfully', 'success');
             }
-            
-            placeholder.innerHTML = `
-                <div class="media-selected-info">
-                    <div class="media-type-badge">🎥</div>
-                    <div class="media-name">${selectedMedia.file_name || 'Video'}</div>
-                    ${selectedMedia.duration ? `<div style="font-size: 11px;">⏱ ${Math.round(selectedMedia.duration)}s</div>` : ''}
-                </div>`;
-                
-            showToast('Video selected. Now select a cover image below.', 'info');
-            
         } else {
-            // Hide cover image field for image ads
-            if (coverImageGroup) {
-                coverImageGroup.style.display = 'none';
+            // Multiple selection - create ads for each selected media
+            const firstMedia = state.selectedMedia[0];
+            updateAdWithMedia(adIndex, firstMedia);
+
+            // Create additional ads for remaining selections
+            for (let i = 1; i < state.selectedMedia.length; i++) {
+                const media = state.selectedMedia[i];
+                const newIndex = state.ads.length;
+                addAdForm(newIndex);
+                state.ads.push({ index: newIndex });
+                // Update the newly created ad with the media
+                updateAdWithMedia(newIndex, media);
             }
-            
-            if (selectedMedia.url) {
-                placeholderContainer.style.backgroundImage = `url(${selectedMedia.url})`;
-                placeholderContainer.style.backgroundSize = 'cover';
-            }
-            
-            placeholder.innerHTML = `
-                <div class="media-selected-info">
-                    <div class="media-type-badge">📷</div>
-                    <div class="media-name">${selectedMedia.file_name || 'Image'}</div>
-                </div>`;
-                
-            showToast('Image selected successfully', 'success');
+
+            closeMediaModal();
+            showToast(`${state.selectedMedia.length} ads created from selected media`, 'success');
+        }
+    }
+}
+
+// Helper function to update an ad with selected media
+function updateAdWithMedia(adIndex, selectedMedia) {
+    const mediaId = selectedMedia.video_id || selectedMedia.image_id;
+    if (!mediaId) {
+        console.error('Invalid media selection - no ID found');
+        return;
+    }
+
+    document.getElementById(`creative-id-${adIndex}`).value = mediaId;
+    document.getElementById(`creative-type-${adIndex}`).value = selectedMedia.type;
+
+    // Store video data for thumbnail access
+    if (selectedMedia.type === 'video') {
+        if (!state.selectedVideoData) {
+            state.selectedVideoData = {};
+        }
+        state.selectedVideoData[mediaId] = selectedMedia;
+    }
+
+    // Update primary media placeholder
+    const placeholder = document.getElementById(`creative-placeholder-${adIndex}`);
+    const placeholderContainer = placeholder.parentElement;
+
+    placeholderContainer.classList.add('has-media');
+
+    // Show or hide cover image field based on media type
+    const coverImageGroup = document.getElementById(`cover-image-group-${adIndex}`);
+
+    if (selectedMedia.type === 'video') {
+        // Show cover image field for video
+        if (coverImageGroup) {
+            coverImageGroup.style.display = 'block';
         }
 
-        closeMediaModal();
+        const previewUrl = selectedMedia.preview_url || selectedMedia.thumbnail_url || selectedMedia.video_cover_url;
+        if (previewUrl) {
+            placeholderContainer.style.backgroundImage = `url(${previewUrl})`;
+            placeholderContainer.style.backgroundSize = 'cover';
+        } else {
+            placeholderContainer.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+        }
+
+        placeholder.innerHTML = `
+            <div class="media-selected-info">
+                <div class="media-type-badge">🎥</div>
+                <div class="media-name">${selectedMedia.file_name || 'Video'}</div>
+                ${selectedMedia.duration ? `<div style="font-size: 11px;">⏱ ${Math.round(selectedMedia.duration)}s</div>` : ''}
+            </div>`;
+
+    } else {
+        // Hide cover image field for image ads
+        if (coverImageGroup) {
+            coverImageGroup.style.display = 'none';
+        }
+
+        if (selectedMedia.url) {
+            placeholderContainer.style.backgroundImage = `url(${selectedMedia.url})`;
+            placeholderContainer.style.backgroundSize = 'cover';
+        }
+
+        placeholder.innerHTML = `
+            <div class="media-selected-info">
+                <div class="media-type-badge">📷</div>
+                <div class="media-name">${selectedMedia.file_name || 'Image'}</div>
+            </div>`;
     }
 }
 

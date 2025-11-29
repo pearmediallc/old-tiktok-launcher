@@ -134,20 +134,26 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
 
                 <div class="form-section">
                     <h3>Budget & Schedule</h3>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Budget Mode</label>
-                            <select id="budget-mode">
-                                <option value="BUDGET_MODE_DAY">Daily Budget</option>
-                                <option value="BUDGET_MODE_DYNAMIC_DAILY_BUDGET">Dynamic Daily Budget (Recommended)</option>
-                                <option value="BUDGET_MODE_TOTAL">Total Budget (Lifetime)</option>
-                            </select>
+                    <div id="adgroup-budget-section">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Budget Mode</label>
+                                <select id="budget-mode">
+                                    <option value="BUDGET_MODE_DAY">Daily Budget</option>
+                                    <option value="BUDGET_MODE_DYNAMIC_DAILY_BUDGET">Dynamic Daily Budget (Recommended)</option>
+                                    <option value="BUDGET_MODE_TOTAL">Total Budget (Lifetime)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Ad Group Budget Amount ($)</label>
+                                <input type="number" id="budget" placeholder="50" min="20" required>
+                                <small>Budget is set at ad group level when CBO is disabled</small>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>Ad Group Budget Amount ($)</label>
-                            <input type="number" id="budget" placeholder="50" min="20" required>
-                            <small>Budget is set at ad group level when CBO is disabled</small>
-                        </div>
+                    </div>
+                    <div id="cbo-budget-note" style="display: none; padding: 15px; background: #e8f5e9; border-radius: 6px; margin-bottom: 15px;">
+                        <p style="margin: 0; color: #2e7d32;"><strong>✓ Campaign Budget Optimization is enabled</strong></p>
+                        <small>Budget is managed at campaign level. Ad group budget is not required.</small>
                     </div>
 
                     <div class="form-row">
@@ -397,8 +403,8 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 </div>
                 <div style="padding: 10px 20px; background: #e8f4f8; border-bottom: 1px solid #eee;">
                     <p style="margin: 0; font-size: 13px; color: #333;">
-                        <strong>For Video Ads:</strong> Select 1 video + 1 image (as cover). 
-                        <strong>For Image Ads:</strong> Select 1 image only.
+                        <strong>Multi-Select Enabled:</strong> Click multiple videos/images to create multiple ads at once.
+                        <strong>For Video Ads:</strong> Select video + cover image separately.
                     </p>
                 </div>
                 <div class="modal-tabs">
