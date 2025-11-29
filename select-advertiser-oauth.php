@@ -756,7 +756,12 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
-                    window.location.href = 'dashboard.php';
+                    // Redirect based on campaign type
+                    if (selectedCampaignType === 'smart') {
+                        window.location.href = 'smart-campaign.php';
+                    } else {
+                        window.location.href = 'dashboard.php';
+                    }
                 } else {
                     alert('Failed to initialize: ' + result.message);
                 }
