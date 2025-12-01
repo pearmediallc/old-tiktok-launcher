@@ -327,18 +327,43 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     </div>
 
                     <div id="dayparting-section" style="display: none;">
-                        <div style="margin-bottom: 15px;">
-                            <button type="button" class="btn-secondary" onclick="selectAllHours()">Select All</button>
-                            <button type="button" class="btn-secondary" onclick="clearAllHours()">Clear All</button>
-                            <button type="button" class="btn-secondary" onclick="selectBusinessHours()">Business Hours</button>
-                            <button type="button" class="btn-secondary" onclick="selectPrimeTime()">Prime Time</button>
+                        <div style="margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 10px;">
+                            <button type="button" class="btn-secondary" onclick="setDaypartingPreset('all')" title="All hours, all days">24/7 (All Hours)</button>
+                            <button type="button" class="btn-secondary" onclick="setDaypartingPreset('business')" title="8AM-5PM, Monday-Friday">Business (8AM-5PM)</button>
+                            <button type="button" class="btn-secondary" onclick="setDaypartingPreset('prime')" title="6PM-11PM, all days">Prime Time (6PM-11PM)</button>
+                            <button type="button" class="btn-secondary" onclick="setDaypartingPreset('evening')" title="5PM-12AM, all days">Evening (5PM-12AM)</button>
+                            <button type="button" class="btn-secondary" onclick="setDaypartingPreset('daytime')" title="6AM-6PM, all days">Daytime (6AM-6PM)</button>
+                            <button type="button" class="btn-secondary" onclick="setDaypartingPreset('none')" title="Clear all selections">Clear All</button>
                         </div>
                         <div class="dayparting-grid">
                             <table class="dayparting-table">
                                 <thead>
                                     <tr>
                                         <th>Day</th>
-                                        <th colspan="25">Hours (0-24)</th>
+                                        <th title="12:00 AM">12A</th>
+                                        <th title="1:00 AM">1A</th>
+                                        <th title="2:00 AM">2A</th>
+                                        <th title="3:00 AM">3A</th>
+                                        <th title="4:00 AM">4A</th>
+                                        <th title="5:00 AM">5A</th>
+                                        <th title="6:00 AM">6A</th>
+                                        <th title="7:00 AM">7A</th>
+                                        <th title="8:00 AM">8A</th>
+                                        <th title="9:00 AM">9A</th>
+                                        <th title="10:00 AM">10A</th>
+                                        <th title="11:00 AM">11A</th>
+                                        <th title="12:00 PM">12P</th>
+                                        <th title="1:00 PM">1P</th>
+                                        <th title="2:00 PM">2P</th>
+                                        <th title="3:00 PM">3P</th>
+                                        <th title="4:00 PM">4P</th>
+                                        <th title="5:00 PM">5P</th>
+                                        <th title="6:00 PM">6P</th>
+                                        <th title="7:00 PM">7P</th>
+                                        <th title="8:00 PM">8P</th>
+                                        <th title="9:00 PM">9P</th>
+                                        <th title="10:00 PM">10P</th>
+                                        <th title="11:00 PM">11P</th>
                                     </tr>
                                 </thead>
                                 <tbody id="dayparting-body">

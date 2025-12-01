@@ -23,60 +23,59 @@ let state = {
     globalCtaPortfolioId: null  // Portfolio ID for Lead Gen ads
 };
 
-// US States with TikTok location IDs
+// US States with TikTok location IDs (verified from TikTok API)
 const US_STATES = [
-    { id: '5128638', name: 'New York', abbr: 'NY' },
-    { id: '5332921', name: 'California', abbr: 'CA' },
-    { id: '4736286', name: 'Texas', abbr: 'TX' },
-    { id: '4155751', name: 'Florida', abbr: 'FL' },
-    { id: '6254926', name: 'Massachusetts', abbr: 'MA' },
-    { id: '4597040', name: 'South Carolina', abbr: 'SC' },
-    { id: '4831725', name: 'Connecticut', abbr: 'CT' },
-    { id: '5001836', name: 'Ohio', abbr: 'OH' },
-    { id: '4662168', name: 'Tennessee', abbr: 'TN' },
-    { id: '4138106', name: 'District of Columbia', abbr: 'DC' },
-    { id: '4361885', name: 'Maryland', abbr: 'MD' },
-    { id: '4566966', name: 'Puerto Rico', abbr: 'PR' },
-    { id: '4099753', name: 'Arkansas', abbr: 'AR' },
-    { id: '4398678', name: 'Missouri', abbr: 'MO' },
-    { id: '4273857', name: 'Kansas', abbr: 'KS' },
-    { id: '5509151', name: 'Nevada', abbr: 'NV' },
-    { id: '5549030', name: 'Utah', abbr: 'UT' },
-    { id: '5481136', name: 'New Mexico', abbr: 'NM' },
-    { id: '5073708', name: 'Nebraska', abbr: 'NE' },
-    { id: '5769223', name: 'South Dakota', abbr: 'SD' },
-    { id: '5690763', name: 'North Dakota', abbr: 'ND' },
-    { id: '5667009', name: 'Montana', abbr: 'MT' },
-    { id: '5843591', name: 'Wyoming', abbr: 'WY' },
-    { id: '5417618', name: 'Colorado', abbr: 'CO' },
+    { id: '4829764', name: 'Alabama', abbr: 'AL' },
+    { id: '5879092', name: 'Alaska', abbr: 'AK' },
     { id: '5551752', name: 'Arizona', abbr: 'AZ' },
+    { id: '4099753', name: 'Arkansas', abbr: 'AR' },
+    { id: '5332921', name: 'California', abbr: 'CA' },
+    { id: '5417618', name: 'Colorado', abbr: 'CO' },
+    { id: '4831725', name: 'Connecticut', abbr: 'CT' },
+    { id: '4142224', name: 'Delaware', abbr: 'DE' },
+    { id: '4155751', name: 'Florida', abbr: 'FL' },
+    { id: '4197000', name: 'Georgia', abbr: 'GA' },
+    { id: '5855797', name: 'Hawaii', abbr: 'HI' },
     { id: '5596512', name: 'Idaho', abbr: 'ID' },
-    { id: '5815135', name: 'Washington', abbr: 'WA' },
-    { id: '5744337', name: 'Oregon', abbr: 'OR' },
-    { id: '4862182', name: 'Iowa', abbr: 'IA' },
-    { id: '5037779', name: 'Minnesota', abbr: 'MN' },
-    { id: '5279468', name: 'Wisconsin', abbr: 'WI' },
     { id: '4896861', name: 'Illinois', abbr: 'IL' },
     { id: '4921868', name: 'Indiana', abbr: 'IN' },
-    { id: '4998796', name: 'Michigan', abbr: 'MI' },
-    { id: '6254925', name: 'Pennsylvania', abbr: 'PA' },
-    { id: '5101760', name: 'New Jersey', abbr: 'NJ' },
-    { id: '4142224', name: 'Delaware', abbr: 'DE' },
-    { id: '4826850', name: 'West Virginia', abbr: 'WV' },
-    { id: '4752186', name: 'Virginia', abbr: 'VA' },
-    { id: '4482348', name: 'North Carolina', abbr: 'NC' },
-    { id: '4197000', name: 'Georgia', abbr: 'GA' },
-    { id: '4829764', name: 'Alabama', abbr: 'AL' },
-    { id: '4436296', name: 'Mississippi', abbr: 'MS' },
+    { id: '4862182', name: 'Iowa', abbr: 'IA' },
+    { id: '4273857', name: 'Kansas', abbr: 'KS' },
+    { id: '6254925', name: 'Kentucky', abbr: 'KY' },
     { id: '4331987', name: 'Louisiana', abbr: 'LA' },
-    { id: '4544379', name: 'Oklahoma', abbr: 'OK' },
-    { id: '6254926', name: 'Kentucky', abbr: 'KY' },
-    { id: '5090174', name: 'New Hampshire', abbr: 'NH' },
-    { id: '5224323', name: 'Rhode Island', abbr: 'RI' },
-    { id: '5242283', name: 'Vermont', abbr: 'VT' },
     { id: '4971068', name: 'Maine', abbr: 'ME' },
-    { id: '5855797', name: 'Hawaii', abbr: 'HI' },
-    { id: '5879092', name: 'Alaska', abbr: 'AK' }
+    { id: '4361885', name: 'Maryland', abbr: 'MD' },
+    { id: '6254926', name: 'Massachusetts', abbr: 'MA' },
+    { id: '4998796', name: 'Michigan', abbr: 'MI' },
+    { id: '5037779', name: 'Minnesota', abbr: 'MN' },
+    { id: '4436296', name: 'Mississippi', abbr: 'MS' },
+    { id: '4398678', name: 'Missouri', abbr: 'MO' },
+    { id: '5667009', name: 'Montana', abbr: 'MT' },
+    { id: '5073708', name: 'Nebraska', abbr: 'NE' },
+    { id: '5509151', name: 'Nevada', abbr: 'NV' },
+    { id: '5090174', name: 'New Hampshire', abbr: 'NH' },
+    { id: '5101760', name: 'New Jersey', abbr: 'NJ' },
+    { id: '5481136', name: 'New Mexico', abbr: 'NM' },
+    { id: '5128638', name: 'New York', abbr: 'NY' },
+    { id: '4482348', name: 'North Carolina', abbr: 'NC' },
+    { id: '5690763', name: 'North Dakota', abbr: 'ND' },
+    { id: '5165418', name: 'Ohio', abbr: 'OH' },
+    { id: '4544379', name: 'Oklahoma', abbr: 'OK' },
+    { id: '5744337', name: 'Oregon', abbr: 'OR' },
+    { id: '6254927', name: 'Pennsylvania', abbr: 'PA' },
+    { id: '5224323', name: 'Rhode Island', abbr: 'RI' },
+    { id: '4597040', name: 'South Carolina', abbr: 'SC' },
+    { id: '5769223', name: 'South Dakota', abbr: 'SD' },
+    { id: '4662168', name: 'Tennessee', abbr: 'TN' },
+    { id: '4736286', name: 'Texas', abbr: 'TX' },
+    { id: '5549030', name: 'Utah', abbr: 'UT' },
+    { id: '5242283', name: 'Vermont', abbr: 'VT' },
+    { id: '6254928', name: 'Virginia', abbr: 'VA' },
+    { id: '5815135', name: 'Washington', abbr: 'WA' },
+    { id: '4138106', name: 'Washington, D.C.', abbr: 'DC' },
+    { id: '4826850', name: 'West Virginia', abbr: 'WV' },
+    { id: '5279468', name: 'Wisconsin', abbr: 'WI' },
+    { id: '5843591', name: 'Wyoming', abbr: 'WY' }
 ];
 
 const SMARTPLUS_API = 'api-smartplus.php';
@@ -633,30 +632,66 @@ function toggleDayparting() {
     document.getElementById('dayparting-section').style.display = enabled ? 'block' : 'none';
 }
 
-function selectAllHours() {
-    document.querySelectorAll('.hour-checkbox').forEach(cb => cb.checked = true);
-}
+// Dayparting preset function with clear time descriptions
+function setDaypartingPreset(preset) {
+    const checkboxes = document.querySelectorAll('.hour-checkbox');
 
-function clearAllHours() {
-    document.querySelectorAll('.hour-checkbox').forEach(cb => cb.checked = false);
-}
+    // Clear all first
+    checkboxes.forEach(cb => cb.checked = false);
 
-function selectBusinessHours() {
-    clearAllHours();
-    document.querySelectorAll('.hour-checkbox').forEach(cb => {
+    checkboxes.forEach(cb => {
         const hour = parseInt(cb.dataset.hour);
-        const day = parseInt(cb.dataset.day);
-        cb.checked = (day >= 1 && day <= 5 && hour >= 8 && hour < 17);
+        const day = parseInt(cb.dataset.day); // 0=Sunday, 1=Monday, ..., 6=Saturday
+
+        switch(preset) {
+            case 'all':
+                // All hours, all days (24/7)
+                cb.checked = true;
+                break;
+
+            case 'business':
+                // Business Hours: 8AM-5PM (hours 8-16), Monday-Friday (days 1-5)
+                cb.checked = (day >= 1 && day <= 5 && hour >= 8 && hour < 17);
+                break;
+
+            case 'prime':
+                // Prime Time: 6PM-11PM (hours 18-22), all days
+                cb.checked = (hour >= 18 && hour < 23);
+                break;
+
+            case 'evening':
+                // Evening: 5PM-12AM (hours 17-23), all days
+                cb.checked = (hour >= 17 && hour <= 23);
+                break;
+
+            case 'daytime':
+                // Daytime: 6AM-6PM (hours 6-17), all days
+                cb.checked = (hour >= 6 && hour < 18);
+                break;
+
+            case 'none':
+                // Clear All - already handled above
+                break;
+        }
     });
+
+    // Log the preset selection
+    const presetNames = {
+        'all': '24/7 (All Hours)',
+        'business': 'Business Hours (8AM-5PM, Mon-Fri)',
+        'prime': 'Prime Time (6PM-11PM)',
+        'evening': 'Evening (5PM-12AM)',
+        'daytime': 'Daytime (6AM-6PM)',
+        'none': 'Cleared All'
+    };
+    addLog('info', `Dayparting preset: ${presetNames[preset] || preset}`);
 }
 
-function selectPrimeTime() {
-    clearAllHours();
-    document.querySelectorAll('.hour-checkbox').forEach(cb => {
-        const hour = parseInt(cb.dataset.hour);
-        cb.checked = (hour >= 18 && hour < 22);
-    });
-}
+// Legacy functions for backward compatibility
+function selectAllHours() { setDaypartingPreset('all'); }
+function clearAllHours() { setDaypartingPreset('none'); }
+function selectBusinessHours() { setDaypartingPreset('business'); }
+function selectPrimeTime() { setDaypartingPreset('prime'); }
 
 function getDaypartingData() {
     if (!document.getElementById('enable-dayparting').checked) {
