@@ -575,7 +575,7 @@ switch ($action) {
             'adgroup_id' => $data['adgroup_id'],
             'ad_name' => $data['ad_name'] ?? 'Smart+ Ad',
             'creative_list' => $creativeList,
-            'landing_page_urls' => $landingPageList,
+            'landing_page_url_list' => $landingPageList,
             'ad_text_list' => $adTextList
         ];
 
@@ -840,7 +840,7 @@ switch ($action) {
             'adgroup_id' => $adgroupId,
             'ad_name' => $data['campaign_name'] . ' - Ad',
             'creative_list' => $creativeListFormatted,
-            'landing_page_urls' => $landingPageUrlList,
+            'landing_page_url_list' => $landingPageUrlList,
             'ad_text_list' => $adTextList
         ];
 
