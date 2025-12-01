@@ -97,97 +97,251 @@ function uploadImageByUrl($imageUrl, $advertiserId, $accessToken) {
     return ['success' => false, 'error' => $result['message'] ?? 'Unknown error'];
 }
 
-// Get video cover image - upload the video's own cover URL to ensure unique covers per video
-// CRITICAL: Smart+ Ads REQUIRE image_info for video covers - this function must always return an image_id
-function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
-    logSmartPlus("Getting cover image for video: $videoId");
+// ==========================================
+// OPTIMIZED BATCH FUNCTIONS - Reduce API calls to prevent timeouts
+// ==========================================
 
-    // First, get video info to get the cover URL
-    $videoResult = makeApiCall('/file/video/ad/info/', [
+// Global cache for image library (populated once, used for all videos)
+$GLOBALS['imageLibraryCache'] = null;
+$GLOBALS['videoInfoCache'] = [];
+
+// Batch fetch video info for multiple videos in ONE API call
+function batchGetVideoInfo($videoIds, $advertiserId, $accessToken) {
+    if (empty($videoIds)) {
+        return [];
+    }
+
+    logSmartPlus("BATCH: Fetching info for " . count($videoIds) . " videos in single call");
+
+    $result = makeApiCall('/file/video/ad/info/', [
         'advertiser_id' => $advertiserId,
-        'video_ids' => json_encode([$videoId])
+        'video_ids' => json_encode($videoIds)
     ], $accessToken, 'GET');
 
-    if ($videoResult['code'] != 0 || empty($videoResult['data']['list'])) {
-        logSmartPlus("Failed to get video info for: $videoId - code: " . ($videoResult['code'] ?? 'null'));
-        // Fallback to any valid image
-        return findAnyValidImage($advertiserId, $accessToken);
-    }
-
-    $video = $videoResult['data']['list'][0];
-    $coverUrl = $video['video_cover_url'] ?? null;
-    $videoWidth = $video['width'] ?? 0;
-    $videoHeight = $video['height'] ?? 0;
-
-    logSmartPlus("Video info: width=$videoWidth, height=$videoHeight, cover_url=" . ($coverUrl ? 'exists' : 'null'));
-
-    // Extract the unique filename pattern from cover URL (e.g., "ogwfGeSbMIbAQg14BAjALFEfIr26A6ienG0aMx")
-    $coverFilePattern = null;
-    if (!empty($coverUrl)) {
-        // Extract pattern between last "/" and "~tplv"
-        if (preg_match('/\/([a-zA-Z0-9]+)~tplv/', $coverUrl, $matches)) {
-            $coverFilePattern = $matches[1];
-            logSmartPlus("Extracted cover file pattern: $coverFilePattern");
+    $videoInfoMap = [];
+    if ($result['code'] == 0 && !empty($result['data']['list'])) {
+        foreach ($result['data']['list'] as $video) {
+            $videoId = $video['video_id'] ?? null;
+            if ($videoId) {
+                $videoInfoMap[$videoId] = $video;
+                $GLOBALS['videoInfoCache'][$videoId] = $video;
+            }
         }
+        logSmartPlus("BATCH: Got info for " . count($videoInfoMap) . " videos");
+    } else {
+        logSmartPlus("BATCH: Failed to get video info - code: " . ($result['code'] ?? 'null'));
     }
 
-    // PRIORITY 1: Try to upload the video's own cover URL
-    if (!empty($coverUrl)) {
-        logSmartPlus("Uploading video's own cover URL to ensure unique cover: $coverUrl");
-        $uploadResult = uploadImageByUrl($coverUrl, $advertiserId, $accessToken);
-        if ($uploadResult['success']) {
-            logSmartPlus("Successfully uploaded unique cover for video $videoId: " . $uploadResult['image_id']);
-            return $uploadResult['image_id'];
-        }
-        logSmartPlus("Failed to upload video cover URL: " . ($uploadResult['error'] ?? 'unknown'));
+    return $videoInfoMap;
+}
 
-        // If upload failed with "Duplicate material name", the image already exists
-        // We need to find it by searching for the cover filename pattern
+// Cache image library search results (ONE API call for entire session)
+function getCachedImageLibrary($advertiserId, $accessToken) {
+    if ($GLOBALS['imageLibraryCache'] !== null) {
+        logSmartPlus("CACHE HIT: Using cached image library (" . count($GLOBALS['imageLibraryCache']) . " images)");
+        return $GLOBALS['imageLibraryCache'];
     }
 
-    // PRIORITY 2: Search for existing image by cover URL filename pattern
-    $imagesResult = makeApiCall('/file/image/ad/search/', [
+    logSmartPlus("CACHE MISS: Fetching image library (single call for all videos)");
+
+    $result = makeApiCall('/file/image/ad/search/', [
         'advertiser_id' => $advertiserId,
         'page' => 1,
         'page_size' => 100
     ], $accessToken, 'GET');
 
-    if ($imagesResult['code'] == 0 && !empty($imagesResult['data']['list'])) {
-        $isPortrait = $videoHeight > $videoWidth;
+    if ($result['code'] == 0 && !empty($result['data']['list'])) {
+        $GLOBALS['imageLibraryCache'] = $result['data']['list'];
+        logSmartPlus("CACHE: Stored " . count($GLOBALS['imageLibraryCache']) . " images in cache");
+    } else {
+        $GLOBALS['imageLibraryCache'] = [];
+        logSmartPlus("CACHE: No images found or error");
+    }
 
-        // First, try to find by cover URL filename pattern (most accurate)
-        if (!empty($coverFilePattern)) {
-            foreach ($imagesResult['data']['list'] as $image) {
-                $fileName = $image['file_name'] ?? '';
+    return $GLOBALS['imageLibraryCache'];
+}
 
-                // Check if filename starts with the cover pattern
-                if (strpos($fileName, $coverFilePattern) === 0) {
-                    logSmartPlus("Found existing cover image by pattern for video $videoId: " . $image['image_id']);
-                    return $image['image_id'];
-                }
+// Find existing cover image by pattern in CACHED library (no API call)
+function findExistingCoverInCache($coverFilePattern, $imageLibrary) {
+    if (empty($coverFilePattern) || empty($imageLibrary)) {
+        return null;
+    }
+
+    foreach ($imageLibrary as $image) {
+        $fileName = $image['file_name'] ?? '';
+        if (strpos($fileName, $coverFilePattern) === 0) {
+            logSmartPlus("CACHE MATCH: Found existing cover by pattern: " . $image['image_id']);
+            return $image['image_id'];
+        }
+    }
+
+    return null;
+}
+
+// Extract cover file pattern from cover URL
+function extractCoverPattern($coverUrl) {
+    if (empty($coverUrl)) {
+        return null;
+    }
+    if (preg_match('/\/([a-zA-Z0-9]+)~tplv/', $coverUrl, $matches)) {
+        return $matches[1];
+    }
+    return null;
+}
+
+// OPTIMIZED: Get cover images for ALL videos with minimal API calls
+// Instead of N×3 calls (per video: get_info + search + upload), we do:
+// - 1 batch video info call
+// - 1 image library search (cached)
+// - Only upload if not found in cache
+function batchGetVideoCoverImages($videoIds, $advertiserId, $accessToken) {
+    logSmartPlus("=== OPTIMIZED BATCH: Processing " . count($videoIds) . " videos ===");
+
+    $coverMap = []; // videoId => imageId
+
+    // Step 1: Batch fetch ALL video info in ONE call
+    $videoInfoMap = batchGetVideoInfo($videoIds, $advertiserId, $accessToken);
+
+    // Step 2: Get cached image library (ONE call, reused)
+    $imageLibrary = getCachedImageLibrary($advertiserId, $accessToken);
+
+    // Step 3: For each video, try to find existing cover first
+    $videosNeedingUpload = [];
+
+    foreach ($videoIds as $videoId) {
+        $videoInfo = $videoInfoMap[$videoId] ?? null;
+        if (!$videoInfo) {
+            logSmartPlus("WARNING: No info for video $videoId");
+            continue;
+        }
+
+        $coverUrl = $videoInfo['video_cover_url'] ?? null;
+        $coverPattern = extractCoverPattern($coverUrl);
+
+        // Try to find existing cover in cache FIRST (no API call)
+        if ($coverPattern) {
+            $existingImageId = findExistingCoverInCache($coverPattern, $imageLibrary);
+            if ($existingImageId) {
+                $coverMap[$videoId] = $existingImageId;
+                logSmartPlus("FOUND EXISTING: Video $videoId -> Image $existingImageId");
+                continue;
             }
         }
 
-        // Fallback: try to find by video ID pattern
-        $videoIdShort = str_replace('v10033g50000', '', $videoId);
-        foreach ($imagesResult['data']['list'] as $image) {
-            $fileName = $image['file_name'] ?? '';
-            $imgWidth = $image['width'] ?? 0;
-            $imgHeight = $image['height'] ?? 0;
+        // Mark for upload if not found
+        if ($coverUrl) {
+            $videosNeedingUpload[$videoId] = $coverUrl;
+        }
+    }
 
-            if (strpos($fileName, $videoIdShort) !== false) {
-                $imgIsPortrait = $imgHeight > $imgWidth;
-                if ($imgIsPortrait === $isPortrait && $imgWidth >= 540) {
-                    logSmartPlus("Found matching cover image by video ID for $videoId: " . $image['image_id']);
-                    return $image['image_id'];
-                }
+    // Step 4: Upload only the covers that don't exist yet
+    logSmartPlus("UPLOADS NEEDED: " . count($videosNeedingUpload) . " videos need cover upload");
+
+    foreach ($videosNeedingUpload as $videoId => $coverUrl) {
+        logSmartPlus("Uploading cover for video $videoId");
+        $uploadResult = uploadImageByUrl($coverUrl, $advertiserId, $accessToken);
+
+        if ($uploadResult['success']) {
+            $coverMap[$videoId] = $uploadResult['image_id'];
+            logSmartPlus("UPLOADED: Video $videoId -> Image " . $uploadResult['image_id']);
+        } else {
+            // If upload failed (duplicate), refresh cache and search again
+            logSmartPlus("Upload failed for $videoId, refreshing cache and searching");
+            $GLOBALS['imageLibraryCache'] = null; // Clear cache
+            $imageLibrary = getCachedImageLibrary($advertiserId, $accessToken);
+            $coverPattern = extractCoverPattern($coverUrl);
+
+            $existingImageId = findExistingCoverInCache($coverPattern, $imageLibrary);
+            if ($existingImageId) {
+                $coverMap[$videoId] = $existingImageId;
+                logSmartPlus("FOUND AFTER REFRESH: Video $videoId -> Image $existingImageId");
             }
         }
     }
 
-    // PRIORITY 3 (Last resort): Find any valid image - but log a warning
-    logSmartPlus("WARNING: No unique cover found for video $videoId, using fallback image");
-    return findAnyValidImage($advertiserId, $accessToken);
+    // Step 5: For any remaining videos without covers, use fallback
+    foreach ($videoIds as $videoId) {
+        if (!isset($coverMap[$videoId])) {
+            logSmartPlus("WARNING: No cover for video $videoId, using fallback");
+            $coverMap[$videoId] = findAnyValidImageFromCache($imageLibrary);
+        }
+    }
+
+    logSmartPlus("=== BATCH COMPLETE: " . count($coverMap) . "/" . count($videoIds) . " videos have covers ===");
+    return $coverMap;
+}
+
+// Find any valid image from cached library (no API call)
+function findAnyValidImageFromCache($imageLibrary) {
+    foreach ($imageLibrary as $image) {
+        $imgWidth = $image['width'] ?? 0;
+        $imgHeight = $image['height'] ?? 0;
+        if ($imgWidth >= 540 && $imgHeight >= 540) {
+            return $image['image_id'];
+        }
+    }
+    // Return first image as last resort
+    if (!empty($imageLibrary[0]['image_id'])) {
+        return $imageLibrary[0]['image_id'];
+    }
+    return null;
+}
+
+// Legacy function - now uses optimized batch internally for single video
+// Kept for backwards compatibility
+function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
+    logSmartPlus("Getting cover image for video: $videoId (using optimized path)");
+
+    // Check if already in cache
+    if (isset($GLOBALS['videoInfoCache'][$videoId])) {
+        $videoInfo = $GLOBALS['videoInfoCache'][$videoId];
+    } else {
+        // Single video - still use batch function for consistency
+        $videoInfoMap = batchGetVideoInfo([$videoId], $advertiserId, $accessToken);
+        $videoInfo = $videoInfoMap[$videoId] ?? null;
+    }
+
+    if (!$videoInfo) {
+        logSmartPlus("Failed to get video info for: $videoId");
+        return findAnyValidImage($advertiserId, $accessToken);
+    }
+
+    $coverUrl = $videoInfo['video_cover_url'] ?? null;
+    $coverPattern = extractCoverPattern($coverUrl);
+
+    // Get cached image library
+    $imageLibrary = getCachedImageLibrary($advertiserId, $accessToken);
+
+    // Try to find existing cover first
+    if ($coverPattern) {
+        $existingImageId = findExistingCoverInCache($coverPattern, $imageLibrary);
+        if ($existingImageId) {
+            return $existingImageId;
+        }
+    }
+
+    // Upload if not found
+    if (!empty($coverUrl)) {
+        $uploadResult = uploadImageByUrl($coverUrl, $advertiserId, $accessToken);
+        if ($uploadResult['success']) {
+            return $uploadResult['image_id'];
+        }
+
+        // Refresh cache and try again
+        $GLOBALS['imageLibraryCache'] = null;
+        $imageLibrary = getCachedImageLibrary($advertiserId, $accessToken);
+
+        if ($coverPattern) {
+            $existingImageId = findExistingCoverInCache($coverPattern, $imageLibrary);
+            if ($existingImageId) {
+                return $existingImageId;
+            }
+        }
+    }
+
+    // Fallback
+    logSmartPlus("WARNING: No unique cover found for video $videoId, using fallback");
+    return findAnyValidImageFromCache($imageLibrary) ?? findAnyValidImage($advertiserId, $accessToken);
 }
 
 // Find any valid image in the library as a fallback
@@ -494,56 +648,74 @@ switch ($action) {
     case 'create_smartplus_ad':
         $data = $input;
 
-        logSmartPlus("=== CREATING SMART+ AD ===");
+        logSmartPlus("=== CREATING SMART+ AD (OPTIMIZED) ===");
 
         if (empty($data['adgroup_id'])) {
             echo json_encode(['success' => false, 'message' => 'Ad Group ID is required']);
             exit;
         }
 
+        // Log incoming creatives to verify uniqueness
+        logSmartPlus("Incoming creatives from frontend: " . json_encode($data['creatives'] ?? []));
+
+        // OPTIMIZED: Collect all video IDs first, then batch fetch covers
+        $videoIds = [];
+        $videoIdToCreative = [];
+        foreach ($data['creatives'] ?? [] as $index => $creative) {
+            if (!empty($creative['video_id'])) {
+                $videoId = $creative['video_id'];
+                // Only add if no image_id provided (needs auto-fetch)
+                if (empty($creative['image_id'])) {
+                    $videoIds[] = $videoId;
+                }
+                $videoIdToCreative[$videoId] = $creative;
+            }
+        }
+
+        // OPTIMIZED: Batch fetch ALL cover images in minimal API calls
+        $coverMap = [];
+        if (!empty($videoIds)) {
+            logSmartPlus("OPTIMIZED: Batch fetching covers for " . count($videoIds) . " videos");
+            $coverMap = batchGetVideoCoverImages($videoIds, $advertiserId, $accessToken);
+        }
+
         // Build creative_list with proper format for Smart+ Ads
         // Format: creative_list = [{creative_info: {video_info: {video_id}, image_info: [{web_uri}], ad_format}}]
         $creativeList = [];
 
-        // Log incoming creatives to verify uniqueness
-        logSmartPlus("Incoming creatives from frontend: " . json_encode($data['creatives'] ?? []));
-
         foreach ($data['creatives'] ?? [] as $index => $creative) {
             logSmartPlus("Processing creative $index: video_id=" . ($creative['video_id'] ?? 'null'));
             if (!empty($creative['video_id'])) {
+                $videoId = $creative['video_id'];
                 $creativeInfo = [
                     'video_info' => [
-                        'video_id' => $creative['video_id']
+                        'video_id' => $videoId
                     ],
                     'ad_format' => 'SINGLE_VIDEO'
                 ];
 
-                // Get video cover image - use provided or auto-find
-                $imageId = $creative['image_id'] ?? null;
-                if (empty($imageId)) {
-                    logSmartPlus("No image_id provided, auto-finding cover for: " . $creative['video_id']);
-                    $imageId = getVideoCoverImage($creative['video_id'], $advertiserId, $accessToken);
-                }
+                // Get cover image - use provided, or from batch result
+                $imageId = $creative['image_id'] ?? $coverMap[$videoId] ?? null;
 
                 if (!empty($imageId)) {
                     // Per TikTok SDK docs: image_info only requires web_uri (not image_id)
                     $creativeInfo['image_info'] = [[
                         'web_uri' => $imageId
                     ]];
-                    logSmartPlus("Added image_info for video " . $creative['video_id'] . ": web_uri=$imageId");
+                    logSmartPlus("Added image_info for video $videoId: web_uri=$imageId");
                 } else {
                     // CRITICAL: Smart+ Ads require image_info for video covers
-                    logSmartPlus("CRITICAL ERROR: No cover image found for video: " . $creative['video_id']);
+                    logSmartPlus("CRITICAL ERROR: No cover image found for video: $videoId");
                     echo json_encode([
                         'success' => false,
-                        'message' => 'Failed to find or create video cover image for video: ' . $creative['video_id'] . '. Please upload an image to your media library first.',
+                        'message' => 'Failed to find or create video cover image for video: ' . $videoId . '. Please upload an image to your media library first.',
                         'error_code' => 'NO_COVER_IMAGE'
                     ]);
                     exit;
                 }
 
                 $creativeList[] = ['creative_info' => $creativeInfo];
-                logSmartPlus("Added to creativeList: video_id=" . $creative['video_id']);
+                logSmartPlus("Added to creativeList: video_id=$videoId");
             }
         }
 
@@ -785,33 +957,46 @@ switch ($action) {
 
         logSmartPlus("creative_list input: " . json_encode($creativeList));
 
+        // OPTIMIZED: Collect all video IDs first, then batch fetch covers
+        $videoIds = [];
+        foreach ($creativeList as $creative) {
+            if (!empty($creative['video_id']) && empty($creative['image_id'])) {
+                $videoIds[] = $creative['video_id'];
+            }
+        }
+
+        // OPTIMIZED: Batch fetch ALL cover images in minimal API calls
+        $coverMap = [];
+        if (!empty($videoIds)) {
+            logSmartPlus("OPTIMIZED: Batch fetching covers for " . count($videoIds) . " videos");
+            $coverMap = batchGetVideoCoverImages($videoIds, $advertiserId, $accessToken);
+        }
+
         // Build creative_list with proper format for Smart+ Ads
         // Format: creative_list = [{creative_info: {video_info: {video_id}, image_info: [{web_uri}], ad_format}}]
         $creativeListFormatted = [];
 
         foreach ($creativeList as $creative) {
             if (!empty($creative['video_id'])) {
+                $videoId = $creative['video_id'];
                 $creativeInfo = [
                     'video_info' => [
-                        'video_id' => $creative['video_id']
+                        'video_id' => $videoId
                     ],
                     'ad_format' => 'SINGLE_VIDEO'
                 ];
 
-                // Get video cover image - use provided or auto-find
-                $imageId = $creative['image_id'] ?? null;
-                if (empty($imageId)) {
-                    logSmartPlus("No image_id provided, auto-finding cover for: " . $creative['video_id']);
-                    $imageId = getVideoCoverImage($creative['video_id'], $advertiserId, $accessToken);
-                }
+                // Get cover image - use provided, or from batch result
+                $imageId = $creative['image_id'] ?? $coverMap[$videoId] ?? null;
 
                 if (!empty($imageId)) {
                     // Per TikTok SDK docs: image_info only requires web_uri (not image_id)
                     $creativeInfo['image_info'] = [[
                         'web_uri' => $imageId
                     ]];
+                    logSmartPlus("Added image_info for video $videoId: web_uri=$imageId");
                 } else {
-                    logSmartPlus("WARNING: No cover image found for video: " . $creative['video_id']);
+                    logSmartPlus("WARNING: No cover image found for video: $videoId");
                 }
 
                 $creativeListFormatted[] = ['creative_info' => $creativeInfo];
