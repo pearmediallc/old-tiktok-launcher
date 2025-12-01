@@ -46,7 +46,7 @@ const US_STATES = [
     { id: '4971068', name: 'Maine', abbr: 'ME' },
     { id: '4361885', name: 'Maryland', abbr: 'MD' },
     { id: '6254926', name: 'Massachusetts', abbr: 'MA' },
-    { id: '4998796', name: 'Michigan', abbr: 'MI' },
+    { id: '5001836', name: 'Michigan', abbr: 'MI' },
     { id: '5037779', name: 'Minnesota', abbr: 'MN' },
     { id: '4436296', name: 'Mississippi', abbr: 'MS' },
     { id: '4398678', name: 'Missouri', abbr: 'MO' },
