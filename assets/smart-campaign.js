@@ -207,7 +207,6 @@ document.addEventListener('DOMContentLoaded', function() {
     loadPixels();
     loadIdentities();
     loadMediaLibrary();
-    loadCtaPortfolios();
     initializeDayparting();
     initializeLocationTargeting();
 
@@ -997,10 +996,13 @@ function testLandingUrl() {
     }
 }
 
-// Get selected CTAs from checkboxes (Legacy - kept for compatibility)
+// Get selected CTAs from checkboxes
 function getSelectedCTAs() {
-    // Now using portfolio-based CTAs instead
-    return [];
+    const selectedCTAs = [];
+    document.querySelectorAll('.cta-checkbox:checked').forEach(cb => {
+        selectedCTAs.push(cb.value);
+    });
+    return selectedCTAs;
 }
 
 // =====================
@@ -1014,7 +1016,7 @@ function reviewAds() {
 
     const identityId = document.getElementById('global-identity').value;
     const landingUrl = document.getElementById('global-landing-url').value.trim();
-    const portfolioId = document.getElementById('cta-portfolio-select').value;
+    const selectedCTAs = getSelectedCTAs();
 
     if (!identityId) {
         showToast('Please select an identity', 'error');
@@ -1026,8 +1028,13 @@ function reviewAds() {
         return;
     }
 
-    if (!portfolioId) {
-        showToast('Please select a CTA Portfolio (required for Lead Generation)', 'error');
+    if (selectedCTAs.length === 0) {
+        showToast('Please select at least one Call to Action', 'error');
+        return;
+    }
+
+    if (selectedCTAs.length > 3) {
+        showToast('Maximum 3 CTAs allowed. Please deselect some.', 'error');
         return;
     }
 
@@ -1053,17 +1060,10 @@ function reviewAds() {
 
     state.globalIdentityId = identityId;
     state.globalLandingUrl = landingUrl;
-    state.selectedPortfolioId = portfolioId;
+    state.globalCtaList = selectedCTAs;
 
     const identity = state.identities.find(i => i.identity_id === identityId);
     const identityName = identity ? (identity.display_name || identity.identity_name) : identityId;
-
-    // Get portfolio info for display
-    const portfolio = state.ctaPortfolios.find(p => p.creative_portfolio_id === portfolioId);
-    const portfolioName = portfolio ? portfolio.portfolio_name : 'CTA Portfolio';
-    const portfolioCTAs = portfolio && portfolio.portfolio_content
-        ? portfolio.portfolio_content.map(c => c.asset_content.replace(/_/g, ' ')).join(', ')
-        : 'Dynamic CTAs';
 
     // Populate review summaries
     document.getElementById('campaign-summary').innerHTML = `
@@ -1082,8 +1082,7 @@ function reviewAds() {
         <div class="summary-item" style="background: #f0f4ff; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
             <p><strong>Identity:</strong> ${identityName}</p>
             <p><strong>Landing Page:</strong> ${landingUrl}</p>
-            <p><strong>CTA Portfolio:</strong> ${portfolioName}</p>
-            <p><strong>Dynamic CTAs:</strong> ${portfolioCTAs}</p>
+            <p><strong>CTAs:</strong> ${selectedCTAs.join(', ')}</p>
             <p><strong>Total Creatives:</strong> ${state.creatives.length} videos</p>
         </div>
     `;
@@ -1110,8 +1109,8 @@ async function createAd() {
         return;
     }
 
-    if (!state.selectedPortfolioId) {
-        showToast('CTA Portfolio is required. Please go back and select one.', 'error');
+    if (!state.globalCtaList || state.globalCtaList.length === 0) {
+        showToast('CTAs are required. Please go back and select 1-3 CTAs.', 'error');
         return;
     }
 
@@ -1128,11 +1127,7 @@ async function createAd() {
             image_id: creative.image_id || null
         }));
 
-        // Get portfolio info for logging
-        const portfolio = state.ctaPortfolios.find(p => p.creative_portfolio_id === state.selectedPortfolioId);
-        const portfolioName = portfolio ? portfolio.portfolio_name : 'CTA Portfolio';
-
-        addLog('info', `Creating ad with ${creativeList.length} creatives and portfolio: ${portfolioName} (${state.selectedPortfolioId})`);
+        addLog('info', `Creating ad with ${creativeList.length} creatives and ${state.globalCtaList.length} CTAs`);
 
         const result = await apiRequest('create_smartplus_ad', {
             adgroup_id: state.adGroupId,
@@ -1140,7 +1135,7 @@ async function createAd() {
             identity_id: state.globalIdentityId,
             identity_type: identityType,
             landing_page_url: state.globalLandingUrl,
-            call_to_action_id: state.selectedPortfolioId,  // Use portfolio ID instead of call_to_action_list
+            call_to_action_list: state.globalCtaList,  // Use call_to_action_list with 1-3 CTAs
             creatives: creativeList
         });
 
@@ -1155,7 +1150,7 @@ async function createAd() {
             alertMessage += `Ad Group ID: ${state.adGroupId}\n`;
             alertMessage += `Smart+ Ad ID: ${result.smart_plus_ad_id}\n`;
             alertMessage += `Creatives: ${creativeList.length} videos\n`;
-            alertMessage += `CTA Portfolio: ${portfolioName}\n`;
+            alertMessage += `CTAs: ${state.globalCtaList.join(', ')}\n`;
 
             alert(alertMessage);
         } else {

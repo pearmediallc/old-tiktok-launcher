@@ -541,18 +541,22 @@ switch ($action) {
             $landingPageList[] = ['landing_page_url' => $data['landing_page_url']];
         }
 
-        // For Lead Gen Smart+ Ads: Use call_to_action_id (portfolio ID) instead of call_to_action_list
-        // This is REQUIRED - call_to_action_list is NOT supported for Lead Gen objective
-        $callToActionId = $data['call_to_action_id'] ?? null;
-
-        if (empty($callToActionId)) {
-            logSmartPlus("ERROR: call_to_action_id (portfolio ID) is required for Lead Gen Smart+ Ads");
-            echo json_encode([
-                'success' => false,
-                'message' => 'Dynamic CTA Portfolio is required for Lead Generation ads. Please select or create a CTA portfolio.'
-            ]);
-            exit;
+        // For Smart+ Ads using /smart_plus/ad/create/:
+        // Use call_to_action_list with 1-3 CTAs (NOT call_to_action_id which is for /campaign/spc/create/)
+        $ctaList = [];
+        if (!empty($data['call_to_action_list']) && is_array($data['call_to_action_list'])) {
+            // Limit to 3 CTAs maximum
+            $ctas = array_slice($data['call_to_action_list'], 0, 3);
+            foreach ($ctas as $cta) {
+                $ctaList[] = ['call_to_action' => $cta];
+            }
         }
+        // Ensure at least 1 CTA
+        if (empty($ctaList)) {
+            $ctaList[] = ['call_to_action' => 'LEARN_MORE'];
+        }
+
+        logSmartPlus("Using call_to_action_list with " . count($ctaList) . " CTAs");
 
         // Build ad_text_list from creatives - each ad_text becomes a separate item
         $adTextList = [];
@@ -572,7 +576,7 @@ switch ($action) {
             'ad_name' => $data['ad_name'] ?? 'Smart+ Ad',
             'creative_list' => $creativeList,
             'landing_page_url_list' => $landingPageList,
-            'call_to_action_id' => $callToActionId,  // Use portfolio ID instead of call_to_action_list
+            'call_to_action_list' => $ctaList,  // Smart+ Ad API uses call_to_action_list (1-3 CTAs)
             'ad_text_list' => $adTextList
         ];
 
