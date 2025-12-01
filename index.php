@@ -46,8 +46,8 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, rgb(30, 157, 241) 0%, rgb(26, 138, 216) 100%);
             height: 100vh;
             display: flex;
             justify-content: center;
@@ -57,8 +57,8 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
         .login-container {
             background: white;
             padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            border-radius: 1.3rem;
+            box-shadow: 0 10px 40px rgba(30, 157, 241, 0.3);
             width: 100%;
             max-width: 400px;
         }
@@ -69,14 +69,15 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
         }
 
         .login-header h1 {
-            color: #333;
+            color: rgb(15, 20, 25);
             font-size: 24px;
             margin-bottom: 10px;
         }
 
         .login-header p {
-            color: #666;
+            color: rgb(15, 20, 25);
             font-size: 14px;
+            opacity: 0.7;
         }
 
         .form-group {
@@ -86,7 +87,7 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
         label {
             display: block;
             margin-bottom: 8px;
-            color: #333;
+            color: rgb(15, 20, 25);
             font-weight: 500;
             font-size: 14px;
         }
@@ -95,26 +96,27 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
         input[type="password"] {
             width: 100%;
             padding: 12px 15px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+            border: 1px solid rgb(225, 234, 239);
+            border-radius: calc(1.3rem - 4px);
             font-size: 14px;
             transition: border-color 0.3s;
+            background: rgb(247, 249, 250);
         }
 
         input[type="text"]:focus,
         input[type="password"]:focus {
             outline: none;
-            border-color: #1a1a1a;
-            box-shadow: 0 0 0 3px rgba(26, 26, 26, 0.1);
+            border-color: rgb(30, 157, 241);
+            box-shadow: 0 0 0 3px rgba(30, 157, 241, 0.1);
         }
 
         .btn-login {
             width: 100%;
             padding: 12px;
-            background: #1a1a1a;
+            background: rgb(30, 157, 241);
             color: white;
-            border: 2px solid #1a1a1a;
-            border-radius: 5px;
+            border: 2px solid rgb(30, 157, 241);
+            border-radius: calc(1.3rem - 4px);
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
@@ -123,18 +125,20 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
 
         .btn-login:hover {
             transform: translateY(-2px);
-            background: #2d2d2d;
-            box-shadow: 0 6px 20px rgba(26, 26, 26, 0.3);
+            background: rgb(26, 138, 216);
+            border-color: rgb(26, 138, 216);
+            box-shadow: 0 6px 20px rgba(30, 157, 241, 0.3);
         }
 
         .error {
-            background: #fee;
-            color: #c33;
+            background: rgba(244, 33, 46, 0.1);
+            color: rgb(244, 33, 46);
             padding: 10px;
-            border-radius: 5px;
+            border-radius: calc(1.3rem - 6px);
             margin-bottom: 20px;
             font-size: 14px;
             text-align: center;
+            border: 1px solid rgba(244, 33, 46, 0.2);
         }
 
         .divider {
@@ -142,7 +146,8 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
             align-items: center;
             text-align: center;
             margin: 30px 0;
-            color: #999;
+            color: rgb(15, 20, 25);
+            opacity: 0.5;
             font-size: 14px;
         }
 
@@ -150,7 +155,7 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
         .divider::after {
             content: '';
             flex: 1;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid rgb(225, 234, 239);
         }
 
         .divider span {
@@ -160,10 +165,10 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
         .btn-oauth {
             width: 100%;
             padding: 16px;
-            background: #fe2c55;
+            background: rgb(30, 157, 241);
             color: white;
-            border: 2px solid #fe2c55;
-            border-radius: 8px;
+            border: 2px solid rgb(30, 157, 241);
+            border-radius: calc(1.3rem - 4px);
             font-size: 18px;
             font-weight: 600;
             cursor: pointer;
@@ -176,20 +181,22 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
 
         .btn-oauth:hover {
             transform: translateY(-3px);
-            background: #d91d45;
-            box-shadow: 0 8px 25px rgba(254, 44, 85, 0.4);
+            background: rgb(26, 138, 216);
+            border-color: rgb(26, 138, 216);
+            box-shadow: 0 8px 25px rgba(30, 157, 241, 0.4);
         }
 
         .btn-oauth-primary {
             padding: 20px;
             font-size: 20px;
-            box-shadow: 0 4px 15px rgba(254, 44, 85, 0.3);
+            box-shadow: 0 4px 15px rgba(30, 157, 241, 0.3);
         }
 
         .info-text {
             text-align: center;
             font-size: 14px;
-            color: #666;
+            color: rgb(15, 20, 25);
+            opacity: 0.7;
             margin-top: 20px;
             line-height: 1.8;
         }
@@ -197,14 +204,15 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
         .developer-login {
             margin-top: 10px;
             padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
+            background: rgb(227, 236, 246);
+            border-radius: calc(1.3rem - 4px);
             cursor: pointer;
         }
 
         .developer-login summary {
             font-size: 14px;
-            color: #666;
+            color: rgb(15, 20, 25);
+            opacity: 0.7;
             text-align: center;
             list-style: none;
             padding: 5px;
@@ -215,11 +223,12 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
         }
 
         .developer-login summary:hover {
-            color: #333;
+            opacity: 1;
         }
 
         .developer-login[open] summary {
-            color: #333;
+            color: rgb(15, 20, 25);
+            opacity: 1;
             font-weight: 600;
             margin-bottom: 10px;
         }

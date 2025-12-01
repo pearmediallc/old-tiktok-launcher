@@ -1285,11 +1285,11 @@ switch ($action) {
             logSmartPlus("Creating new frequently used CTA portfolio");
 
             $frequentlyUsedCTAs = [
-                ['asset_content' => 'LEARN_MORE', 'asset_ids' => [0]],
-                ['asset_content' => 'GET_QUOTE', 'asset_ids' => [0]],
-                ['asset_content' => 'SIGN_UP', 'asset_ids' => [0]],
-                ['asset_content' => 'CONTACT_US', 'asset_ids' => [0]],
-                ['asset_content' => 'APPLY_NOW', 'asset_ids' => [0]]
+                ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]],
+                ['asset_content' => 'GET_QUOTE', 'asset_ids' => ["0"]],
+                ['asset_content' => 'SIGN_UP', 'asset_ids' => ["0"]],
+                ['asset_content' => 'CONTACT_US', 'asset_ids' => ["0"]],
+                ['asset_content' => 'APPLY_NOW', 'asset_ids' => ["0"]]
             ];
 
             $params = [

@@ -434,7 +434,7 @@ async function createCtaPortfolio() {
     document.querySelectorAll('.portfolio-cta-checkbox:checked').forEach(cb => {
         selectedCTAs.push({
             asset_content: cb.value,
-            asset_ids: [0]  // Required format for TikTok API
+            asset_ids: ["0"]  // Must be string per TikTok API requirement
         });
     });
 

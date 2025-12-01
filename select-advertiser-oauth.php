@@ -26,8 +26,8 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, rgb(30, 157, 241) 0%, rgb(26, 138, 216) 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -59,13 +59,13 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
 
         .wizard-container {
             background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            border-radius: 1.3rem;
+            box-shadow: 0 20px 60px rgba(30, 157, 241, 0.3);
             overflow: hidden;
         }
 
         .wizard-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, rgb(30, 157, 241) 0%, rgb(26, 138, 216) 100%);
             padding: 30px;
             color: white;
         }
@@ -99,12 +99,12 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
 
         .step.active .step-number {
             background: white;
-            color: #667eea;
+            color: rgb(30, 157, 241);
             box-shadow: 0 4px 15px rgba(255,255,255,0.3);
         }
 
         .step.completed .step-number {
-            background: #4caf50;
+            background: rgb(0, 184, 122);
         }
 
         .step-label {
@@ -144,13 +144,14 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
         .section-title {
             font-size: 28px;
             font-weight: 700;
-            color: #1a1a1a;
+            color: rgb(15, 20, 25);
             margin-bottom: 10px;
         }
 
         .section-subtitle {
             font-size: 16px;
-            color: #666;
+            color: rgb(15, 20, 25);
+            opacity: 0.7;
             margin-bottom: 30px;
         }
 
@@ -162,8 +163,8 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
         }
 
         .selection-card {
-            border: 3px solid #e0e0e0;
-            border-radius: 16px;
+            border: 3px solid rgb(225, 234, 239);
+            border-radius: calc(1.3rem - 4px);
             padding: 25px;
             cursor: pointer;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -179,15 +180,15 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
             left: 0;
             right: 0;
             height: 4px;
-            background: linear-gradient(90deg, #667eea, #764ba2);
+            background: linear-gradient(90deg, rgb(30, 157, 241), rgb(26, 138, 216));
             transform: scaleX(0);
             transition: transform 0.3s;
         }
 
         .selection-card:hover {
-            border-color: #667eea;
+            border-color: rgb(30, 157, 241);
             transform: translateY(-4px);
-            box-shadow: 0 12px 24px rgba(102, 126, 234, 0.2);
+            box-shadow: 0 12px 24px rgba(30, 157, 241, 0.2);
         }
 
         .selection-card:hover::before {
@@ -195,13 +196,13 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
         }
 
         .selection-card.selected {
-            border-color: #4caf50;
-            background: linear-gradient(135deg, #f1f8f4 0%, #e8f5e9 100%);
-            box-shadow: 0 8px 24px rgba(76, 175, 80, 0.3);
+            border-color: rgb(0, 184, 122);
+            background: linear-gradient(135deg, rgb(227, 236, 246) 0%, rgb(240, 248, 244) 100%);
+            box-shadow: 0 8px 24px rgba(0, 184, 122, 0.3);
         }
 
         .selection-card.selected::before {
-            background: #4caf50;
+            background: rgb(0, 184, 122);
             transform: scaleX(1);
         }
 
@@ -214,30 +215,32 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
             justify-content: center;
             font-size: 32px;
             margin-bottom: 15px;
-            background: linear-gradient(135deg, #667eea15, #764ba215);
+            background: linear-gradient(135deg, rgba(30, 157, 241, 0.1), rgba(26, 138, 216, 0.1));
         }
 
         .selection-card.selected .card-icon {
-            background: linear-gradient(135deg, #4caf5015, #66bb6a15);
+            background: linear-gradient(135deg, rgba(0, 184, 122, 0.1), rgba(0, 160, 106, 0.1));
         }
 
         .card-title {
             font-size: 20px;
             font-weight: 700;
-            color: #1a1a1a;
+            color: rgb(15, 20, 25);
             margin-bottom: 8px;
         }
 
         .card-subtitle {
             font-size: 14px;
-            color: #666;
+            color: rgb(15, 20, 25);
+            opacity: 0.7;
             margin-bottom: 12px;
             font-weight: 500;
         }
 
         .card-description {
             font-size: 13px;
-            color: #888;
+            color: rgb(15, 20, 25);
+            opacity: 0.6;
             line-height: 1.6;
         }
 
@@ -248,7 +251,7 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
             width: 28px;
             height: 28px;
             border-radius: 50%;
-            background: #4caf50;
+            background: rgb(0, 184, 122);
             color: white;
             display: none;
             align-items: center;
@@ -271,21 +274,21 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
             display: none;
             margin-top: 20px;
             padding: 12px 24px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            background: linear-gradient(135deg, rgb(30, 157, 241), rgb(26, 138, 216));
             color: white;
             border: none;
-            border-radius: 10px;
+            border-radius: calc(1.3rem - 4px);
             font-size: 15px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
             width: 100%;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 4px 12px rgba(30, 157, 241, 0.3);
         }
 
         .card-next-button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+            box-shadow: 0 6px 16px rgba(30, 157, 241, 0.5);
         }
 
         .selection-card.selected .card-next-button {
@@ -312,8 +315,8 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
         }
 
         .campaign-card {
-            border: 3px solid #e0e0e0;
-            border-radius: 16px;
+            border: 3px solid rgb(225, 234, 239);
+            border-radius: calc(1.3rem - 4px);
             padding: 30px;
             cursor: pointer;
             transition: all 0.3s;
@@ -322,15 +325,15 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
         }
 
         .campaign-card:hover {
-            border-color: #667eea;
+            border-color: rgb(30, 157, 241);
             transform: translateY(-5px);
-            box-shadow: 0 15px 35px rgba(102, 126, 234, 0.25);
+            box-shadow: 0 15px 35px rgba(30, 157, 241, 0.25);
         }
 
         .campaign-card.selected {
-            border-color: #4caf50;
-            background: linear-gradient(135deg, #ffffff 0%, #f1f8f4 100%);
-            box-shadow: 0 10px 30px rgba(76, 175, 80, 0.3);
+            border-color: rgb(0, 184, 122);
+            background: linear-gradient(135deg, #ffffff 0%, rgb(240, 248, 244) 100%);
+            box-shadow: 0 10px 30px rgba(0, 184, 122, 0.3);
         }
 
         .campaign-icon {
@@ -342,23 +345,24 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
             justify-content: center;
             font-size: 36px;
             margin-bottom: 20px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            background: linear-gradient(135deg, rgb(30, 157, 241), rgb(26, 138, 216));
         }
 
         .campaign-card.selected .campaign-icon {
-            background: linear-gradient(135deg, #4caf50, #66bb6a);
+            background: linear-gradient(135deg, rgb(0, 184, 122), rgb(0, 160, 106));
         }
 
         .campaign-title {
             font-size: 24px;
             font-weight: 700;
-            color: #1a1a1a;
+            color: rgb(15, 20, 25);
             margin-bottom: 10px;
         }
 
         .campaign-description {
             font-size: 14px;
-            color: #666;
+            color: rgb(15, 20, 25);
+            opacity: 0.7;
             line-height: 1.7;
             margin-bottom: 15px;
         }
@@ -371,7 +375,8 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
         .campaign-features li {
             padding: 8px 0;
             font-size: 13px;
-            color: #555;
+            color: rgb(15, 20, 25);
+            opacity: 0.8;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -379,7 +384,7 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
 
         .campaign-features li::before {
             content: '✓';
-            color: #4caf50;
+            color: rgb(0, 184, 122);
             font-weight: 700;
             font-size: 16px;
         }
@@ -389,14 +394,14 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
             gap: 15px;
             justify-content: flex-end;
             padding-top: 20px;
-            border-top: 2px solid #f0f0f0;
+            border-top: 2px solid rgb(225, 234, 239);
             margin-top: 30px;
         }
 
         .btn {
             padding: 14px 32px;
             border: none;
-            border-radius: 12px;
+            border-radius: calc(1.3rem - 4px);
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
@@ -407,38 +412,38 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
         }
 
         .btn-secondary {
-            background: #f5f5f5;
-            color: #666;
+            background: rgb(247, 249, 250);
+            color: rgb(15, 20, 25);
         }
 
         .btn-secondary:hover {
-            background: #e0e0e0;
+            background: rgb(227, 236, 246);
             transform: translateY(-2px);
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            background: linear-gradient(135deg, rgb(30, 157, 241), rgb(26, 138, 216));
             color: white;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 15px rgba(30, 157, 241, 0.4);
         }
 
         .btn-primary:hover {
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+            box-shadow: 0 6px 20px rgba(30, 157, 241, 0.6);
             transform: translateY(-2px);
         }
 
         .btn-primary:disabled {
-            background: #ccc;
+            background: rgb(229, 229, 230);
             cursor: not-allowed;
             box-shadow: none;
             transform: none;
         }
 
         .success-banner {
-            background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
-            border-left: 5px solid #4caf50;
+            background: linear-gradient(135deg, rgb(227, 236, 246), rgb(240, 248, 244));
+            border-left: 5px solid rgb(0, 184, 122);
             padding: 20px;
-            border-radius: 12px;
+            border-radius: calc(1.3rem - 4px);
             margin-bottom: 30px;
             display: flex;
             align-items: center;
@@ -449,7 +454,7 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
             width: 50px;
             height: 50px;
             border-radius: 50%;
-            background: #4caf50;
+            background: rgb(0, 184, 122);
             color: white;
             display: flex;
             align-items: center;
@@ -464,21 +469,21 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
 
         .success-banner-title {
             font-weight: 700;
-            color: #2e7d32;
+            color: rgb(0, 140, 94);
             font-size: 16px;
             margin-bottom: 4px;
         }
 
         .success-banner-subtitle {
-            color: #388e3c;
+            color: rgb(0, 160, 106);
             font-size: 14px;
         }
 
         .empty-state {
             text-align: center;
             padding: 60px 20px;
-            background: #fff3cd;
-            border-radius: 16px;
+            background: rgb(227, 236, 246);
+            border-radius: calc(1.3rem - 4px);
             margin-top: 30px;
         }
 
@@ -490,12 +495,13 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
         .empty-state-title {
             font-size: 24px;
             font-weight: 700;
-            color: #856404;
+            color: rgb(15, 20, 25);
             margin-bottom: 10px;
         }
 
         .empty-state-text {
-            color: #856404;
+            color: rgb(15, 20, 25);
+            opacity: 0.7;
             margin-bottom: 30px;
         }
 
