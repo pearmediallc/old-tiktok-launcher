@@ -97,12 +97,12 @@ function uploadImageByUrl($imageUrl, $advertiserId, $accessToken) {
     return ['success' => false, 'error' => $result['message'] ?? 'Unknown error'];
 }
 
-// Get video cover image - find from image library or upload from video cover URL
+// Get video cover image - upload the video's own cover URL to ensure unique covers per video
 // CRITICAL: Smart+ Ads REQUIRE image_info for video covers - this function must always return an image_id
 function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
     logSmartPlus("Getting cover image for video: $videoId");
 
-    // First, get video info to get the cover URL and dimensions
+    // First, get video info to get the cover URL
     $videoResult = makeApiCall('/file/video/ad/info/', [
         'advertiser_id' => $advertiserId,
         'video_ids' => json_encode([$videoId])
@@ -110,7 +110,7 @@ function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
 
     if ($videoResult['code'] != 0 || empty($videoResult['data']['list'])) {
         logSmartPlus("Failed to get video info for: $videoId - code: " . ($videoResult['code'] ?? 'null'));
-        // Still try to search for any matching image
+        // Fallback to any valid image
         return findAnyValidImage($advertiserId, $accessToken);
     }
 
@@ -121,12 +121,19 @@ function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
 
     logSmartPlus("Video info: width=$videoWidth, height=$videoHeight, cover_url=" . ($coverUrl ? 'exists' : 'null'));
 
-    // Calculate video aspect ratio (portrait = height > width, landscape = width > height)
-    $isPortrait = $videoHeight > $videoWidth;
-    $videoAspectRatio = $videoWidth > 0 ? $videoHeight / $videoWidth : 0;
-    logSmartPlus("Video dimensions: {$videoWidth}x{$videoHeight}, aspect ratio: $videoAspectRatio, portrait: " . ($isPortrait ? 'yes' : 'no'));
+    // PRIORITY 1: Use the video's own cover URL - this guarantees a unique cover per video
+    // Upload it to the image library to get an image_id
+    if (!empty($coverUrl)) {
+        logSmartPlus("Uploading video's own cover URL to ensure unique cover: $coverUrl");
+        $uploadResult = uploadImageByUrl($coverUrl, $advertiserId, $accessToken);
+        if ($uploadResult['success']) {
+            logSmartPlus("Successfully uploaded unique cover for video $videoId: " . $uploadResult['image_id']);
+            return $uploadResult['image_id'];
+        }
+        logSmartPlus("Failed to upload video cover URL: " . ($uploadResult['error'] ?? 'unknown'));
+    }
 
-    // Search for existing image in library that might be the cover
+    // PRIORITY 2: Search for existing image that matches the video ID pattern
     $imagesResult = makeApiCall('/file/image/ad/search/', [
         'advertiser_id' => $advertiserId,
         'page' => 1,
@@ -134,53 +141,29 @@ function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
     ], $accessToken, 'GET');
 
     if ($imagesResult['code'] == 0 && !empty($imagesResult['data']['list'])) {
-        // Look for an image that matches the video ID pattern in filename AND has matching aspect ratio
         $videoIdShort = str_replace('v10033g50000', '', $videoId);
+        $isPortrait = $videoHeight > $videoWidth;
+
         foreach ($imagesResult['data']['list'] as $image) {
             $fileName = $image['file_name'] ?? '';
             $imgWidth = $image['width'] ?? 0;
             $imgHeight = $image['height'] ?? 0;
 
-            // Check if filename contains part of video ID or is a thumb for this video
+            // Check if filename contains part of video ID (exact match for this video)
             if (strpos($fileName, $videoIdShort) !== false ||
                 (strpos($fileName, 'thumb') !== false && strpos($fileName, substr($videoIdShort, 0, 8)) !== false)) {
 
-                // Verify aspect ratio matches (portrait video needs portrait image)
                 $imgIsPortrait = $imgHeight > $imgWidth;
                 if ($imgIsPortrait === $isPortrait && $imgWidth >= 540) {
-                    logSmartPlus("Found matching cover image with correct aspect: " . $image['image_id'] . " ({$imgWidth}x{$imgHeight})");
+                    logSmartPlus("Found exact matching cover image for video $videoId: " . $image['image_id']);
                     return $image['image_id'];
                 }
             }
         }
-
-        // If no exact match, find any image with matching aspect ratio and good resolution
-        foreach ($imagesResult['data']['list'] as $image) {
-            $imgWidth = $image['width'] ?? 0;
-            $imgHeight = $image['height'] ?? 0;
-            $imgIsPortrait = $imgHeight > $imgWidth;
-
-            // Match orientation and ensure decent resolution
-            if ($imgIsPortrait === $isPortrait && $imgWidth >= 540 && $imgHeight >= 540) {
-                logSmartPlus("Using fallback image with matching aspect: " . $image['image_id'] . " ({$imgWidth}x{$imgHeight})");
-                return $image['image_id'];
-            }
-        }
     }
 
-    // If no suitable image found, upload the video's own cover URL (guaranteed to match)
-    if (!empty($coverUrl)) {
-        logSmartPlus("No matching aspect ratio image found, uploading video cover URL: $coverUrl");
-        $uploadResult = uploadImageByUrl($coverUrl, $advertiserId, $accessToken);
-        if ($uploadResult['success']) {
-            logSmartPlus("Uploaded video cover as image: " . $uploadResult['image_id']);
-            return $uploadResult['image_id'];
-        }
-        logSmartPlus("Failed to upload video cover URL: " . ($uploadResult['error'] ?? 'unknown'));
-    }
-
-    // Last resort: find ANY displayable image in the library
-    logSmartPlus("All methods failed, trying to find ANY valid image...");
+    // PRIORITY 3 (Last resort): Find any valid image - but log a warning
+    logSmartPlus("WARNING: No unique cover found for video $videoId, using fallback image");
     return findAnyValidImage($advertiserId, $accessToken);
 }
 
