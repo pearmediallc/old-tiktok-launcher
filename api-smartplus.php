@@ -535,7 +535,8 @@ switch ($action) {
             }
         }
 
-        // Build landing_page_url_list as array of OBJECTS with landing_page_url key
+        // Build landing_page_urls as array of OBJECTS with landing_page_url key
+        // Per TikTok docs: landing_page_urls for Website destination (not page_list)
         $landingPageList = [];
         if (!empty($data['landing_page_url'])) {
             $landingPageList[] = ['landing_page_url' => $data['landing_page_url']];
@@ -574,7 +575,7 @@ switch ($action) {
             'adgroup_id' => $data['adgroup_id'],
             'ad_name' => $data['ad_name'] ?? 'Smart+ Ad',
             'creative_list' => $creativeList,
-            'landing_page_url_list' => $landingPageList,
+            'landing_page_urls' => $landingPageList,
             'ad_text_list' => $adTextList
         ];
 
@@ -800,7 +801,8 @@ switch ($action) {
 
         logSmartPlus("creative_list formatted: " . json_encode($creativeListFormatted));
 
-        // Build landing_page_url_list as array of OBJECTS with landing_page_url key
+        // Build landing_page_urls as array of OBJECTS with landing_page_url key
+        // Per TikTok docs: landing_page_urls for Website destination (not page_list)
         $landingPageUrlList = [];
         if (!empty($data['landing_page_url'])) {
             $landingPageUrlList[] = ['landing_page_url' => $data['landing_page_url']];
@@ -838,7 +840,7 @@ switch ($action) {
             'adgroup_id' => $adgroupId,
             'ad_name' => $data['campaign_name'] . ' - Ad',
             'creative_list' => $creativeListFormatted,
-            'landing_page_url_list' => $landingPageUrlList,
+            'landing_page_urls' => $landingPageUrlList,
             'ad_text_list' => $adTextList
         ];
 
