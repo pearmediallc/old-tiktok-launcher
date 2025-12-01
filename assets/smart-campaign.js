@@ -232,7 +232,12 @@ document.addEventListener('DOMContentLoaded', function() {
 // Toggle CBO budget section
 function toggleCBOBudget() {
     const cboEnabled = document.getElementById('cbo-enabled').checked;
+
+    // Step 1 elements
     const campaignBudgetSection = document.getElementById('campaign-budget-section');
+    const cboDisabledNote = document.getElementById('campaign-cbo-disabled-note');
+
+    // Step 2 elements
     const adGroupBudgetSection = document.getElementById('adgroup-budget-section');
     const cboBudgetNote = document.getElementById('cbo-budget-note');
     const displayBudgetInfo = document.getElementById('display-budget-info');
@@ -240,20 +245,27 @@ function toggleCBOBudget() {
     state.cboEnabled = cboEnabled;
 
     if (cboEnabled) {
+        // CBO Enabled: Show campaign budget input in Step 1, hide ad group budget in Step 2
         if (campaignBudgetSection) campaignBudgetSection.style.display = 'block';
+        if (cboDisabledNote) cboDisabledNote.style.display = 'none';
         if (adGroupBudgetSection) adGroupBudgetSection.style.display = 'none';
         if (cboBudgetNote) cboBudgetNote.style.display = 'block';
         if (displayBudgetInfo) {
-            displayBudgetInfo.innerHTML = '<strong>Budget:</strong> $<span id="display-budget">-</span>/day (Campaign Level)';
+            const budgetVal = document.getElementById('campaign-budget')?.value || '50';
+            displayBudgetInfo.innerHTML = '<strong>Budget:</strong> $<span id="display-budget">' + budgetVal + '</span>/day (Campaign Level)';
         }
     } else {
+        // CBO Disabled: Hide campaign budget in Step 1, show ad group budget input in Step 2
         if (campaignBudgetSection) campaignBudgetSection.style.display = 'none';
+        if (cboDisabledNote) cboDisabledNote.style.display = 'block';
         if (adGroupBudgetSection) adGroupBudgetSection.style.display = 'block';
         if (cboBudgetNote) cboBudgetNote.style.display = 'none';
         if (displayBudgetInfo) {
-            displayBudgetInfo.innerHTML = '<strong>Budget:</strong> Set at Ad Group level';
+            displayBudgetInfo.innerHTML = '<strong>Budget:</strong> Set at Ad Group level (Step 2)';
         }
     }
+
+    addLog('info', `CBO ${cboEnabled ? 'enabled' : 'disabled'} - Budget will be set at ${cboEnabled ? 'Campaign' : 'Ad Group'} level`);
 }
 
 // Load Pixels
@@ -738,10 +750,22 @@ async function createCampaign() {
             const displayNameEl = document.getElementById('display-campaign-name');
             const displayBudgetEl = document.getElementById('display-budget');
             const displayCampaignIdEl = document.getElementById('display-campaign-id');
+            const cboBudgetDisplay = document.getElementById('cbo-budget-display');
 
             if (displayNameEl) displayNameEl.textContent = campaignName;
             if (displayBudgetEl) displayBudgetEl.textContent = campaignBudget;
             if (displayCampaignIdEl) displayCampaignIdEl.textContent = result.campaign_id;
+            if (cboBudgetDisplay) cboBudgetDisplay.textContent = campaignBudget;
+
+            // Update Step 2 budget info based on CBO state
+            const displayBudgetInfo = document.getElementById('display-budget-info');
+            if (displayBudgetInfo) {
+                if (state.cboEnabled) {
+                    displayBudgetInfo.innerHTML = '<strong>Budget:</strong> $<span id="display-budget">' + campaignBudget + '</span>/day (Campaign Level)';
+                } else {
+                    displayBudgetInfo.innerHTML = '<strong>Budget:</strong> Set at Ad Group level below';
+                }
+            }
 
             showToast(`Campaign created! ID: ${result.campaign_id}`, 'success');
             addLog('info', `Campaign created: ${result.campaign_id}`);
@@ -775,9 +799,11 @@ async function createAdGroup() {
     if (state.cboEnabled) {
         // If CBO was "enabled", the budget was entered in campaign budget field but still goes to AdGroup
         adGroupBudget = state.budget || parseFloat(document.getElementById('campaign-budget')?.value) || 50;
+        addLog('info', `Using Campaign-level budget for AdGroup: $${adGroupBudget}`);
     } else {
         // If CBO was disabled, get from adgroup budget field
         adGroupBudget = parseFloat(document.getElementById('adgroup-budget')?.value) || 50;
+        addLog('info', `Using AdGroup-level budget: $${adGroupBudget}`);
     }
 
     if (!pixelId) {
@@ -1060,10 +1086,14 @@ function reviewAds() {
     const identityName = identity ? (identity.display_name || identity.identity_name) : identityId;
 
     // Populate review summaries
+    const budgetDisplay = state.cboEnabled
+        ? `$${state.budget}/day (Campaign Level)`
+        : `$${state.adGroupBudget}/day (Ad Group Level)`;
+
     document.getElementById('campaign-summary').innerHTML = `
         <p><strong>Campaign Name:</strong> ${state.campaignName}</p>
         <p><strong>Campaign ID:</strong> ${state.campaignId}</p>
-        <p><strong>Budget:</strong> $${state.budget}/day</p>
+        <p><strong>Budget:</strong> ${budgetDisplay}</p>
     `;
 
     document.getElementById('adgroup-summary').innerHTML = `

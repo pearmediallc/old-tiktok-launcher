@@ -193,11 +193,26 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 </div>
 
                 <div class="form-section">
-                    <h3>Budget</h3>
+                    <h3>Budget Settings</h3>
                     <div class="form-group">
-                        <label>Daily Budget ($)</label>
-                        <input type="number" id="campaign-budget" value="50" min="20" placeholder="50">
-                        <small>Minimum $20 daily budget. Default: $50</small>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="cbo-enabled" checked onchange="toggleCBOBudget()" style="width: 20px; height: 20px; accent-color: rgb(30, 157, 241);">
+                            <span style="font-weight: 600;">Campaign Budget Optimization (CBO)</span>
+                        </label>
+                        <small style="display: block; margin-top: 8px; margin-left: 30px; color: #666;">
+                            When enabled, budget is set at campaign level and TikTok optimizes across ad groups.<br>
+                            When disabled, you set budget individually at ad group level.
+                        </small>
+                    </div>
+                    <div id="campaign-budget-section">
+                        <div class="form-group">
+                            <label>Daily Budget ($)</label>
+                            <input type="number" id="campaign-budget" value="50" min="20" placeholder="50">
+                            <small>Minimum $20 daily budget. Default: $50</small>
+                        </div>
+                    </div>
+                    <div id="campaign-cbo-disabled-note" style="display: none; padding: 15px; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
+                        <p style="margin: 0; color: #856404;"><strong>CBO Disabled:</strong> You will set the budget at Ad Group level in Step 2.</p>
                     </div>
                 </div>
 
@@ -221,25 +236,15 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 <div class="form-section">
                     <h3>Budget & Schedule</h3>
                     <div id="adgroup-budget-section" style="display: none;">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Budget Mode</label>
-                                <select id="budget-mode">
-                                    <option value="BUDGET_MODE_DAY">Daily Budget</option>
-                                    <option value="BUDGET_MODE_DYNAMIC_DAILY_BUDGET">Dynamic Daily Budget (Recommended)</option>
-                                    <option value="BUDGET_MODE_TOTAL">Total Budget (Lifetime)</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Ad Group Budget Amount ($)</label>
-                                <input type="number" id="adgroup-budget" placeholder="50" min="20" value="50">
-                                <small>Budget is set at ad group level when CBO is disabled</small>
-                            </div>
+                        <div class="form-group">
+                            <label>Ad Group Daily Budget ($)</label>
+                            <input type="number" id="adgroup-budget" placeholder="50" min="20" value="50">
+                            <small>Minimum $20 daily budget. This budget applies to this ad group only.</small>
                         </div>
                     </div>
                     <div id="cbo-budget-note" style="padding: 15px; background: #e8f5e9; border-radius: 6px; margin-bottom: 15px;">
                         <p style="margin: 0; color: #2e7d32;"><strong>✓ Campaign Budget Optimization is enabled</strong></p>
-                        <small>Budget is managed at campaign level. Ad group budget is not required.</small>
+                        <small>Budget is managed at campaign level ($<span id="cbo-budget-display">50</span>/day). TikTok will optimize spend across ad groups.</small>
                     </div>
                 </div>
 
