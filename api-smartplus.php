@@ -422,7 +422,8 @@ switch ($action) {
             'campaign_id' => $data['campaign_id'],
             'adgroup_name' => $data['adgroup_name'] ?? $data['campaign_name'] . ' Ad Group',
             'promotion_type' => 'LEAD_GENERATION',
-            'optimization_goal' => 'LEAD_GENERATION',  // Must be LEAD_GENERATION for lead gen campaigns
+            'promotion_target_type' => 'EXTERNAL_WEBSITE',  // Required for Website destination (not Instant Form)
+            'optimization_goal' => 'CONVERT',  // Use CONVERT for Lead Gen with External Website
             'billing_event' => 'OCPM',
             'schedule_type' => 'SCHEDULE_FROM_NOW',
             'schedule_start_time' => $scheduleStart,
@@ -495,7 +496,7 @@ switch ($action) {
         }
 
         // Build creative_list with proper format for Smart+ Ads
-        // Format: creative_list = [{creative_info: {video_info: {video_id}, image_info: [{image_id, web_uri}], ad_format}}]
+        // Format: creative_list = [{creative_info: {video_info: {video_id}, image_info: [{web_uri}], ad_format}}]
         $creativeList = [];
 
         foreach ($data['creatives'] ?? [] as $creative) {
@@ -515,11 +516,11 @@ switch ($action) {
                 }
 
                 if (!empty($imageId)) {
+                    // Per TikTok SDK docs: image_info only requires web_uri (not image_id)
                     $creativeInfo['image_info'] = [[
-                        'image_id' => $imageId,
                         'web_uri' => $imageId
                     ]];
-                    logSmartPlus("Added image_info for video " . $creative['video_id'] . ": image_id=$imageId");
+                    logSmartPlus("Added image_info for video " . $creative['video_id'] . ": web_uri=$imageId");
                 } else {
                     // CRITICAL: Smart+ Ads require image_info for video covers
                     logSmartPlus("CRITICAL ERROR: No cover image found for video: " . $creative['video_id']);
@@ -767,7 +768,7 @@ switch ($action) {
         logSmartPlus("creative_list input: " . json_encode($creativeList));
 
         // Build creative_list with proper format for Smart+ Ads
-        // Format: creative_list = [{creative_info: {video_info: {video_id}, image_info: [{image_id, web_uri}], ad_format}}]
+        // Format: creative_list = [{creative_info: {video_info: {video_id}, image_info: [{web_uri}], ad_format}}]
         $creativeListFormatted = [];
 
         foreach ($creativeList as $creative) {
@@ -787,8 +788,8 @@ switch ($action) {
                 }
 
                 if (!empty($imageId)) {
+                    // Per TikTok SDK docs: image_info only requires web_uri (not image_id)
                     $creativeInfo['image_info'] = [[
-                        'image_id' => $imageId,
                         'web_uri' => $imageId
                     ]];
                 } else {
