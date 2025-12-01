@@ -1121,7 +1121,9 @@ async function createAd() {
             image_id: creative.image_id || null
         }));
 
+        // Log detailed creative list to verify each video is unique
         addLog('info', `Creating ad with ${creativeList.length} creatives and portfolio ${state.globalCtaPortfolioId}`);
+        addLog('info', 'Creative list details:', creativeList.map((c, i) => `Creative ${i+1}: video_id=${c.video_id}`).join(', '));
 
         const result = await apiRequest('create_smartplus_ad', {
             adgroup_id: state.adGroupId,
@@ -1144,7 +1146,7 @@ async function createAd() {
             alertMessage += `Ad Group ID: ${state.adGroupId}\n`;
             alertMessage += `Smart+ Ad ID: ${result.smart_plus_ad_id}\n`;
             alertMessage += `Creatives: ${creativeList.length} videos\n`;
-            alertMessage += `CTAs: ${state.globalCtaList.join(', ')}\n`;
+            alertMessage += `CTA Portfolio: ${state.selectedPortfolioName || 'Dynamic CTAs'}\n`;
 
             alert(alertMessage);
         } else {

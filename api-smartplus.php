@@ -499,7 +499,11 @@ switch ($action) {
         // Format: creative_list = [{creative_info: {video_info: {video_id}, image_info: [{web_uri}], ad_format}}]
         $creativeList = [];
 
-        foreach ($data['creatives'] ?? [] as $creative) {
+        // Log incoming creatives to verify uniqueness
+        logSmartPlus("Incoming creatives from frontend: " . json_encode($data['creatives'] ?? []));
+
+        foreach ($data['creatives'] ?? [] as $index => $creative) {
+            logSmartPlus("Processing creative $index: video_id=" . ($creative['video_id'] ?? 'null'));
             if (!empty($creative['video_id'])) {
                 $creativeInfo = [
                     'video_info' => [
@@ -533,7 +537,15 @@ switch ($action) {
                 }
 
                 $creativeList[] = ['creative_info' => $creativeInfo];
+                logSmartPlus("Added to creativeList: video_id=" . $creative['video_id']);
             }
+        }
+
+        // Log final creative list to verify all videos are unique
+        logSmartPlus("Final creative_list count: " . count($creativeList));
+        foreach ($creativeList as $idx => $item) {
+            $vid = $item['creative_info']['video_info']['video_id'] ?? 'unknown';
+            logSmartPlus("Final creative $idx: video_id=$vid");
         }
 
         // Build landing_page_urls as array of OBJECTS with landing_page_url key
