@@ -19,7 +19,8 @@ let state = {
     cboEnabled: true,
     ctaPortfolios: [],
     selectedPortfolioId: null,
-    selectedPortfolioName: null
+    selectedPortfolioName: null,
+    globalCtaPortfolioId: null  // Portfolio ID for Lead Gen ads
 };
 
 // US States with TikTok location IDs
@@ -206,6 +207,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     loadPixels();
     loadIdentities();
+    loadCtaPortfolios();  // Load CTA portfolios for Lead Gen campaigns
     loadMediaLibrary();
     initializeDayparting();
     initializeLocationTargeting();
@@ -996,13 +998,10 @@ function testLandingUrl() {
     }
 }
 
-// Get selected CTAs from checkboxes
-function getSelectedCTAs() {
-    const selectedCTAs = [];
-    document.querySelectorAll('.cta-checkbox:checked').forEach(cb => {
-        selectedCTAs.push(cb.value);
-    });
-    return selectedCTAs;
+// Get selected portfolio ID
+function getSelectedPortfolioId() {
+    const select = document.getElementById('cta-portfolio-select');
+    return select ? select.value : null;
 }
 
 // =====================
@@ -1016,7 +1015,7 @@ function reviewAds() {
 
     const identityId = document.getElementById('global-identity').value;
     const landingUrl = document.getElementById('global-landing-url').value.trim();
-    const selectedCTAs = getSelectedCTAs();
+    const portfolioId = getSelectedPortfolioId();
 
     if (!identityId) {
         showToast('Please select an identity', 'error');
@@ -1028,13 +1027,8 @@ function reviewAds() {
         return;
     }
 
-    if (selectedCTAs.length === 0) {
-        showToast('Please select at least one Call to Action', 'error');
-        return;
-    }
-
-    if (selectedCTAs.length > 3) {
-        showToast('Maximum 3 CTAs allowed. Please deselect some.', 'error');
+    if (!portfolioId) {
+        showToast('Please select a CTA Portfolio (required for Lead Gen campaigns)', 'error');
         return;
     }
 
@@ -1060,7 +1054,7 @@ function reviewAds() {
 
     state.globalIdentityId = identityId;
     state.globalLandingUrl = landingUrl;
-    state.globalCtaList = selectedCTAs;
+    state.globalCtaPortfolioId = portfolioId;
 
     const identity = state.identities.find(i => i.identity_id === identityId);
     const identityName = identity ? (identity.display_name || identity.identity_name) : identityId;
@@ -1082,7 +1076,7 @@ function reviewAds() {
         <div class="summary-item" style="background: #f0f4ff; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
             <p><strong>Identity:</strong> ${identityName}</p>
             <p><strong>Landing Page:</strong> ${landingUrl}</p>
-            <p><strong>CTAs:</strong> ${selectedCTAs.join(', ')}</p>
+            <p><strong>CTA Portfolio:</strong> ${state.selectedPortfolioName || portfolioId}</p>
             <p><strong>Total Creatives:</strong> ${state.creatives.length} videos</p>
         </div>
     `;
@@ -1109,8 +1103,8 @@ async function createAd() {
         return;
     }
 
-    if (!state.globalCtaList || state.globalCtaList.length === 0) {
-        showToast('CTAs are required. Please go back and select 1-3 CTAs.', 'error');
+    if (!state.globalCtaPortfolioId) {
+        showToast('CTA Portfolio is required. Please go back and select a portfolio.', 'error');
         return;
     }
 
@@ -1127,7 +1121,7 @@ async function createAd() {
             image_id: creative.image_id || null
         }));
 
-        addLog('info', `Creating ad with ${creativeList.length} creatives and ${state.globalCtaList.length} CTAs`);
+        addLog('info', `Creating ad with ${creativeList.length} creatives and portfolio ${state.globalCtaPortfolioId}`);
 
         const result = await apiRequest('create_smartplus_ad', {
             adgroup_id: state.adGroupId,
@@ -1135,7 +1129,7 @@ async function createAd() {
             identity_id: state.globalIdentityId,
             identity_type: identityType,
             landing_page_url: state.globalLandingUrl,
-            call_to_action_list: state.globalCtaList,  // Use call_to_action_list with 1-3 CTAs
+            call_to_action_id: state.globalCtaPortfolioId,  // Lead Gen requires Dynamic CTA Portfolio
             creatives: creativeList
         });
 
