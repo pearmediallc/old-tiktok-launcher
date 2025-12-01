@@ -1,7 +1,7 @@
 /* Smart+ Campaign Specific Styles */
 
 .badge-smart {
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    background: linear-gradient(135deg, var(--primary), rgb(26, 138, 216));
     color: white;
     padding: 4px 12px;
     border-radius: 20px;
@@ -12,15 +12,15 @@
 }
 
 @keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7); }
-    70% { box-shadow: 0 0 0 10px rgba(102, 126, 234, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0); }
+    0% { box-shadow: 0 0 0 0 rgba(30, 157, 241, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(30, 157, 241, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(30, 157, 241, 0); }
 }
 
 .smart-badge-info {
-    background: linear-gradient(135deg, #f5f3ff, #fff);
-    border: 2px solid #667eea;
-    border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--background));
+    border: 2px solid var(--primary);
+    border-radius: var(--radius);
     padding: 20px;
     margin-bottom: 30px;
     text-align: center;
@@ -28,27 +28,27 @@
 
 .smart-badge-info p {
     margin-top: 10px;
-    color: #555;
+    color: var(--foreground);
 }
 
 .smart-features {
-    background: #f8f9ff;
-    border-radius: 8px;
+    background: var(--accent);
+    border-radius: calc(var(--radius) - 4px);
     padding: 20px;
 }
 
 .feature-toggle {
     padding: 15px;
     margin-bottom: 15px;
-    background: white;
-    border-radius: 8px;
-    border: 1px solid #e0e0e0;
+    background: var(--background);
+    border-radius: calc(var(--radius) - 4px);
+    border: 1px solid var(--border);
     transition: all 0.3s ease;
 }
 
 .feature-toggle:hover {
-    border-color: #667eea;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+    border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(30, 157, 241, 0.1);
 }
 
 .feature-toggle label {
@@ -62,31 +62,32 @@
     height: 20px;
     margin-right: 12px;
     cursor: pointer;
+    accent-color: var(--primary);
 }
 
 .feature-toggle span {
     font-weight: 600;
-    color: #333;
+    color: var(--foreground);
 }
 
 .feature-toggle small {
     display: block;
     margin-top: 8px;
     margin-left: 32px;
-    color: #666;
+    color: var(--muted-foreground);
 }
 
 .smart-info {
-    background: linear-gradient(135deg, #e8f4f8, #f0f8ff);
-    border-radius: 12px;
+    background: var(--accent);
+    border-radius: var(--radius);
     padding: 20px;
-    border-left: 4px solid #667eea;
+    border-left: 4px solid var(--primary);
 }
 
 .smart-info p {
     font-size: 16px;
     margin-bottom: 15px;
-    color: #333;
+    color: var(--foreground);
 }
 
 .smart-info ul {
@@ -98,7 +99,7 @@
     padding: 8px 0;
     padding-left: 25px;
     position: relative;
-    color: #555;
+    color: var(--foreground);
 }
 
 .smart-info ul li:before {
@@ -108,27 +109,27 @@
 }
 
 .smart-ads-info {
-    background: #f5f3ff;
-    border-radius: 8px;
+    background: var(--accent);
+    border-radius: calc(var(--radius) - 4px);
     padding: 15px;
     margin-bottom: 20px;
     text-align: center;
-    color: #555;
+    color: var(--foreground);
 }
 
 /* Smart Ad Card */
 .smart-ad-card {
-    background: white;
-    border: 2px solid #e0e0e0;
-    border-radius: 12px;
+    background: var(--background);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
     padding: 30px;
     margin-bottom: 20px;
     position: relative;
 }
 
 .smart-ad-card.active {
-    border-color: #667eea;
-    background: #f8f9ff;
+    border-color: var(--primary);
+    background: var(--accent);
 }
 
 .smart-ad-header {
@@ -137,7 +138,7 @@
     align-items: center;
     margin-bottom: 20px;
     padding-bottom: 15px;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid var(--border);
 }
 
 .smart-ad-header h3 {
@@ -148,17 +149,17 @@
 }
 
 .remove-ad-btn {
-    background: #ff4444;
-    color: white;
+    background: var(--destructive);
+    color: var(--destructive-foreground);
     border: none;
     padding: 8px 16px;
-    border-radius: 6px;
+    border-radius: calc(var(--radius) - 6px);
     cursor: pointer;
     font-size: 14px;
 }
 
 .remove-ad-btn:hover {
-    background: #cc0000;
+    background: rgb(220, 30, 41);
 }
 
 /* Creative Assets Grid */
@@ -168,17 +169,17 @@
     gap: 15px;
     margin: 20px 0;
     padding: 20px;
-    background: #f8f9ff;
-    border-radius: 8px;
+    background: var(--accent);
+    border-radius: calc(var(--radius) - 4px);
     min-height: 180px;
 }
 
 .creative-asset-item {
     position: relative;
-    border-radius: 8px;
+    border-radius: calc(var(--radius) - 4px);
     overflow: hidden;
-    background: white;
-    border: 2px solid #e0e0e0;
+    background: var(--background);
+    border: 2px solid var(--border);
     aspect-ratio: 1;
 }
 
@@ -204,7 +205,7 @@
     position: absolute;
     top: 5px;
     left: 5px;
-    background: rgba(255, 68, 68, 0.9);
+    background: rgba(244, 33, 46, 0.9);
     color: white;
     border: none;
     border-radius: 50%;
@@ -217,18 +218,18 @@
 }
 
 .add-creative-btn {
-    border: 2px dashed #667eea;
+    border: 2px dashed var(--primary);
     background: transparent;
-    color: #667eea;
+    color: var(--primary);
     padding: 40px;
-    border-radius: 8px;
+    border-radius: calc(var(--radius) - 4px);
     cursor: pointer;
     text-align: center;
     transition: all 0.3s ease;
 }
 
 .add-creative-btn:hover {
-    background: #f8f9ff;
+    background: var(--accent);
     border-style: solid;
 }
 
@@ -240,8 +241,8 @@
 .creative-text-item {
     margin-bottom: 15px;
     padding: 15px;
-    background: #f8f9ff;
-    border-radius: 8px;
+    background: var(--accent);
+    border-radius: calc(var(--radius) - 4px);
     position: relative;
 }
 
@@ -249,25 +250,26 @@
     display: block;
     margin-bottom: 8px;
     font-weight: 600;
-    color: #333;
+    color: var(--foreground);
 }
 
 .creative-text-item input,
 .creative-text-item textarea {
     width: 100%;
     padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 6px);
+    background: var(--background);
 }
 
 .creative-text-item .remove-text {
     position: absolute;
     top: 10px;
     right: 10px;
-    background: #ff4444;
-    color: white;
+    background: var(--destructive);
+    color: var(--destructive-foreground);
     border: none;
-    border-radius: 4px;
+    border-radius: calc(var(--radius) - 8px);
     padding: 4px 8px;
     cursor: pointer;
     font-size: 12px;
@@ -275,10 +277,10 @@
 
 /* Smart Optimization Note */
 .smart-optimization-note {
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    background: linear-gradient(135deg, var(--primary), rgb(26, 138, 216));
     color: white;
     padding: 25px;
-    border-radius: 12px;
+    border-radius: var(--radius);
     margin: 30px 0;
 }
 
@@ -307,20 +309,20 @@
 
 /* Media Selection for Smart+ */
 .smart-media-selection {
-    background: #f8f9ff;
-    border-radius: 8px;
+    background: var(--accent);
+    border-radius: calc(var(--radius) - 4px);
     padding: 20px;
     margin: 20px 0;
 }
 
 .smart-media-selection h4 {
     margin-top: 0;
-    color: #333;
+    color: var(--foreground);
 }
 
 .selected-media-count {
-    background: #667eea;
-    color: white;
+    background: var(--primary);
+    color: var(--primary-foreground);
     padding: 4px 12px;
     border-radius: 20px;
     font-size: 14px;
@@ -350,22 +352,22 @@
 
 .cta-option {
     padding: 8px;
-    border: 2px solid #e0e0e0;
-    border-radius: 6px;
+    border: 2px solid var(--border);
+    border-radius: calc(var(--radius) - 6px);
     text-align: center;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .cta-option:hover {
-    border-color: #667eea;
-    background: #f8f9ff;
+    border-color: var(--primary);
+    background: var(--accent);
 }
 
 .cta-option.selected {
-    border-color: #667eea;
-    background: #667eea;
-    color: white;
+    border-color: var(--primary);
+    background: var(--primary);
+    color: var(--primary-foreground);
 }
 
 /* Responsive adjustments */

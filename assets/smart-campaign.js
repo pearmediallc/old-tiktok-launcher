@@ -1141,14 +1141,10 @@ async function createAd() {
             showToast('Smart+ Ad created successfully!', 'success');
             addLog('info', `Smart+ Ad created: ${result.smart_plus_ad_id}`);
 
-            let alertMessage = `Smart+ Campaign Published!\n\n`;
-            alertMessage += `Campaign ID: ${state.campaignId}\n`;
-            alertMessage += `Ad Group ID: ${state.adGroupId}\n`;
-            alertMessage += `Smart+ Ad ID: ${result.smart_plus_ad_id}\n`;
-            alertMessage += `Creatives: ${creativeList.length} videos\n`;
-            alertMessage += `CTA Portfolio: ${state.selectedPortfolioName || 'Dynamic CTAs'}\n`;
-
-            alert(alertMessage);
+            // Show success modal after a short delay
+            setTimeout(() => {
+                showSuccessModal(result.smart_plus_ad_id, creativeList.length);
+            }, 500);
         } else {
             showToast('Failed to create ad: ' + (result.message || 'Unknown error'), 'error');
             addLog('error', 'Failed to create ad', result);
@@ -1237,4 +1233,124 @@ function showToast(message, type = 'info') {
 
 function logout() {
     window.location.href = 'logout.php';
+}
+
+// Show success modal with thank you message
+function showSuccessModal(adId, creativesCount) {
+    // Create modal overlay
+    const modalHtml = `
+        <div id="success-modal" style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.3s ease;
+        ">
+            <div style="
+                background: white;
+                border-radius: 20px;
+                padding: 40px;
+                max-width: 500px;
+                text-align: center;
+                animation: slideIn 0.3s ease;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            ">
+                <div style="font-size: 72px; margin-bottom: 20px;">🎉</div>
+                <h2 style="color: #1e9df1; margin-bottom: 10px; font-size: 32px;">Thank You!</h2>
+                <p style="color: #333; margin-bottom: 20px; font-size: 18px; font-weight: 500;">
+                    Smart+ Campaign Launched Successfully!
+                </p>
+                <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
+                    Your Smart+ TikTok ad campaign has been created and is now live.
+                </p>
+                <div style="background: #f0f8ff; padding: 15px; border-radius: 10px; margin-bottom: 25px;">
+                    <p style="margin: 5px 0; font-size: 13px;"><strong>Campaign ID:</strong> ${state.campaignId}</p>
+                    <p style="margin: 5px 0; font-size: 13px;"><strong>Ad Group ID:</strong> ${state.adGroupId}</p>
+                    <p style="margin: 5px 0; font-size: 13px;"><strong>Smart+ Ad ID:</strong> ${adId}</p>
+                    <p style="margin: 5px 0; font-size: 13px;"><strong>Creatives:</strong> ${creativesCount} videos</p>
+                </div>
+                <p style="color: #666; margin-bottom: 30px; font-size: 14px; font-weight: 600;">
+                    Would you like to create another campaign?
+                </p>
+                <div style="display: flex; gap: 15px; justify-content: center;">
+                    <button onclick="createNewCampaign()" style="
+                        background: #1e9df1;
+                        color: white;
+                        border: 2px solid #1e9df1;
+                        padding: 14px 35px;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        box-shadow: 0 4px 15px rgba(30, 157, 241, 0.3);
+                        transition: all 0.3s;
+                    " onmouseover="this.style.background='#1a8ad8'; this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#1e9df1'; this.style.transform='translateY(0)'">
+                        Yes, Create Another
+                    </button>
+                    <button onclick="finishAndReset()" style="
+                        background: #f3f4f6;
+                        color: #374151;
+                        border: 2px solid #e5e7eb;
+                        padding: 14px 35px;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                    " onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'">
+                        No, Go Back
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Add CSS animation if not already added
+    if (!document.getElementById('success-modal-styles')) {
+        const style = document.createElement('style');
+        style.id = 'success-modal-styles';
+        style.textContent = `
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            @keyframes slideIn {
+                from {
+                    transform: translateY(-30px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+// Create new campaign - reload page
+function createNewCampaign() {
+    location.reload();
+}
+
+// Finish and redirect to advertiser selection page
+function finishAndReset() {
+    // Remove success modal
+    const modal = document.getElementById('success-modal');
+    if (modal) {
+        modal.remove();
+    }
+
+    // Redirect to advertiser selection page (home)
+    window.location.href = 'select-advertiser-oauth.php';
 }

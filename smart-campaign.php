@@ -22,7 +22,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
     <link rel="stylesheet" href="assets/style.css?v=<?php echo time(); ?>">
     <style>
         .smart-badge {
-            background: linear-gradient(135deg, #ff0050 0%, #00f2ea 100%);
+            background: linear-gradient(135deg, rgb(30, 157, 241), rgb(26, 138, 216));
             color: white;
             padding: 4px 12px;
             border-radius: 20px;
@@ -31,31 +31,31 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             margin-left: 10px;
         }
         .form-info.smart-info {
-            background: linear-gradient(135deg, #fff0f3 0%, #f0ffff 100%);
-            border-left: 4px solid #ff0050;
+            background: rgb(227, 236, 246);
+            border-left: 4px solid rgb(30, 157, 241);
         }
         /* Video Selection Grid */
         .video-select-item {
-            border: 2px solid #ddd;
-            border-radius: 8px;
+            border: 2px solid rgb(225, 234, 239);
+            border-radius: calc(1.3rem - 4px);
             overflow: hidden;
             cursor: pointer;
             transition: all 0.2s;
             background: white;
         }
         .video-select-item:hover {
-            border-color: #667eea;
+            border-color: rgb(30, 157, 241);
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(30, 157, 241, 0.1);
         }
         .video-select-item.selected {
-            border-color: #22c55e;
-            background: #f0fff4;
+            border-color: rgb(0, 184, 122);
+            background: rgb(227, 236, 246);
         }
         .video-select-item .video-preview {
             position: relative;
             height: 100px;
-            background: #f0f0f0;
+            background: rgb(247, 249, 250);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -79,7 +79,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             position: absolute;
             top: 5px;
             right: 5px;
-            background: #22c55e;
+            background: rgb(0, 184, 122);
             color: white;
             padding: 4px 8px;
             border-radius: 50%;
@@ -97,8 +97,8 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         /* Creative Items */
         .creative-item {
             background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
+            border: 1px solid rgb(225, 234, 239);
+            border-radius: calc(1.3rem - 4px);
             overflow: hidden;
         }
         .creative-item .creative-header {
@@ -106,8 +106,8 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             justify-content: space-between;
             align-items: center;
             padding: 12px 15px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e0e0e0;
+            background: rgb(247, 248, 248);
+            border-bottom: 1px solid rgb(225, 234, 239);
         }
         .creative-item .creative-video-info {
             display: flex;
@@ -122,14 +122,14 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         }
         .creative-item .creative-number {
             font-weight: 600;
-            color: #667eea;
+            color: rgb(30, 157, 241);
         }
         .creative-item .creative-video-name {
-            color: #666;
+            color: rgb(15, 20, 25);
             font-size: 13px;
         }
         .creative-item .btn-remove {
-            background: #ff4444;
+            background: rgb(244, 33, 46);
             color: white;
             border: none;
             border-radius: 4px;
@@ -142,8 +142,8 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         .creative-item .creative-body textarea {
             width: 100%;
             padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            border: 1px solid rgb(225, 234, 239);
+            border-radius: calc(1.3rem - 6px);
             resize: vertical;
         }
     </style>
