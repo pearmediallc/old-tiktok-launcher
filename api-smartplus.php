@@ -121,8 +121,17 @@ function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
 
     logSmartPlus("Video info: width=$videoWidth, height=$videoHeight, cover_url=" . ($coverUrl ? 'exists' : 'null'));
 
-    // PRIORITY 1: Use the video's own cover URL - this guarantees a unique cover per video
-    // Upload it to the image library to get an image_id
+    // Extract the unique filename pattern from cover URL (e.g., "ogwfGeSbMIbAQg14BAjALFEfIr26A6ienG0aMx")
+    $coverFilePattern = null;
+    if (!empty($coverUrl)) {
+        // Extract pattern between last "/" and "~tplv"
+        if (preg_match('/\/([a-zA-Z0-9]+)~tplv/', $coverUrl, $matches)) {
+            $coverFilePattern = $matches[1];
+            logSmartPlus("Extracted cover file pattern: $coverFilePattern");
+        }
+    }
+
+    // PRIORITY 1: Try to upload the video's own cover URL
     if (!empty($coverUrl)) {
         logSmartPlus("Uploading video's own cover URL to ensure unique cover: $coverUrl");
         $uploadResult = uploadImageByUrl($coverUrl, $advertiserId, $accessToken);
@@ -131,9 +140,12 @@ function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
             return $uploadResult['image_id'];
         }
         logSmartPlus("Failed to upload video cover URL: " . ($uploadResult['error'] ?? 'unknown'));
+
+        // If upload failed with "Duplicate material name", the image already exists
+        // We need to find it by searching for the cover filename pattern
     }
 
-    // PRIORITY 2: Search for existing image that matches the video ID pattern
+    // PRIORITY 2: Search for existing image by cover URL filename pattern
     $imagesResult = makeApiCall('/file/image/ad/search/', [
         'advertiser_id' => $advertiserId,
         'page' => 1,
@@ -141,21 +153,32 @@ function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
     ], $accessToken, 'GET');
 
     if ($imagesResult['code'] == 0 && !empty($imagesResult['data']['list'])) {
-        $videoIdShort = str_replace('v10033g50000', '', $videoId);
         $isPortrait = $videoHeight > $videoWidth;
 
+        // First, try to find by cover URL filename pattern (most accurate)
+        if (!empty($coverFilePattern)) {
+            foreach ($imagesResult['data']['list'] as $image) {
+                $fileName = $image['file_name'] ?? '';
+
+                // Check if filename starts with the cover pattern
+                if (strpos($fileName, $coverFilePattern) === 0) {
+                    logSmartPlus("Found existing cover image by pattern for video $videoId: " . $image['image_id']);
+                    return $image['image_id'];
+                }
+            }
+        }
+
+        // Fallback: try to find by video ID pattern
+        $videoIdShort = str_replace('v10033g50000', '', $videoId);
         foreach ($imagesResult['data']['list'] as $image) {
             $fileName = $image['file_name'] ?? '';
             $imgWidth = $image['width'] ?? 0;
             $imgHeight = $image['height'] ?? 0;
 
-            // Check if filename contains part of video ID (exact match for this video)
-            if (strpos($fileName, $videoIdShort) !== false ||
-                (strpos($fileName, 'thumb') !== false && strpos($fileName, substr($videoIdShort, 0, 8)) !== false)) {
-
+            if (strpos($fileName, $videoIdShort) !== false) {
                 $imgIsPortrait = $imgHeight > $imgWidth;
                 if ($imgIsPortrait === $isPortrait && $imgWidth >= 540) {
-                    logSmartPlus("Found exact matching cover image for video $videoId: " . $image['image_id']);
+                    logSmartPlus("Found matching cover image by video ID for $videoId: " . $image['image_id']);
                     return $image['image_id'];
                 }
             }
