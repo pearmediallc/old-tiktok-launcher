@@ -120,7 +120,7 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
         .step-divider {
             width: 50px;
             height: 2px;
-            background: rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.8);
         }
 
         .wizard-body {
