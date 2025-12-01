@@ -98,6 +98,7 @@ function uploadImageByUrl($imageUrl, $advertiserId, $accessToken) {
 }
 
 // Get video cover image - find from image library or upload from video cover URL
+// CRITICAL: Smart+ Ads REQUIRE image_info for video covers - this function must always return an image_id
 function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
     logSmartPlus("Getting cover image for video: $videoId");
 
@@ -108,8 +109,9 @@ function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
     ], $accessToken, 'GET');
 
     if ($videoResult['code'] != 0 || empty($videoResult['data']['list'])) {
-        logSmartPlus("Failed to get video info for: $videoId");
-        return null;
+        logSmartPlus("Failed to get video info for: $videoId - code: " . ($videoResult['code'] ?? 'null'));
+        // Still try to search for any matching image
+        return findAnyValidImage($advertiserId, $accessToken);
     }
 
     $video = $videoResult['data']['list'][0];
@@ -117,10 +119,7 @@ function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
     $videoWidth = $video['width'] ?? 0;
     $videoHeight = $video['height'] ?? 0;
 
-    if (!$coverUrl) {
-        logSmartPlus("No cover URL for video: $videoId");
-        return null;
-    }
+    logSmartPlus("Video info: width=$videoWidth, height=$videoHeight, cover_url=" . ($coverUrl ? 'exists' : 'null'));
 
     // Calculate video aspect ratio (portrait = height > width, landscape = width > height)
     $isPortrait = $videoHeight > $videoWidth;
@@ -162,9 +161,7 @@ function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
             $imgIsPortrait = $imgHeight > $imgWidth;
 
             // Match orientation and ensure decent resolution
-            if ($imgIsPortrait === $isPortrait &&
-                $imgWidth >= 540 && $imgHeight >= 540 &&
-                ($image['displayable'] ?? false)) {
+            if ($imgIsPortrait === $isPortrait && $imgWidth >= 540 && $imgHeight >= 540) {
                 logSmartPlus("Using fallback image with matching aspect: " . $image['image_id'] . " ({$imgWidth}x{$imgHeight})");
                 return $image['image_id'];
             }
@@ -172,14 +169,48 @@ function getVideoCoverImage($videoId, $advertiserId, $accessToken) {
     }
 
     // If no suitable image found, upload the video's own cover URL (guaranteed to match)
-    logSmartPlus("No matching aspect ratio image found, uploading video cover URL...");
-    $uploadResult = uploadImageByUrl($coverUrl, $advertiserId, $accessToken);
-    if ($uploadResult['success']) {
-        logSmartPlus("Uploaded video cover as image: " . $uploadResult['image_id']);
-        return $uploadResult['image_id'];
+    if (!empty($coverUrl)) {
+        logSmartPlus("No matching aspect ratio image found, uploading video cover URL: $coverUrl");
+        $uploadResult = uploadImageByUrl($coverUrl, $advertiserId, $accessToken);
+        if ($uploadResult['success']) {
+            logSmartPlus("Uploaded video cover as image: " . $uploadResult['image_id']);
+            return $uploadResult['image_id'];
+        }
+        logSmartPlus("Failed to upload video cover URL: " . ($uploadResult['error'] ?? 'unknown'));
     }
 
-    logSmartPlus("Failed to upload video cover");
+    // Last resort: find ANY displayable image in the library
+    logSmartPlus("All methods failed, trying to find ANY valid image...");
+    return findAnyValidImage($advertiserId, $accessToken);
+}
+
+// Find any valid image in the library as a fallback
+function findAnyValidImage($advertiserId, $accessToken) {
+    $imagesResult = makeApiCall('/file/image/ad/search/', [
+        'advertiser_id' => $advertiserId,
+        'page' => 1,
+        'page_size' => 50
+    ], $accessToken, 'GET');
+
+    if ($imagesResult['code'] == 0 && !empty($imagesResult['data']['list'])) {
+        foreach ($imagesResult['data']['list'] as $image) {
+            $imgWidth = $image['width'] ?? 0;
+            $imgHeight = $image['height'] ?? 0;
+
+            // Find any reasonably sized image
+            if ($imgWidth >= 540 && $imgHeight >= 540) {
+                logSmartPlus("Using fallback image (any valid): " . $image['image_id'] . " ({$imgWidth}x{$imgHeight})");
+                return $image['image_id'];
+            }
+        }
+        // If no large enough images, use the first one
+        if (!empty($imagesResult['data']['list'][0]['image_id'])) {
+            logSmartPlus("Using first available image as last resort: " . $imagesResult['data']['list'][0]['image_id']);
+            return $imagesResult['data']['list'][0]['image_id'];
+        }
+    }
+
+    logSmartPlus("CRITICAL: No valid image found in library!");
     return null;
 }
 
@@ -488,8 +519,16 @@ switch ($action) {
                         'image_id' => $imageId,
                         'web_uri' => $imageId
                     ]];
+                    logSmartPlus("Added image_info for video " . $creative['video_id'] . ": image_id=$imageId");
                 } else {
-                    logSmartPlus("WARNING: No cover image found for video: " . $creative['video_id']);
+                    // CRITICAL: Smart+ Ads require image_info for video covers
+                    logSmartPlus("CRITICAL ERROR: No cover image found for video: " . $creative['video_id']);
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Failed to find or create video cover image for video: ' . $creative['video_id'] . '. Please upload an image to your media library first.',
+                        'error_code' => 'NO_COVER_IMAGE'
+                    ]);
+                    exit;
                 }
 
                 $creativeList[] = ['creative_info' => $creativeInfo];
