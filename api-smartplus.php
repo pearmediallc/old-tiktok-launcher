@@ -575,17 +575,21 @@ switch ($action) {
             'ad_name' => $data['ad_name'] ?? 'Smart+ Ad',
             'creative_list' => $creativeList,
             'landing_page_url_list' => $landingPageList,
-            'call_to_action_id' => $callToActionId,  // Lead Gen requires Dynamic CTA Portfolio
             'ad_text_list' => $adTextList
         ];
 
-        // Add ad_configuration with identity for non-spark ads
+        // Build ad_configuration - per SDK docs, call_to_action_id belongs INSIDE ad_configuration
+        $adConfig = [
+            'call_to_action_id' => $callToActionId  // Dynamic CTA Portfolio ID goes here
+        ];
+
+        // Add identity for non-spark ads
         if (!empty($data['identity_id'])) {
-            $adParams['ad_configuration'] = [
-                'identity_id' => $data['identity_id'],
-                'identity_type' => $data['identity_type'] ?? 'CUSTOMIZED_USER'
-            ];
+            $adConfig['identity_id'] = $data['identity_id'];
+            $adConfig['identity_type'] = $data['identity_type'] ?? 'CUSTOMIZED_USER';
         }
+
+        $adParams['ad_configuration'] = $adConfig;
 
         logSmartPlus("Ad params: " . json_encode($adParams));
 
@@ -835,17 +839,21 @@ switch ($action) {
             'ad_name' => $data['campaign_name'] . ' - Ad',
             'creative_list' => $creativeListFormatted,
             'landing_page_url_list' => $landingPageUrlList,
-            'call_to_action_id' => $callToActionId,  // Use portfolio ID instead of call_to_action_list
             'ad_text_list' => $adTextList
         ];
 
-        // Add ad_configuration with identity for non-spark ads
+        // Build ad_configuration - per SDK docs, call_to_action_id belongs INSIDE ad_configuration
+        $adConfig = [
+            'call_to_action_id' => $callToActionId  // Dynamic CTA Portfolio ID goes here
+        ];
+
+        // Add identity for non-spark ads
         if (!empty($data['identity_id'])) {
-            $adParams['ad_configuration'] = [
-                'identity_id' => $data['identity_id'],
-                'identity_type' => $data['identity_type'] ?? 'CUSTOMIZED_USER'
-            ];
+            $adConfig['identity_id'] = $data['identity_id'];
+            $adConfig['identity_type'] = $data['identity_type'] ?? 'CUSTOMIZED_USER';
         }
+
+        $adParams['ad_configuration'] = $adConfig;
 
         logSmartPlus("Ad params: " . json_encode($adParams));
 
