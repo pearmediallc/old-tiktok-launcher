@@ -561,8 +561,13 @@ h3 {
     background: var(--primary);
     color: var(--primary-foreground);
     border-color: var(--primary);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(30, 157, 241, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(30, 157, 241, 0.4);
+    font-weight: 600;
+}
+
+.cta-chip.selected::before {
+    content: '✓ ';
 }
 
 
@@ -999,6 +1004,43 @@ h3 {
         opacity: 1;
         transform: translateX(0);
     }
+}
+
+/* Pulse highlight animation for newly uploaded media */
+@keyframes pulse-highlight {
+    0% {
+        box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 20px 5px rgba(76, 175, 80, 0.4);
+        transform: scale(1.02);
+    }
+    100% {
+        box-shadow: 0 0 15px rgba(76, 175, 80, 0.6);
+        transform: scale(1);
+    }
+}
+
+/* NEW badge for recently uploaded media */
+.media-item.new-upload::before {
+    content: 'NEW';
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    background: linear-gradient(135deg, #4caf50, #8bc34a);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: bold;
+    z-index: 10;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
 }
 
 .log-entry:last-child {

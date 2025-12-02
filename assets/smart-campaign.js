@@ -529,10 +529,172 @@ async function loadMediaLibrary() {
 
         addLog('info', `Loaded ${state.mediaLibrary.length} media items`);
         renderVideoSelectionGrid();
+        renderImageGrid();
     } catch (error) {
         console.error('Error loading media:', error);
         addLog('error', 'Failed to load media library');
     }
+}
+
+// Render Image Grid
+function renderImageGrid() {
+    const container = document.getElementById('image-selection-grid');
+    if (!container) return;
+
+    const images = state.mediaLibrary.filter(m => m.type === 'image');
+    const countEl = document.getElementById('images-count');
+    if (countEl) countEl.textContent = images.length;
+
+    if (images.length === 0) {
+        container.innerHTML = '<p style="text-align: center; padding: 20px; color: #666;">No images found. Upload images to use as video covers.</p>';
+        return;
+    }
+
+    container.innerHTML = '';
+
+    images.forEach(image => {
+        const item = document.createElement('div');
+        item.style.cssText = 'border: 2px solid #4fc3f7; border-radius: 8px; overflow: hidden; background: white;';
+
+        item.innerHTML = `
+            <div style="position: relative; height: 80px; background: #f5f5f5;">
+                ${image.url ? `<img src="${image.url}" alt="${image.name}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\\'background: linear-gradient(135deg, #4fc3f7, #29b6f6); width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px;\\'>🖼️</div>'">` : '<div style="background: linear-gradient(135deg, #4fc3f7, #29b6f6); width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px;">🖼️</div>'}
+                <span style="position: absolute; top: 3px; right: 3px; background: #4fc3f7; color: white; padding: 2px 5px; border-radius: 3px; font-size: 9px; font-weight: bold;">IMG</span>
+            </div>
+            <div style="padding: 5px; font-size: 10px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #333;">
+                ${(image.name || 'Image').substring(0, 15)}${image.name && image.name.length > 15 ? '...' : ''}
+            </div>
+        `;
+
+        container.appendChild(item);
+    });
+}
+
+// Refresh Media Library
+async function refreshMediaLibrary() {
+    showToast('Refreshing media library...', 'info');
+    await loadMediaLibrary();
+    showToast('Media library refreshed!', 'success');
+}
+
+// =====================
+// Upload Functionality
+// =====================
+let currentUploadType = 'video';
+
+function openUploadModal(type) {
+    currentUploadType = type;
+    const modal = document.getElementById('upload-modal');
+    const title = document.getElementById('upload-modal-title');
+    const icon = document.getElementById('upload-icon');
+    const hint = document.getElementById('upload-hint');
+    const fileInput = document.getElementById('media-file-input');
+
+    // Reset modal state
+    document.getElementById('upload-area').style.display = 'block';
+    document.getElementById('upload-progress').style.display = 'none';
+    document.getElementById('upload-success').style.display = 'none';
+
+    if (type === 'video') {
+        title.textContent = '📹 Upload Video';
+        icon.textContent = '🎬';
+        hint.textContent = 'Supported: MP4, MOV, AVI (Max 500MB)';
+        fileInput.accept = 'video/*';
+    } else {
+        title.textContent = '🖼️ Upload Image';
+        icon.textContent = '📷';
+        hint.textContent = 'Supported: JPG, PNG, GIF (Max 10MB)';
+        fileInput.accept = 'image/*';
+    }
+
+    modal.style.display = 'flex';
+}
+
+function closeUploadModal() {
+    document.getElementById('upload-modal').style.display = 'none';
+    document.getElementById('media-file-input').value = '';
+}
+
+async function handleSmartMediaUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const isVideo = file.type.startsWith('video/');
+    const isImage = file.type.startsWith('image/');
+
+    if (!isImage && !isVideo) {
+        showToast('Please upload an image or video file', 'error');
+        return;
+    }
+
+    // Check file size
+    const maxSize = isVideo ? 500 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+        showToast(`File too large. Maximum size is ${isVideo ? '500MB' : '10MB'}`, 'error');
+        return;
+    }
+
+    // Show progress
+    document.getElementById('upload-area').style.display = 'none';
+    document.getElementById('upload-progress').style.display = 'block';
+    document.getElementById('upload-success').style.display = 'none';
+    document.getElementById('upload-status').textContent = `Uploading ${file.name}...`;
+
+    const formData = new FormData();
+    formData.append(isVideo ? 'video' : 'image', file);
+
+    try {
+        addLog('request', `Uploading ${isVideo ? 'video' : 'image'}: ${file.name}`);
+
+        // Simulate progress
+        let progress = 0;
+        const progressBar = document.getElementById('upload-progress-bar');
+        const progressInterval = setInterval(() => {
+            progress += Math.random() * 15;
+            if (progress > 90) progress = 90;
+            progressBar.style.width = progress + '%';
+        }, 200);
+
+        const response = await fetch(`api.php?action=${isVideo ? 'upload_video' : 'upload_image'}`, {
+            method: 'POST',
+            body: formData
+        });
+
+        clearInterval(progressInterval);
+        progressBar.style.width = '100%';
+
+        const result = await response.json();
+
+        addLog(result.success ? 'response' : 'error', `Upload ${result.success ? 'successful' : 'failed'}`, result);
+
+        if (result.success) {
+            // Show success
+            document.getElementById('upload-progress').style.display = 'none';
+            document.getElementById('upload-success').style.display = 'block';
+            document.getElementById('upload-success-name').textContent = `${file.name} uploaded successfully!`;
+
+            showToast(`${isVideo ? 'Video' : 'Image'} uploaded successfully!`, 'success');
+
+            // Reload media library
+            await loadMediaLibrary();
+
+            // Auto-close after 2 seconds
+            setTimeout(() => {
+                closeUploadModal();
+            }, 2000);
+        } else {
+            document.getElementById('upload-area').style.display = 'block';
+            document.getElementById('upload-progress').style.display = 'none';
+            showToast(result.message || 'Upload failed', 'error');
+        }
+    } catch (error) {
+        document.getElementById('upload-area').style.display = 'block';
+        document.getElementById('upload-progress').style.display = 'none';
+        addLog('error', 'Upload failed', { error: error.message });
+        showToast('Error uploading file: ' + error.message, 'error');
+    }
+
+    event.target.value = '';
 }
 
 // =====================

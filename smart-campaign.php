@@ -439,16 +439,40 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     </div>
                 </div>
 
-                <!-- Video Selection Grid -->
+                <!-- Media Library Section -->
                 <div class="form-section">
-                    <h3>Select Videos (<span id="selected-videos-count">0</span> selected)</h3>
-                    <div style="margin-bottom: 15px;">
-                        <button class="btn-secondary" onclick="selectAllVideos()">Select All</button>
-                        <button class="btn-secondary" onclick="clearVideoSelection()">Clear Selection</button>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="margin: 0;">Media Library</h3>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn-secondary" onclick="refreshMediaLibrary()" title="Refresh from TikTok">🔄 Refresh</button>
+                            <button class="btn-primary" onclick="openUploadModal('video')" style="background: linear-gradient(135deg, #667eea, #764ba2);">📹 Upload Video</button>
+                            <button class="btn-primary" onclick="openUploadModal('image')" style="background: linear-gradient(135deg, #4fc3f7, #29b6f6);">🖼️ Upload Image</button>
+                        </div>
                     </div>
-                    <div id="video-selection-grid" class="video-selection-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; max-height: 400px; overflow-y: auto; padding: 10px; background: #f9f9f9; border-radius: 8px;">
-                        <!-- Videos will be loaded here -->
-                        <p style="text-align: center; padding: 20px; color: #666;">Loading videos...</p>
+
+                    <!-- Videos Section -->
+                    <div style="margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <h4 style="margin: 0; color: #667eea;">🎬 Videos (<span id="selected-videos-count">0</span> selected)</h4>
+                            <div>
+                                <button class="btn-secondary btn-sm" onclick="selectAllVideos()">Select All</button>
+                                <button class="btn-secondary btn-sm" onclick="clearVideoSelection()">Clear</button>
+                            </div>
+                        </div>
+                        <div id="video-selection-grid" class="video-selection-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; max-height: 300px; overflow-y: auto; padding: 10px; background: #f9f9f9; border-radius: 8px; border: 2px solid #667eea;">
+                            <p style="text-align: center; padding: 20px; color: #666;">Loading videos...</p>
+                        </div>
+                    </div>
+
+                    <!-- Images Section -->
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <h4 style="margin: 0; color: #4fc3f7;">🖼️ Images (<span id="images-count">0</span> available)</h4>
+                        </div>
+                        <div id="image-selection-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; max-height: 200px; overflow-y: auto; padding: 10px; background: #f0f9ff; border-radius: 8px; border: 2px solid #4fc3f7;">
+                            <p style="text-align: center; padding: 20px; color: #666;">Loading images...</p>
+                        </div>
+                        <small style="color: #666; display: block; margin-top: 8px;">Images are used as cover images for videos. TikTok will auto-match or you can upload matching covers.</small>
                     </div>
                 </div>
 
@@ -505,50 +529,45 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             </div>
         </div>
 
-        <!-- Media Library Modal -->
-        <div id="media-modal" class="modal">
-            <div class="modal-content">
+        <!-- Upload Modal -->
+        <div id="upload-modal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-width: 500px;">
                 <div class="modal-header">
-                    <h3>Select Media <span id="selection-counter" style="font-size: 14px; color: #667eea; margin-left: 10px;"></span></h3>
-                    <span class="modal-close" onclick="closeMediaModal()">&times;</span>
-                </div>
-                <div style="padding: 10px 20px; background: #e8f4f8; border-bottom: 1px solid #eee;">
-                    <p style="margin: 0; font-size: 13px; color: #333;">
-                        <strong>Multi-Select Videos:</strong> Click multiple videos to create separate ads for each.
-                        <strong>Each ad</strong> will have its own ad text field.
-                    </p>
-                </div>
-                <div class="modal-tabs">
-                    <button class="tab-btn active" onclick="switchMediaTab('library', event)">Library</button>
-                    <button class="tab-btn" onclick="switchMediaTab('upload', event)">Upload New</button>
+                    <h3 id="upload-modal-title">Upload Media</h3>
+                    <span class="modal-close" onclick="closeUploadModal()">&times;</span>
                 </div>
                 <div class="modal-body">
-                    <div id="media-library-tab" class="media-tab active">
-                        <div style="margin-bottom: 15px; padding: 10px; background: #f5f5f5; border-radius: 5px;">
-                            <label style="font-weight: 600; margin-right: 10px;">Filter by type:</label>
-                            <button class="btn-secondary btn-sm media-filter active" data-filter="all" onclick="filterMedia('all')">All</button>
-                            <button class="btn-secondary btn-sm media-filter" data-filter="image" onclick="filterMedia('image')">Images</button>
-                            <button class="btn-secondary btn-sm media-filter" data-filter="video" onclick="filterMedia('video')">Videos</button>
-                            <span id="media-count" style="margin-left: 15px; font-size: 12px; color: #666;"></span>
-                        </div>
-                        <div class="media-grid" id="media-grid">
-                            <!-- Media items will be loaded here -->
+                    <div class="upload-area" id="upload-area" style="text-align: center; padding: 40px; border: 2px dashed #ddd; border-radius: 8px; cursor: pointer;">
+                        <input type="file" id="media-file-input" accept="image/*,video/*" style="display: none;" onchange="handleSmartMediaUpload(event)">
+                        <div onclick="document.getElementById('media-file-input').click()">
+                            <div id="upload-icon" style="font-size: 50px; margin-bottom: 10px;">📁</div>
+                            <p id="upload-text" style="font-size: 16px; color: #333;">Click to select file or drag and drop</p>
+                            <p id="upload-hint" style="font-size: 12px; color: #666;">Supported: MP4, MOV, JPG, PNG</p>
                         </div>
                     </div>
-                    <div id="media-upload-tab" class="media-tab">
-                        <div class="upload-area" id="upload-area">
-                            <input type="file" id="media-file-input" accept="image/*,video/*" onchange="handleMediaUpload(event)">
-                            <label for="media-file-input">
-                                <div class="upload-icon">📁</div>
-                                <p>Click to upload or drag and drop</p>
-                                <p class="upload-hint">Images or Videos</p>
-                            </label>
+                    <div id="upload-progress" style="display: none; margin-top: 20px;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div class="spinner" style="width: 30px; height: 30px;"></div>
+                            <div style="flex: 1;">
+                                <p id="upload-status" style="margin: 0; font-weight: 600;">Uploading...</p>
+                                <div style="background: #e0e0e0; border-radius: 10px; height: 8px; margin-top: 8px; overflow: hidden;">
+                                    <div id="upload-progress-bar" style="background: linear-gradient(135deg, #667eea, #764ba2); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="upload-success" style="display: none; margin-top: 20px; padding: 15px; background: #e8f5e9; border-radius: 8px; border: 2px solid #4caf50;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="font-size: 30px;">✅</div>
+                            <div>
+                                <p style="margin: 0; font-weight: 600; color: #2e7d32;">Upload Successful!</p>
+                                <p id="upload-success-name" style="margin: 5px 0 0 0; font-size: 13px; color: #666;"></p>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn-secondary" onclick="closeMediaModal()">Cancel</button>
-                    <button class="btn-primary" onclick="confirmMediaSelection()">Select</button>
+                    <button class="btn-secondary" onclick="closeUploadModal()">Close</button>
                 </div>
             </div>
         </div>

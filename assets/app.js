@@ -1356,6 +1356,9 @@ function toggleCTAMode(adIndex, mode) {
 
         // Populate CTA grid for direct selection
         populateCTAGrid(adIndex);
+
+        // Auto-load existing portfolios when switching to dynamic mode
+        loadExistingPortfolios(adIndex);
     }
 }
 
@@ -2713,6 +2716,17 @@ function renderMediaGrid() {
         item.dataset.type = media.type;
         item.onclick = () => selectMedia(media);
 
+        // Check if this is a newly uploaded file (within last 30 seconds)
+        const isNewUpload = state.lastUploadedFile &&
+            state.lastUploadedFile.name === media.file_name &&
+            state.lastUploadedFile.type === media.type &&
+            (Date.now() - state.lastUploadedFile.timestamp) < 30000;
+
+        if (isNewUpload) {
+            item.style.animation = 'pulse-highlight 2s ease-in-out';
+            item.style.boxShadow = '0 0 15px rgba(76, 175, 80, 0.6)';
+        }
+
         if (media.type === 'image') {
             // Prioritize TikTok's image_url field first, then fallback to other fields
             const imgUrl = media.image_url || media.url || media.preview_url || media.thumbnail_url;
@@ -3177,7 +3191,23 @@ async function handleMediaUpload(event) {
         addLog(result.success ? 'response' : 'error', `Upload ${result.success ? 'successful' : 'failed'}`, result);
 
         if (result.success) {
-            showToast(`${isVideo ? 'Video' : 'Image'} uploaded successfully`, 'success');
+            // Show enhanced success message with file details
+            const fileName = file.name;
+            const fileSize = (file.size / 1024 / 1024).toFixed(2);
+
+            // Update progress area with success message before switching
+            progressDiv.innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <div style="font-size: 50px; margin-bottom: 10px;">✅</div>
+                    <p style="font-weight: 600; color: #2e7d32; margin: 0;">Upload Successful!</p>
+                    <p style="color: #666; font-size: 13px; margin: 5px 0 0 0;">${fileName} (${fileSize} MB)</p>
+                </div>
+            `;
+
+            showToast(`✅ ${isVideo ? 'Video' : 'Image'} "${fileName}" uploaded successfully!`, 'success');
+
+            // Wait a moment to show success, then reload
+            await new Promise(resolve => setTimeout(resolve, 1500));
 
             // Reload media library to show the new upload
             await loadMediaLibrary();
@@ -3187,6 +3217,13 @@ async function handleMediaUpload(event) {
 
             // Reset upload form
             event.target.value = '';
+
+            // Store the newly uploaded file info to highlight it
+            state.lastUploadedFile = {
+                name: fileName,
+                type: isVideo ? 'video' : 'image',
+                timestamp: Date.now()
+            };
         } else {
             const errorMsg = result.message || `Failed to upload ${isVideo ? 'video' : 'image'}`;
             showToast(errorMsg, 'error');
