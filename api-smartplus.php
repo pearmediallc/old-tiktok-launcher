@@ -809,16 +809,30 @@ switch ($action) {
         $adParams['ad_configuration'] = $adConfig;
 
         logSmartPlus("Ad params: " . json_encode($adParams));
+        logSmartPlus("=== SENDING TO TIKTOK API ===");
+        logSmartPlus("Number of videos in creative_list: " . count($creativeList));
+        logSmartPlus("Number of ad texts in ad_text_list: " . count($adTextList));
 
         $result = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);
 
+        // Log FULL TikTok response for debugging
+        logSmartPlus("=== TIKTOK API RESPONSE ===");
+        logSmartPlus("Full response: " . json_encode($result, JSON_PRETTY_PRINT));
+
         if ($result['code'] == 0 && isset($result['data']['smart_plus_ad_id'])) {
+            logSmartPlus("SUCCESS: Smart+ Ad created with ID: " . $result['data']['smart_plus_ad_id']);
+            logSmartPlus("Videos submitted: " . count($creativeList) . ", Ad texts: " . count($adTextList));
             echo json_encode([
                 'success' => true,
                 'smart_plus_ad_id' => $result['data']['smart_plus_ad_id'],
-                'message' => 'Smart+ Ad created successfully'
+                'message' => 'Smart+ Ad created successfully',
+                'videos_count' => count($creativeList),
+                'texts_count' => count($adTextList)
             ]);
         } else {
+            logSmartPlus("ERROR: Failed to create ad");
+            logSmartPlus("Error code: " . ($result['code'] ?? 'unknown'));
+            logSmartPlus("Error message: " . ($result['message'] ?? 'unknown'));
             echo json_encode([
                 'success' => false,
                 'message' => 'Failed to create ad: ' . ($result['message'] ?? 'Unknown error'),

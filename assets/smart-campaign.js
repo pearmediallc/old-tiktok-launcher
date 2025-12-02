@@ -1437,10 +1437,11 @@ async function createAd() {
         if (result.success && result.smart_plus_ad_id) {
             showToast('Smart+ Ad created successfully!', 'success');
             addLog('info', `Smart+ Ad created: ${result.smart_plus_ad_id}`);
+            addLog('info', `Videos submitted: ${result.videos_count || creativeList.length}, Text variations: ${result.texts_count || state.adTexts.length}`);
 
             // Show success modal after a short delay
             setTimeout(() => {
-                showSuccessModal(result.smart_plus_ad_id, creativeList.length);
+                showSuccessModal(result.smart_plus_ad_id, result.videos_count || creativeList.length, result.texts_count || state.adTexts.length);
             }, 500);
         } else {
             showToast('Failed to create ad: ' + (result.message || 'Unknown error'), 'error');
@@ -1533,7 +1534,7 @@ function logout() {
 }
 
 // Show success modal with thank you message
-function showSuccessModal(adId, creativesCount) {
+function showSuccessModal(adId, creativesCount, textsCount = 1) {
     // Create modal overlay
     const modalHtml = `
         <div id="success-modal" style="
@@ -1570,8 +1571,12 @@ function showSuccessModal(adId, creativesCount) {
                     <p style="margin: 5px 0; font-size: 13px;"><strong>Campaign ID:</strong> ${state.campaignId}</p>
                     <p style="margin: 5px 0; font-size: 13px;"><strong>Ad Group ID:</strong> ${state.adGroupId}</p>
                     <p style="margin: 5px 0; font-size: 13px;"><strong>Smart+ Ad ID:</strong> ${adId}</p>
-                    <p style="margin: 5px 0; font-size: 13px;"><strong>Creatives:</strong> ${creativesCount} videos</p>
+                    <p style="margin: 5px 0; font-size: 13px;"><strong>Videos:</strong> ${creativesCount} (TikTok will auto-optimize)</p>
+                    <p style="margin: 5px 0; font-size: 13px;"><strong>Text Variations:</strong> ${textsCount}</p>
                 </div>
+                <p style="color: #888; margin-bottom: 15px; font-size: 12px; font-style: italic;">
+                    TikTok AI will automatically rotate and optimize your ${creativesCount} video${creativesCount > 1 ? 's' : ''} to show the best performing creative.
+                </p>
                 <p style="color: #666; margin-bottom: 30px; font-size: 14px; font-weight: 600;">
                     Would you like to create another campaign?
                 </p>
