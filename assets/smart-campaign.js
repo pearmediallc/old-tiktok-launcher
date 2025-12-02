@@ -20,7 +20,8 @@ let state = {
     ctaPortfolios: [],
     selectedPortfolioId: null,
     selectedPortfolioName: null,
-    globalCtaPortfolioId: null  // Portfolio ID for Lead Gen ads
+    globalCtaPortfolioId: null,  // Portfolio ID for Lead Gen ads
+    adTexts: []  // Array of ad text variations
 };
 
 // US States with TikTok location IDs (verified from TikTok API)
@@ -1103,69 +1104,65 @@ function toggleVideoSelection(video) {
         state.selectedVideos.push(video);
     }
     renderVideoSelectionGrid();
-    renderCreativesList();
+    updateSelectedVideosSummary();
 }
 
 function selectAllVideos() {
     const videos = state.mediaLibrary.filter(m => m.type === 'video');
     state.selectedVideos = [...videos];
     renderVideoSelectionGrid();
-    renderCreativesList();
+    updateSelectedVideosSummary();
 }
 
 function clearVideoSelection() {
     state.selectedVideos = [];
     renderVideoSelectionGrid();
-    renderCreativesList();
+    updateSelectedVideosSummary();
 }
 
 function updateSelectedVideosCount() {
     const countEl = document.getElementById('selected-videos-count');
     if (countEl) countEl.textContent = state.selectedVideos.length;
+
+    // Also update the creative assets count
+    const assetsCountEl = document.getElementById('creative-assets-count');
+    if (assetsCountEl) assetsCountEl.textContent = state.selectedVideos.length;
 }
 
-function renderCreativesList() {
-    const container = document.getElementById('creatives-list');
-    if (!container) return;
+// Update the selected videos summary (preview thumbnails)
+function updateSelectedVideosSummary() {
+    const previewContainer = document.getElementById('selected-videos-preview');
+    const assetsCountEl = document.getElementById('creative-assets-count');
+
+    if (assetsCountEl) assetsCountEl.textContent = state.selectedVideos.length;
+
+    if (!previewContainer) return;
 
     if (state.selectedVideos.length === 0) {
-        container.innerHTML = '<p style="text-align: center; padding: 20px; color: #666;">Select videos above to add creatives</p>';
+        previewContainer.innerHTML = '<p style="color: #666; font-size: 13px;">No videos selected yet</p>';
         return;
     }
 
-    container.innerHTML = '';
+    previewContainer.innerHTML = '';
 
     state.selectedVideos.forEach((video, index) => {
-        const existingCreative = state.creatives.find(c => c.video_id === video.id);
-        const adText = existingCreative?.ad_text || '';
-
         const item = document.createElement('div');
-        item.className = 'creative-item';
+        item.style.cssText = 'position: relative; width: 80px; height: 80px; border-radius: 8px; overflow: hidden; border: 2px solid #667eea; flex-shrink: 0;';
         item.innerHTML = `
-            <div class="creative-header">
-                <div class="creative-video-info">
-                    ${video.url ? `<img src="${video.url}" class="creative-thumbnail">` : ''}
-                    <span class="creative-number">Creative #${index + 1}</span>
-                    <span class="creative-video-name">${video.name || video.id}</span>
-                </div>
-                <button type="button" class="btn-remove" onclick="removeCreative('${video.id}')">✕</button>
+            ${video.url ? `<img src="${video.url}" style="width: 100%; height: 100%; object-fit: cover;">` : '<div style="background: linear-gradient(135deg, #667eea, #764ba2); width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">🎬</div>'}
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.5); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
+                <span style="color: white; font-size: 10px;">▶</span>
             </div>
-            <div class="creative-body">
-                <label>Ad Text (12-100 characters)</label>
-                <textarea
-                    id="ad-text-${video.id}"
-                    placeholder="Enter your ad copy..."
-                    rows="2"
-                    onchange="updateCreativeText('${video.id}', this.value)"
-                >${adText}</textarea>
+            <div style="position: absolute; bottom: 2px; left: 2px; right: 2px; background: rgba(0,0,0,0.7); padding: 2px 4px; border-radius: 3px;">
+                <span style="color: white; font-size: 9px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(video.name || 'Video').substring(0, 10)}</span>
             </div>
         `;
-        container.appendChild(item);
+        previewContainer.appendChild(item);
     });
 
+    // Update creatives state
     state.creatives = state.selectedVideos.map(video => {
         const existing = state.creatives.find(c => c.video_id === video.id);
-        // Find matching image cover from image library (by file_name pattern)
         const matchingImage = state.mediaLibrary.find(m =>
             m.type === 'image' &&
             m.name && video.name &&
@@ -1180,6 +1177,64 @@ function renderCreativesList() {
             ad_text: existing?.ad_text || ''
         };
     });
+}
+
+// Scroll to media section when clicking Edit selections
+function scrollToMediaSection() {
+    const mediaSection = document.getElementById('video-selection-grid');
+    if (mediaSection) {
+        mediaSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+// Ad Text Field Management
+let adTextFieldCount = 1;
+
+function addAdTextField() {
+    adTextFieldCount++;
+    const container = document.getElementById('ad-text-fields');
+
+    const fieldDiv = document.createElement('div');
+    fieldDiv.className = 'ad-text-field';
+    fieldDiv.style.cssText = 'display: flex; align-items: center; gap: 10px;';
+    fieldDiv.id = `ad-text-field-${adTextFieldCount}`;
+    fieldDiv.innerHTML = `
+        <input type="text" id="ad-text-${adTextFieldCount}" class="ad-text-input" placeholder="Enter text for your ad" maxlength="100" style="flex: 1;" oninput="updateTextCount(this)">
+        <span class="text-count" style="color: #999; font-size: 12px;">0/100</span>
+        <button type="button" onclick="removeAdTextField(${adTextFieldCount})" style="background: none; border: none; color: #f44336; cursor: pointer; font-size: 18px; padding: 5px;">✕</button>
+    `;
+    container.appendChild(fieldDiv);
+}
+
+function removeAdTextField(fieldNum) {
+    const field = document.getElementById(`ad-text-field-${fieldNum}`);
+    if (field) {
+        field.remove();
+    }
+}
+
+function updateTextCount(input) {
+    const countSpan = input.nextElementSibling;
+    if (countSpan && countSpan.classList.contains('text-count')) {
+        countSpan.textContent = `${input.value.length}/100`;
+    }
+}
+
+// Get all ad texts
+function getAdTexts() {
+    const inputs = document.querySelectorAll('.ad-text-input');
+    const texts = [];
+    inputs.forEach(input => {
+        if (input.value.trim()) {
+            texts.push(input.value.trim());
+        }
+    });
+    return texts;
+}
+
+// Legacy function - kept for compatibility
+function renderCreativesList() {
+    updateSelectedVideosSummary();
 }
 
 function updateCreativeText(videoId, text) {
@@ -1255,25 +1310,26 @@ function reviewAds() {
         return;
     }
 
-    // Update ad texts from form
-    state.creatives.forEach(creative => {
-        const textarea = document.getElementById(`ad-text-${creative.video_id}`);
-        if (textarea) {
-            creative.ad_text = textarea.value;
-        }
-    });
+    // Get ad texts from the new text fields
+    const adTexts = getAdTexts();
 
-    if (state.creatives.length === 0) {
+    if (adTexts.length === 0) {
+        showToast('Please enter at least one ad text', 'error');
+        return;
+    }
+
+    if (state.selectedVideos.length === 0) {
         showToast('Please select at least one video', 'error');
         return;
     }
 
-    for (let i = 0; i < state.creatives.length; i++) {
-        if (!state.creatives[i].ad_text || state.creatives[i].ad_text.length < 1) {
-            showToast(`Creative ${i + 1}: Please enter ad text`, 'error');
-            return;
-        }
-    }
+    // Store ad texts in state
+    state.adTexts = adTexts;
+
+    // Update creatives with the first ad text (all videos share the same text variations)
+    state.creatives.forEach(creative => {
+        creative.ad_text = adTexts[0]; // Primary text
+    });
 
     state.globalIdentityId = identityId;
     state.globalLandingUrl = landingUrl;
@@ -1304,16 +1360,28 @@ function reviewAds() {
             <p><strong>Identity:</strong> ${identityName}</p>
             <p><strong>Landing Page:</strong> ${landingUrl}</p>
             <p><strong>CTA Portfolio:</strong> ${state.selectedPortfolioName || portfolioId}</p>
-            <p><strong>Total Creatives:</strong> ${state.creatives.length} videos</p>
+            <p><strong>Total Videos:</strong> ${state.creatives.length}</p>
+            <p><strong>Ad Text Variations:</strong> ${adTexts.length}</p>
         </div>
     `;
 
+    // Show ad texts
+    adsSummaryHtml += `
+        <div class="summary-item" style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+            <h4 style="margin-top: 0;">Ad Text${adTexts.length > 1 ? ' Variations' : ''}</h4>
+            ${adTexts.map((text, i) => `<p><strong>Text ${i + 1}:</strong> ${text}</p>`).join('')}
+        </div>
+    `;
+
+    // Show videos
+    adsSummaryHtml += `<h4>Selected Videos (${state.creatives.length})</h4>`;
     state.creatives.forEach((creative, index) => {
         adsSummaryHtml += `
-            <div class="summary-item">
-                <h4>Creative #${index + 1}</h4>
-                <p><strong>Video:</strong> ${creative.video_name || creative.video_id}</p>
-                <p><strong>Ad Text:</strong> ${creative.ad_text}</p>
+            <div class="summary-item" style="display: flex; align-items: center; gap: 10px; padding: 10px; background: #f9f9f9; border-radius: 6px; margin-bottom: 8px;">
+                ${creative.video_url ? `<img src="${creative.video_url}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;">` : '<div style="width: 50px; height: 50px; background: #667eea; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white;">🎬</div>'}
+                <div>
+                    <p style="margin: 0; font-weight: 600;">${creative.video_name || creative.video_id}</p>
+                </div>
             </div>
         `;
     });

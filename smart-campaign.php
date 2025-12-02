@@ -476,18 +476,35 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     </div>
                 </div>
 
-                <!-- Creatives List (Ad Text for each video) -->
+                <!-- Ad Text Section (Single text field like TikTok Ads Manager) -->
                 <div class="form-section">
-                    <h3>Creatives (Ad Text for Each Video)</h3>
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label>Apply Same Ad Text to All</label>
-                        <div style="display: flex; gap: 10px;">
-                            <input type="text" id="global-ad-text" placeholder="Enter ad text to apply to all videos" style="flex: 1;">
-                            <button type="button" class="btn-secondary" onclick="applyAdTextToAll()">Apply to All</button>
+                    <h3>Identity and Text for your Ad</h3>
+                    <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Your TikTok posts in this campaign will use the creator's original identity and text.</p>
+
+                    <!-- Selected Videos Summary -->
+                    <div id="selected-videos-summary" style="margin-bottom: 20px; padding: 15px; background: #f8f9ff; border-radius: 8px; border: 2px solid #667eea;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="font-weight: 600; color: #333;">Creative assets (<span id="creative-assets-count">0</span>/<span>50</span>)</span>
+                            <button type="button" class="btn-secondary btn-sm" onclick="scrollToMediaSection()">✏️ Edit selections</button>
+                        </div>
+                        <div id="selected-videos-preview" style="display: flex; gap: 10px; flex-wrap: wrap; max-height: 120px; overflow-y: auto;">
+                            <p style="color: #666; font-size: 13px;">No videos selected yet</p>
                         </div>
                     </div>
-                    <div id="creatives-list" style="display: flex; flex-direction: column; gap: 15px;">
-                        <p style="text-align: center; padding: 20px; color: #666;">Select videos above to add creatives</p>
+
+                    <!-- Ad Text Fields -->
+                    <div class="form-group">
+                        <label style="font-weight: 600;">Text <span style="color: #999; font-weight: normal;">(0/100)</span></label>
+                        <div id="ad-text-fields" style="display: flex; flex-direction: column; gap: 10px;">
+                            <div class="ad-text-field" style="display: flex; align-items: center; gap: 10px;">
+                                <input type="text" id="ad-text-1" class="ad-text-input" placeholder="Enter text for your ad" maxlength="100" style="flex: 1;" oninput="updateTextCount(this)">
+                                <span class="text-count" style="color: #999; font-size: 12px;">0/100</span>
+                            </div>
+                        </div>
+                        <button type="button" id="add-text-btn" onclick="addAdTextField()" style="margin-top: 10px; background: none; border: none; color: #1e9df1; cursor: pointer; font-size: 14px; padding: 5px 0;">
+                            + Add text
+                        </button>
+                        <small style="display: block; margin-top: 8px; color: #666;">Add multiple text variations. TikTok will automatically optimize which text performs best.</small>
                     </div>
                 </div>
 
