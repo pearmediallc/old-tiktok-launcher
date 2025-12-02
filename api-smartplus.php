@@ -749,17 +749,42 @@ switch ($action) {
 
         logSmartPlus("Using call_to_action_id (portfolio): $callToActionId");
 
-        // Build ad_text_list from creatives - each ad_text becomes a separate item
+        // Build ad_text_list - DEDUPLICATE to avoid "duplicate titles" error
+        // Option 1: Use ad_texts array if provided (from new UI with single text field)
+        // Option 2: Extract unique texts from creatives (fallback for compatibility)
         $adTextList = [];
-        foreach ($data['creatives'] ?? [] as $creative) {
-            if (!empty($creative['ad_text'])) {
-                $adTextList[] = ['ad_text' => $creative['ad_text']];
+        $uniqueTexts = []; // Track unique texts to avoid duplicates
+
+        if (!empty($data['ad_texts']) && is_array($data['ad_texts'])) {
+            // New approach: Use ad_texts array directly from frontend
+            logSmartPlus("Using ad_texts array from frontend: " . json_encode($data['ad_texts']));
+            foreach ($data['ad_texts'] as $text) {
+                $text = trim($text);
+                if (!empty($text) && !in_array($text, $uniqueTexts)) {
+                    $uniqueTexts[] = $text;
+                    $adTextList[] = ['ad_text' => $text];
+                }
+            }
+        } else {
+            // Fallback: Extract from creatives but DEDUPLICATE
+            logSmartPlus("Extracting ad texts from creatives (with deduplication)");
+            foreach ($data['creatives'] ?? [] as $creative) {
+                if (!empty($creative['ad_text'])) {
+                    $text = trim($creative['ad_text']);
+                    if (!in_array($text, $uniqueTexts)) {
+                        $uniqueTexts[] = $text;
+                        $adTextList[] = ['ad_text' => $text];
+                    }
+                }
             }
         }
+
         // Ensure at least one ad_text
         if (empty($adTextList)) {
             $adTextList[] = ['ad_text' => 'Check it out!'];
         }
+
+        logSmartPlus("Final ad_text_list (deduplicated): " . json_encode($adTextList));
 
         $adParams = [
             'advertiser_id' => $advertiserId,

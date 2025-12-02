@@ -1419,6 +1419,7 @@ async function createAd() {
         // Log detailed creative list to verify each video is unique
         addLog('info', `Creating ad with ${creativeList.length} creatives and portfolio ${state.globalCtaPortfolioId}`);
         addLog('info', 'Creative list details:', creativeList.map((c, i) => `Creative ${i+1}: video_id=${c.video_id}`).join(', '));
+        addLog('info', `Ad text variations: ${state.adTexts.length}`, state.adTexts);
 
         const result = await apiRequest('create_smartplus_ad', {
             adgroup_id: state.adGroupId,
@@ -1427,7 +1428,8 @@ async function createAd() {
             identity_type: identityType,
             landing_page_url: state.globalLandingUrl,
             call_to_action_id: state.globalCtaPortfolioId,  // Lead Gen requires Dynamic CTA Portfolio
-            creatives: creativeList
+            creatives: creativeList,
+            ad_texts: state.adTexts  // Send unique ad text variations separately
         });
 
         hideLoading();
