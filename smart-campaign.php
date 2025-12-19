@@ -146,6 +146,34 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             border-radius: calc(1.3rem - 6px);
             resize: vertical;
         }
+        /* Age Selection Toggle Buttons */
+        .age-selection-container {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .age-toggle-btn {
+            padding: 8px 16px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            color: #333;
+            transition: all 0.2s ease;
+        }
+        .age-toggle-btn:hover {
+            border-color: #00b8a9;
+        }
+        .age-toggle-btn.selected {
+            border-color: #00b8a9;
+            background: #e6f7f5;
+            color: #00b8a9;
+        }
+        .age-toggle-btn.selected::after {
+            content: ' ✓';
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -274,12 +302,15 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     <h3>Audience Targeting</h3>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Age Targeting</label>
-                            <select id="spc-audience-age">
-                                <option value="18+" selected>18+ (All adults)</option>
-                                <option value="25+">25+ (Adults 25 and older)</option>
-                            </select>
-                            <small>Smart+ supports simplified age targeting</small>
+                            <label>Age</label>
+                            <div class="age-selection-container" id="age-selection-container">
+                                <button type="button" class="age-toggle-btn selected" data-age="AGE_18_24">18-24</button>
+                                <button type="button" class="age-toggle-btn selected" data-age="AGE_25_34">25-34</button>
+                                <button type="button" class="age-toggle-btn selected" data-age="AGE_35_44">35-44</button>
+                                <button type="button" class="age-toggle-btn selected" data-age="AGE_45_54">45-54</button>
+                                <button type="button" class="age-toggle-btn" data-age="AGE_55_100">55+</button>
+                            </div>
+                            <small>Select one or more age ranges for targeting</small>
                         </div>
                     </div>
                 </div>

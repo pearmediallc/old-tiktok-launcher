@@ -11,6 +11,7 @@ let state = {
     pixelId: null,
     optimizationEvent: null,
     locationIds: [],
+    ageGroups: ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54'],  // Default age groups (55+ unchecked)
     dayparting: null,
     creatives: [],
     identities: [],
@@ -211,6 +212,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadMediaLibrary();
     initializeDayparting();
     initializeLocationTargeting();
+    initializeAgeTargeting();  // Initialize age selection buttons
 
     state.cboEnabled = true;
 
@@ -228,6 +230,45 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Initialize age targeting toggle buttons
+function initializeAgeTargeting() {
+    const container = document.getElementById('age-selection-container');
+    if (!container) return;
+
+    const buttons = container.querySelectorAll('.age-toggle-btn');
+    buttons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            this.classList.toggle('selected');
+            updateAgeGroupsState();
+        });
+    });
+
+    // Initialize state from current button states
+    updateAgeGroupsState();
+}
+
+// Update state.ageGroups based on selected buttons
+function updateAgeGroupsState() {
+    const container = document.getElementById('age-selection-container');
+    if (!container) return;
+
+    const selectedButtons = container.querySelectorAll('.age-toggle-btn.selected');
+    state.ageGroups = Array.from(selectedButtons).map(btn => btn.dataset.age);
+
+    // Ensure at least one age group is selected
+    if (state.ageGroups.length === 0) {
+        showToast('At least one age group must be selected', 'warning');
+        // Re-select the first button as default
+        const firstBtn = container.querySelector('.age-toggle-btn');
+        if (firstBtn) {
+            firstBtn.classList.add('selected');
+            state.ageGroups = [firstBtn.dataset.age];
+        }
+    }
+
+    console.log('Age groups updated:', state.ageGroups);
+}
 
 // Toggle CBO budget section
 function toggleCBOBudget() {
@@ -1025,6 +1066,7 @@ async function createAdGroup() {
             pixel_id: pixelId,
             optimization_event: optimizationEvent,
             location_ids: locationIds,
+            age_groups: state.ageGroups,  // Age targeting
             dayparting: dayparting,
             budget: adGroupBudget  // Always at AdGroup level for LEAD_GENERATION
         });

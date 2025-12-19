@@ -590,7 +590,8 @@ switch ($action) {
             'conversion_bid_price' => floatval($data['conversion_bid_price'] ?? 10),  // Required for OCPM
             'operation_status' => 'ENABLE',
             'targeting_spec' => [
-                'location_ids' => $data['location_ids'] ?? ['6252001']
+                'location_ids' => $data['location_ids'] ?? ['6252001'],
+                'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54']
             ]
         ];
 
@@ -924,7 +925,8 @@ switch ($action) {
             'conversion_bid_price' => floatval($data['conversion_bid_price'] ?? 10),  // Required for OCPM
             'operation_status' => 'ENABLE',
             'targeting_spec' => [
-                'location_ids' => $data['location_ids'] ?? ['6252001']
+                'location_ids' => $data['location_ids'] ?? ['6252001'],
+                'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54']
             ]
         ];
 
