@@ -530,7 +530,7 @@ switch ($action) {
             'objective_type' => 'LEAD_GENERATION',
             'request_id' => generateRequestId(),
             'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
-            'operation_status' => 'ENABLE'
+            'operation_status' => 'DISABLE'
         ];
 
         // Only add budget if provided
@@ -587,8 +587,7 @@ switch ($action) {
             'billing_event' => 'OCPM',
             'schedule_type' => 'SCHEDULE_FROM_NOW',
             'schedule_start_time' => $scheduleStart,
-            'conversion_bid_price' => floatval($data['conversion_bid_price'] ?? 10),  // Required for OCPM
-            'operation_status' => 'ENABLE',
+            'operation_status' => 'DISABLE',
             'targeting_spec' => [
                 'location_ids' => $data['location_ids'] ?? ['6252001'],
                 'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54']
@@ -882,7 +881,7 @@ switch ($action) {
             'objective_type' => 'LEAD_GENERATION',
             'request_id' => generateRequestId(),
             'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
-            'operation_status' => 'ENABLE'
+            'operation_status' => 'DISABLE'
         ];
 
         // Only add budget if provided
@@ -922,8 +921,7 @@ switch ($action) {
             'billing_event' => 'OCPM',
             'schedule_type' => 'SCHEDULE_FROM_NOW',
             'schedule_start_time' => $scheduleStart,
-            'conversion_bid_price' => floatval($data['conversion_bid_price'] ?? 10),  // Required for OCPM
-            'operation_status' => 'ENABLE',
+            'operation_status' => 'DISABLE',
             'targeting_spec' => [
                 'location_ids' => $data['location_ids'] ?? ['6252001'],
                 'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54']
@@ -1718,7 +1716,7 @@ switch ($action) {
                     'objective_type' => 'LEAD_GENERATION',
                     'request_id' => generateRequestId(),
                     'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
-                    'operation_status' => 'ENABLE'
+                    'operation_status' => 'DISABLE'
                 ];
 
                 if (!empty($campaignConfig['budget'])) {
@@ -1748,8 +1746,7 @@ switch ($action) {
                     'billing_event' => 'OCPM',
                     'schedule_type' => 'SCHEDULE_FROM_NOW',
                     'schedule_start_time' => $scheduleStart,
-                    'conversion_bid_price' => floatval($campaignConfig['conversion_bid_price'] ?? 10),
-                    'operation_status' => 'ENABLE',
+                    'operation_status' => 'DISABLE',
                     'targeting_spec' => [
                         'location_ids' => $campaignConfig['location_ids'] ?? ['6252001'],
                         'age_groups' => $campaignConfig['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54']
