@@ -585,6 +585,7 @@ switch ($action) {
             'promotion_target_type' => 'EXTERNAL_WEBSITE',  // Required for Website destination (not Instant Form)
             'optimization_goal' => 'CONVERT',  // Use CONVERT for Lead Gen with External Website
             'billing_event' => 'OCPM',
+            'bid_type' => 'BID_TYPE_NO_BID',  // Lowest Cost strategy - no target CPA required
             'schedule_type' => 'SCHEDULE_FROM_NOW',
             'schedule_start_time' => $scheduleStart,
             'operation_status' => 'ENABLE',
@@ -612,6 +613,14 @@ switch ($action) {
             } else {
                 logSmartPlus("WARNING: Budget $budget is less than minimum $20");
             }
+        }
+
+        // Optional: Add Target CPA only if provided and using Cost Cap strategy
+        // If user provides a target CPA, switch to BID_TYPE_CUSTOM (Cost Cap)
+        if (!empty($data['conversion_bid_price'])) {
+            $adgroupParams['bid_type'] = 'BID_TYPE_CUSTOM';  // Cost Cap - requires target CPA
+            $adgroupParams['conversion_bid_price'] = floatval($data['conversion_bid_price']);
+            logSmartPlus("Using Cost Cap with target CPA: " . $data['conversion_bid_price']);
         }
 
         // Add dayparting if provided
@@ -919,6 +928,7 @@ switch ($action) {
             'promotion_type' => 'LEAD_GENERATION',
             'optimization_goal' => 'LEAD_GENERATION',  // Must be LEAD_GENERATION for lead gen
             'billing_event' => 'OCPM',
+            'bid_type' => 'BID_TYPE_NO_BID',  // Lowest Cost strategy - no target CPA required
             'schedule_type' => 'SCHEDULE_FROM_NOW',
             'schedule_start_time' => $scheduleStart,
             'operation_status' => 'ENABLE',
@@ -940,6 +950,13 @@ switch ($action) {
         if (!empty($adgroupBudget)) {
             $adgroupParams['budget'] = floatval($adgroupBudget);
             logSmartPlus("Setting budget at AdGroup level: " . $adgroupParams['budget']);
+        }
+
+        // Optional: Add Target CPA only if provided and using Cost Cap strategy
+        if (!empty($data['conversion_bid_price'])) {
+            $adgroupParams['bid_type'] = 'BID_TYPE_CUSTOM';  // Cost Cap - requires target CPA
+            $adgroupParams['conversion_bid_price'] = floatval($data['conversion_bid_price']);
+            logSmartPlus("Using Cost Cap with target CPA: " . $data['conversion_bid_price']);
         }
 
         // Add dayparting
@@ -1761,6 +1778,7 @@ switch ($action) {
                     'promotion_target_type' => 'EXTERNAL_WEBSITE',
                     'optimization_goal' => 'CONVERT',
                     'billing_event' => 'OCPM',
+                    'bid_type' => 'BID_TYPE_NO_BID',  // Lowest Cost strategy - no target CPA required
                     'schedule_type' => 'SCHEDULE_FROM_NOW',
                     'schedule_start_time' => $scheduleStart,
                     'operation_status' => 'ENABLE',
@@ -1779,6 +1797,12 @@ switch ($action) {
                 // Add budget at adgroup level for LEAD_GENERATION
                 if (!empty($campaignConfig['budget'])) {
                     $adgroupParams['budget'] = floatval($campaignConfig['budget']);
+                }
+
+                // Optional: Add Target CPA only if provided
+                if (!empty($campaignConfig['conversion_bid_price'])) {
+                    $adgroupParams['bid_type'] = 'BID_TYPE_CUSTOM';  // Cost Cap - requires target CPA
+                    $adgroupParams['conversion_bid_price'] = floatval($campaignConfig['conversion_bid_price']);
                 }
 
                 // Add dayparting if provided
