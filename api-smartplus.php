@@ -530,7 +530,7 @@ switch ($action) {
             'objective_type' => 'LEAD_GENERATION',
             'request_id' => generateRequestId(),
             'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
-            'operation_status' => 'DISABLE'
+            'operation_status' => 'ENABLE'
         ];
 
         // Only add budget if provided
@@ -587,7 +587,7 @@ switch ($action) {
             'billing_event' => 'OCPM',
             'schedule_type' => 'SCHEDULE_FROM_NOW',
             'schedule_start_time' => $scheduleStart,
-            'operation_status' => 'DISABLE',
+            'operation_status' => 'ENABLE',
             'targeting_spec' => [
                 'location_ids' => $data['location_ids'] ?? ['6252001'],
                 'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54']
@@ -881,7 +881,7 @@ switch ($action) {
             'objective_type' => 'LEAD_GENERATION',
             'request_id' => generateRequestId(),
             'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
-            'operation_status' => 'DISABLE'
+            'operation_status' => 'ENABLE'
         ];
 
         // Only add budget if provided
@@ -921,7 +921,7 @@ switch ($action) {
             'billing_event' => 'OCPM',
             'schedule_type' => 'SCHEDULE_FROM_NOW',
             'schedule_start_time' => $scheduleStart,
-            'operation_status' => 'DISABLE',
+            'operation_status' => 'ENABLE',
             'targeting_spec' => [
                 'location_ids' => $data['location_ids'] ?? ['6252001'],
                 'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54']
@@ -1112,6 +1112,23 @@ switch ($action) {
                 'name' => $data['campaign_name'] . ' - Ad'
             ];
             logSmartPlus("Smart+ Ad created: $smartPlusAdId with " . count($creativeList) . " creatives");
+
+            // Step 4: DISABLE the campaign after ad creation
+            // This ensures the campaign starts in paused state for user review
+            logSmartPlus("Step 4: Disabling campaign after ad creation...");
+            $disableResult = makeApiCall('/campaign/update/status/', [
+                'advertiser_id' => $advertiserId,
+                'campaign_ids' => [$campaignId],
+                'operation_status' => 'DISABLE'
+            ], $accessToken);
+
+            if ($disableResult['code'] == 0) {
+                logSmartPlus("Campaign disabled successfully: $campaignId");
+                $results['campaign_disabled'] = true;
+            } else {
+                logSmartPlus("Warning: Failed to disable campaign: " . ($disableResult['message'] ?? 'Unknown error'));
+                $results['campaign_disabled'] = false;
+            }
         } else {
             $results['ads'][] = [
                 'success' => false,
@@ -1716,7 +1733,7 @@ switch ($action) {
                     'objective_type' => 'LEAD_GENERATION',
                     'request_id' => generateRequestId(),
                     'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
-                    'operation_status' => 'DISABLE'
+                    'operation_status' => 'ENABLE'
                 ];
 
                 if (!empty($campaignConfig['budget'])) {
@@ -1746,7 +1763,7 @@ switch ($action) {
                     'billing_event' => 'OCPM',
                     'schedule_type' => 'SCHEDULE_FROM_NOW',
                     'schedule_start_time' => $scheduleStart,
-                    'operation_status' => 'DISABLE',
+                    'operation_status' => 'ENABLE',
                     'targeting_spec' => [
                         'location_ids' => $campaignConfig['location_ids'] ?? ['6252001'],
                         'age_groups' => $campaignConfig['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54']
@@ -1894,6 +1911,21 @@ switch ($action) {
 
                 $adId = $adResult['data']['smart_plus_ad_id'];
                 logSmartPlus("Ad created: $adId");
+
+                // 4. DISABLE the campaign after ad creation
+                // This ensures the campaign starts in paused state for user review
+                logSmartPlus("Disabling campaign after ad creation...");
+                $disableResult = makeApiCall('/campaign/update/status/', [
+                    'advertiser_id' => $targetAdvertiserId,
+                    'campaign_ids' => [$campaignId],
+                    'operation_status' => 'DISABLE'
+                ], $accessToken);
+
+                if ($disableResult['code'] == 0) {
+                    logSmartPlus("Campaign disabled successfully: $campaignId");
+                } else {
+                    logSmartPlus("Warning: Failed to disable campaign: " . ($disableResult['message'] ?? 'Unknown error'));
+                }
 
                 // Success!
                 $results['success'][] = [
