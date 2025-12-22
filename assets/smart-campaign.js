@@ -1913,11 +1913,261 @@ function renderAccountAssetsDropdowns(advertiserId, assets) {
             <div class="asset-row video-match-status ${statusClass}">
                 <span class="match-icon">${matchRate === 100 ? '✓' : matchRate > 0 ? '⚠' : '✗'}</span>
                 <span>Videos: ${videoMatch.matched?.length || 0}/${state.selectedVideos.length} matched (${matchRate}%)</span>
+                <button type="button" class="btn-toggle-library" onclick="toggleMediaLibrary('${advertiserId}')">
+                    📁 View Library
+                </button>
             </div>
         `;
     }
 
+    // Add collapsible media library section
+    const videos = assets.videos || [];
+    const images = assets.images || [];
+    const isExpanded = bulkLaunchState.expandedLibraries?.[advertiserId] || false;
+
+    html += `
+        <div class="account-media-library" id="media-library-${advertiserId}" style="display: ${isExpanded ? 'block' : 'none'};">
+            <div class="media-library-header">
+                <span class="media-library-title">📁 Media Library</span>
+                <span class="media-counts">
+                    <span class="video-count">🎬 ${videos.length} videos</span>
+                    <span class="image-count">🖼️ ${images.length} images</span>
+                </span>
+            </div>
+            ${renderAccountMediaContent(advertiserId, assets, videoMatch)}
+        </div>
+    `;
+
     return html;
+}
+
+// Render media library content (videos and images)
+function renderAccountMediaContent(advertiserId, assets, videoMatch) {
+    const videos = assets.videos || [];
+    const images = assets.images || [];
+    const matched = videoMatch?.matched || [];
+    const unmatched = videoMatch?.unmatched || [];
+
+    // Create a set of matched target video IDs for quick lookup
+    const matchedTargetIds = new Set(matched.map(m => m.target_video_id));
+    const matchedSourceToTarget = {};
+    matched.forEach(m => {
+        matchedSourceToTarget[m.source_video_id] = m.target_video_id;
+    });
+
+    let html = '';
+
+    // Campaign Videos Section - Show which videos are needed and their match status
+    if (state.selectedVideos.length > 0) {
+        html += `
+            <div class="media-section">
+                <h5 class="media-section-title">Campaign Videos (${state.selectedVideos.length} required)</h5>
+                <div class="campaign-videos-list">
+        `;
+
+        state.selectedVideos.forEach(sourceVideo => {
+            const matchInfo = matched.find(m => m.source_video_id === sourceVideo.id);
+            const isMatched = !!matchInfo;
+            const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+            const currentMapping = selectedAccount?.video_mapping?.[sourceVideo.id];
+
+            html += `
+                <div class="campaign-video-row ${isMatched ? 'matched' : 'unmatched'}">
+                    <div class="campaign-video-info">
+                        <div class="campaign-video-thumb">
+                            ${sourceVideo.url ? `<img src="${sourceVideo.url}" alt="">` : '<span class="no-thumb">🎬</span>'}
+                        </div>
+                        <div class="campaign-video-details">
+                            <span class="campaign-video-name">${(sourceVideo.name || 'Video').substring(0, 25)}${sourceVideo.name?.length > 25 ? '...' : ''}</span>
+                            <span class="campaign-video-status ${isMatched ? 'status-matched' : 'status-unmatched'}">
+                                ${isMatched ? '✓ Matched' : '✗ Not found'}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="campaign-video-mapping">
+                        <select id="video-map-${advertiserId}-${sourceVideo.id}"
+                                onchange="updateVideoMapping('${advertiserId}', '${sourceVideo.id}', this.value)"
+                                class="video-mapping-select ${isMatched ? '' : 'needs-selection'}">
+                            <option value="">-- Select video --</option>
+                            ${videos.map(v => `
+                                <option value="${v.video_id}"
+                                    ${(currentMapping === v.video_id || matchInfo?.target_video_id === v.video_id) ? 'selected' : ''}>
+                                    ${(v.file_name || v.video_id).substring(0, 30)}${v.file_name?.length > 30 ? '...' : ''}
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `
+                </div>
+            </div>
+        `;
+    }
+
+    // All Videos in Account Section
+    html += `
+        <div class="media-section">
+            <h5 class="media-section-title">All Videos in Account (${videos.length})</h5>
+            <div class="media-grid-container">
+                <div class="media-grid">
+    `;
+
+    if (videos.length === 0) {
+        html += '<p class="no-media-text">No videos in this account</p>';
+    } else {
+        videos.forEach(video => {
+            const isUsedInCampaign = matchedTargetIds.has(video.video_id);
+            html += `
+                <div class="media-item video-item ${isUsedInCampaign ? 'used-in-campaign' : ''}">
+                    <div class="media-thumb">
+                        ${video.video_cover_url ? `<img src="${video.video_cover_url}" alt="">` : '<div class="media-placeholder">🎬</div>'}
+                        ${isUsedInCampaign ? '<span class="used-badge">✓</span>' : ''}
+                    </div>
+                    <div class="media-name">${(video.file_name || 'Video').substring(0, 15)}${video.file_name?.length > 15 ? '...' : ''}</div>
+                </div>
+            `;
+        });
+    }
+
+    html += `
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Images Section
+    html += `
+        <div class="media-section">
+            <h5 class="media-section-title">Images (${images.length})</h5>
+            <div class="media-grid-container">
+                <div class="media-grid">
+    `;
+
+    if (images.length === 0) {
+        html += '<p class="no-media-text">No images in this account</p>';
+    } else {
+        images.forEach(image => {
+            html += `
+                <div class="media-item image-item">
+                    <div class="media-thumb">
+                        ${image.image_url ? `<img src="${image.image_url}" alt="">` : '<div class="media-placeholder">🖼️</div>'}
+                    </div>
+                    <div class="media-name">${(image.file_name || 'Image').substring(0, 15)}${image.file_name?.length > 15 ? '...' : ''}</div>
+                </div>
+            `;
+        });
+    }
+
+    html += `
+                </div>
+            </div>
+        </div>
+    `;
+
+    return html;
+}
+
+// Toggle media library visibility
+function toggleMediaLibrary(advertiserId) {
+    if (!bulkLaunchState.expandedLibraries) {
+        bulkLaunchState.expandedLibraries = {};
+    }
+
+    const library = document.getElementById(`media-library-${advertiserId}`);
+    if (!library) return;
+
+    const isExpanded = library.style.display !== 'none';
+    library.style.display = isExpanded ? 'none' : 'block';
+    bulkLaunchState.expandedLibraries[advertiserId] = !isExpanded;
+
+    // Update button text
+    const btn = document.querySelector(`#bulk-account-${advertiserId} .btn-toggle-library`);
+    if (btn) {
+        btn.textContent = isExpanded ? '📁 View Library' : '📁 Hide Library';
+    }
+}
+
+// Update video mapping when user manually selects a video
+function updateVideoMapping(advertiserId, sourceVideoId, targetVideoId) {
+    const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+    if (!selectedAccount) {
+        // Add to selected accounts if not already there
+        const account = bulkLaunchState.accounts.find(a => a.advertiser_id === advertiserId);
+        if (account) {
+            bulkLaunchState.selectedAccounts.push({
+                advertiser_id: advertiserId,
+                advertiser_name: account.advertiser_name,
+                pixel_id: null,
+                identity_id: null,
+                identity_type: 'CUSTOMIZED_USER',
+                video_mapping: {}
+            });
+        }
+    }
+
+    // Get the account again after potentially adding it
+    const accountToUpdate = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+    if (accountToUpdate) {
+        if (!accountToUpdate.video_mapping) {
+            accountToUpdate.video_mapping = {};
+        }
+
+        if (targetVideoId) {
+            accountToUpdate.video_mapping[sourceVideoId] = targetVideoId;
+        } else {
+            delete accountToUpdate.video_mapping[sourceVideoId];
+        }
+
+        // Update the video match status in account assets
+        updateVideoMatchStatus(advertiserId);
+
+        // Update UI
+        const statusEl = document.getElementById(`status-${advertiserId}`);
+        if (statusEl) {
+            statusEl.innerHTML = getAccountStatus(advertiserId);
+        }
+
+        updateBulkModalCounts();
+
+        addLog('info', `Manual video mapping for ${advertiserId}: ${sourceVideoId} -> ${targetVideoId}`);
+    }
+}
+
+// Update video match status based on manual mappings
+function updateVideoMatchStatus(advertiserId) {
+    const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+    if (!selectedAccount || !bulkLaunchState.accountAssets[advertiserId]) return;
+
+    const videoMapping = selectedAccount.video_mapping || {};
+    const totalRequired = state.selectedVideos.length;
+    const mappedCount = Object.keys(videoMapping).filter(k => videoMapping[k]).length;
+
+    // Update the videoMatch object
+    if (!bulkLaunchState.accountAssets[advertiserId].videoMatch) {
+        bulkLaunchState.accountAssets[advertiserId].videoMatch = {
+            matched: [],
+            unmatched: [],
+            total_source: totalRequired,
+            match_rate: 0
+        };
+    }
+
+    bulkLaunchState.accountAssets[advertiserId].videoMatch.match_rate =
+        totalRequired > 0 ? Math.round(mappedCount / totalRequired * 100) : 0;
+
+    // Update the video match status display
+    const matchStatusEl = document.querySelector(`#assets-${advertiserId} .video-match-status`);
+    if (matchStatusEl) {
+        const matchRate = bulkLaunchState.accountAssets[advertiserId].videoMatch.match_rate;
+        const statusClass = matchRate === 100 ? 'success' : matchRate > 0 ? 'warning' : 'error';
+        matchStatusEl.className = `asset-row video-match-status ${statusClass}`;
+        matchStatusEl.querySelector('.match-icon').textContent = matchRate === 100 ? '✓' : matchRate > 0 ? '⚠' : '✗';
+        matchStatusEl.querySelector('span:nth-child(2)').textContent =
+            `Videos: ${mappedCount}/${totalRequired} matched (${matchRate}%)`;
+    }
 }
 
 // Get account status text

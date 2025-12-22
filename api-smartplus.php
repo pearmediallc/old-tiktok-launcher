@@ -1484,7 +1484,8 @@ switch ($action) {
             'advertiser_id' => $targetAdvertiserId,
             'pixels' => [],
             'identities' => [],
-            'videos' => []
+            'videos' => [],
+            'images' => []
         ];
 
         // Get Pixels
@@ -1517,6 +1518,18 @@ switch ($action) {
         if ($videoResult['code'] == 0 && isset($videoResult['data']['list'])) {
             $assets['videos'] = $videoResult['data']['list'];
             logSmartPlus("Found " . count($assets['videos']) . " videos");
+        }
+
+        // Get Images
+        $imageResult = makeApiCall('/file/image/ad/get/', [
+            'advertiser_id' => $targetAdvertiserId,
+            'page' => 1,
+            'page_size' => 100
+        ], $accessToken, 'GET');
+
+        if ($imageResult['code'] == 0 && isset($imageResult['data']['list'])) {
+            $assets['images'] = $imageResult['data']['list'];
+            logSmartPlus("Found " . count($assets['images']) . " images");
         }
 
         echo json_encode([
