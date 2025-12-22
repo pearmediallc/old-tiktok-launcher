@@ -1132,11 +1132,12 @@ switch ($action) {
 
             // Step 4: DISABLE the campaign after ad creation
             // This ensures the campaign starts in paused state for user review
+            // API endpoint: /campaign/status/update/ with opt_status parameter
             logSmartPlus("Step 4: Disabling campaign after ad creation...");
-            $disableResult = makeApiCall('/campaign/update/status/', [
+            $disableResult = makeApiCall('/campaign/status/update/', [
                 'advertiser_id' => $advertiserId,
                 'campaign_ids' => [$campaignId],
-                'operation_status' => 'DISABLE'
+                'opt_status' => 'DISABLE'
             ], $accessToken);
 
             if ($disableResult['code'] == 0) {
@@ -1144,6 +1145,7 @@ switch ($action) {
                 $results['campaign_disabled'] = true;
             } else {
                 logSmartPlus("Warning: Failed to disable campaign: " . ($disableResult['message'] ?? 'Unknown error'));
+                logSmartPlus("Disable API response: " . json_encode($disableResult));
                 $results['campaign_disabled'] = false;
             }
         } else {
@@ -1938,17 +1940,19 @@ switch ($action) {
 
                 // 4. DISABLE the campaign after ad creation
                 // This ensures the campaign starts in paused state for user review
+                // API endpoint: /campaign/status/update/ with opt_status parameter
                 logSmartPlus("Disabling campaign after ad creation...");
-                $disableResult = makeApiCall('/campaign/update/status/', [
+                $disableResult = makeApiCall('/campaign/status/update/', [
                     'advertiser_id' => $targetAdvertiserId,
                     'campaign_ids' => [$campaignId],
-                    'operation_status' => 'DISABLE'
+                    'opt_status' => 'DISABLE'
                 ], $accessToken);
 
                 if ($disableResult['code'] == 0) {
                     logSmartPlus("Campaign disabled successfully: $campaignId");
                 } else {
                     logSmartPlus("Warning: Failed to disable campaign: " . ($disableResult['message'] ?? 'Unknown error'));
+                    logSmartPlus("Disable API response: " . json_encode($disableResult));
                 }
 
                 // Success!
