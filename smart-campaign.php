@@ -570,9 +570,77 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     </div>
                 </div>
 
+                <!-- Launch Options Section -->
+                <div class="review-section" style="margin-top: 30px;">
+                    <h3>Launch Options</h3>
+
+                    <div class="launch-options-container">
+                        <!-- Option 1: Single Account -->
+                        <div class="launch-option-card" id="single-launch-option">
+                            <div class="launch-option-header">
+                                <input type="radio" name="launch_mode" value="single" id="launch-mode-single" checked onchange="toggleLaunchMode()">
+                                <label for="launch-mode-single">
+                                    <span class="launch-option-icon">🚀</span>
+                                    <span class="launch-option-title">Launch to Current Account Only</span>
+                                </label>
+                            </div>
+                            <div class="launch-option-body">
+                                <p class="launch-option-desc">Launch campaign to the currently selected advertiser account.</p>
+                                <div class="current-account-info">
+                                    <span class="account-label">Account:</span>
+                                    <span class="account-name" id="current-account-name">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Option 2: Bulk Launch -->
+                        <div class="launch-option-card" id="bulk-launch-option">
+                            <div class="launch-option-header">
+                                <input type="radio" name="launch_mode" value="bulk" id="launch-mode-bulk" onchange="toggleLaunchMode()">
+                                <label for="launch-mode-bulk">
+                                    <span class="launch-option-icon">⚡</span>
+                                    <span class="launch-option-title">Bulk Launch to Multiple Accounts</span>
+                                </label>
+                            </div>
+                            <div class="launch-option-body">
+                                <p class="launch-option-desc">Launch the same campaign to multiple advertiser accounts at once.</p>
+                                <div id="bulk-accounts-preview" style="display: none;">
+                                    <span class="accounts-count"><span id="available-accounts-count">0</span> accounts available</span>
+                                    <button type="button" class="btn-configure-bulk" onclick="openBulkLaunchModal()">Configure Accounts →</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bulk Launch Summary (shows after configuration) -->
+                    <div id="bulk-launch-summary" style="display: none; margin-top: 20px;">
+                        <div class="bulk-summary-card">
+                            <h4>Bulk Launch Configuration</h4>
+                            <div class="bulk-summary-stats">
+                                <div class="stat-item">
+                                    <span class="stat-value" id="bulk-selected-count">0</span>
+                                    <span class="stat-label">Accounts Selected</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-value" id="bulk-total-budget">$0</span>
+                                    <span class="stat-label">Total Daily Budget</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-value" id="bulk-ready-count">0</span>
+                                    <span class="stat-label">Ready to Launch</span>
+                                </div>
+                            </div>
+                            <div id="bulk-accounts-list" class="bulk-accounts-list">
+                                <!-- Populated by JavaScript -->
+                            </div>
+                            <button type="button" class="btn-secondary" onclick="openBulkLaunchModal()">Edit Configuration</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="button-row">
                     <button class="btn-secondary" onclick="prevStep()">← Back</button>
-                    <button class="btn-success" onclick="createAd()">✓ Create Ad & Publish</button>
+                    <button class="btn-success" id="launch-button" onclick="handleLaunch()">🚀 Launch Campaign</button>
                 </div>
             </div>
         </div>
@@ -616,6 +684,125 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 </div>
                 <div class="modal-footer">
                     <button class="btn-secondary" onclick="closeUploadModal()">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bulk Launch Modal -->
+        <div id="bulk-launch-modal" class="modal" style="display: none;">
+            <div class="modal-content bulk-launch-modal-content">
+                <div class="modal-header">
+                    <h3>⚡ Bulk Launch Configuration</h3>
+                    <span class="modal-close" onclick="closeBulkLaunchModal()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <!-- Campaign Info Banner -->
+                    <div class="bulk-campaign-info">
+                        <strong>Campaign:</strong> <span id="bulk-campaign-name">-</span> |
+                        <strong>Budget:</strong> $<span id="bulk-campaign-budget">0</span>/day per account
+                    </div>
+
+                    <!-- Video Distribution Section -->
+                    <div class="bulk-section">
+                        <h4>📹 Video Distribution</h4>
+                        <p class="bulk-section-desc">Your selected videos need to exist in each target account.</p>
+                        <div class="video-options">
+                            <label class="video-option">
+                                <input type="radio" name="video_distribution" value="match" checked onchange="toggleVideoDistribution()">
+                                <span>Videos already exist in all accounts (match by file name)</span>
+                            </label>
+                            <label class="video-option">
+                                <input type="radio" name="video_distribution" value="upload" onchange="toggleVideoDistribution()">
+                                <span>Upload videos to selected accounts now</span>
+                            </label>
+                        </div>
+                        <div id="video-upload-progress" style="display: none; margin-top: 15px;">
+                            <div class="upload-progress-container">
+                                <div id="video-upload-status">Ready to upload</div>
+                                <div class="progress-bar-container">
+                                    <div id="video-upload-bar" class="progress-bar-fill" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accounts Selection Section -->
+                    <div class="bulk-section">
+                        <h4>Select Accounts & Configure</h4>
+                        <div class="bulk-accounts-header">
+                            <button type="button" class="btn-sm" onclick="selectAllBulkAccounts()">Select All</button>
+                            <button type="button" class="btn-sm" onclick="deselectAllBulkAccounts()">Deselect All</button>
+                            <span class="accounts-selected-text"><span id="modal-selected-count">0</span> selected</span>
+                        </div>
+
+                        <div id="bulk-accounts-container" class="bulk-accounts-container">
+                            <!-- Account cards will be populated by JavaScript -->
+                            <div class="loading-accounts">
+                                <div class="spinner-small"></div>
+                                <span>Loading accounts...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Summary Section -->
+                    <div class="bulk-modal-summary">
+                        <div class="summary-item">
+                            <span class="summary-label">Total Accounts:</span>
+                            <span class="summary-value" id="modal-total-accounts">0</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Ready to Launch:</span>
+                            <span class="summary-value" id="modal-ready-accounts">0</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Total Daily Budget:</span>
+                            <span class="summary-value" id="modal-total-budget">$0</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="closeBulkLaunchModal()">Cancel</button>
+                    <button class="btn-primary" id="confirm-bulk-config-btn" onclick="confirmBulkConfiguration()">Confirm Configuration</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bulk Launch Progress Modal -->
+        <div id="bulk-progress-modal" class="modal" style="display: none;">
+            <div class="modal-content bulk-progress-modal-content">
+                <div class="modal-header">
+                    <h3>🚀 Launching Campaigns...</h3>
+                </div>
+                <div class="modal-body">
+                    <div class="bulk-progress-stats">
+                        <div class="progress-stat">
+                            <span class="progress-stat-value" id="progress-completed">0</span>
+                            <span class="progress-stat-label">Completed</span>
+                        </div>
+                        <div class="progress-stat">
+                            <span class="progress-stat-value" id="progress-total">0</span>
+                            <span class="progress-stat-label">Total</span>
+                        </div>
+                        <div class="progress-stat success">
+                            <span class="progress-stat-value" id="progress-success">0</span>
+                            <span class="progress-stat-label">Success</span>
+                        </div>
+                        <div class="progress-stat failed">
+                            <span class="progress-stat-value" id="progress-failed">0</span>
+                            <span class="progress-stat-label">Failed</span>
+                        </div>
+                    </div>
+
+                    <div class="bulk-progress-bar-container">
+                        <div id="bulk-progress-bar" class="bulk-progress-bar" style="width: 0%;"></div>
+                    </div>
+
+                    <div id="bulk-progress-list" class="bulk-progress-list">
+                        <!-- Progress items will be added here -->
+                    </div>
+                </div>
+                <div class="modal-footer" id="bulk-progress-footer" style="display: none;">
+                    <button class="btn-primary" onclick="closeBulkProgressModal()">Done</button>
                 </div>
             </div>
         </div>

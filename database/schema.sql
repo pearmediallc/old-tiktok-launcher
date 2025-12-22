@@ -221,3 +221,85 @@ CREATE TABLE IF NOT EXISTS tool_portfolios (
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT='Stores all portfolios created through TikTok Launcher for easy retrieval';
+
+-- ============================================
+-- Table 8: Bulk Campaign Jobs
+-- ============================================
+-- Tracks bulk launch operations across multiple advertiser accounts
+CREATE TABLE IF NOT EXISTS bulk_campaign_jobs (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    job_id VARCHAR(36) UNIQUE NOT NULL COMMENT 'UUID for the bulk job',
+    user_id INT COMMENT 'User who initiated the job',
+    job_name VARCHAR(255) COMMENT 'User-friendly name for the job',
+
+    -- Campaign configuration (JSON blob of all settings)
+    campaign_config JSON NOT NULL COMMENT 'Full campaign configuration',
+
+    -- Target accounts
+    advertiser_ids JSON NOT NULL COMMENT 'Array of target advertiser IDs',
+    primary_advertiser_id VARCHAR(255) COMMENT 'The original account used to configure',
+
+    -- Progress tracking
+    total_accounts INT NOT NULL DEFAULT 0,
+    completed_count INT DEFAULT 0,
+    success_count INT DEFAULT 0,
+    failed_count INT DEFAULT 0,
+
+    -- Status
+    status ENUM('pending', 'running', 'completed', 'failed', 'cancelled') DEFAULT 'pending',
+
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP NULL,
+    completed_at TIMESTAMP NULL,
+
+    INDEX idx_job_id (job_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_status (status),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Tracks bulk campaign launch jobs across multiple accounts';
+
+-- ============================================
+-- Table 9: Bulk Campaign Results (Per-Account)
+-- ============================================
+-- Stores the result of each account in a bulk launch
+CREATE TABLE IF NOT EXISTS bulk_campaign_results (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    job_id VARCHAR(36) NOT NULL COMMENT 'Reference to bulk job',
+
+    -- Account info
+    advertiser_id VARCHAR(255) NOT NULL,
+    advertiser_name VARCHAR(255),
+
+    -- Per-account configuration
+    pixel_id VARCHAR(255) COMMENT 'Pixel used for this account',
+    pixel_name VARCHAR(255),
+    identity_id VARCHAR(255) COMMENT 'Identity used for this account',
+    identity_name VARCHAR(255),
+
+    -- Video mapping (JSON: {original_video_id: matched_video_id})
+    video_mapping JSON COMMENT 'Maps source videos to this account videos',
+
+    -- Created resources
+    campaign_id VARCHAR(255),
+    adgroup_id VARCHAR(255),
+    ad_id VARCHAR(255),
+
+    -- Status
+    status ENUM('pending', 'validating', 'running', 'success', 'failed', 'skipped') DEFAULT 'pending',
+    error_code VARCHAR(100),
+    error_message TEXT,
+    api_response JSON COMMENT 'Raw API response for debugging',
+
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP NULL,
+    completed_at TIMESTAMP NULL,
+
+    INDEX idx_job_id (job_id),
+    INDEX idx_advertiser_id (advertiser_id),
+    INDEX idx_status (status),
+    FOREIGN KEY (job_id) REFERENCES bulk_campaign_jobs(job_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Per-account results for bulk campaign launches';

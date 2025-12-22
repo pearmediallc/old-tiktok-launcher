@@ -213,8 +213,13 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeDayparting();
     initializeLocationTargeting();
     initializeAgeTargeting();  // Initialize age selection buttons
+    loadBulkAccounts();  // Pre-load accounts for bulk launch feature
 
     state.cboEnabled = true;
+
+    // Initialize launch mode (single is default and selected)
+    const singleOption = document.getElementById('single-launch-option');
+    if (singleOption) singleOption.classList.add('selected');
 
     const statusElement = document.getElementById('timezone-status');
     if (statusElement) {
@@ -760,6 +765,11 @@ function initializeLocationTargeting() {
         grid.appendChild(item);
     });
 
+    // Add change event listener to all state checkboxes to update count
+    document.querySelectorAll('.state-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateStatesCount);
+    });
+
     updateStatesCount();
 }
 
@@ -787,7 +797,10 @@ function updateStatesCount() {
 
 function getSelectedLocationIds() {
     const method = document.querySelector('input[name="location_method"]:checked').value;
+    console.log('Location method:', method);
+
     if (method === 'country') {
+        console.log('Targeting entire US: [6252001]');
         return ['6252001'];
     }
 
@@ -795,7 +808,10 @@ function getSelectedLocationIds() {
     document.querySelectorAll('.state-checkbox:checked').forEach(cb => {
         selected.push(cb.value);
     });
-    return selected.length > 0 ? selected : ['6252001'];
+
+    const result = selected.length > 0 ? selected : ['6252001'];
+    console.log('Selected state location IDs:', result.length, 'states', result);
+    return result;
 }
 
 // =====================
@@ -1031,6 +1047,10 @@ async function createAdGroup() {
     const optimizationEvent = document.getElementById('optimization-event').value;
     const locationIds = getSelectedLocationIds();
     const dayparting = getDaypartingData();
+
+    // Log location targeting for debugging
+    addLog('info', `Location targeting: ${locationIds.length} location(s) selected`);
+    console.log('Location IDs being sent to API:', locationIds);
 
     // For LEAD_GENERATION objective: budget is ALWAYS at AdGroup level (not campaign)
     // Get budget from either campaign budget field (if CBO was enabled in step 1) or adgroup budget field
@@ -1697,4 +1717,713 @@ function finishAndReset() {
 
     // Redirect to advertiser selection page (home)
     window.location.href = 'select-advertiser-oauth.php';
+}
+
+// =====================
+// BULK LAUNCH FUNCTIONALITY
+// =====================
+
+// Bulk launch state
+let bulkLaunchState = {
+    accounts: [],
+    selectedAccounts: [],
+    accountAssets: {},
+    videoDistributionMode: 'match',
+    isConfigured: false
+};
+
+// Toggle between single and bulk launch modes
+function toggleLaunchMode() {
+    const mode = document.querySelector('input[name="launch_mode"]:checked').value;
+    const singleOption = document.getElementById('single-launch-option');
+    const bulkOption = document.getElementById('bulk-launch-option');
+    const bulkPreview = document.getElementById('bulk-accounts-preview');
+    const bulkSummary = document.getElementById('bulk-launch-summary');
+    const launchButton = document.getElementById('launch-button');
+
+    if (mode === 'bulk') {
+        singleOption.classList.remove('selected');
+        bulkOption.classList.add('selected');
+        bulkPreview.style.display = 'block';
+
+        // Load available accounts if not already loaded
+        if (bulkLaunchState.accounts.length === 0) {
+            loadBulkAccounts();
+        }
+
+        // Show summary if already configured
+        if (bulkLaunchState.isConfigured && bulkLaunchState.selectedAccounts.length > 0) {
+            bulkSummary.style.display = 'block';
+            launchButton.textContent = `⚡ Bulk Launch to ${bulkLaunchState.selectedAccounts.length} Accounts`;
+        } else {
+            bulkSummary.style.display = 'none';
+            launchButton.textContent = '⚡ Configure & Launch';
+        }
+    } else {
+        singleOption.classList.add('selected');
+        bulkOption.classList.remove('selected');
+        bulkPreview.style.display = 'none';
+        bulkSummary.style.display = 'none';
+        launchButton.textContent = '🚀 Launch Campaign';
+    }
+
+    addLog('info', `Launch mode changed to: ${mode}`);
+}
+
+// Load available accounts for bulk launch
+async function loadBulkAccounts() {
+    try {
+        addLog('info', 'Loading available accounts for bulk launch...');
+
+        const result = await apiRequest('get_bulk_accounts');
+
+        if (result.success && result.data && result.data.accounts) {
+            bulkLaunchState.accounts = result.data.accounts;
+
+            // Update the available count
+            const countEl = document.getElementById('available-accounts-count');
+            if (countEl) countEl.textContent = result.data.accounts.length;
+
+            // Set current account name
+            const currentAccount = result.data.accounts.find(a => a.is_current);
+            if (currentAccount) {
+                const currentNameEl = document.getElementById('current-account-name');
+                if (currentNameEl) currentNameEl.textContent = currentAccount.advertiser_name;
+            }
+
+            addLog('info', `Loaded ${result.data.accounts.length} accounts`);
+        } else {
+            showToast('Failed to load accounts: ' + (result.message || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        addLog('error', 'Error loading accounts: ' + error.message);
+        showToast('Error loading accounts', 'error');
+    }
+}
+
+// Open bulk launch modal
+function openBulkLaunchModal() {
+    const modal = document.getElementById('bulk-launch-modal');
+    modal.style.display = 'flex';
+
+    // Populate campaign info
+    document.getElementById('bulk-campaign-name').textContent = state.campaignName || '-';
+    document.getElementById('bulk-campaign-budget').textContent = state.budget || state.adGroupBudget || '0';
+
+    // Render accounts
+    renderBulkAccountsInModal();
+}
+
+// Close bulk launch modal
+function closeBulkLaunchModal() {
+    document.getElementById('bulk-launch-modal').style.display = 'none';
+}
+
+// Render accounts in the bulk launch modal
+async function renderBulkAccountsInModal() {
+    const container = document.getElementById('bulk-accounts-container');
+
+    if (bulkLaunchState.accounts.length === 0) {
+        await loadBulkAccounts();
+    }
+
+    if (bulkLaunchState.accounts.length === 0) {
+        container.innerHTML = '<p style="text-align: center; padding: 20px; color: #666;">No accounts available</p>';
+        return;
+    }
+
+    container.innerHTML = '';
+
+    for (const account of bulkLaunchState.accounts) {
+        // Skip current account (it's already used for the primary campaign)
+        if (account.is_current) continue;
+
+        const isSelected = bulkLaunchState.selectedAccounts.some(a => a.advertiser_id === account.advertiser_id);
+        const assets = bulkLaunchState.accountAssets[account.advertiser_id] || null;
+
+        const card = document.createElement('div');
+        card.className = `bulk-account-card ${isSelected ? 'selected' : ''}`;
+        card.id = `bulk-account-${account.advertiser_id}`;
+
+        card.innerHTML = `
+            <div class="bulk-account-header">
+                <label class="bulk-account-checkbox">
+                    <input type="checkbox"
+                           id="bulk-check-${account.advertiser_id}"
+                           ${isSelected ? 'checked' : ''}
+                           onchange="toggleBulkAccountSelection('${account.advertiser_id}')">
+                    <span class="checkmark"></span>
+                </label>
+                <div class="bulk-account-info">
+                    <span class="bulk-account-name">${account.advertiser_name}</span>
+                    <span class="bulk-account-id">${account.advertiser_id}</span>
+                </div>
+                <button type="button" class="btn-load-assets" onclick="loadAccountAssets('${account.advertiser_id}')"
+                        ${assets ? 'style="display:none;"' : ''}>
+                    Load Assets
+                </button>
+            </div>
+            <div class="bulk-account-assets" id="assets-${account.advertiser_id}" style="${assets ? '' : 'display:none;'}">
+                ${assets ? renderAccountAssetsDropdowns(account.advertiser_id, assets) : '<div class="loading-assets"><div class="spinner-small"></div> Loading...</div>'}
+            </div>
+            <div class="bulk-account-status" id="status-${account.advertiser_id}">
+                ${isSelected && assets ? getAccountStatus(account.advertiser_id) : ''}
+            </div>
+        `;
+
+        container.appendChild(card);
+    }
+
+    updateBulkModalCounts();
+}
+
+// Render asset dropdowns for an account
+function renderAccountAssetsDropdowns(advertiserId, assets) {
+    const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+    const selectedPixelId = selectedAccount?.pixel_id || '';
+    const selectedIdentityId = selectedAccount?.identity_id || '';
+
+    let html = `
+        <div class="asset-row">
+            <label>Pixel:</label>
+            <select id="pixel-${advertiserId}" onchange="updateAccountAssetSelection('${advertiserId}')">
+                <option value="">Select Pixel...</option>
+                ${(assets.pixels || []).map(p =>
+                    `<option value="${p.pixel_id}" ${p.pixel_id === selectedPixelId ? 'selected' : ''}>${p.pixel_name || p.pixel_id}</option>`
+                ).join('')}
+            </select>
+        </div>
+        <div class="asset-row">
+            <label>Identity:</label>
+            <select id="identity-${advertiserId}" onchange="updateAccountAssetSelection('${advertiserId}')">
+                <option value="">Select Identity...</option>
+                ${(assets.identities || []).map(i =>
+                    `<option value="${i.identity_id}" data-type="${i.identity_type || 'CUSTOMIZED_USER'}" ${i.identity_id === selectedIdentityId ? 'selected' : ''}>${i.display_name || i.identity_name || i.identity_id}</option>`
+                ).join('')}
+            </select>
+        </div>
+    `;
+
+    // Video matching status
+    const videoMatch = bulkLaunchState.accountAssets[advertiserId]?.videoMatch;
+    if (videoMatch) {
+        const matchRate = videoMatch.match_rate || 0;
+        const statusClass = matchRate === 100 ? 'success' : matchRate > 0 ? 'warning' : 'error';
+        html += `
+            <div class="asset-row video-match-status ${statusClass}">
+                <span class="match-icon">${matchRate === 100 ? '✓' : matchRate > 0 ? '⚠' : '✗'}</span>
+                <span>Videos: ${videoMatch.matched?.length || 0}/${state.selectedVideos.length} matched (${matchRate}%)</span>
+            </div>
+        `;
+    }
+
+    return html;
+}
+
+// Get account status text
+function getAccountStatus(advertiserId) {
+    const account = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+    if (!account) return '';
+
+    const hasPixel = !!account.pixel_id;
+    const hasIdentity = !!account.identity_id;
+    const videoMatch = bulkLaunchState.accountAssets[advertiserId]?.videoMatch;
+    const hasVideos = videoMatch && videoMatch.match_rate === 100;
+
+    if (hasPixel && hasIdentity && hasVideos) {
+        return '<span class="status-ready">✓ Ready to launch</span>';
+    } else {
+        const missing = [];
+        if (!hasPixel) missing.push('pixel');
+        if (!hasIdentity) missing.push('identity');
+        if (!hasVideos) missing.push('videos');
+        return `<span class="status-incomplete">Missing: ${missing.join(', ')}</span>`;
+    }
+}
+
+// Load assets for a specific account
+async function loadAccountAssets(advertiserId) {
+    const assetsContainer = document.getElementById(`assets-${advertiserId}`);
+    const loadButton = document.querySelector(`#bulk-account-${advertiserId} .btn-load-assets`);
+
+    if (loadButton) loadButton.style.display = 'none';
+    assetsContainer.style.display = 'block';
+    assetsContainer.innerHTML = '<div class="loading-assets"><div class="spinner-small"></div> Loading assets...</div>';
+
+    try {
+        // Load assets
+        const result = await apiRequest('get_account_assets', { target_advertiser_id: advertiserId });
+
+        if (result.success && result.data) {
+            bulkLaunchState.accountAssets[advertiserId] = result.data;
+
+            // Also match videos
+            await matchVideosForAccount(advertiserId);
+
+            // Render dropdowns
+            assetsContainer.innerHTML = renderAccountAssetsDropdowns(advertiserId, result.data);
+
+            addLog('info', `Loaded assets for ${advertiserId}: ${result.data.pixels?.length || 0} pixels, ${result.data.identities?.length || 0} identities`);
+        } else {
+            assetsContainer.innerHTML = '<p class="error-text">Failed to load assets</p>';
+        }
+    } catch (error) {
+        assetsContainer.innerHTML = '<p class="error-text">Error loading assets</p>';
+        addLog('error', `Error loading assets for ${advertiserId}: ${error.message}`);
+    }
+}
+
+// Match videos for an account
+async function matchVideosForAccount(advertiserId) {
+    if (state.selectedVideos.length === 0) return;
+
+    try {
+        const sourceVideos = state.selectedVideos.map(v => ({
+            video_id: v.id,
+            file_name: v.name
+        }));
+
+        const result = await apiRequest('match_videos_by_filename', {
+            target_advertiser_id: advertiserId,
+            source_videos: sourceVideos
+        });
+
+        if (result.success && result.data) {
+            bulkLaunchState.accountAssets[advertiserId].videoMatch = result.data;
+
+            // Build video mapping
+            const videoMapping = {};
+            (result.data.matched || []).forEach(m => {
+                videoMapping[m.source_video_id] = m.target_video_id;
+            });
+
+            // Update selected account if exists
+            const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+            if (selectedAccount) {
+                selectedAccount.video_mapping = videoMapping;
+            }
+
+            addLog('info', `Video matching for ${advertiserId}: ${result.data.match_rate}% match rate`);
+        }
+    } catch (error) {
+        addLog('error', `Error matching videos for ${advertiserId}: ${error.message}`);
+    }
+}
+
+// Toggle account selection
+function toggleBulkAccountSelection(advertiserId) {
+    const checkbox = document.getElementById(`bulk-check-${advertiserId}`);
+    const card = document.getElementById(`bulk-account-${advertiserId}`);
+    const account = bulkLaunchState.accounts.find(a => a.advertiser_id === advertiserId);
+
+    if (!account) return;
+
+    if (checkbox.checked) {
+        // Add to selected
+        card.classList.add('selected');
+
+        // Load assets if not loaded
+        if (!bulkLaunchState.accountAssets[advertiserId]) {
+            loadAccountAssets(advertiserId);
+        }
+
+        // Add to selected accounts
+        if (!bulkLaunchState.selectedAccounts.some(a => a.advertiser_id === advertiserId)) {
+            bulkLaunchState.selectedAccounts.push({
+                advertiser_id: advertiserId,
+                advertiser_name: account.advertiser_name,
+                pixel_id: null,
+                identity_id: null,
+                identity_type: 'CUSTOMIZED_USER',
+                video_mapping: {}
+            });
+        }
+    } else {
+        // Remove from selected
+        card.classList.remove('selected');
+        bulkLaunchState.selectedAccounts = bulkLaunchState.selectedAccounts.filter(a => a.advertiser_id !== advertiserId);
+    }
+
+    // Update status
+    const statusEl = document.getElementById(`status-${advertiserId}`);
+    if (statusEl) {
+        statusEl.innerHTML = checkbox.checked ? getAccountStatus(advertiserId) : '';
+    }
+
+    updateBulkModalCounts();
+}
+
+// Update account asset selection (pixel/identity)
+function updateAccountAssetSelection(advertiserId) {
+    const pixelSelect = document.getElementById(`pixel-${advertiserId}`);
+    const identitySelect = document.getElementById(`identity-${advertiserId}`);
+
+    const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+    if (!selectedAccount) return;
+
+    if (pixelSelect) {
+        selectedAccount.pixel_id = pixelSelect.value;
+    }
+
+    if (identitySelect) {
+        selectedAccount.identity_id = identitySelect.value;
+        const selectedOption = identitySelect.options[identitySelect.selectedIndex];
+        selectedAccount.identity_type = selectedOption?.dataset?.type || 'CUSTOMIZED_USER';
+    }
+
+    // Update status
+    const statusEl = document.getElementById(`status-${advertiserId}`);
+    if (statusEl) {
+        statusEl.innerHTML = getAccountStatus(advertiserId);
+    }
+
+    updateBulkModalCounts();
+}
+
+// Select all accounts
+function selectAllBulkAccounts() {
+    bulkLaunchState.accounts.forEach(account => {
+        if (account.is_current) return;
+
+        const checkbox = document.getElementById(`bulk-check-${account.advertiser_id}`);
+        if (checkbox && !checkbox.checked) {
+            checkbox.checked = true;
+            toggleBulkAccountSelection(account.advertiser_id);
+        }
+    });
+}
+
+// Deselect all accounts
+function deselectAllBulkAccounts() {
+    bulkLaunchState.selectedAccounts.forEach(account => {
+        const checkbox = document.getElementById(`bulk-check-${account.advertiser_id}`);
+        if (checkbox && checkbox.checked) {
+            checkbox.checked = false;
+            toggleBulkAccountSelection(account.advertiser_id);
+        }
+    });
+}
+
+// Update counts in the modal
+function updateBulkModalCounts() {
+    const selectedCount = bulkLaunchState.selectedAccounts.length;
+    const readyCount = bulkLaunchState.selectedAccounts.filter(a => {
+        const assets = bulkLaunchState.accountAssets[a.advertiser_id];
+        const videoMatch = assets?.videoMatch;
+        return a.pixel_id && a.identity_id && videoMatch && videoMatch.match_rate === 100;
+    }).length;
+
+    const budget = parseFloat(state.budget || state.adGroupBudget || 0);
+    const totalBudget = budget * selectedCount;
+
+    // Modal counts
+    document.getElementById('modal-selected-count').textContent = selectedCount;
+    document.getElementById('modal-total-accounts').textContent = bulkLaunchState.accounts.filter(a => !a.is_current).length;
+    document.getElementById('modal-ready-accounts').textContent = readyCount;
+    document.getElementById('modal-total-budget').textContent = `$${totalBudget.toFixed(2)}`;
+
+    // Enable/disable confirm button
+    const confirmBtn = document.getElementById('confirm-bulk-config-btn');
+    if (confirmBtn) {
+        confirmBtn.disabled = selectedCount === 0;
+    }
+}
+
+// Toggle video distribution mode
+function toggleVideoDistribution() {
+    const mode = document.querySelector('input[name="video_distribution"]:checked').value;
+    bulkLaunchState.videoDistributionMode = mode;
+
+    const uploadProgress = document.getElementById('video-upload-progress');
+    uploadProgress.style.display = mode === 'upload' ? 'block' : 'none';
+
+    addLog('info', `Video distribution mode: ${mode}`);
+}
+
+// Confirm bulk configuration
+function confirmBulkConfiguration() {
+    if (bulkLaunchState.selectedAccounts.length === 0) {
+        showToast('Please select at least one account', 'error');
+        return;
+    }
+
+    // Check if all selected accounts are ready
+    const notReady = bulkLaunchState.selectedAccounts.filter(a => {
+        const assets = bulkLaunchState.accountAssets[a.advertiser_id];
+        const videoMatch = assets?.videoMatch;
+        return !a.pixel_id || !a.identity_id || !videoMatch || videoMatch.match_rate < 100;
+    });
+
+    if (notReady.length > 0) {
+        const names = notReady.map(a => a.advertiser_name).join(', ');
+        showToast(`Some accounts are not ready: ${names}. Please configure pixel, identity, and ensure videos are matched.`, 'warning');
+        return;
+    }
+
+    // Mark as configured
+    bulkLaunchState.isConfigured = true;
+
+    // Close modal
+    closeBulkLaunchModal();
+
+    // Update summary
+    updateBulkLaunchSummary();
+
+    showToast(`Configured ${bulkLaunchState.selectedAccounts.length} accounts for bulk launch`, 'success');
+}
+
+// Update bulk launch summary on main page
+function updateBulkLaunchSummary() {
+    const summaryDiv = document.getElementById('bulk-launch-summary');
+    const accountsList = document.getElementById('bulk-accounts-list');
+    const launchButton = document.getElementById('launch-button');
+
+    if (!bulkLaunchState.isConfigured || bulkLaunchState.selectedAccounts.length === 0) {
+        summaryDiv.style.display = 'none';
+        return;
+    }
+
+    summaryDiv.style.display = 'block';
+
+    // Update stats
+    const budget = parseFloat(state.budget || state.adGroupBudget || 0);
+    document.getElementById('bulk-selected-count').textContent = bulkLaunchState.selectedAccounts.length;
+    document.getElementById('bulk-total-budget').textContent = `$${(budget * bulkLaunchState.selectedAccounts.length).toFixed(2)}`;
+    document.getElementById('bulk-ready-count').textContent = bulkLaunchState.selectedAccounts.length;
+
+    // Render accounts list
+    accountsList.innerHTML = bulkLaunchState.selectedAccounts.map(a => `
+        <div class="bulk-account-item">
+            <span class="account-name">${a.advertiser_name}</span>
+            <span class="account-status ready">✓ Ready</span>
+        </div>
+    `).join('');
+
+    // Update launch button
+    launchButton.textContent = `⚡ Bulk Launch to ${bulkLaunchState.selectedAccounts.length} Accounts`;
+}
+
+// Handle launch button click (routes to single or bulk)
+function handleLaunch() {
+    const mode = document.querySelector('input[name="launch_mode"]:checked').value;
+
+    if (mode === 'bulk') {
+        if (!bulkLaunchState.isConfigured || bulkLaunchState.selectedAccounts.length === 0) {
+            // Open configuration modal if not configured
+            openBulkLaunchModal();
+        } else {
+            // Execute bulk launch
+            executeBulkLaunch();
+        }
+    } else {
+        // Single account launch
+        createAd();
+    }
+}
+
+// Execute bulk launch
+async function executeBulkLaunch() {
+    if (bulkLaunchState.selectedAccounts.length === 0) {
+        showToast('No accounts configured for bulk launch', 'error');
+        return;
+    }
+
+    // Show progress modal
+    const progressModal = document.getElementById('bulk-progress-modal');
+    const progressList = document.getElementById('bulk-progress-list');
+    const progressBar = document.getElementById('bulk-progress-bar');
+    const progressFooter = document.getElementById('bulk-progress-footer');
+
+    progressModal.style.display = 'flex';
+    progressFooter.style.display = 'none';
+    progressList.innerHTML = '';
+    progressBar.style.width = '0%';
+
+    // Update progress stats
+    document.getElementById('progress-total').textContent = bulkLaunchState.selectedAccounts.length;
+    document.getElementById('progress-completed').textContent = '0';
+    document.getElementById('progress-success').textContent = '0';
+    document.getElementById('progress-failed').textContent = '0';
+
+    // Add initial progress items
+    bulkLaunchState.selectedAccounts.forEach(account => {
+        progressList.innerHTML += `
+            <div class="progress-item" id="progress-item-${account.advertiser_id}">
+                <span class="progress-account-name">${account.advertiser_name}</span>
+                <span class="progress-status pending">Pending...</span>
+            </div>
+        `;
+    });
+
+    addLog('info', `Starting bulk launch to ${bulkLaunchState.selectedAccounts.length} accounts`);
+
+    // Build campaign config
+    const campaignConfig = {
+        campaign_name: state.campaignName,
+        budget: state.budget || state.adGroupBudget,
+        location_ids: state.locationIds,
+        age_groups: state.ageGroups,
+        dayparting: state.dayparting,
+        optimization_event: state.optimizationEvent,
+        landing_page_url: state.globalLandingUrl,
+        ad_texts: state.adTexts,
+        creatives: state.creatives.map(c => ({
+            video_id: c.video_id,
+            ad_text: c.ad_text
+        }))
+    };
+
+    // Prepare accounts with video mappings
+    const accountsToLaunch = bulkLaunchState.selectedAccounts.map(account => ({
+        advertiser_id: account.advertiser_id,
+        advertiser_name: account.advertiser_name,
+        pixel_id: account.pixel_id,
+        identity_id: account.identity_id,
+        identity_type: account.identity_type,
+        video_mapping: account.video_mapping || {}
+    }));
+
+    try {
+        const result = await apiRequest('execute_bulk_launch', {
+            campaign_config: campaignConfig,
+            accounts: accountsToLaunch,
+            primary_advertiser_id: bulkLaunchState.accounts.find(a => a.is_current)?.advertiser_id
+        });
+
+        if (result.success && result.data) {
+            const data = result.data;
+
+            // Update progress UI
+            let completed = 0;
+            let successCount = 0;
+            let failedCount = 0;
+
+            // Update success items
+            (data.success || []).forEach(item => {
+                completed++;
+                successCount++;
+                updateProgressItem(item.advertiser_id, 'success', `✓ Campaign: ${item.campaign_id}`);
+            });
+
+            // Update failed items
+            (data.failed || []).forEach(item => {
+                completed++;
+                failedCount++;
+                updateProgressItem(item.advertiser_id, 'failed', `✗ ${item.error}`);
+            });
+
+            // Update stats
+            document.getElementById('progress-completed').textContent = completed;
+            document.getElementById('progress-success').textContent = successCount;
+            document.getElementById('progress-failed').textContent = failedCount;
+            progressBar.style.width = '100%';
+
+            // Show footer
+            progressFooter.style.display = 'block';
+
+            addLog('info', `Bulk launch completed: ${successCount} success, ${failedCount} failed`);
+
+            if (failedCount === 0) {
+                showToast(`Successfully launched to ${successCount} accounts!`, 'success');
+            } else if (successCount > 0) {
+                showToast(`Launched to ${successCount} accounts, ${failedCount} failed`, 'warning');
+            } else {
+                showToast(`Bulk launch failed for all accounts`, 'error');
+            }
+        } else {
+            showToast('Bulk launch failed: ' + (result.message || 'Unknown error'), 'error');
+            progressFooter.style.display = 'block';
+        }
+    } catch (error) {
+        addLog('error', 'Bulk launch error: ' + error.message);
+        showToast('Error during bulk launch: ' + error.message, 'error');
+        progressFooter.style.display = 'block';
+    }
+}
+
+// Update progress item status
+function updateProgressItem(advertiserId, status, message) {
+    const item = document.getElementById(`progress-item-${advertiserId}`);
+    if (!item) return;
+
+    const statusEl = item.querySelector('.progress-status');
+    if (statusEl) {
+        statusEl.className = `progress-status ${status}`;
+        statusEl.textContent = message;
+    }
+}
+
+// Close bulk progress modal
+function closeBulkProgressModal() {
+    document.getElementById('bulk-progress-modal').style.display = 'none';
+
+    // Optionally refresh or redirect
+    showSuccessModalBulk();
+}
+
+// Show success modal for bulk launch
+function showSuccessModalBulk() {
+    const successCount = parseInt(document.getElementById('progress-success').textContent) || 0;
+    const failedCount = parseInt(document.getElementById('progress-failed').textContent) || 0;
+
+    const modalHtml = `
+        <div id="success-modal-bulk" style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.3s ease;
+        ">
+            <div style="
+                background: white;
+                border-radius: 20px;
+                padding: 40px;
+                max-width: 500px;
+                text-align: center;
+                animation: slideIn 0.3s ease;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            ">
+                <div style="font-size: 72px; margin-bottom: 20px;">${failedCount === 0 ? '🎉' : '⚡'}</div>
+                <h2 style="color: #1e9df1; margin-bottom: 10px; font-size: 28px;">Bulk Launch ${failedCount === 0 ? 'Complete!' : 'Finished'}</h2>
+                <p style="color: #333; margin-bottom: 20px; font-size: 18px; font-weight: 500;">
+                    ${successCount} campaigns launched successfully
+                    ${failedCount > 0 ? `, ${failedCount} failed` : ''}
+                </p>
+                <div style="background: #f0f8ff; padding: 15px; border-radius: 10px; margin-bottom: 25px;">
+                    <p style="margin: 5px 0; font-size: 13px;"><strong>Primary Campaign:</strong> ${state.campaignId}</p>
+                    <p style="margin: 5px 0; font-size: 13px;"><strong>Accounts Launched:</strong> ${successCount}</p>
+                </div>
+                <div style="display: flex; gap: 15px; justify-content: center;">
+                    <button onclick="createNewCampaign()" style="
+                        background: #1e9df1;
+                        color: white;
+                        border: 2px solid #1e9df1;
+                        padding: 14px 35px;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        cursor: pointer;
+                    ">Create Another</button>
+                    <button onclick="document.getElementById('success-modal-bulk').remove(); finishAndReset();" style="
+                        background: #f3f4f6;
+                        color: #374151;
+                        border: 2px solid #e5e7eb;
+                        padding: 14px 35px;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        cursor: pointer;
+                    ">Done</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
 }

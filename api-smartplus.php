@@ -1419,6 +1419,505 @@ switch ($action) {
         break;
 
     // ==========================================
+    // BULK LAUNCH: Get Available Accounts for Bulk Launch
+    // ==========================================
+    case 'get_bulk_accounts':
+        logSmartPlus("=== Getting Available Accounts for Bulk Launch ===");
+
+        // Get all advertiser IDs from session (these are all accounts user has OAuth access to)
+        $allAdvertiserIds = $_SESSION['oauth_advertiser_ids'] ?? [];
+        $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
+        $advertiserDetails = $_SESSION['oauth_advertiser_details'] ?? [];
+
+        if (empty($allAdvertiserIds)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'No advertiser accounts found in session'
+            ]);
+            exit;
+        }
+
+        $accounts = [];
+        foreach ($allAdvertiserIds as $advId) {
+            $details = $advertiserDetails[$advId] ?? null;
+            $accounts[] = [
+                'advertiser_id' => $advId,
+                'advertiser_name' => $details['name'] ?? 'Account ' . substr($advId, -6),
+                'is_current' => ($advId === $currentAdvertiserId),
+                'status' => $details['status'] ?? 'active'
+            ];
+        }
+
+        logSmartPlus("Found " . count($accounts) . " accounts for bulk launch");
+
+        echo json_encode([
+            'success' => true,
+            'data' => [
+                'accounts' => $accounts,
+                'current_advertiser_id' => $currentAdvertiserId,
+                'total' => count($accounts)
+            ]
+        ]);
+        break;
+
+    // ==========================================
+    // BULK LAUNCH: Get Account Assets (Pixels, Identities, Videos)
+    // ==========================================
+    case 'get_account_assets':
+        $targetAdvertiserId = $input['target_advertiser_id'] ?? '';
+
+        if (empty($targetAdvertiserId)) {
+            echo json_encode(['success' => false, 'message' => 'target_advertiser_id is required']);
+            exit;
+        }
+
+        // Validate advertiser is authorized
+        $allAdvertiserIds = $_SESSION['oauth_advertiser_ids'] ?? [];
+        if (!in_array($targetAdvertiserId, $allAdvertiserIds)) {
+            echo json_encode(['success' => false, 'message' => 'Unauthorized advertiser ID']);
+            exit;
+        }
+
+        logSmartPlus("=== Getting Assets for Account: $targetAdvertiserId ===");
+
+        $assets = [
+            'advertiser_id' => $targetAdvertiserId,
+            'pixels' => [],
+            'identities' => [],
+            'videos' => []
+        ];
+
+        // Get Pixels
+        $pixelResult = makeApiCall('/pixel/list/', [
+            'advertiser_id' => $targetAdvertiserId
+        ], $accessToken, 'GET');
+
+        if ($pixelResult['code'] == 0 && isset($pixelResult['data']['pixels'])) {
+            $assets['pixels'] = $pixelResult['data']['pixels'];
+            logSmartPlus("Found " . count($assets['pixels']) . " pixels");
+        }
+
+        // Get Identities
+        $identityResult = makeApiCall('/identity/get/', [
+            'advertiser_id' => $targetAdvertiserId
+        ], $accessToken, 'GET');
+
+        if ($identityResult['code'] == 0 && isset($identityResult['data']['identity_list'])) {
+            $assets['identities'] = $identityResult['data']['identity_list'];
+            logSmartPlus("Found " . count($assets['identities']) . " identities");
+        }
+
+        // Get Videos
+        $videoResult = makeApiCall('/file/video/ad/search/', [
+            'advertiser_id' => $targetAdvertiserId,
+            'page' => 1,
+            'page_size' => 100
+        ], $accessToken, 'GET');
+
+        if ($videoResult['code'] == 0 && isset($videoResult['data']['list'])) {
+            $assets['videos'] = $videoResult['data']['list'];
+            logSmartPlus("Found " . count($assets['videos']) . " videos");
+        }
+
+        echo json_encode([
+            'success' => true,
+            'data' => $assets
+        ]);
+        break;
+
+    // ==========================================
+    // BULK LAUNCH: Match Videos by Filename
+    // ==========================================
+    case 'match_videos_by_filename':
+        $targetAdvertiserId = $input['target_advertiser_id'] ?? '';
+        $sourceVideos = $input['source_videos'] ?? []; // Array of {video_id, file_name}
+
+        if (empty($targetAdvertiserId) || empty($sourceVideos)) {
+            echo json_encode(['success' => false, 'message' => 'target_advertiser_id and source_videos are required']);
+            exit;
+        }
+
+        logSmartPlus("=== Matching Videos for Account: $targetAdvertiserId ===");
+
+        // Get videos from target account
+        $videoResult = makeApiCall('/file/video/ad/search/', [
+            'advertiser_id' => $targetAdvertiserId,
+            'page' => 1,
+            'page_size' => 100
+        ], $accessToken, 'GET');
+
+        $targetVideos = [];
+        if ($videoResult['code'] == 0 && isset($videoResult['data']['list'])) {
+            $targetVideos = $videoResult['data']['list'];
+        }
+
+        // Build filename to video_id map for target account
+        $targetVideoMap = [];
+        foreach ($targetVideos as $video) {
+            $fileName = $video['file_name'] ?? '';
+            if ($fileName) {
+                $targetVideoMap[$fileName] = $video;
+            }
+        }
+
+        // Match source videos to target videos
+        $matched = [];
+        $unmatched = [];
+
+        foreach ($sourceVideos as $sourceVideo) {
+            $sourceFileName = $sourceVideo['file_name'] ?? '';
+            $sourceVideoId = $sourceVideo['video_id'] ?? '';
+
+            if (isset($targetVideoMap[$sourceFileName])) {
+                $targetVideo = $targetVideoMap[$sourceFileName];
+                $matched[] = [
+                    'source_video_id' => $sourceVideoId,
+                    'source_file_name' => $sourceFileName,
+                    'target_video_id' => $targetVideo['video_id'],
+                    'target_file_name' => $targetVideo['file_name']
+                ];
+            } else {
+                $unmatched[] = [
+                    'source_video_id' => $sourceVideoId,
+                    'source_file_name' => $sourceFileName
+                ];
+            }
+        }
+
+        logSmartPlus("Matched: " . count($matched) . ", Unmatched: " . count($unmatched));
+
+        echo json_encode([
+            'success' => true,
+            'data' => [
+                'matched' => $matched,
+                'unmatched' => $unmatched,
+                'total_source' => count($sourceVideos),
+                'match_rate' => count($sourceVideos) > 0 ? round(count($matched) / count($sourceVideos) * 100) : 0
+            ]
+        ]);
+        break;
+
+    // ==========================================
+    // BULK LAUNCH: Upload Video to Account
+    // ==========================================
+    case 'upload_video_to_account':
+        $targetAdvertiserId = $input['target_advertiser_id'] ?? '';
+        $videoUrl = $input['video_url'] ?? '';
+        $fileName = $input['file_name'] ?? '';
+
+        if (empty($targetAdvertiserId) || empty($videoUrl)) {
+            echo json_encode(['success' => false, 'message' => 'target_advertiser_id and video_url are required']);
+            exit;
+        }
+
+        logSmartPlus("=== Uploading Video to Account: $targetAdvertiserId ===");
+
+        $uploadResult = makeApiCall('/file/video/ad/upload/', [
+            'advertiser_id' => $targetAdvertiserId,
+            'upload_type' => 'UPLOAD_BY_URL',
+            'video_url' => $videoUrl,
+            'file_name' => $fileName
+        ], $accessToken);
+
+        if ($uploadResult['code'] == 0 && isset($uploadResult['data']['video_id'])) {
+            echo json_encode([
+                'success' => true,
+                'data' => [
+                    'video_id' => $uploadResult['data']['video_id'],
+                    'advertiser_id' => $targetAdvertiserId
+                ]
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => $uploadResult['message'] ?? 'Failed to upload video',
+                'details' => $uploadResult
+            ]);
+        }
+        break;
+
+    // ==========================================
+    // BULK LAUNCH: Execute Bulk Campaign Launch
+    // ==========================================
+    case 'execute_bulk_launch':
+        $data = $input;
+
+        logSmartPlus("=== EXECUTING BULK LAUNCH ===");
+
+        // Validate required fields
+        if (empty($data['campaign_config'])) {
+            echo json_encode(['success' => false, 'message' => 'campaign_config is required']);
+            exit;
+        }
+        if (empty($data['accounts'])) {
+            echo json_encode(['success' => false, 'message' => 'accounts array is required']);
+            exit;
+        }
+
+        $campaignConfig = $data['campaign_config'];
+        $accounts = $data['accounts'];
+        $primaryAdvertiserId = $data['primary_advertiser_id'] ?? $advertiserId;
+
+        // Generate job ID
+        $jobId = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0x0fff) | 0x4000,
+            mt_rand(0, 0x3fff) | 0x8000,
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+        );
+
+        logSmartPlus("Bulk Job ID: $jobId");
+        logSmartPlus("Processing " . count($accounts) . " accounts");
+
+        $results = [
+            'job_id' => $jobId,
+            'total' => count($accounts),
+            'success' => [],
+            'failed' => []
+        ];
+
+        // Process each account
+        foreach ($accounts as $index => $account) {
+            $targetAdvertiserId = $account['advertiser_id'];
+            $accountName = $account['advertiser_name'] ?? 'Account ' . ($index + 1);
+            $pixelId = $account['pixel_id'] ?? null;
+            $identityId = $account['identity_id'] ?? null;
+            $identityType = $account['identity_type'] ?? 'CUSTOMIZED_USER';
+            $videoMapping = $account['video_mapping'] ?? [];
+
+            logSmartPlus("--- Processing Account: $accountName ($targetAdvertiserId) ---");
+
+            // Rate limiting: 200ms delay between accounts
+            if ($index > 0) {
+                usleep(200000);
+            }
+
+            try {
+                // Clear caches for this advertiser
+                $GLOBALS['imageLibraryCache'] = null;
+                $GLOBALS['videoInfoCache'] = [];
+
+                // 1. CREATE CAMPAIGN
+                $campaignParams = [
+                    'advertiser_id' => $targetAdvertiserId,
+                    'campaign_name' => $campaignConfig['campaign_name'],
+                    'objective_type' => 'LEAD_GENERATION',
+                    'request_id' => generateRequestId(),
+                    'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
+                    'operation_status' => 'ENABLE'
+                ];
+
+                if (!empty($campaignConfig['budget'])) {
+                    $campaignParams['budget'] = floatval($campaignConfig['budget']);
+                }
+
+                $campaignResult = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
+
+                if ($campaignResult['code'] != 0 || !isset($campaignResult['data']['campaign_id'])) {
+                    throw new Exception('Campaign creation failed: ' . ($campaignResult['message'] ?? 'Unknown error'));
+                }
+
+                $campaignId = $campaignResult['data']['campaign_id'];
+                logSmartPlus("Campaign created: $campaignId");
+
+                // 2. CREATE AD GROUP
+                $scheduleStart = date('Y-m-d H:i:s', strtotime('+1 hour'));
+
+                $adgroupParams = [
+                    'advertiser_id' => $targetAdvertiserId,
+                    'request_id' => generateRequestId(),
+                    'campaign_id' => $campaignId,
+                    'adgroup_name' => $campaignConfig['campaign_name'] . ' - Ad Group',
+                    'promotion_type' => 'LEAD_GENERATION',
+                    'promotion_target_type' => 'EXTERNAL_WEBSITE',
+                    'optimization_goal' => 'CONVERT',
+                    'billing_event' => 'OCPM',
+                    'schedule_type' => 'SCHEDULE_FROM_NOW',
+                    'schedule_start_time' => $scheduleStart,
+                    'conversion_bid_price' => floatval($campaignConfig['conversion_bid_price'] ?? 10),
+                    'operation_status' => 'ENABLE',
+                    'targeting_spec' => [
+                        'location_ids' => $campaignConfig['location_ids'] ?? ['6252001'],
+                        'age_groups' => $campaignConfig['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54']
+                    ]
+                ];
+
+                // Add pixel if provided for this account
+                if (!empty($pixelId)) {
+                    $adgroupParams['pixel_id'] = $pixelId;
+                    $adgroupParams['optimization_event'] = $campaignConfig['optimization_event'] ?? 'FORM';
+                }
+
+                // Add budget at adgroup level for LEAD_GENERATION
+                if (!empty($campaignConfig['budget'])) {
+                    $adgroupParams['budget'] = floatval($campaignConfig['budget']);
+                }
+
+                // Add dayparting if provided
+                if (!empty($campaignConfig['dayparting'])) {
+                    $adgroupParams['dayparting'] = $campaignConfig['dayparting'];
+                }
+
+                $adgroupResult = makeApiCall('/smart_plus/adgroup/create/', $adgroupParams, $accessToken);
+
+                if ($adgroupResult['code'] != 0 || !isset($adgroupResult['data']['adgroup_id'])) {
+                    throw new Exception('Ad Group creation failed: ' . ($adgroupResult['message'] ?? 'Unknown error'));
+                }
+
+                $adgroupId = $adgroupResult['data']['adgroup_id'];
+                logSmartPlus("Ad Group created: $adgroupId");
+
+                // 3. CREATE AD
+                // Map videos from source to target
+                $creativeList = [];
+                foreach ($campaignConfig['creatives'] ?? [] as $creative) {
+                    $sourceVideoId = $creative['video_id'];
+
+                    // Get target video ID from mapping
+                    $targetVideoId = $videoMapping[$sourceVideoId] ?? $sourceVideoId;
+
+                    // Get cover image for this video in target account
+                    $coverImageId = getVideoCoverImage($targetVideoId, $targetAdvertiserId, $accessToken);
+
+                    $creativeInfo = [
+                        'video_info' => ['video_id' => $targetVideoId],
+                        'ad_format' => 'SINGLE_VIDEO'
+                    ];
+
+                    if ($coverImageId) {
+                        $creativeInfo['image_info'] = [['web_uri' => $coverImageId]];
+                    }
+
+                    $creativeList[] = ['creative_info' => $creativeInfo];
+                }
+
+                // Get or create CTA portfolio for this account
+                $ctaPortfolioId = null;
+                try {
+                    // Check for existing "Frequently Used CTAs" portfolio
+                    require_once __DIR__ . '/database/Database.php';
+                    $db = Database::getInstance();
+
+                    $existingPortfolio = $db->fetchOne(
+                        "SELECT creative_portfolio_id FROM tool_portfolios
+                         WHERE advertiser_id = :advertiser_id
+                         AND portfolio_name = 'Frequently Used CTAs'
+                         AND portfolio_type = 'CTA'",
+                        ['advertiser_id' => $targetAdvertiserId]
+                    );
+
+                    if ($existingPortfolio) {
+                        $ctaPortfolioId = $existingPortfolio['creative_portfolio_id'];
+                    } else {
+                        // Create new portfolio
+                        $frequentlyUsedCTAs = [
+                            ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]],
+                            ['asset_content' => 'GET_QUOTE', 'asset_ids' => ["0"]],
+                            ['asset_content' => 'SIGN_UP', 'asset_ids' => ["0"]],
+                            ['asset_content' => 'CONTACT_US', 'asset_ids' => ["0"]],
+                            ['asset_content' => 'APPLY_NOW', 'asset_ids' => ["0"]]
+                        ];
+
+                        $portfolioResult = makeApiCall('/creative/portfolio/create/', [
+                            'advertiser_id' => $targetAdvertiserId,
+                            'creative_portfolio_type' => 'CTA',
+                            'portfolio_content' => $frequentlyUsedCTAs
+                        ], $accessToken);
+
+                        if ($portfolioResult['code'] == 0 && isset($portfolioResult['data']['creative_portfolio_id'])) {
+                            $ctaPortfolioId = $portfolioResult['data']['creative_portfolio_id'];
+
+                            // Save to database
+                            $db->insert('tool_portfolios', [
+                                'advertiser_id' => $targetAdvertiserId,
+                                'creative_portfolio_id' => $ctaPortfolioId,
+                                'portfolio_name' => 'Frequently Used CTAs',
+                                'portfolio_type' => 'CTA',
+                                'portfolio_content' => json_encode($frequentlyUsedCTAs),
+                                'created_by_tool' => 1
+                            ]);
+                        }
+                    }
+                } catch (Exception $e) {
+                    logSmartPlus("Warning: Could not get/create CTA portfolio: " . $e->getMessage());
+                }
+
+                if (!$ctaPortfolioId) {
+                    throw new Exception('Failed to get or create CTA portfolio for this account');
+                }
+
+                // Build ad text list
+                $adTextList = [];
+                foreach ($campaignConfig['ad_texts'] ?? [] as $text) {
+                    $adTextList[] = ['ad_text' => $text];
+                }
+                if (empty($adTextList)) {
+                    $adTextList[] = ['ad_text' => 'Check it out!'];
+                }
+
+                // Build landing page URL list
+                $landingPageList = [];
+                if (!empty($campaignConfig['landing_page_url'])) {
+                    $landingPageList[] = ['landing_page_url' => $campaignConfig['landing_page_url']];
+                }
+
+                $adParams = [
+                    'advertiser_id' => $targetAdvertiserId,
+                    'adgroup_id' => $adgroupId,
+                    'ad_name' => $campaignConfig['campaign_name'] . ' - Ad',
+                    'creative_list' => $creativeList,
+                    'landing_page_url_list' => $landingPageList,
+                    'ad_text_list' => $adTextList,
+                    'ad_configuration' => [
+                        'call_to_action_id' => $ctaPortfolioId,
+                        'identity_id' => $identityId,
+                        'identity_type' => $identityType
+                    ]
+                ];
+
+                $adResult = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);
+
+                if ($adResult['code'] != 0 || !isset($adResult['data']['smart_plus_ad_id'])) {
+                    throw new Exception('Ad creation failed: ' . ($adResult['message'] ?? 'Unknown error'));
+                }
+
+                $adId = $adResult['data']['smart_plus_ad_id'];
+                logSmartPlus("Ad created: $adId");
+
+                // Success!
+                $results['success'][] = [
+                    'advertiser_id' => $targetAdvertiserId,
+                    'advertiser_name' => $accountName,
+                    'campaign_id' => $campaignId,
+                    'adgroup_id' => $adgroupId,
+                    'ad_id' => $adId
+                ];
+
+            } catch (Exception $e) {
+                logSmartPlus("ERROR for $targetAdvertiserId: " . $e->getMessage());
+                $results['failed'][] = [
+                    'advertiser_id' => $targetAdvertiserId,
+                    'advertiser_name' => $accountName,
+                    'error' => $e->getMessage()
+                ];
+            }
+        }
+
+        // Summary
+        $results['success_count'] = count($results['success']);
+        $results['failed_count'] = count($results['failed']);
+
+        logSmartPlus("=== BULK LAUNCH COMPLETE ===");
+        logSmartPlus("Success: " . $results['success_count'] . ", Failed: " . $results['failed_count']);
+
+        echo json_encode([
+            'success' => true,
+            'data' => $results
+        ]);
+        break;
+
+    // ==========================================
     // DEFAULT
     // ==========================================
     default:
