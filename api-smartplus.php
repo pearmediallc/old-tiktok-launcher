@@ -1130,21 +1130,21 @@ switch ($action) {
             ];
             logSmartPlus("Smart+ Ad created: $smartPlusAdId with " . count($creativeList) . " creatives");
 
-            // Step 4: DISABLE the campaign after ad creation
+            // Step 4: DISABLE the Smart+ campaign after ad creation
             // This ensures the campaign starts in paused state for user review
-            // API endpoint: /campaign/status/update/ with opt_status parameter
-            logSmartPlus("Step 4: Disabling campaign after ad creation...");
-            $disableResult = makeApiCall('/campaign/status/update/', [
+            // For Smart+ campaigns, use /smart_plus/campaign/update/ with operation_status
+            logSmartPlus("Step 4: Disabling Smart+ campaign after ad creation...");
+            $disableResult = makeApiCall('/smart_plus/campaign/update/', [
                 'advertiser_id' => $advertiserId,
-                'campaign_ids' => [$campaignId],
-                'opt_status' => 'DISABLE'
+                'campaign_id' => $campaignId,
+                'operation_status' => 'DISABLE'
             ], $accessToken);
 
             if ($disableResult['code'] == 0) {
-                logSmartPlus("Campaign disabled successfully: $campaignId");
+                logSmartPlus("Smart+ Campaign disabled successfully: $campaignId");
                 $results['campaign_disabled'] = true;
             } else {
-                logSmartPlus("Warning: Failed to disable campaign: " . ($disableResult['message'] ?? 'Unknown error'));
+                logSmartPlus("Warning: Failed to disable Smart+ campaign: " . ($disableResult['message'] ?? 'Unknown error'));
                 logSmartPlus("Disable API response: " . json_encode($disableResult));
                 $results['campaign_disabled'] = false;
             }
@@ -1938,20 +1938,20 @@ switch ($action) {
                 $adId = $adResult['data']['smart_plus_ad_id'];
                 logSmartPlus("Ad created: $adId");
 
-                // 4. DISABLE the campaign after ad creation
+                // 4. DISABLE the Smart+ campaign after ad creation
                 // This ensures the campaign starts in paused state for user review
-                // API endpoint: /campaign/status/update/ with opt_status parameter
-                logSmartPlus("Disabling campaign after ad creation...");
-                $disableResult = makeApiCall('/campaign/status/update/', [
+                // For Smart+ campaigns, use /smart_plus/campaign/update/ with operation_status
+                logSmartPlus("Disabling Smart+ campaign after ad creation...");
+                $disableResult = makeApiCall('/smart_plus/campaign/update/', [
                     'advertiser_id' => $targetAdvertiserId,
-                    'campaign_ids' => [$campaignId],
-                    'opt_status' => 'DISABLE'
+                    'campaign_id' => $campaignId,
+                    'operation_status' => 'DISABLE'
                 ], $accessToken);
 
                 if ($disableResult['code'] == 0) {
-                    logSmartPlus("Campaign disabled successfully: $campaignId");
+                    logSmartPlus("Smart+ Campaign disabled successfully: $campaignId");
                 } else {
-                    logSmartPlus("Warning: Failed to disable campaign: " . ($disableResult['message'] ?? 'Unknown error'));
+                    logSmartPlus("Warning: Failed to disable Smart+ campaign: " . ($disableResult['message'] ?? 'Unknown error'));
                     logSmartPlus("Disable API response: " . json_encode($disableResult));
                 }
 
