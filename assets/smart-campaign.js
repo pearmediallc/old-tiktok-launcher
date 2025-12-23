@@ -1,5 +1,6 @@
 // Smart+ Campaign JavaScript
 // Flow: Step 1 CREATES Campaign -> Step 2 CREATES AdGroup -> Step 4 CREATES Ad
+// Supports UPDATE when going back to modify existing resources
 
 // Global state
 let state = {
@@ -8,6 +9,7 @@ let state = {
     campaignName: null,
     campaignBudget: null,
     adGroupId: null,
+    adId: null,  // Smart+ Ad ID
     pixelId: null,
     optimizationEvent: null,
     locationIds: [],
@@ -22,7 +24,16 @@ let state = {
     selectedPortfolioId: null,
     selectedPortfolioName: null,
     globalCtaPortfolioId: null,  // Portfolio ID for Lead Gen ads
-    adTexts: []  // Array of ad text variations
+    adTexts: [],  // Array of ad text variations
+
+    // Creation tracking - for UPDATE vs CREATE logic
+    campaignCreated: false,
+    adGroupCreated: false,
+    adCreated: false,
+
+    // Previous values - to detect changes that require delete+recreate
+    previousPixelId: null,
+    previousOptEvent: null
 };
 
 // US States with TikTok location IDs (verified from TikTok API)
@@ -969,7 +980,7 @@ function prevStep() {
 }
 
 // =====================
-// STEP 1: CREATE CAMPAIGN (Actually creates via API)
+// STEP 1: CREATE OR UPDATE CAMPAIGN
 // =====================
 async function createCampaign() {
     const campaignName = document.getElementById('campaign-name').value.trim();
@@ -983,6 +994,11 @@ async function createCampaign() {
     if (campaignBudget < 20) {
         showToast('Minimum budget is $20', 'error');
         return;
+    }
+
+    // Check if we should UPDATE instead of CREATE
+    if (state.campaignCreated && state.campaignId) {
+        return await updateCampaign();
     }
 
     showLoading('Creating Campaign...');
@@ -1000,6 +1016,7 @@ async function createCampaign() {
             state.campaignId = result.campaign_id;
             state.campaignName = campaignName;
             state.budget = campaignBudget;
+            state.campaignCreated = true;  // Mark as created
 
             // Update display
             const displayNameEl = document.getElementById('display-campaign-name');
@@ -1022,8 +1039,11 @@ async function createCampaign() {
                 }
             }
 
-            showToast(`Campaign created! ID: ${result.campaign_id}`, 'success');
-            addLog('info', `Campaign created: ${result.campaign_id}`);
+            // Update button text
+            updateStepButtonLabels();
+
+            showToast(`Campaign created (PAUSED)! ID: ${result.campaign_id}`, 'success');
+            addLog('info', `Campaign created (disabled): ${result.campaign_id}`);
             nextStep();
         } else {
             showToast('Failed to create campaign: ' + (result.message || 'Unknown error'), 'error');
@@ -1034,8 +1054,49 @@ async function createCampaign() {
     }
 }
 
+// UPDATE existing campaign
+async function updateCampaign() {
+    const campaignName = document.getElementById('campaign-name').value.trim();
+    const campaignBudget = parseFloat(document.getElementById('campaign-budget').value) || 50;
+
+    showLoading('Updating Campaign...');
+    addLog('info', '=== Updating Smart+ Campaign ===');
+
+    try {
+        const result = await apiRequest('update_smartplus_campaign', {
+            campaign_id: state.campaignId,
+            campaign_name: campaignName,
+            budget: campaignBudget
+        });
+
+        hideLoading();
+
+        if (result.success) {
+            state.campaignName = campaignName;
+            state.budget = campaignBudget;
+
+            // Update display
+            const displayNameEl = document.getElementById('display-campaign-name');
+            const displayBudgetEl = document.getElementById('display-budget');
+            if (displayNameEl) displayNameEl.textContent = campaignName;
+            if (displayBudgetEl) displayBudgetEl.textContent = campaignBudget;
+
+            showToast('Campaign updated successfully!', 'success');
+            addLog('info', `Campaign updated: ${state.campaignId}`);
+            nextStep();
+        } else {
+            showToast('Failed to update campaign: ' + (result.message || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        showToast('Error updating campaign: ' + error.message, 'error');
+    }
+}
+
 // =====================
-// STEP 2: CREATE AD GROUP (Actually creates via API with campaign_id)
+// STEP 2: CREATE OR UPDATE AD GROUP
+// NOTE: pixel_id and optimization_event CANNOT be updated!
+// If they change, we must DELETE and recreate the ad group.
 // =====================
 async function createAdGroup() {
     if (!state.campaignId) {
@@ -1075,6 +1136,31 @@ async function createAdGroup() {
         return;
     }
 
+    // Check if ad group already exists - determine if UPDATE or DELETE+CREATE needed
+    if (state.adGroupCreated && state.adGroupId) {
+        // Check if pixel or optimization event changed - these CANNOT be updated!
+        const pixelChanged = state.previousPixelId && state.previousPixelId !== pixelId;
+        const optEventChanged = state.previousOptEvent && state.previousOptEvent !== optimizationEvent;
+
+        if (pixelChanged || optEventChanged) {
+            // Must delete and recreate
+            addLog('info', 'Pixel or optimization event changed - deleting existing ad group');
+            const deleteSuccess = await deleteAdGroup();
+            if (!deleteSuccess) {
+                showToast('Failed to delete existing ad group. Please try again.', 'error');
+                return;
+            }
+            // Reset state and continue with create
+            state.adGroupCreated = false;
+            state.adGroupId = null;
+            state.adCreated = false;  // Ad also needs to be recreated
+            state.adId = null;
+        } else {
+            // Only other fields changed - use update
+            return await updateAdGroup(adGroupBudget, locationIds, dayparting);
+        }
+    }
+
     showLoading('Creating Ad Group...');
     addLog('info', '=== Creating Smart+ Ad Group ===');
 
@@ -1100,6 +1186,11 @@ async function createAdGroup() {
             state.locationIds = locationIds;
             state.dayparting = dayparting;
             state.adGroupBudget = adGroupBudget;
+            state.adGroupCreated = true;  // Mark as created
+
+            // Store previous values for change detection
+            state.previousPixelId = pixelId;
+            state.previousOptEvent = optimizationEvent;
 
             // Update display
             const displayAdGroupIdEl = document.getElementById('display-adgroup-id');
@@ -1108,6 +1199,9 @@ async function createAdGroup() {
             // Also update campaign ID in step 3
             const displayCampaignIdStep3 = document.getElementById('display-campaign-id-step3');
             if (displayCampaignIdStep3) displayCampaignIdStep3.textContent = state.campaignId;
+
+            // Update button labels
+            updateStepButtonLabels();
 
             showToast(`Ad Group created! ID: ${result.adgroup_id}`, 'success');
             addLog('info', `Ad Group created: ${result.adgroup_id}`);
@@ -1118,6 +1212,63 @@ async function createAdGroup() {
     } catch (error) {
         hideLoading();
         showToast('Error creating ad group: ' + error.message, 'error');
+    }
+}
+
+// UPDATE existing ad group (for fields that can be updated)
+async function updateAdGroup(budget, locationIds, dayparting) {
+    showLoading('Updating Ad Group...');
+    addLog('info', '=== Updating Smart+ Ad Group ===');
+
+    try {
+        const result = await apiRequest('update_smartplus_adgroup', {
+            adgroup_id: state.adGroupId,
+            budget: budget,
+            targeting_spec: {
+                location_ids: locationIds,
+                age_groups: state.ageGroups
+            },
+            dayparting: dayparting
+        });
+
+        hideLoading();
+
+        if (result.success) {
+            state.locationIds = locationIds;
+            state.dayparting = dayparting;
+            state.adGroupBudget = budget;
+
+            showToast('Ad Group updated successfully!', 'success');
+            addLog('info', `Ad Group updated: ${state.adGroupId}`);
+            nextStep();
+        } else {
+            showToast('Failed to update ad group: ' + (result.message || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        showToast('Error updating ad group: ' + error.message, 'error');
+    }
+}
+
+// DELETE ad group (needed when pixel/optimization_event changes)
+async function deleteAdGroup() {
+    addLog('info', '=== Deleting Smart+ Ad Group ===');
+
+    try {
+        const result = await apiRequest('delete_smartplus_adgroup', {
+            adgroup_id: state.adGroupId
+        });
+
+        if (result.success) {
+            addLog('info', `Ad Group deleted: ${state.adGroupId}`);
+            return true;
+        } else {
+            addLog('error', 'Failed to delete ad group: ' + (result.message || 'Unknown error'));
+            return false;
+        }
+    } catch (error) {
+        addLog('error', 'Error deleting ad group: ' + error.message);
+        return false;
     }
 }
 
@@ -1453,7 +1604,7 @@ function reviewAds() {
     nextStep();
 }
 
-// Create Ad (Final step - actually creates the ad)
+// Create or Update Ad (Final step)
 async function createAd() {
     if (!state.adGroupId) {
         showToast('Ad Group not created. Please complete previous steps.', 'error');
@@ -1463,6 +1614,11 @@ async function createAd() {
     if (!state.globalCtaPortfolioId) {
         showToast('CTA Portfolio is required. Please go back and select a portfolio.', 'error');
         return;
+    }
+
+    // Check if we should UPDATE instead of CREATE
+    if (state.adCreated && state.adId) {
+        return await updateAd();
     }
 
     showLoading('Creating Smart+ Ad...');
@@ -1497,7 +1653,13 @@ async function createAd() {
         hideLoading();
 
         if (result.success && result.smart_plus_ad_id) {
-            showToast('Smart+ Ad created successfully!', 'success');
+            state.adId = result.smart_plus_ad_id;  // Store ad ID
+            state.adCreated = true;  // Mark as created
+
+            // Update button labels
+            updateStepButtonLabels();
+
+            showToast('Smart+ Ad created successfully! Campaign is PAUSED.', 'success');
             addLog('info', `Smart+ Ad created: ${result.smart_plus_ad_id}`);
             addLog('info', `Videos submitted: ${result.videos_count || creativeList.length}, Text variations: ${result.texts_count || state.adTexts.length}`);
 
@@ -1513,6 +1675,75 @@ async function createAd() {
         hideLoading();
         showToast('Error creating ad: ' + error.message, 'error');
         addLog('error', 'Error: ' + error.message);
+    }
+}
+
+// UPDATE existing ad
+async function updateAd() {
+    showLoading('Updating Smart+ Ad...');
+    addLog('info', '=== Updating Smart+ Ad ===');
+
+    try {
+        const identity = state.identities.find(i => i.identity_id === state.globalIdentityId);
+        const identityType = identity?.identity_type || 'CUSTOMIZED_USER';
+
+        const creativeList = state.creatives.map(creative => ({
+            video_id: creative.video_id,
+            ad_text: creative.ad_text,
+            image_id: creative.image_id || null
+        }));
+
+        const result = await apiRequest('update_smartplus_ad', {
+            smart_plus_ad_id: state.adId,
+            ad_name: state.campaignName + ' - Ad',
+            ad_text_list: state.adTexts.map(text => ({ ad_text: text })),
+            landing_page_url_list: state.globalLandingUrl ? [{ landing_page_url: state.globalLandingUrl }] : [],
+            ad_configuration: {
+                call_to_action_id: state.globalCtaPortfolioId,
+                identity_id: state.globalIdentityId,
+                identity_type: identityType
+            }
+        });
+
+        hideLoading();
+
+        if (result.success) {
+            showToast('Smart+ Ad updated successfully!', 'success');
+            addLog('info', `Smart+ Ad updated: ${state.adId}`);
+
+            // Show success modal
+            setTimeout(() => {
+                showSuccessModal(state.adId, creativeList.length, state.adTexts.length);
+            }, 500);
+        } else {
+            showToast('Failed to update ad: ' + (result.message || 'Unknown error'), 'error');
+            addLog('error', 'Failed to update ad', result);
+        }
+    } catch (error) {
+        hideLoading();
+        showToast('Error updating ad: ' + error.message, 'error');
+        addLog('error', 'Error: ' + error.message);
+    }
+}
+
+// Update button labels based on creation state
+function updateStepButtonLabels() {
+    // Step 1 button
+    const step1Btn = document.querySelector('#step-1-content .btn-next');
+    if (step1Btn) {
+        step1Btn.textContent = state.campaignCreated ? 'Update Campaign & Continue' : 'Create Campaign';
+    }
+
+    // Step 2 button
+    const step2Btn = document.querySelector('#step-2-content .btn-next');
+    if (step2Btn) {
+        step2Btn.textContent = state.adGroupCreated ? 'Update Ad Group & Continue' : 'Create Ad Group';
+    }
+
+    // Step 4 button
+    const step4Btn = document.querySelector('#step-4-content .btn-next');
+    if (step4Btn) {
+        step4Btn.textContent = state.adCreated ? 'Update Ad' : 'Create Ad';
     }
 }
 

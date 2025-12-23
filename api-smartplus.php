@@ -537,6 +537,7 @@ switch ($action) {
     // ==========================================
     // CREATE SMART+ CAMPAIGN
     // POST /open_api/v1.3/smart_plus/campaign/create/
+    // Creates campaign as DISABLED by default for safety
     // ==========================================
     case 'create_smartplus_campaign':
         $data = $input;
@@ -549,13 +550,14 @@ switch ($action) {
         }
 
         // Smart+ Lead Generation Campaign - exact parameters from TikTok docs
+        // Create as DISABLED by default - user must explicitly enable
         $campaignParams = [
             'advertiser_id' => $advertiserId,
             'campaign_name' => $data['campaign_name'],
             'objective_type' => 'LEAD_GENERATION',
             'request_id' => generateRequestId(),
             'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
-            'operation_status' => 'ENABLE'
+            'operation_status' => 'DISABLE'  // Create as DISABLED - safer default
         ];
 
         // Only add budget if provided
@@ -572,7 +574,8 @@ switch ($action) {
             echo json_encode([
                 'success' => true,
                 'campaign_id' => $result['data']['campaign_id'],
-                'message' => 'Smart+ Campaign created successfully'
+                'message' => 'Smart+ Campaign created successfully (disabled)',
+                'operation_status' => 'DISABLE'
             ]);
         } else {
             echo json_encode([
@@ -907,7 +910,8 @@ switch ($action) {
 
         // Step 1: Create Campaign
         // Smart+ Lead Generation Campaign - exact parameters from TikTok docs
-        logSmartPlus("Step 1: Creating Campaign...");
+        // Create as DISABLED by default - safer, user can enable when ready
+        logSmartPlus("Step 1: Creating Campaign (as DISABLED)...");
 
         $campaignParams = [
             'advertiser_id' => $advertiserId,
@@ -915,7 +919,7 @@ switch ($action) {
             'objective_type' => 'LEAD_GENERATION',
             'request_id' => generateRequestId(),
             'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
-            'operation_status' => 'ENABLE'
+            'operation_status' => 'DISABLE'  // Create as DISABLED - safer default
         ];
 
         // Only add budget if provided
@@ -1155,26 +1159,10 @@ switch ($action) {
             ];
             logSmartPlus("Smart+ Ad created: $smartPlusAdId with " . count($creativeList) . " creatives");
 
-            // Step 4: DISABLE the Smart+ campaign after ad creation
-            // This ensures the campaign starts in paused state for user review
-            // Try the regular campaign status update endpoint (works for all campaign types)
-            logSmartPlus("Step 4: Disabling campaign after ad creation...");
-
-            // Use regular campaign status update endpoint - it works for Smart+ campaigns too
-            $disableResult = makeApiCall('/campaign/status/update/', [
-                'advertiser_id' => $advertiserId,
-                'campaign_ids' => [$campaignId],
-                'operation_status' => 'DISABLE'
-            ], $accessToken);
-
-            if ($disableResult['code'] == 0) {
-                logSmartPlus("Campaign disabled successfully via /campaign/status/update/: $campaignId");
-                $results['campaign_disabled'] = true;
-            } else {
-                logSmartPlus("Warning: Failed to disable campaign: " . ($disableResult['message'] ?? 'Unknown error'));
-                logSmartPlus("Disable API response: " . json_encode($disableResult));
-                $results['campaign_disabled'] = false;
-            }
+            // Campaign was created as DISABLED in Step 1, so no need to disable again
+            // User can enable it manually when ready
+            $results['campaign_disabled'] = true;
+            logSmartPlus("Campaign was created as DISABLED - no post-creation disable needed");
         } else {
             $results['ads'][] = [
                 'success' => false,
@@ -1194,8 +1182,9 @@ switch ($action) {
             'smart_plus_ad_id' => $results['ads'][0]['smart_plus_ad_id'] ?? null,
             'creatives_count' => $creativesCount,
             'results' => $results,
+            'campaign_status' => 'DISABLED',  // Campaign is created as disabled
             'message' => !empty($results['ads'][0]['success'])
-                ? "Smart+ Campaign created: Campaign $campaignId, AdGroup $adgroupId, Ad with $creativesCount creatives"
+                ? "Smart+ Campaign created (PAUSED): Campaign $campaignId, AdGroup $adgroupId, Ad with $creativesCount creatives. Enable in TikTok Ads Manager when ready."
                 : "Failed to create ad: " . ($results['ads'][0]['error'] ?? 'Unknown error')
         ]);
         break;
@@ -1847,7 +1836,7 @@ switch ($action) {
                     'objective_type' => 'LEAD_GENERATION',
                     'request_id' => generateRequestId(),
                     'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
-                    'operation_status' => 'ENABLE'
+                    'operation_status' => 'DISABLE'  // Create as DISABLED - safer default
                 ];
 
                 if (!empty($campaignConfig['budget'])) {
@@ -1861,7 +1850,7 @@ switch ($action) {
                 }
 
                 $campaignId = $campaignResult['data']['campaign_id'];
-                logSmartPlus("Campaign created: $campaignId");
+                logSmartPlus("Campaign created (DISABLED): $campaignId");
 
                 // 2. CREATE AD GROUP
                 $scheduleStart = date('Y-m-d H:i:s', strtotime('+1 hour'));
@@ -2033,22 +2022,8 @@ switch ($action) {
                 $adId = $adResult['data']['smart_plus_ad_id'];
                 logSmartPlus("Ad created: $adId");
 
-                // 4. DISABLE the Smart+ campaign after ad creation
-                // This ensures the campaign starts in paused state for user review
-                // Use regular campaign status update endpoint - it works for Smart+ campaigns too
-                logSmartPlus("Disabling campaign after ad creation...");
-                $disableResult = makeApiCall('/campaign/status/update/', [
-                    'advertiser_id' => $targetAdvertiserId,
-                    'campaign_ids' => [$campaignId],
-                    'operation_status' => 'DISABLE'
-                ], $accessToken);
-
-                if ($disableResult['code'] == 0) {
-                    logSmartPlus("Campaign disabled successfully via /campaign/status/update/: $campaignId");
-                } else {
-                    logSmartPlus("Warning: Failed to disable campaign: " . ($disableResult['message'] ?? 'Unknown error'));
-                    logSmartPlus("Disable API response: " . json_encode($disableResult));
-                }
+                // Campaign was created as DISABLED in step 1, no need to disable again
+                logSmartPlus("Campaign already DISABLED - no post-creation disable needed");
 
                 // Success!
                 $results['success'][] = [
@@ -2080,6 +2055,253 @@ switch ($action) {
             'success' => true,
             'data' => $results
         ]);
+        break;
+
+    // ==========================================
+    // UPDATE SMART+ CAMPAIGN
+    // POST /open_api/v1.3/smart_plus/campaign/update/
+    // ==========================================
+    case 'update_smartplus_campaign':
+        $data = $input;
+
+        logSmartPlus("=== UPDATING SMART+ CAMPAIGN ===");
+
+        if (empty($data['campaign_id'])) {
+            echo json_encode(['success' => false, 'message' => 'Campaign ID is required']);
+            exit;
+        }
+
+        $updateParams = [
+            'advertiser_id' => $advertiserId,
+            'campaign_id' => $data['campaign_id']
+        ];
+
+        // Add optional update fields
+        if (!empty($data['campaign_name'])) {
+            $updateParams['campaign_name'] = $data['campaign_name'];
+        }
+        if (!empty($data['budget'])) {
+            $updateParams['budget'] = floatval($data['budget']);
+        }
+
+        logSmartPlus("Update params: " . json_encode($updateParams));
+
+        $result = makeApiCall('/smart_plus/campaign/update/', $updateParams, $accessToken);
+        logSmartPlus("Update response: " . json_encode($result));
+
+        if ($result['code'] == 0) {
+            echo json_encode([
+                'success' => true,
+                'campaign_id' => $data['campaign_id'],
+                'message' => 'Campaign updated successfully'
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to update campaign: ' . ($result['message'] ?? 'Unknown error'),
+                'error_code' => $result['code'] ?? null,
+                'details' => $result
+            ]);
+        }
+        break;
+
+    // ==========================================
+    // UPDATE SMART+ AD GROUP
+    // POST /open_api/v1.3/smart_plus/adgroup/update/
+    // NOTE: pixel_id and optimization_event CANNOT be updated!
+    // ==========================================
+    case 'update_smartplus_adgroup':
+        $data = $input;
+
+        logSmartPlus("=== UPDATING SMART+ AD GROUP ===");
+
+        if (empty($data['adgroup_id'])) {
+            echo json_encode(['success' => false, 'message' => 'AdGroup ID is required']);
+            exit;
+        }
+
+        $updateParams = [
+            'advertiser_id' => $advertiserId,
+            'adgroup_id' => $data['adgroup_id']
+        ];
+
+        // Add optional update fields (NOTE: pixel_id cannot be updated!)
+        if (!empty($data['adgroup_name'])) {
+            $updateParams['adgroup_name'] = $data['adgroup_name'];
+        }
+        if (!empty($data['budget'])) {
+            $updateParams['budget'] = floatval($data['budget']);
+        }
+        if (!empty($data['dayparting'])) {
+            $updateParams['dayparting'] = $data['dayparting'];
+        }
+        if (!empty($data['targeting_spec'])) {
+            $updateParams['targeting_spec'] = $data['targeting_spec'];
+        }
+        if (!empty($data['schedule_start_time'])) {
+            $updateParams['schedule_start_time'] = $data['schedule_start_time'];
+        }
+        if (!empty($data['schedule_end_time'])) {
+            $updateParams['schedule_end_time'] = $data['schedule_end_time'];
+        }
+        if (!empty($data['conversion_bid_price'])) {
+            $updateParams['conversion_bid_price'] = floatval($data['conversion_bid_price']);
+        }
+
+        logSmartPlus("Update params: " . json_encode($updateParams));
+
+        $result = makeApiCall('/smart_plus/adgroup/update/', $updateParams, $accessToken);
+        logSmartPlus("Update response: " . json_encode($result));
+
+        if ($result['code'] == 0) {
+            echo json_encode([
+                'success' => true,
+                'adgroup_id' => $data['adgroup_id'],
+                'message' => 'Ad Group updated successfully'
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to update ad group: ' . ($result['message'] ?? 'Unknown error'),
+                'error_code' => $result['code'] ?? null,
+                'details' => $result
+            ]);
+        }
+        break;
+
+    // ==========================================
+    // UPDATE SMART+ AD
+    // POST /open_api/v1.3/smart_plus/ad/update/
+    // ==========================================
+    case 'update_smartplus_ad':
+        $data = $input;
+
+        logSmartPlus("=== UPDATING SMART+ AD ===");
+
+        if (empty($data['smart_plus_ad_id'])) {
+            echo json_encode(['success' => false, 'message' => 'Smart+ Ad ID is required']);
+            exit;
+        }
+
+        $updateParams = [
+            'advertiser_id' => $advertiserId,
+            'smart_plus_ad_id' => $data['smart_plus_ad_id']
+        ];
+
+        // Add optional update fields
+        if (!empty($data['ad_name'])) {
+            $updateParams['ad_name'] = $data['ad_name'];
+        }
+        if (!empty($data['ad_text_list'])) {
+            $updateParams['ad_text_list'] = $data['ad_text_list'];
+        }
+        if (!empty($data['creative_list'])) {
+            $updateParams['creative_list'] = $data['creative_list'];
+        }
+        if (!empty($data['landing_page_url_list'])) {
+            $updateParams['landing_page_url_list'] = $data['landing_page_url_list'];
+        }
+        if (!empty($data['ad_configuration'])) {
+            $updateParams['ad_configuration'] = $data['ad_configuration'];
+        }
+
+        logSmartPlus("Update params: " . json_encode($updateParams));
+
+        $result = makeApiCall('/smart_plus/ad/update/', $updateParams, $accessToken);
+        logSmartPlus("Update response: " . json_encode($result));
+
+        if ($result['code'] == 0) {
+            echo json_encode([
+                'success' => true,
+                'smart_plus_ad_id' => $data['smart_plus_ad_id'],
+                'message' => 'Ad updated successfully'
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to update ad: ' . ($result['message'] ?? 'Unknown error'),
+                'error_code' => $result['code'] ?? null,
+                'details' => $result
+            ]);
+        }
+        break;
+
+    // ==========================================
+    // DELETE SMART+ AD GROUP
+    // Used when pixel/optimization_event needs to change
+    // ==========================================
+    case 'delete_smartplus_adgroup':
+        $data = $input;
+
+        logSmartPlus("=== DELETING SMART+ AD GROUP ===");
+
+        if (empty($data['adgroup_id'])) {
+            echo json_encode(['success' => false, 'message' => 'AdGroup ID is required']);
+            exit;
+        }
+
+        // Use the adgroup status update endpoint with DELETE
+        $result = makeApiCall('/adgroup/status/update/', [
+            'advertiser_id' => $advertiserId,
+            'adgroup_ids' => [$data['adgroup_id']],
+            'operation_status' => 'DELETE'
+        ], $accessToken);
+
+        logSmartPlus("Delete response: " . json_encode($result));
+
+        if ($result['code'] == 0) {
+            echo json_encode([
+                'success' => true,
+                'adgroup_id' => $data['adgroup_id'],
+                'message' => 'Ad Group deleted successfully'
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to delete ad group: ' . ($result['message'] ?? 'Unknown error'),
+                'error_code' => $result['code'] ?? null,
+                'details' => $result
+            ]);
+        }
+        break;
+
+    // ==========================================
+    // ENABLE SMART+ CAMPAIGN
+    // Used when user wants to launch the campaign
+    // ==========================================
+    case 'enable_smartplus_campaign':
+        $data = $input;
+
+        logSmartPlus("=== ENABLING SMART+ CAMPAIGN ===");
+
+        if (empty($data['campaign_id'])) {
+            echo json_encode(['success' => false, 'message' => 'Campaign ID is required']);
+            exit;
+        }
+
+        // Use the campaign status update endpoint
+        $result = makeApiCall('/campaign/status/update/', [
+            'advertiser_id' => $advertiserId,
+            'campaign_ids' => [$data['campaign_id']],
+            'operation_status' => 'ENABLE'
+        ], $accessToken);
+
+        logSmartPlus("Enable response: " . json_encode($result));
+
+        if ($result['code'] == 0) {
+            echo json_encode([
+                'success' => true,
+                'campaign_id' => $data['campaign_id'],
+                'message' => 'Campaign enabled successfully'
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to enable campaign: ' . ($result['message'] ?? 'Unknown error'),
+                'error_code' => $result['code'] ?? null,
+                'details' => $result
+            ]);
+        }
         break;
 
     // ==========================================
