@@ -9,6 +9,30 @@
  * Documentation: https://github.com/tiktok/tiktok-business-api-sdk
  */
 
+// Disable HTML error output - this is an API endpoint, only return JSON
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+ini_set('html_errors', '0');
+
+// Custom error handler to convert PHP errors to JSON
+set_error_handler(function($severity, $message, $file, $line) {
+    // Log the error for debugging
+    error_log("PHP Error in api-smartplus.php: [$severity] $message in $file on line $line");
+    // Don't output anything - let the script continue or fail gracefully
+    return true;
+});
+
+// Custom exception handler to return JSON on uncaught exceptions
+set_exception_handler(function($exception) {
+    error_log("Uncaught Exception in api-smartplus.php: " . $exception->getMessage());
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Server error: ' . $exception->getMessage()
+    ]);
+    exit;
+});
+
 session_start();
 header('Content-Type: application/json');
 
@@ -26,7 +50,8 @@ if (file_exists($envPath)) {
 }
 
 // Get access token and advertiser ID
-$accessToken = $_ENV['TIKTOK_ACCESS_TOKEN'] ?? $_SESSION['access_token'] ?? '';
+// OAuth flow stores token in 'oauth_access_token', legacy stores in 'access_token'
+$accessToken = $_SESSION['oauth_access_token'] ?? $_ENV['TIKTOK_ACCESS_TOKEN'] ?? $_SESSION['access_token'] ?? '';
 $advertiserId = $_SESSION['selected_advertiser_id'] ?? '';
 
 // Log function
