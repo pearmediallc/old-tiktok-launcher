@@ -1882,24 +1882,49 @@ function renderAccountAssetsDropdowns(advertiserId, assets) {
     const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
     const selectedPixelId = selectedAccount?.pixel_id || '';
     const selectedIdentityId = selectedAccount?.identity_id || '';
+    const errors = assets.errors || {};
 
-    let html = `
+    // Check if we have pixels or if there was an error
+    const pixelsArray = assets.pixels || [];
+    const identitiesArray = assets.identities || [];
+    const hasPixelError = errors.pixels;
+    const hasIdentityError = errors.identities;
+
+    let html = '';
+
+    // Show any API errors at the top
+    if (Object.keys(errors).length > 0) {
+        html += `<div class="asset-errors" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 10px; margin-bottom: 10px; font-size: 12px;">
+            <strong style="color: #ef4444;">⚠ API Issues:</strong>
+            <ul style="margin: 5px 0 0 0; padding-left: 20px; color: #ef4444;">
+                ${Object.entries(errors).map(([key, msg]) => `<li>${key}: ${msg}</li>`).join('')}
+            </ul>
+        </div>`;
+    }
+
+    html += `
         <div class="asset-row">
             <label>Pixel:</label>
             <select id="pixel-${advertiserId}" onchange="updateAccountAssetSelection('${advertiserId}')">
-                <option value="">Select Pixel...</option>
-                ${(assets.pixels || []).map(p =>
-                    `<option value="${p.pixel_id}" ${p.pixel_id === selectedPixelId ? 'selected' : ''}>${p.pixel_name || p.pixel_id}</option>`
-                ).join('')}
+                ${pixelsArray.length === 0
+                    ? `<option value="">${hasPixelError ? '⚠ Error loading pixels' : 'No pixels found'}</option>`
+                    : `<option value="">Select Pixel...</option>
+                       ${pixelsArray.map(p =>
+                           `<option value="${p.pixel_id}" ${p.pixel_id === selectedPixelId ? 'selected' : ''}>${p.pixel_name || p.pixel_id}</option>`
+                       ).join('')}`
+                }
             </select>
         </div>
         <div class="asset-row">
             <label>Identity:</label>
             <select id="identity-${advertiserId}" onchange="updateAccountAssetSelection('${advertiserId}')">
-                <option value="">Select Identity...</option>
-                ${(assets.identities || []).map(i =>
-                    `<option value="${i.identity_id}" data-type="${i.identity_type || 'CUSTOMIZED_USER'}" ${i.identity_id === selectedIdentityId ? 'selected' : ''}>${i.display_name || i.identity_name || i.identity_id}</option>`
-                ).join('')}
+                ${identitiesArray.length === 0
+                    ? `<option value="">${hasIdentityError ? '⚠ Error loading identities' : 'No identities found'}</option>`
+                    : `<option value="">Select Identity...</option>
+                       ${identitiesArray.map(i =>
+                           `<option value="${i.identity_id}" data-type="${i.identity_type || 'CUSTOMIZED_USER'}" ${i.identity_id === selectedIdentityId ? 'selected' : ''}>${i.display_name || i.identity_name || i.identity_id}</option>`
+                       ).join('')}`
+                }
             </select>
         </div>
     `;
@@ -2202,10 +2227,22 @@ async function loadAccountAssets(advertiserId) {
 
     try {
         // Load assets
+        console.log(`[Bulk Launch] Loading assets for account: ${advertiserId}`);
         const result = await apiRequest('get_account_assets', { target_advertiser_id: advertiserId });
+        console.log(`[Bulk Launch] API response for ${advertiserId}:`, result);
 
         if (result.success && result.data) {
             bulkLaunchState.accountAssets[advertiserId] = result.data;
+
+            // Log detailed asset counts
+            const data = result.data;
+            console.log(`[Bulk Launch] Assets for ${advertiserId}:`, {
+                pixels: data.pixels?.length || 0,
+                identities: data.identities?.length || 0,
+                videos: data.videos?.length || 0,
+                images: data.images?.length || 0,
+                errors: data.errors || 'none'
+            });
 
             // Also match videos
             await matchVideosForAccount(advertiserId);
@@ -2213,14 +2250,47 @@ async function loadAccountAssets(advertiserId) {
             // Render dropdowns
             assetsContainer.innerHTML = renderAccountAssetsDropdowns(advertiserId, result.data);
 
-            addLog('info', `Loaded assets for ${advertiserId}: ${result.data.pixels?.length || 0} pixels, ${result.data.identities?.length || 0} identities`);
+            // Log with any errors
+            const hasErrors = data.errors && Object.keys(data.errors).length > 0;
+            if (hasErrors) {
+                addLog('warning', `Loaded assets for ${advertiserId} with errors: ${JSON.stringify(data.errors)}`);
+            } else {
+                addLog('info', `Loaded assets for ${advertiserId}: ${data.pixels?.length || 0} pixels, ${data.identities?.length || 0} identities`);
+            }
         } else {
-            assetsContainer.innerHTML = '<p class="error-text">Failed to load assets</p>';
+            const errorMsg = result.message || 'Unknown error';
+            console.error(`[Bulk Launch] Failed to load assets for ${advertiserId}:`, errorMsg);
+            assetsContainer.innerHTML = renderAssetLoadError(advertiserId, errorMsg);
+            addLog('error', `Failed to load assets for ${advertiserId}: ${errorMsg}`);
         }
     } catch (error) {
-        assetsContainer.innerHTML = '<p class="error-text">Error loading assets</p>';
-        addLog('error', `Error loading assets for ${advertiserId}: ${error.message}`);
+        // Handle any type of error - ensure we have a message
+        const errorMsg = error?.message || error?.toString() || 'Network or server error';
+        console.error(`[Bulk Launch] Exception loading assets for ${advertiserId}:`, error);
+        assetsContainer.innerHTML = renderAssetLoadError(advertiserId, errorMsg);
+        addLog('error', `Error loading assets for ${advertiserId}: ${errorMsg}`);
     }
+}
+
+// Render error state with retry button
+function renderAssetLoadError(advertiserId, errorMsg) {
+    return `
+        <div class="asset-load-error" style="text-align: center; padding: 15px;">
+            <p class="error-text" style="margin-bottom: 10px;">Failed to load assets: ${errorMsg}</p>
+            <button type="button" class="btn-retry-assets" onclick="retryLoadAssets('${advertiserId}')"
+                    style="background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                🔄 Retry
+            </button>
+        </div>
+    `;
+}
+
+// Retry loading assets for an account
+async function retryLoadAssets(advertiserId) {
+    // Clear any cached error state
+    delete bulkLaunchState.accountAssets[advertiserId];
+    // Reload assets
+    await loadAccountAssets(advertiserId);
 }
 
 // Match videos for an account

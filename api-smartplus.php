@@ -1132,12 +1132,12 @@ switch ($action) {
 
             // Step 4: DISABLE the Smart+ campaign after ad creation
             // This ensures the campaign starts in paused state for user review
-            // For Smart+ campaigns, use /smart_plus/campaign/update/ with operation_status
+            // For Smart+ campaigns, use the dedicated status update endpoint
             logSmartPlus("Step 4: Disabling Smart+ campaign after ad creation...");
-            $disableResult = makeApiCall('/smart_plus/campaign/update/', [
+            $disableResult = makeApiCall('/smart_plus/campaign/status/update/', [
                 'advertiser_id' => $advertiserId,
-                'campaign_id' => $campaignId,
-                'operation_status' => 'DISABLE'
+                'campaign_ids' => [$campaignId],
+                'opt_status' => 'DISABLE'
             ], $accessToken);
 
             if ($disableResult['code'] == 0) {
@@ -1501,25 +1501,58 @@ switch ($action) {
         $targetAdvertiserId = $input['target_advertiser_id'] ?? '';
 
         if (empty($targetAdvertiserId)) {
+            logSmartPlus("ERROR: get_account_assets - target_advertiser_id is required");
             echo json_encode(['success' => false, 'message' => 'target_advertiser_id is required']);
+            exit;
+        }
+
+        // Check if session exists and has required data
+        if (empty($_SESSION)) {
+            logSmartPlus("ERROR: get_account_assets - Session is empty or expired");
+            echo json_encode(['success' => false, 'message' => 'Session expired. Please refresh the page and try again.']);
+            exit;
+        }
+
+        // Check if access token exists
+        if (empty($accessToken)) {
+            logSmartPlus("ERROR: get_account_assets - No access token available");
+            echo json_encode(['success' => false, 'message' => 'No access token. Please reconnect your TikTok account.']);
             exit;
         }
 
         // Validate advertiser is authorized
         $allAdvertiserIds = $_SESSION['oauth_advertiser_ids'] ?? [];
+
+        if (empty($allAdvertiserIds)) {
+            logSmartPlus("ERROR: get_account_assets - No advertiser IDs in session");
+            echo json_encode(['success' => false, 'message' => 'No advertiser accounts found. Please reconnect your TikTok account.']);
+            exit;
+        }
+
         if (!in_array($targetAdvertiserId, $allAdvertiserIds)) {
-            echo json_encode(['success' => false, 'message' => 'Unauthorized advertiser ID']);
+            logSmartPlus("ERROR: get_account_assets - Unauthorized: $targetAdvertiserId not in " . json_encode($allAdvertiserIds));
+            echo json_encode([
+                'success' => false,
+                'message' => 'Unauthorized advertiser ID. This account may not be linked to your OAuth session.',
+                'debug' => [
+                    'requested_id' => $targetAdvertiserId,
+                    'authorized_count' => count($allAdvertiserIds)
+                ]
+            ]);
             exit;
         }
 
         logSmartPlus("=== Getting Assets for Account: $targetAdvertiserId ===");
+        logSmartPlus("Access token length: " . strlen($accessToken) . ", Authorized accounts: " . count($allAdvertiserIds));
 
+        try {
         $assets = [
             'advertiser_id' => $targetAdvertiserId,
             'pixels' => [],
             'identities' => [],
             'videos' => [],
-            'images' => []
+            'images' => [],
+            'errors' => []  // Track any API errors for debugging
         ];
 
         // Get Pixels
@@ -1530,6 +1563,10 @@ switch ($action) {
         if ($pixelResult['code'] == 0 && isset($pixelResult['data']['pixels'])) {
             $assets['pixels'] = $pixelResult['data']['pixels'];
             logSmartPlus("Found " . count($assets['pixels']) . " pixels");
+        } else {
+            $errorMsg = "Pixel API error: " . ($pixelResult['message'] ?? 'Unknown') . " (code: " . ($pixelResult['code'] ?? 'N/A') . ")";
+            logSmartPlus($errorMsg);
+            $assets['errors']['pixels'] = $errorMsg;
         }
 
         // Get Identities
@@ -1540,6 +1577,10 @@ switch ($action) {
         if ($identityResult['code'] == 0 && isset($identityResult['data']['identity_list'])) {
             $assets['identities'] = $identityResult['data']['identity_list'];
             logSmartPlus("Found " . count($assets['identities']) . " identities");
+        } else {
+            $errorMsg = "Identity API error: " . ($identityResult['message'] ?? 'Unknown') . " (code: " . ($identityResult['code'] ?? 'N/A') . ")";
+            logSmartPlus($errorMsg);
+            $assets['errors']['identities'] = $errorMsg;
         }
 
         // Get Videos
@@ -1552,6 +1593,10 @@ switch ($action) {
         if ($videoResult['code'] == 0 && isset($videoResult['data']['list'])) {
             $assets['videos'] = $videoResult['data']['list'];
             logSmartPlus("Found " . count($assets['videos']) . " videos");
+        } else {
+            $errorMsg = "Video API error: " . ($videoResult['message'] ?? 'Unknown') . " (code: " . ($videoResult['code'] ?? 'N/A') . ")";
+            logSmartPlus($errorMsg);
+            $assets['errors']['videos'] = $errorMsg;
         }
 
         // Get Images
@@ -1564,12 +1609,35 @@ switch ($action) {
         if ($imageResult['code'] == 0 && isset($imageResult['data']['list'])) {
             $assets['images'] = $imageResult['data']['list'];
             logSmartPlus("Found " . count($assets['images']) . " images");
+        } else {
+            $errorMsg = "Image API error: " . ($imageResult['message'] ?? 'Unknown') . " (code: " . ($imageResult['code'] ?? 'N/A') . ")";
+            logSmartPlus($errorMsg);
+            $assets['errors']['images'] = $errorMsg;
+        }
+
+        // Log summary
+        logSmartPlus("Assets summary for $targetAdvertiserId: " .
+            count($assets['pixels']) . " pixels, " .
+            count($assets['identities']) . " identities, " .
+            count($assets['videos']) . " videos, " .
+            count($assets['images']) . " images");
+
+        // Remove empty errors array if no errors
+        if (empty($assets['errors'])) {
+            unset($assets['errors']);
         }
 
         echo json_encode([
             'success' => true,
             'data' => $assets
         ]);
+        } catch (Exception $e) {
+            logSmartPlus("EXCEPTION in get_account_assets: " . $e->getMessage());
+            echo json_encode([
+                'success' => false,
+                'message' => 'Server error while loading assets: ' . $e->getMessage()
+            ]);
+        }
         break;
 
     // ==========================================
@@ -1940,12 +2008,12 @@ switch ($action) {
 
                 // 4. DISABLE the Smart+ campaign after ad creation
                 // This ensures the campaign starts in paused state for user review
-                // For Smart+ campaigns, use /smart_plus/campaign/update/ with operation_status
+                // For Smart+ campaigns, use the dedicated status update endpoint
                 logSmartPlus("Disabling Smart+ campaign after ad creation...");
-                $disableResult = makeApiCall('/smart_plus/campaign/update/', [
+                $disableResult = makeApiCall('/smart_plus/campaign/status/update/', [
                     'advertiser_id' => $targetAdvertiserId,
-                    'campaign_id' => $campaignId,
-                    'operation_status' => 'DISABLE'
+                    'campaign_ids' => [$campaignId],
+                    'opt_status' => 'DISABLE'
                 ], $accessToken);
 
                 if ($disableResult['code'] == 0) {
