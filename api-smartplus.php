@@ -1157,20 +1157,21 @@ switch ($action) {
 
             // Step 4: DISABLE the Smart+ campaign after ad creation
             // This ensures the campaign starts in paused state for user review
-            // For Smart+ campaigns, use the dedicated status update endpoint
-            // According to TikTok SDK: parameter is 'operation_status' with values ENABLE/DISABLE/DELETE
-            logSmartPlus("Step 4: Disabling Smart+ campaign after ad creation...");
-            $disableResult = makeApiCall('/smart_plus/campaign/status/update/', [
+            // Try the regular campaign status update endpoint (works for all campaign types)
+            logSmartPlus("Step 4: Disabling campaign after ad creation...");
+
+            // Use regular campaign status update endpoint - it works for Smart+ campaigns too
+            $disableResult = makeApiCall('/campaign/status/update/', [
                 'advertiser_id' => $advertiserId,
                 'campaign_ids' => [$campaignId],
                 'operation_status' => 'DISABLE'
             ], $accessToken);
 
             if ($disableResult['code'] == 0) {
-                logSmartPlus("Smart+ Campaign disabled successfully: $campaignId");
+                logSmartPlus("Campaign disabled successfully via /campaign/status/update/: $campaignId");
                 $results['campaign_disabled'] = true;
             } else {
-                logSmartPlus("Warning: Failed to disable Smart+ campaign: " . ($disableResult['message'] ?? 'Unknown error'));
+                logSmartPlus("Warning: Failed to disable campaign: " . ($disableResult['message'] ?? 'Unknown error'));
                 logSmartPlus("Disable API response: " . json_encode($disableResult));
                 $results['campaign_disabled'] = false;
             }
@@ -2034,19 +2035,18 @@ switch ($action) {
 
                 // 4. DISABLE the Smart+ campaign after ad creation
                 // This ensures the campaign starts in paused state for user review
-                // For Smart+ campaigns, use the dedicated status update endpoint
-                // According to TikTok SDK: parameter is 'operation_status' with values ENABLE/DISABLE/DELETE
-                logSmartPlus("Disabling Smart+ campaign after ad creation...");
-                $disableResult = makeApiCall('/smart_plus/campaign/status/update/', [
+                // Use regular campaign status update endpoint - it works for Smart+ campaigns too
+                logSmartPlus("Disabling campaign after ad creation...");
+                $disableResult = makeApiCall('/campaign/status/update/', [
                     'advertiser_id' => $targetAdvertiserId,
                     'campaign_ids' => [$campaignId],
                     'operation_status' => 'DISABLE'
                 ], $accessToken);
 
                 if ($disableResult['code'] == 0) {
-                    logSmartPlus("Smart+ Campaign disabled successfully: $campaignId");
+                    logSmartPlus("Campaign disabled successfully via /campaign/status/update/: $campaignId");
                 } else {
-                    logSmartPlus("Warning: Failed to disable Smart+ campaign: " . ($disableResult['message'] ?? 'Unknown error'));
+                    logSmartPlus("Warning: Failed to disable campaign: " . ($disableResult['message'] ?? 'Unknown error'));
                     logSmartPlus("Disable API response: " . json_encode($disableResult));
                 }
 
