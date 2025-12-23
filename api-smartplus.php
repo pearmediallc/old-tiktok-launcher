@@ -1158,11 +1158,12 @@ switch ($action) {
             // Step 4: DISABLE the Smart+ campaign after ad creation
             // This ensures the campaign starts in paused state for user review
             // For Smart+ campaigns, use the dedicated status update endpoint
+            // According to TikTok SDK: parameter is 'operation_status' with values ENABLE/DISABLE/DELETE
             logSmartPlus("Step 4: Disabling Smart+ campaign after ad creation...");
             $disableResult = makeApiCall('/smart_plus/campaign/status/update/', [
                 'advertiser_id' => $advertiserId,
                 'campaign_ids' => [$campaignId],
-                'opt_status' => 'DISABLE'
+                'operation_status' => 'DISABLE'
             ], $accessToken);
 
             if ($disableResult['code'] == 0) {
@@ -2034,11 +2035,12 @@ switch ($action) {
                 // 4. DISABLE the Smart+ campaign after ad creation
                 // This ensures the campaign starts in paused state for user review
                 // For Smart+ campaigns, use the dedicated status update endpoint
+                // According to TikTok SDK: parameter is 'operation_status' with values ENABLE/DISABLE/DELETE
                 logSmartPlus("Disabling Smart+ campaign after ad creation...");
                 $disableResult = makeApiCall('/smart_plus/campaign/status/update/', [
                     'advertiser_id' => $targetAdvertiserId,
                     'campaign_ids' => [$campaignId],
-                    'opt_status' => 'DISABLE'
+                    'operation_status' => 'DISABLE'
                 ], $accessToken);
 
                 if ($disableResult['code'] == 0) {
