@@ -2215,35 +2215,37 @@ function renderAccountMediaContent(advertiserId, assets, videoMatch) {
 
         state.selectedVideos.forEach(sourceVideo => {
             const matchInfo = matched.find(m => m.source_video_id === sourceVideo.id);
-            const isMatched = !!matchInfo;
             const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
             const currentMapping = selectedAccount?.video_mapping?.[sourceVideo.id];
+            const targetVideoId = currentMapping || matchInfo?.target_video_id;
+            const isMatched = !!targetVideoId;
+
+            // Find the selected video info for display
+            const selectedVideoInfo = targetVideoId ? videos.find(v => v.video_id === targetVideoId) : null;
+            const selectedVideoName = selectedVideoInfo?.file_name || targetVideoId || '';
 
             html += `
-                <div class="campaign-video-row ${isMatched ? 'matched' : 'unmatched'}">
+                <div class="campaign-video-row ${isMatched ? 'matched' : 'unmatched'}" id="video-row-${advertiserId}-${sourceVideo.id}">
                     <div class="campaign-video-info">
                         <div class="campaign-video-thumb">
                             ${sourceVideo.url ? `<img src="${sourceVideo.url}" alt="">` : '<span class="no-thumb">🎬</span>'}
                         </div>
                         <div class="campaign-video-details">
                             <span class="campaign-video-name">${(sourceVideo.name || 'Video').substring(0, 25)}${sourceVideo.name?.length > 25 ? '...' : ''}</span>
-                            <span class="campaign-video-status ${isMatched ? 'status-matched' : 'status-unmatched'}">
-                                ${isMatched ? '✓ Matched' : '✗ Not found'}
+                            <span class="campaign-video-status ${isMatched ? 'matched' : 'unmatched'}" id="video-status-${advertiserId}-${sourceVideo.id}">
+                                ${isMatched
+                                    ? `<span class="status-icon">✓</span> Mapped → ${selectedVideoName.substring(0, 20)}${selectedVideoName.length > 20 ? '...' : ''}`
+                                    : '<span class="status-icon">!</span> Needs mapping'}
                             </span>
                         </div>
                     </div>
                     <div class="campaign-video-mapping">
-                        <select id="video-map-${advertiserId}-${sourceVideo.id}"
-                                onchange="updateVideoMapping('${advertiserId}', '${sourceVideo.id}', this.value)"
-                                class="video-mapping-select ${isMatched ? '' : 'needs-selection'}">
-                            <option value="">-- Select video --</option>
-                            ${videos.map(v => `
-                                <option value="${v.video_id}"
-                                    ${(currentMapping === v.video_id || matchInfo?.target_video_id === v.video_id) ? 'selected' : ''}>
-                                    ${(v.file_name || v.video_id).substring(0, 30)}${v.file_name?.length > 30 ? '...' : ''}
-                                </option>
-                            `).join('')}
-                        </select>
+                        <button type="button"
+                                id="video-map-btn-${advertiserId}-${sourceVideo.id}"
+                                class="btn-select-library ${isMatched ? 'has-selection' : ''}"
+                                onclick="openVideoPicker('${advertiserId}', '${sourceVideo.id}', '${(sourceVideo.name || 'Video').replace(/'/g, "\\'")}')">
+                            ${isMatched ? '✓ Change Video' : '📹 Select from Library'}
+                        </button>
                     </div>
                 </div>
             `;
@@ -2316,6 +2318,166 @@ function renderAccountMediaContent(advertiserId, assets, videoMatch) {
     `;
 
     return html;
+}
+
+// =============================================
+// VIDEO PICKER MODAL FUNCTIONS
+// =============================================
+
+// Video picker state
+let videoPickerState = {
+    advertiserId: null,
+    sourceVideoId: null,
+    sourceVideoName: null,
+    videos: [],
+    searchTerm: ''
+};
+
+// Open video picker modal
+function openVideoPicker(advertiserId, sourceVideoId, sourceVideoName) {
+    console.log('Opening video picker:', { advertiserId, sourceVideoId, sourceVideoName });
+
+    // Get videos for this account
+    const accountAssets = bulkLaunchState.accountAssets[advertiserId];
+    if (!accountAssets || !accountAssets.videos) {
+        showToast('No videos available for this account', 'error');
+        return;
+    }
+
+    // Sort videos alphabetically by filename
+    const videos = [...accountAssets.videos].sort((a, b) => {
+        const nameA = (a.file_name || '').toLowerCase();
+        const nameB = (b.file_name || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+
+    // Store state
+    videoPickerState = {
+        advertiserId,
+        sourceVideoId,
+        sourceVideoName,
+        videos,
+        searchTerm: ''
+    };
+
+    // Get current selection
+    const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+    videoPickerState.currentSelection = selectedAccount?.video_mapping?.[sourceVideoId] || null;
+
+    // Update modal content
+    document.getElementById('picker-source-name').textContent = sourceVideoName;
+    document.getElementById('video-picker-search').value = '';
+
+    // Render video grid
+    renderVideoPickerGrid();
+
+    // Show modal
+    document.getElementById('video-picker-modal').style.display = 'flex';
+}
+
+// Close video picker modal
+function closeVideoPickerModal() {
+    document.getElementById('video-picker-modal').style.display = 'none';
+    videoPickerState = {
+        advertiserId: null,
+        sourceVideoId: null,
+        sourceVideoName: null,
+        videos: [],
+        searchTerm: ''
+    };
+}
+
+// Filter video picker results based on search
+function filterVideoPickerResults() {
+    const searchInput = document.getElementById('video-picker-search');
+    videoPickerState.searchTerm = searchInput.value.toLowerCase().trim();
+    renderVideoPickerGrid();
+}
+
+// Render video picker grid
+function renderVideoPickerGrid() {
+    const grid = document.getElementById('picker-video-grid');
+    const countEl = document.getElementById('picker-video-count');
+
+    // Filter videos based on search term
+    let filteredVideos = videoPickerState.videos;
+    if (videoPickerState.searchTerm) {
+        filteredVideos = videoPickerState.videos.filter(v => {
+            const fileName = (v.file_name || '').toLowerCase();
+            return fileName.includes(videoPickerState.searchTerm);
+        });
+    }
+
+    // Update count
+    countEl.textContent = `${filteredVideos.length} video${filteredVideos.length !== 1 ? 's' : ''}`;
+
+    // Render grid
+    if (filteredVideos.length === 0) {
+        grid.innerHTML = `
+            <div class="picker-empty-state">
+                <div class="empty-icon">🎬</div>
+                <p>${videoPickerState.searchTerm ? 'No videos match your search' : 'No videos in this account'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+    filteredVideos.forEach(video => {
+        const isSelected = videoPickerState.currentSelection === video.video_id;
+        const fileName = video.file_name || video.video_id || 'Untitled';
+        const coverUrl = video.video_cover_url || '';
+
+        html += `
+            <div class="picker-video-item ${isSelected ? 'selected' : ''}"
+                 onclick="selectVideoFromPicker('${video.video_id}', '${fileName.replace(/'/g, "\\'")}')">
+                ${coverUrl
+                    ? `<img src="${coverUrl}" alt="${fileName}" loading="lazy">`
+                    : '<div class="no-preview">🎬</div>'}
+                <div class="picker-video-info">
+                    <span class="picker-video-name">${fileName}</span>
+                </div>
+                <div class="selected-badge">✓</div>
+                <div class="select-hint">${isSelected ? 'Selected' : 'Click to select'}</div>
+            </div>
+        `;
+    });
+
+    grid.innerHTML = html;
+}
+
+// Select video from picker
+function selectVideoFromPicker(targetVideoId, targetVideoName) {
+    const { advertiserId, sourceVideoId } = videoPickerState;
+
+    console.log('Video selected from picker:', { advertiserId, sourceVideoId, targetVideoId, targetVideoName });
+
+    // Update video mapping
+    updateVideoMapping(advertiserId, sourceVideoId, targetVideoId);
+
+    // Update the button and status in the campaign video row
+    const rowEl = document.getElementById(`video-row-${advertiserId}-${sourceVideoId}`);
+    if (rowEl) {
+        rowEl.classList.remove('unmatched');
+        rowEl.classList.add('matched');
+
+        const statusEl = document.getElementById(`video-status-${advertiserId}-${sourceVideoId}`);
+        if (statusEl) {
+            statusEl.className = 'campaign-video-status matched';
+            statusEl.innerHTML = `<span class="status-icon">✓</span> Mapped → ${targetVideoName.substring(0, 20)}${targetVideoName.length > 20 ? '...' : ''}`;
+        }
+
+        const btnEl = document.getElementById(`video-map-btn-${advertiserId}-${sourceVideoId}`);
+        if (btnEl) {
+            btnEl.className = 'btn-select-library has-selection';
+            btnEl.textContent = '✓ Change Video';
+        }
+    }
+
+    // Close modal
+    closeVideoPickerModal();
+
+    showToast(`Video mapped: ${targetVideoName}`, 'success');
 }
 
 // Toggle media library visibility
@@ -2485,6 +2647,15 @@ async function loadAccountAssets(advertiserId) {
         console.log(`[Bulk Launch] API response for ${advertiserId}:`, result);
 
         if (result.success && result.data) {
+            // Sort videos alphabetically by filename before storing
+            if (result.data.videos && Array.isArray(result.data.videos)) {
+                result.data.videos.sort((a, b) => {
+                    const nameA = (a.file_name || '').toLowerCase();
+                    const nameB = (b.file_name || '').toLowerCase();
+                    return nameA.localeCompare(nameB);
+                });
+            }
+
             bulkLaunchState.accountAssets[advertiserId] = result.data;
 
             // Log detailed asset counts

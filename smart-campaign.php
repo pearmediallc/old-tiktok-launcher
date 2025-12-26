@@ -921,6 +921,41 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         </div>
     </div>
 
+    <!-- Video Picker Modal -->
+    <div id="video-picker-modal" class="modal video-picker-modal" style="display: none;">
+        <div class="modal-content video-picker-modal-content">
+            <div class="modal-header">
+                <h3>📹 Select Video from Library</h3>
+                <span class="modal-close" onclick="closeVideoPickerModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <!-- Source Video Info -->
+                <div class="picker-source-info" id="picker-source-info">
+                    <span class="picker-label">Mapping for:</span>
+                    <span class="picker-source-name" id="picker-source-name">-</span>
+                </div>
+
+                <!-- Search Input -->
+                <div class="picker-search-container">
+                    <input type="text"
+                           id="video-picker-search"
+                           class="picker-search-input"
+                           placeholder="🔍 Search videos by name..."
+                           oninput="filterVideoPickerResults()">
+                    <span class="picker-video-count" id="picker-video-count">0 videos</span>
+                </div>
+
+                <!-- Video Grid -->
+                <div class="picker-video-grid" id="picker-video-grid">
+                    <!-- Videos will be rendered here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeVideoPickerModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script src="assets/smart-campaign.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>

@@ -2420,6 +2420,245 @@ h3 {
     font-weight: 600;
 }
 
+/* =====================
+   VIDEO PICKER MODAL
+   ===================== */
+
+.video-picker-modal .modal-content {
+    max-width: 900px;
+    width: 95%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.video-picker-modal-content .modal-body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+}
+
+/* Source Video Info */
+.picker-source-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 15px;
+    background: var(--accent);
+    border-radius: calc(var(--radius) - 4px);
+    margin-bottom: 15px;
+}
+
+.picker-label {
+    font-size: 13px;
+    color: var(--muted-foreground);
+}
+
+.picker-source-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--foreground);
+}
+
+/* Search Container */
+.picker-search-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.picker-search-input {
+    flex: 1;
+    padding: 12px 16px;
+    border: 2px solid var(--border);
+    border-radius: calc(var(--radius) - 2px);
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.picker-search-input:focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(30, 157, 241, 0.1);
+}
+
+.picker-video-count {
+    font-size: 13px;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+}
+
+/* Video Grid */
+.picker-video-grid {
+    flex: 1;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    padding: 5px;
+    max-height: 450px;
+}
+
+/* Video Item */
+.picker-video-item {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    aspect-ratio: 9/16;
+    background: var(--secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 3px solid transparent;
+}
+
+.picker-video-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    border-color: var(--primary);
+}
+
+.picker-video-item.selected {
+    border-color: var(--success);
+    box-shadow: 0 0 0 3px rgba(0, 184, 122, 0.3);
+}
+
+.picker-video-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.picker-video-item .no-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    font-size: 32px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+/* Video Item Info Overlay */
+.picker-video-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 30px 10px 10px 10px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+    color: white;
+}
+
+.picker-video-name {
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+
+/* Selected Checkmark */
+.picker-video-item .selected-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    background: var(--success);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    transform: scale(0);
+    transition: all 0.2s ease;
+}
+
+.picker-video-item.selected .selected-badge {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Click to Select Hint */
+.picker-video-item .select-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(30, 157, 241, 0.9);
+    color: white;
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0;
+    transition: all 0.2s ease;
+    pointer-events: none;
+}
+
+.picker-video-item:hover .select-hint {
+    opacity: 1;
+}
+
+.picker-video-item.selected:hover .select-hint {
+    background: var(--success);
+}
+
+/* Empty State */
+.picker-empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted-foreground);
+}
+
+.picker-empty-state .empty-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+    opacity: 0.5;
+}
+
+.picker-empty-state p {
+    margin: 0;
+    font-size: 14px;
+}
+
+/* Select from Library Button */
+.btn-select-library {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: calc(var(--radius) - 4px);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-select-library:hover {
+    background: #1a8ad8;
+    transform: translateY(-1px);
+}
+
+.btn-select-library.has-selection {
+    background: var(--success);
+}
+
+.btn-select-library.has-selection:hover {
+    background: #00a36c;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .header {
