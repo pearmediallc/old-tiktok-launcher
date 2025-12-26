@@ -2340,33 +2340,36 @@ function toggleMediaLibrary(advertiserId) {
 
 // Update video mapping when user manually selects a video
 function updateVideoMapping(advertiserId, sourceVideoId, targetVideoId) {
-    const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+    console.log('updateVideoMapping called:', { advertiserId, sourceVideoId, targetVideoId });
+
+    let selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
     if (!selectedAccount) {
         // Add to selected accounts if not already there
         const account = bulkLaunchState.accounts.find(a => a.advertiser_id === advertiserId);
         if (account) {
-            bulkLaunchState.selectedAccounts.push({
+            selectedAccount = {
                 advertiser_id: advertiserId,
                 advertiser_name: account.advertiser_name,
                 pixel_id: null,
                 identity_id: null,
                 identity_type: 'CUSTOMIZED_USER',
                 video_mapping: {}
-            });
+            };
+            bulkLaunchState.selectedAccounts.push(selectedAccount);
         }
     }
 
-    // Get the account again after potentially adding it
-    const accountToUpdate = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
-    if (accountToUpdate) {
-        if (!accountToUpdate.video_mapping) {
-            accountToUpdate.video_mapping = {};
+    if (selectedAccount) {
+        if (!selectedAccount.video_mapping) {
+            selectedAccount.video_mapping = {};
         }
 
         if (targetVideoId) {
-            accountToUpdate.video_mapping[sourceVideoId] = targetVideoId;
+            selectedAccount.video_mapping[sourceVideoId] = targetVideoId;
+            console.log('Video mapping set:', selectedAccount.video_mapping);
         } else {
-            delete accountToUpdate.video_mapping[sourceVideoId];
+            delete selectedAccount.video_mapping[sourceVideoId];
+            console.log('Video mapping removed for:', sourceVideoId);
         }
 
         // Update the video match status in account assets
@@ -2412,10 +2415,37 @@ function updateVideoMatchStatus(advertiserId) {
         const matchRate = bulkLaunchState.accountAssets[advertiserId].videoMatch.match_rate;
         const statusClass = matchRate === 100 ? 'success' : matchRate > 0 ? 'warning' : 'error';
         matchStatusEl.className = `asset-row video-match-status ${statusClass}`;
-        matchStatusEl.querySelector('.match-icon').textContent = matchRate === 100 ? '✓' : matchRate > 0 ? '⚠' : '✗';
-        matchStatusEl.querySelector('span:nth-child(2)').textContent =
-            `Videos: ${mappedCount}/${totalRequired} matched (${matchRate}%)`;
+
+        const matchIcon = matchStatusEl.querySelector('.match-icon');
+        if (matchIcon) {
+            matchIcon.textContent = matchRate === 100 ? '✓' : matchRate > 0 ? '⚠' : '✗';
+        }
+
+        // Find the span with video count text (second span element)
+        const spans = matchStatusEl.querySelectorAll('span');
+        if (spans.length >= 2) {
+            spans[1].textContent = `Videos: ${mappedCount}/${totalRequired} matched (${matchRate}%)`;
+        }
     }
+
+    // Also update the campaign video rows to show matched/unmatched status
+    const videoMapping = selectedAccount.video_mapping || {};
+    state.selectedVideos.forEach(sourceVideo => {
+        const rowEl = document.querySelector(`#video-map-${advertiserId}-${sourceVideo.id}`)?.closest('.campaign-video-row');
+        if (rowEl) {
+            const isMapped = !!videoMapping[sourceVideo.id];
+            rowEl.classList.toggle('matched', isMapped);
+            rowEl.classList.toggle('unmatched', !isMapped);
+
+            const statusEl = rowEl.querySelector('.campaign-video-status');
+            if (statusEl) {
+                statusEl.className = `campaign-video-status ${isMapped ? 'matched' : 'unmatched'}`;
+                statusEl.innerHTML = isMapped
+                    ? '<span class="status-icon">✓</span> Mapped'
+                    : '<span class="status-icon">!</span> Needs mapping';
+            }
+        }
+    });
 }
 
 // Get account status text

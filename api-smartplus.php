@@ -1615,20 +1615,29 @@ switch ($action) {
             $assets['errors']['videos'] = $errorMsg;
         }
 
-        // Get Images
-        $imageResult = makeApiCall('/file/image/ad/get/', [
-            'advertiser_id' => $targetAdvertiserId,
-            'page' => 1,
-            'page_size' => 100
-        ], $accessToken, 'GET');
+        // Get Images (optional - not critical for bulk launch)
+        try {
+            $imageResult = makeApiCall('/file/image/ad/get/', [
+                'advertiser_id' => $targetAdvertiserId,
+                'page' => 1,
+                'page_size' => 100
+            ], $accessToken, 'GET');
 
-        if ($imageResult['code'] == 0 && isset($imageResult['data']['list'])) {
-            $assets['images'] = $imageResult['data']['list'];
-            logSmartPlus("Found " . count($assets['images']) . " images");
-        } else {
-            $errorMsg = "Image API error: " . ($imageResult['message'] ?? 'Unknown') . " (code: " . ($imageResult['code'] ?? 'N/A') . ")";
-            logSmartPlus($errorMsg);
-            $assets['errors']['images'] = $errorMsg;
+            if ($imageResult['code'] == 0 && isset($imageResult['data']['list'])) {
+                $assets['images'] = $imageResult['data']['list'];
+                logSmartPlus("Found " . count($assets['images']) . " images");
+            } else if ($imageResult['code'] == 0) {
+                // No images but no error
+                $assets['images'] = [];
+                logSmartPlus("No images found in library (this is OK)");
+            } else {
+                // Only log as warning, don't treat as blocking error
+                logSmartPlus("Warning: Image API returned code " . ($imageResult['code'] ?? 'N/A') . " - " . ($imageResult['message'] ?? 'Unknown'));
+                $assets['images'] = [];
+            }
+        } catch (Exception $e) {
+            logSmartPlus("Warning: Could not load images: " . $e->getMessage());
+            $assets['images'] = [];
         }
 
         // Log summary
@@ -1907,12 +1916,17 @@ switch ($action) {
 
                 // 3. CREATE AD
                 // Map videos from source to target
+                logSmartPlus("Video mapping received: " . json_encode($videoMapping));
+                logSmartPlus("Creatives config: " . json_encode($campaignConfig['creatives'] ?? []));
+
                 $creativeList = [];
                 foreach ($campaignConfig['creatives'] ?? [] as $creative) {
                     $sourceVideoId = $creative['video_id'];
+                    logSmartPlus("Processing source video: $sourceVideoId");
 
                     // Get target video ID from mapping
                     $targetVideoId = $videoMapping[$sourceVideoId] ?? $sourceVideoId;
+                    logSmartPlus("Target video ID (after mapping): $targetVideoId");
 
                     // Get cover image for this video in target account
                     $coverImageId = getVideoCoverImage($targetVideoId, $targetAdvertiserId, $accessToken);
