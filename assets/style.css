@@ -1150,6 +1150,57 @@ h3 {
     flex: 1;
 }
 
+/* Age Radio Options (Smart+ Campaign) */
+.age-radio-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.age-radio-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--input);
+    border: 2px solid var(--border);
+    border-radius: calc(var(--radius) - 2px);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.age-radio-option:hover {
+    border-color: var(--primary);
+    background: var(--accent);
+}
+
+.age-radio-option:has(input:checked) {
+    border-color: var(--primary);
+    background: rgba(30, 157, 241, 0.08);
+}
+
+.age-radio-option input[type="radio"] {
+    margin-top: 2px;
+    transform: scale(1.2);
+    accent-color: var(--primary);
+}
+
+.age-radio-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.age-radio-label strong {
+    font-size: 15px;
+    color: var(--foreground);
+}
+
+.age-radio-label small {
+    font-size: 12px;
+    color: var(--muted-foreground);
+}
+
 .age-note {
     font-size: 11px;
     color: #dc3545;

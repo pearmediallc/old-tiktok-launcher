@@ -302,15 +302,24 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     <h3>Audience Targeting</h3>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Age</label>
-                            <div class="age-selection-container" id="age-selection-container">
-                                <button type="button" class="age-toggle-btn selected" data-age="AGE_18_24">18-24</button>
-                                <button type="button" class="age-toggle-btn selected" data-age="AGE_25_34">25-34</button>
-                                <button type="button" class="age-toggle-btn selected" data-age="AGE_35_44">35-44</button>
-                                <button type="button" class="age-toggle-btn selected" data-age="AGE_45_54">45-54</button>
-                                <button type="button" class="age-toggle-btn" data-age="AGE_55_100">55+</button>
+                            <label>Age Targeting</label>
+                            <div class="age-radio-container" id="age-selection-container">
+                                <label class="age-radio-option">
+                                    <input type="radio" name="age_targeting" value="18+" checked onchange="updateAgeSelection('18+')">
+                                    <span class="age-radio-label">
+                                        <strong>18+</strong>
+                                        <small>All Adults (18-24, 25-34, 35-44, 45-54, 55+)</small>
+                                    </span>
+                                </label>
+                                <label class="age-radio-option">
+                                    <input type="radio" name="age_targeting" value="25+" onchange="updateAgeSelection('25+')">
+                                    <span class="age-radio-label">
+                                        <strong>25+</strong>
+                                        <small>Older Adults (25-34, 35-44, 45-54, 55+)</small>
+                                    </span>
+                                </label>
                             </div>
-                            <small>Select one or more age ranges for targeting</small>
+                            <small>Select minimum age for targeting (matches TikTok Ads Manager options)</small>
                         </div>
                     </div>
                 </div>

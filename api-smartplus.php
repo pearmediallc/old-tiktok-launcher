@@ -619,7 +619,7 @@ switch ($action) {
             'operation_status' => 'ENABLE',
             'targeting_spec' => [
                 'location_ids' => $data['location_ids'] ?? ['6252001'],
-                'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54']
+                'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100']
             ]
         ];
 
@@ -963,7 +963,7 @@ switch ($action) {
             'operation_status' => 'ENABLE',
             'targeting_spec' => [
                 'location_ids' => $data['location_ids'] ?? ['6252001'],
-                'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54']
+                'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100']
             ]
         ];
 
@@ -1870,7 +1870,7 @@ switch ($action) {
                     'operation_status' => 'ENABLE',
                     'targeting_spec' => [
                         'location_ids' => $campaignConfig['location_ids'] ?? ['6252001'],
-                        'age_groups' => $campaignConfig['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54']
+                        'age_groups' => $campaignConfig['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100']
                     ]
                 ];
 

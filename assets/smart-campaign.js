@@ -13,7 +13,8 @@ let state = {
     pixelId: null,
     optimizationEvent: null,
     locationIds: [],
-    ageGroups: ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54'],  // Default age groups (55+ unchecked)
+    ageGroups: ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100'],  // Default: 18+ (all adults)
+    ageSelection: '18+',  // '18+' or '25+' - matches TikTok Ads Manager options
     dayparting: null,
     creatives: [],
     identities: [],
@@ -247,43 +248,34 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Initialize age targeting toggle buttons
+// Initialize age targeting radio buttons
 function initializeAgeTargeting() {
-    const container = document.getElementById('age-selection-container');
-    if (!container) return;
-
-    const buttons = container.querySelectorAll('.age-toggle-btn');
-    buttons.forEach(btn => {
-        btn.addEventListener('click', function() {
-            this.classList.toggle('selected');
-            updateAgeGroupsState();
-        });
-    });
-
-    // Initialize state from current button states
-    updateAgeGroupsState();
+    // Set default state - 18+ is checked by default in HTML
+    state.ageSelection = '18+';
+    state.ageGroups = ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100'];
+    console.log('Age targeting initialized:', state.ageSelection, state.ageGroups);
 }
 
-// Update state.ageGroups based on selected buttons
-function updateAgeGroupsState() {
-    const container = document.getElementById('age-selection-container');
-    if (!container) return;
+// Update age selection based on radio button choice (called from HTML onchange)
+function updateAgeSelection(selection) {
+    state.ageSelection = selection;
 
-    const selectedButtons = container.querySelectorAll('.age-toggle-btn.selected');
-    state.ageGroups = Array.from(selectedButtons).map(btn => btn.dataset.age);
-
-    // Ensure at least one age group is selected
-    if (state.ageGroups.length === 0) {
-        showToast('At least one age group must be selected', 'warning');
-        // Re-select the first button as default
-        const firstBtn = container.querySelector('.age-toggle-btn');
-        if (firstBtn) {
-            firstBtn.classList.add('selected');
-            state.ageGroups = [firstBtn.dataset.age];
-        }
+    if (selection === '18+') {
+        // 18+ = All adults
+        state.ageGroups = ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100'];
+    } else if (selection === '25+') {
+        // 25+ = Older adults only
+        state.ageGroups = ['AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100'];
     }
 
-    console.log('Age groups updated:', state.ageGroups);
+    console.log('Age selection updated:', state.ageSelection, state.ageGroups);
+}
+
+// Legacy function - kept for compatibility
+function updateAgeGroupsState() {
+    // This function is no longer needed with radio buttons
+    // Age state is now managed by updateAgeSelection()
+    console.log('Current age groups:', state.ageGroups);
 }
 
 // Toggle CBO budget section
