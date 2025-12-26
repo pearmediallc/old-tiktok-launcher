@@ -2429,7 +2429,7 @@ function updateVideoMatchStatus(advertiserId) {
     }
 
     // Also update the campaign video rows to show matched/unmatched status
-    const videoMapping = selectedAccount.video_mapping || {};
+    // videoMapping already declared above, reuse it
     state.selectedVideos.forEach(sourceVideo => {
         const rowEl = document.querySelector(`#video-map-${advertiserId}-${sourceVideo.id}`)?.closest('.campaign-video-row');
         if (rowEl) {
