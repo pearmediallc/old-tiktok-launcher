@@ -73,6 +73,38 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             font-size: 12px;
             font-weight: 600;
         }
+
+        .campaign-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+
+        .campaign-icon.manual {
+            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+        }
+
+        .campaign-icon.smart {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+        }
+
+        .smart-stars {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            font-size: 20px;
+            animation: sparkle 2s ease-in-out infinite;
+        }
+
+        @keyframes sparkle {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
         
         .campaign-card .description {
             color: #666;
@@ -187,31 +219,34 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         <div class="campaign-type-cards">
             <div class="campaign-card" onclick="selectCampaignType('manual')" id="manual-card">
                 <div class="radio-indicator"></div>
+                <div class="campaign-icon manual">🎯</div>
                 <h3>Manual Campaign</h3>
                 <p class="description">
-                    Create your campaign using the standard workflow to maximize precise control for your ads settings.
+                    Full control over your campaign settings, targeting, and optimization strategies.
                 </p>
                 <ul class="features">
-                    <li>Full control over targeting options</li>
-                    <li>Detailed budget management</li>
-                    <li>Custom ad scheduling</li>
-                    <li>Manual bid optimization</li>
-                    <li>Best for experienced advertisers</li>
+                    <li>Custom audience targeting</li>
+                    <li>Manual bid management</li>
+                    <li>Advanced optimization controls</li>
+                    <li>Detailed performance tracking</li>
+                    <li>Flexible budget allocation</li>
                 </ul>
             </div>
 
             <div class="campaign-card" onclick="selectCampaignType('smart')" id="smart-card">
                 <div class="radio-indicator"></div>
+                <div class="smart-stars">✨</div>
+                <div class="campaign-icon smart">⚡</div>
                 <h3>Smart+ Campaign <span class="badge">NEW</span></h3>
                 <p class="description">
-                    Improve ad performance with automated campaign management and smart optimization (placement selection, AIGC, audience targeting, and more).
+                    AI-powered automation that optimizes your campaigns for maximum performance.
                 </p>
                 <ul class="features">
-                    <li>AI-powered optimization</li>
-                    <li>Automated audience targeting</li>
-                    <li>Smart creative optimization</li>
-                    <li>Dynamic budget allocation</li>
-                    <li>Best for quick results</li>
+                    <li>Automated audience discovery</li>
+                    <li>Smart bid optimization</li>
+                    <li>AI-driven budget allocation</li>
+                    <li>Real-time performance optimization</li>
+                    <li>Simplified campaign setup</li>
                 </ul>
             </div>
         </div>
