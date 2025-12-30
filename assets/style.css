@@ -2659,6 +2659,327 @@ h3 {
     background: #00a36c;
 }
 
+/* =====================
+   MAIN VIEW TABS
+   ===================== */
+.main-view-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 25px;
+    border-bottom: 2px solid var(--border);
+    background: var(--card);
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 0 10px;
+}
+
+.main-view-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 28px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    transition: all 0.2s ease;
+    position: relative;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+}
+
+.main-view-tab:hover {
+    color: var(--primary);
+    background: var(--accent);
+}
+
+.main-view-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.main-view-tab .tab-icon {
+    font-size: 18px;
+}
+
+/* =====================
+   CAMPAIGNS VIEW
+   ===================== */
+.campaigns-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.campaigns-header h2 {
+    margin: 0;
+    font-size: 24px;
+    color: var(--foreground);
+}
+
+.campaigns-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* Campaign Filters */
+.campaign-filters {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.campaign-filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border: 2px solid var(--border);
+    border-radius: 25px;
+    background: var(--card);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    transition: all 0.2s ease;
+}
+
+.campaign-filter-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.campaign-filter-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.campaign-filter-btn .filter-count {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.campaign-filter-btn.active .filter-count {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Campaign Search */
+.campaign-search-container {
+    margin-bottom: 20px;
+}
+
+.campaign-search-input {
+    width: 100%;
+    padding: 14px 20px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 15px;
+    background: var(--card);
+    transition: all 0.2s;
+}
+
+.campaign-search-input:focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(30, 157, 241, 0.1);
+}
+
+/* Campaign List */
+.campaign-list {
+    background: var(--card);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+
+/* Loading State */
+.campaign-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: var(--muted-foreground);
+}
+
+.campaign-loading .spinner {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 15px;
+}
+
+/* Empty State */
+.campaign-empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted-foreground);
+}
+
+.campaign-empty-state .empty-icon {
+    font-size: 64px;
+    margin-bottom: 15px;
+    opacity: 0.5;
+}
+
+.campaign-empty-state h3 {
+    margin: 0 0 10px 0;
+    font-size: 20px;
+    color: var(--foreground);
+}
+
+.campaign-empty-state p {
+    margin: 0 0 20px 0;
+    font-size: 14px;
+}
+
+/* Campaign Card */
+.campaign-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.2s;
+}
+
+.campaign-card:last-child {
+    border-bottom: none;
+}
+
+.campaign-card:hover {
+    background: var(--accent);
+}
+
+.campaign-card-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.campaign-card-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--foreground);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.campaign-card-name .campaign-id {
+    font-size: 12px;
+    color: var(--muted-foreground);
+    font-weight: normal;
+}
+
+.campaign-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 13px;
+    color: var(--muted-foreground);
+}
+
+.campaign-card-meta .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.campaign-card-meta .meta-icon {
+    font-size: 14px;
+}
+
+/* Smart+ Badge */
+.smart-plus-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+/* Campaign Status Badge */
+.campaign-status-badge {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.campaign-status-badge.active {
+    background: rgba(0, 184, 122, 0.1);
+    color: var(--success);
+}
+
+.campaign-status-badge.inactive {
+    background: rgba(156, 163, 175, 0.15);
+    color: #6b7280;
+}
+
+/* Campaign Actions */
+.campaign-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+/* Toggle Switch */
+.campaign-toggle {
+    position: relative;
+    width: 52px;
+    height: 28px;
+    background: #d1d5db;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.campaign-toggle.on {
+    background: var(--success);
+}
+
+.campaign-toggle .toggle-slider {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    background: white;
+    border-radius: 50%;
+    top: 3px;
+    left: 3px;
+    transition: transform 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.campaign-toggle.on .toggle-slider {
+    transform: translateX(24px);
+}
+
+.campaign-toggle.loading {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.campaign-toggle.loading .toggle-slider {
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .header {

@@ -2319,6 +2319,122 @@ switch ($action) {
         break;
 
     // ==========================================
+    // GET CAMPAIGNS LIST
+    // Fetches all campaigns for the current advertiser
+    // ==========================================
+    case 'get_campaigns':
+        logSmartPlus("=== FETCHING CAMPAIGNS LIST ===");
+        logSmartPlus("Advertiser ID: $advertiserId");
+
+        // Build request params
+        $params = [
+            'advertiser_id' => $advertiserId,
+            'page' => 1,
+            'page_size' => 100
+        ];
+
+        // Optional filtering by status
+        $statusFilter = $input['status_filter'] ?? null;
+        if ($statusFilter && in_array($statusFilter, ['ENABLE', 'DISABLE'])) {
+            $params['filtering'] = json_encode([
+                'operation_status' => $statusFilter
+            ]);
+        }
+
+        // Call TikTok API to get campaigns
+        $result = makeApiCall('/campaign/get/', $params, $accessToken, 'GET');
+
+        logSmartPlus("Get campaigns response code: " . ($result['code'] ?? 'null'));
+
+        if ($result['code'] == 0) {
+            $campaigns = $result['data']['list'] ?? [];
+            $pageInfo = $result['data']['page_info'] ?? [];
+
+            // Log campaign count
+            logSmartPlus("Found " . count($campaigns) . " campaigns");
+
+            // Format campaigns for frontend
+            $formattedCampaigns = [];
+            foreach ($campaigns as $campaign) {
+                $formattedCampaigns[] = [
+                    'campaign_id' => $campaign['campaign_id'] ?? '',
+                    'campaign_name' => $campaign['campaign_name'] ?? 'Unnamed Campaign',
+                    'operation_status' => $campaign['operation_status'] ?? 'UNKNOWN',
+                    'budget' => $campaign['budget'] ?? 0,
+                    'budget_mode' => $campaign['budget_mode'] ?? '',
+                    'objective_type' => $campaign['objective_type'] ?? '',
+                    'is_smart_performance_campaign' => $campaign['is_smart_performance_campaign'] ?? false,
+                    'create_time' => $campaign['create_time'] ?? '',
+                    'modify_time' => $campaign['modify_time'] ?? ''
+                ];
+            }
+
+            echo json_encode([
+                'success' => true,
+                'campaigns' => $formattedCampaigns,
+                'total_count' => $pageInfo['total_number'] ?? count($formattedCampaigns),
+                'page' => $pageInfo['page'] ?? 1,
+                'page_size' => $pageInfo['page_size'] ?? 100
+            ]);
+        } else {
+            logSmartPlus("Failed to get campaigns: " . ($result['message'] ?? 'Unknown error'));
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to fetch campaigns: ' . ($result['message'] ?? 'Unknown error'),
+                'error_code' => $result['code'] ?? null,
+                'campaigns' => []
+            ]);
+        }
+        break;
+
+    // ==========================================
+    // UPDATE CAMPAIGN STATUS (ON/OFF)
+    // ==========================================
+    case 'update_campaign_status':
+        $data = $input;
+
+        logSmartPlus("=== UPDATING CAMPAIGN STATUS ===");
+
+        if (empty($data['campaign_id'])) {
+            echo json_encode(['success' => false, 'message' => 'Campaign ID is required']);
+            exit;
+        }
+
+        $newStatus = $data['status'] ?? 'ENABLE';
+        if (!in_array($newStatus, ['ENABLE', 'DISABLE'])) {
+            echo json_encode(['success' => false, 'message' => 'Invalid status. Use ENABLE or DISABLE']);
+            exit;
+        }
+
+        logSmartPlus("Campaign ID: " . $data['campaign_id'] . ", New Status: " . $newStatus);
+
+        // Call TikTok API to update campaign status
+        $result = makeApiCall('/campaign/status/update/', [
+            'advertiser_id' => $advertiserId,
+            'campaign_ids' => [$data['campaign_id']],
+            'operation_status' => $newStatus
+        ], $accessToken);
+
+        logSmartPlus("Update status response: " . json_encode($result));
+
+        if ($result['code'] == 0) {
+            echo json_encode([
+                'success' => true,
+                'campaign_id' => $data['campaign_id'],
+                'new_status' => $newStatus,
+                'message' => 'Campaign status updated to ' . $newStatus
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to update status: ' . ($result['message'] ?? 'Unknown error'),
+                'error_code' => $result['code'] ?? null,
+                'details' => $result
+            ]);
+        }
+        break;
+
+    // ==========================================
     // DEFAULT
     // ==========================================
     default:

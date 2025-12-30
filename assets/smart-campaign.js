@@ -34,7 +34,15 @@ let state = {
 
     // Previous values - to detect changes that require delete+recreate
     previousPixelId: null,
-    previousOptEvent: null
+    previousOptEvent: null,
+
+    // Campaign listing state
+    campaignsList: [],           // All campaigns from API
+    filteredCampaigns: [],       // Currently displayed (after filter)
+    campaignFilter: 'all',       // Current filter: 'all', 'active', 'inactive'
+    campaignSearchQuery: '',     // Search query
+    campaignsLoaded: false,      // Whether campaigns have been fetched
+    currentView: 'create'        // Current main view: 'create' or 'campaigns'
 };
 
 // US States with TikTok location IDs (verified from TikTok API)
@@ -3170,4 +3178,310 @@ function showSuccessModalBulk() {
     `;
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+// ==========================================
+// CAMPAIGN LISTING FUNCTIONALITY
+// ==========================================
+
+// Switch between Create and My Campaigns views
+function switchMainView(view) {
+    state.currentView = view;
+
+    const createView = document.getElementById('create-view');
+    const campaignsView = document.getElementById('campaigns-view');
+    const tabCreate = document.getElementById('tab-create');
+    const tabCampaigns = document.getElementById('tab-campaigns');
+
+    if (view === 'create') {
+        createView.style.display = 'block';
+        campaignsView.style.display = 'none';
+        tabCreate.classList.add('active');
+        tabCampaigns.classList.remove('active');
+    } else if (view === 'campaigns') {
+        createView.style.display = 'none';
+        campaignsView.style.display = 'block';
+        tabCreate.classList.remove('active');
+        tabCampaigns.classList.add('active');
+
+        // Load campaigns if not already loaded
+        if (!state.campaignsLoaded) {
+            loadCampaigns();
+        }
+    }
+
+    addLog('info', `Switched to ${view} view`);
+}
+
+// Load campaigns from API
+async function loadCampaigns() {
+    const loadingEl = document.getElementById('campaign-loading');
+    const emptyEl = document.getElementById('campaign-empty-state');
+    const cardsContainer = document.getElementById('campaign-cards-container');
+
+    // Show loading state
+    loadingEl.style.display = 'flex';
+    emptyEl.style.display = 'none';
+    cardsContainer.innerHTML = '';
+
+    addLog('info', 'Loading campaigns...');
+
+    try {
+        const result = await apiRequest('get_campaigns', {});
+
+        if (result.success) {
+            state.campaignsList = result.campaigns || [];
+            state.campaignsLoaded = true;
+
+            addLog('success', `Loaded ${state.campaignsList.length} campaigns`);
+
+            // Apply current filter and render
+            applyFiltersAndRender();
+        } else {
+            throw new Error(result.message || 'Failed to load campaigns');
+        }
+    } catch (error) {
+        console.error('Error loading campaigns:', error);
+        addLog('error', `Failed to load campaigns: ${error.message}`);
+
+        // Show empty state with error
+        loadingEl.style.display = 'none';
+        emptyEl.style.display = 'block';
+        emptyEl.querySelector('h3').textContent = 'Error Loading Campaigns';
+        emptyEl.querySelector('p').textContent = error.message || 'Please try again later.';
+    }
+}
+
+// Refresh campaign list
+function refreshCampaignList() {
+    state.campaignsLoaded = false;
+    loadCampaigns();
+    showToast('Refreshing campaigns...', 'info');
+}
+
+// Filter campaigns by status
+function filterCampaignsByStatus(status) {
+    state.campaignFilter = status;
+
+    // Update filter button active states
+    document.querySelectorAll('.campaign-filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.filter === status) {
+            btn.classList.add('active');
+        }
+    });
+
+    applyFiltersAndRender();
+}
+
+// Search campaigns
+function searchCampaigns() {
+    const searchInput = document.getElementById('campaign-search-input');
+    state.campaignSearchQuery = searchInput.value.toLowerCase().trim();
+    applyFiltersAndRender();
+}
+
+// Apply all filters and render
+function applyFiltersAndRender() {
+    let filtered = [...state.campaignsList];
+
+    // Apply status filter
+    if (state.campaignFilter === 'active') {
+        filtered = filtered.filter(c => c.operation_status === 'ENABLE');
+    } else if (state.campaignFilter === 'inactive') {
+        filtered = filtered.filter(c => c.operation_status === 'DISABLE');
+    }
+
+    // Apply search filter
+    if (state.campaignSearchQuery) {
+        filtered = filtered.filter(c =>
+            c.campaign_name.toLowerCase().includes(state.campaignSearchQuery) ||
+            c.campaign_id.toLowerCase().includes(state.campaignSearchQuery)
+        );
+    }
+
+    state.filteredCampaigns = filtered;
+
+    // Update counts
+    updateCampaignCounts();
+
+    // Render the list
+    renderCampaignList();
+}
+
+// Update filter counts
+function updateCampaignCounts() {
+    const allCount = state.campaignsList.length;
+    const activeCount = state.campaignsList.filter(c => c.operation_status === 'ENABLE').length;
+    const inactiveCount = state.campaignsList.filter(c => c.operation_status === 'DISABLE').length;
+
+    document.getElementById('count-all').textContent = allCount;
+    document.getElementById('count-active').textContent = activeCount;
+    document.getElementById('count-inactive').textContent = inactiveCount;
+}
+
+// Render campaign list
+function renderCampaignList() {
+    const loadingEl = document.getElementById('campaign-loading');
+    const emptyEl = document.getElementById('campaign-empty-state');
+    const cardsContainer = document.getElementById('campaign-cards-container');
+
+    // Hide loading
+    loadingEl.style.display = 'none';
+
+    // Check if empty
+    if (state.filteredCampaigns.length === 0) {
+        emptyEl.style.display = 'block';
+        emptyEl.querySelector('h3').textContent = 'No campaigns found';
+        emptyEl.querySelector('p').textContent =
+            state.campaignSearchQuery
+                ? 'No campaigns match your search. Try a different keyword.'
+                : state.campaignFilter !== 'all'
+                    ? `No ${state.campaignFilter} campaigns found.`
+                    : "You haven't created any campaigns yet.";
+        cardsContainer.innerHTML = '';
+        return;
+    }
+
+    emptyEl.style.display = 'none';
+
+    // Render campaign cards
+    cardsContainer.innerHTML = state.filteredCampaigns.map(campaign => renderCampaignCard(campaign)).join('');
+}
+
+// Render single campaign card
+function renderCampaignCard(campaign) {
+    const isActive = campaign.operation_status === 'ENABLE';
+    const statusClass = isActive ? 'active' : 'inactive';
+    const statusLabel = isActive ? 'Active' : 'Inactive';
+    const toggleClass = isActive ? 'on' : '';
+
+    // Format budget
+    const budget = campaign.budget ? `$${parseFloat(campaign.budget).toFixed(2)}` : 'N/A';
+    const budgetMode = campaign.budget_mode === 'BUDGET_MODE_DAY' ? '/day'
+        : campaign.budget_mode === 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET' ? '/day (dynamic)'
+        : campaign.budget_mode === 'BUDGET_MODE_TOTAL' ? ' total'
+        : '';
+
+    // Format date
+    const createDate = campaign.create_time
+        ? new Date(campaign.create_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : 'N/A';
+
+    // Smart+ badge
+    const smartPlusBadge = campaign.is_smart_performance_campaign
+        ? '<span class="smart-plus-badge">Smart+</span>'
+        : '';
+
+    return `
+        <div class="campaign-card" data-campaign-id="${campaign.campaign_id}">
+            <div class="campaign-card-info">
+                <div class="campaign-card-name">
+                    ${campaign.campaign_name}
+                    ${smartPlusBadge}
+                    <span class="campaign-id">#${campaign.campaign_id}</span>
+                </div>
+                <div class="campaign-card-meta">
+                    <span class="meta-item">
+                        <span class="meta-icon">💰</span>
+                        ${budget}${budgetMode}
+                    </span>
+                    <span class="meta-item">
+                        <span class="meta-icon">🎯</span>
+                        ${formatObjectiveType(campaign.objective_type)}
+                    </span>
+                    <span class="meta-item">
+                        <span class="meta-icon">📅</span>
+                        ${createDate}
+                    </span>
+                </div>
+            </div>
+            <div class="campaign-card-actions">
+                <span class="campaign-status-badge ${statusClass}">${statusLabel}</span>
+                <div class="campaign-toggle ${toggleClass}"
+                     data-campaign-id="${campaign.campaign_id}"
+                     data-status="${campaign.operation_status}"
+                     onclick="toggleCampaignStatus('${campaign.campaign_id}', '${campaign.operation_status}')"
+                     title="${isActive ? 'Click to disable' : 'Click to enable'}">
+                    <div class="toggle-slider"></div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Format objective type for display
+function formatObjectiveType(objectiveType) {
+    const types = {
+        'LEAD_GENERATION': 'Lead Gen',
+        'CONVERSIONS': 'Conversions',
+        'TRAFFIC': 'Traffic',
+        'APP_INSTALL': 'App Install',
+        'REACH': 'Reach',
+        'VIDEO_VIEWS': 'Video Views',
+        'ENGAGEMENT': 'Engagement',
+        'PRODUCT_SALES': 'Product Sales'
+    };
+    return types[objectiveType] || objectiveType || 'Unknown';
+}
+
+// Toggle campaign status (ON/OFF)
+async function toggleCampaignStatus(campaignId, currentStatus) {
+    const toggleEl = document.querySelector(`.campaign-toggle[data-campaign-id="${campaignId}"]`);
+    const cardEl = document.querySelector(`.campaign-card[data-campaign-id="${campaignId}"]`);
+
+    if (!toggleEl) return;
+
+    // Add loading state
+    toggleEl.classList.add('loading');
+
+    const newStatus = currentStatus === 'ENABLE' ? 'DISABLE' : 'ENABLE';
+    const actionWord = newStatus === 'ENABLE' ? 'Enabling' : 'Disabling';
+
+    addLog('info', `${actionWord} campaign ${campaignId}...`);
+
+    try {
+        const result = await apiRequest('update_campaign_status', {
+            campaign_id: campaignId,
+            status: newStatus
+        });
+
+        if (result.success) {
+            // Update local state
+            const campaign = state.campaignsList.find(c => c.campaign_id === campaignId);
+            if (campaign) {
+                campaign.operation_status = newStatus;
+            }
+
+            // Update UI
+            toggleEl.classList.remove('loading');
+            toggleEl.classList.toggle('on', newStatus === 'ENABLE');
+            toggleEl.dataset.status = newStatus;
+
+            // Update status badge
+            const badgeEl = cardEl.querySelector('.campaign-status-badge');
+            if (badgeEl) {
+                badgeEl.className = `campaign-status-badge ${newStatus === 'ENABLE' ? 'active' : 'inactive'}`;
+                badgeEl.textContent = newStatus === 'ENABLE' ? 'Active' : 'Inactive';
+            }
+
+            // Update counts
+            updateCampaignCounts();
+
+            // Re-apply filters if needed (campaign might disappear from current filter)
+            if (state.campaignFilter !== 'all') {
+                applyFiltersAndRender();
+            }
+
+            showToast(`Campaign ${newStatus === 'ENABLE' ? 'enabled' : 'disabled'} successfully`, 'success');
+            addLog('success', `Campaign ${campaignId} ${newStatus === 'ENABLE' ? 'enabled' : 'disabled'}`);
+        } else {
+            throw new Error(result.message || 'Failed to update status');
+        }
+    } catch (error) {
+        console.error('Error toggling campaign status:', error);
+        toggleEl.classList.remove('loading');
+        showToast(`Failed to update campaign: ${error.message}`, 'error');
+        addLog('error', `Failed to update campaign ${campaignId}: ${error.message}`);
+    }
 }

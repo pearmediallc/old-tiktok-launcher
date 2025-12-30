@@ -190,6 +190,19 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             </div>
         </header>
 
+        <!-- Main View Tabs -->
+        <div class="main-view-tabs">
+            <button class="main-view-tab active" id="tab-create" onclick="switchMainView('create')">
+                <span class="tab-icon">✏️</span> Create Campaign
+            </button>
+            <button class="main-view-tab" id="tab-campaigns" onclick="switchMainView('campaigns')">
+                <span class="tab-icon">📋</span> My Campaigns
+            </button>
+        </div>
+
+        <!-- CREATE VIEW (existing functionality) -->
+        <div id="create-view">
+
         <!-- Progress Steps -->
         <div class="progress-steps">
             <div class="step active" data-step="1">
@@ -899,6 +912,63 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 <div class="modal-footer">
                     <button class="btn-secondary" onclick="closeCreatePortfolioModal()">Cancel</button>
                     <button class="btn-primary" onclick="createCtaPortfolio()">Create Portfolio</button>
+                </div>
+            </div>
+        </div>
+
+        </div><!-- End of create-view -->
+
+        <!-- CAMPAIGNS VIEW (My Campaigns) -->
+        <div id="campaigns-view" style="display: none;">
+            <!-- Campaigns Header -->
+            <div class="campaigns-header">
+                <h2>📋 My Campaigns</h2>
+                <div class="campaigns-actions">
+                    <button class="btn-secondary" onclick="refreshCampaignList()">🔄 Refresh</button>
+                </div>
+            </div>
+
+            <!-- Campaign Filters -->
+            <div class="campaign-filters">
+                <button class="campaign-filter-btn active" data-filter="all" onclick="filterCampaignsByStatus('all')">
+                    All <span class="filter-count" id="count-all">0</span>
+                </button>
+                <button class="campaign-filter-btn" data-filter="active" onclick="filterCampaignsByStatus('active')">
+                    Active <span class="filter-count" id="count-active">0</span>
+                </button>
+                <button class="campaign-filter-btn" data-filter="inactive" onclick="filterCampaignsByStatus('inactive')">
+                    Inactive <span class="filter-count" id="count-inactive">0</span>
+                </button>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="campaign-search-container">
+                <input type="text"
+                       id="campaign-search-input"
+                       class="campaign-search-input"
+                       placeholder="🔍 Search campaigns by name..."
+                       oninput="searchCampaigns()">
+            </div>
+
+            <!-- Campaign List -->
+            <div class="campaign-list" id="campaign-list">
+                <!-- Loading State -->
+                <div class="campaign-loading" id="campaign-loading">
+                    <div class="spinner"></div>
+                    <p>Loading campaigns...</p>
+                </div>
+
+                <!-- Empty State (hidden by default) -->
+                <div class="campaign-empty-state" id="campaign-empty-state" style="display: none;">
+                    <div class="empty-icon">📭</div>
+                    <h3>No campaigns found</h3>
+                    <p>You haven't created any campaigns yet, or no campaigns match your filter.</p>
+                    <button class="btn-primary" onclick="switchMainView('create')">Create Your First Campaign</button>
+                </div>
+
+                <!-- Campaign Cards Container -->
+                <div id="campaign-cards-container">
+                    <!-- Campaign cards will be rendered here by JavaScript -->
                 </div>
             </div>
         </div>
