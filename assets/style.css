@@ -2838,8 +2838,8 @@ h3 {
     font-size: 14px;
 }
 
-/* Campaign Card */
-.campaign-card {
+/* My Campaigns - Campaign Card (renamed to avoid conflict with campaign-select.php) */
+.my-campaign-card {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -2848,20 +2848,20 @@ h3 {
     transition: background 0.2s;
 }
 
-.campaign-card:last-child {
+.my-campaign-card:last-child {
     border-bottom: none;
 }
 
-.campaign-card:hover {
+.my-campaign-card:hover {
     background: var(--accent);
 }
 
-.campaign-card-info {
+.my-campaign-card-info {
     flex: 1;
     min-width: 0;
 }
 
-.campaign-card-name {
+.my-campaign-card-name {
     font-size: 16px;
     font-weight: 600;
     color: var(--foreground);
@@ -2871,13 +2871,13 @@ h3 {
     gap: 10px;
 }
 
-.campaign-card-name .campaign-id {
+.my-campaign-card-name .campaign-id {
     font-size: 12px;
     color: var(--muted-foreground);
     font-weight: normal;
 }
 
-.campaign-card-meta {
+.my-campaign-card-meta {
     display: flex;
     align-items: center;
     gap: 15px;
@@ -2885,13 +2885,13 @@ h3 {
     color: var(--muted-foreground);
 }
 
-.campaign-card-meta .meta-item {
+.my-campaign-card-meta .meta-item {
     display: flex;
     align-items: center;
     gap: 5px;
 }
 
-.campaign-card-meta .meta-icon {
+.my-campaign-card-meta .meta-icon {
     font-size: 14px;
 }
 
@@ -2929,7 +2929,7 @@ h3 {
 }
 
 /* Campaign Actions */
-.campaign-card-actions {
+.my-campaign-card-actions {
     display: flex;
     align-items: center;
     gap: 15px;

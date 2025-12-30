@@ -3374,14 +3374,14 @@ function renderCampaignCard(campaign) {
         : '';
 
     return `
-        <div class="campaign-card" data-campaign-id="${campaign.campaign_id}">
-            <div class="campaign-card-info">
-                <div class="campaign-card-name">
+        <div class="my-campaign-card" data-campaign-id="${campaign.campaign_id}">
+            <div class="my-campaign-card-info">
+                <div class="my-campaign-card-name">
                     ${campaign.campaign_name}
                     ${smartPlusBadge}
                     <span class="campaign-id">#${campaign.campaign_id}</span>
                 </div>
-                <div class="campaign-card-meta">
+                <div class="my-campaign-card-meta">
                     <span class="meta-item">
                         <span class="meta-icon">💰</span>
                         ${budget}${budgetMode}
@@ -3396,7 +3396,7 @@ function renderCampaignCard(campaign) {
                     </span>
                 </div>
             </div>
-            <div class="campaign-card-actions">
+            <div class="my-campaign-card-actions">
                 <span class="campaign-status-badge ${statusClass}">${statusLabel}</span>
                 <div class="campaign-toggle ${toggleClass}"
                      data-campaign-id="${campaign.campaign_id}"
@@ -3428,7 +3428,7 @@ function formatObjectiveType(objectiveType) {
 // Toggle campaign status (ON/OFF)
 async function toggleCampaignStatus(campaignId, currentStatus) {
     const toggleEl = document.querySelector(`.campaign-toggle[data-campaign-id="${campaignId}"]`);
-    const cardEl = document.querySelector(`.campaign-card[data-campaign-id="${campaignId}"]`);
+    const cardEl = document.querySelector(`.my-campaign-card[data-campaign-id="${campaignId}"]`);
 
     if (!toggleEl) return;
 
