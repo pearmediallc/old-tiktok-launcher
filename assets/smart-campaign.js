@@ -2968,9 +2968,196 @@ function handleLaunch() {
             executeBulkLaunch();
         }
     } else {
-        // Single account launch
-        createAd();
+        // Single account launch - check for duplicates
+        const duplicatesEnabled = document.getElementById('enable-duplicates')?.checked;
+        const duplicateCount = duplicatesEnabled ? parseInt(document.getElementById('duplicate-count')?.value) || 1 : 1;
+
+        if (duplicatesEnabled && duplicateCount > 1) {
+            // Launch multiple campaign copies
+            launchDuplicateCampaigns(duplicateCount);
+        } else {
+            // Standard single launch
+            createAd();
+        }
     }
+}
+
+// Launch multiple duplicate campaigns
+async function launchDuplicateCampaigns(count) {
+    if (count < 1 || count > 20) {
+        showToast('Invalid duplicate count (1-20 allowed)', 'error');
+        return;
+    }
+
+    const baseName = state.campaignName;
+    addLog('info', `Starting duplicate campaign launch: ${count} copies of "${baseName}"`);
+    showLoading(`Creating ${count} campaign copies...`);
+
+    let successCount = 0;
+    let failedCount = 0;
+    const results = [];
+
+    for (let i = 1; i <= count; i++) {
+        // Generate numbered campaign name
+        const campaignName = `${baseName} (${i})`;
+
+        try {
+            // Update state with new name
+            state.campaignName = campaignName;
+
+            addLog('info', `Creating campaign ${i}/${count}: "${campaignName}"`);
+
+            // Create campaign with new name
+            const campaignResult = await apiRequest('create_smart_campaign', {
+                campaign_name: campaignName,
+                budget: state.budget,
+                budget_mode: 'BUDGET_MODE_DAY',
+                cbo_enabled: state.cboEnabled
+            });
+
+            if (!campaignResult.success) {
+                throw new Error(campaignResult.message || 'Failed to create campaign');
+            }
+
+            const newCampaignId = campaignResult.campaign_id || campaignResult.data?.campaign_id;
+
+            // Create ad group for this campaign
+            const adGroupResult = await apiRequest('create_smart_adgroup', {
+                campaign_id: newCampaignId,
+                pixel_id: state.pixelId,
+                optimization_event: state.optimizationEvent,
+                location_ids: state.locationIds,
+                age_groups: state.ageGroups,
+                dayparting: state.dayparting,
+                budget: state.cboEnabled ? null : state.adGroupBudget
+            });
+
+            if (!adGroupResult.success) {
+                throw new Error(adGroupResult.message || 'Failed to create ad group');
+            }
+
+            const newAdGroupId = adGroupResult.adgroup_id || adGroupResult.data?.adgroup_id;
+
+            // Create ad for this campaign
+            const adResult = await apiRequest('create_smart_ad', {
+                campaign_id: newCampaignId,
+                adgroup_id: newAdGroupId,
+                creatives: state.creatives,
+                identity_id: state.identityId,
+                identity_type: state.identityType,
+                landing_page_url: state.globalLandingUrl,
+                ad_texts: state.adTexts,
+                cta_portfolio_id: state.selectedPortfolioId
+            });
+
+            if (adResult.success) {
+                successCount++;
+                results.push({
+                    name: campaignName,
+                    campaign_id: newCampaignId,
+                    status: 'success'
+                });
+                addLog('success', `Campaign ${i}/${count} created successfully: ${newCampaignId}`);
+            } else {
+                throw new Error(adResult.message || 'Failed to create ad');
+            }
+        } catch (error) {
+            failedCount++;
+            results.push({
+                name: campaignName,
+                status: 'failed',
+                error: error.message
+            });
+            addLog('error', `Campaign ${i}/${count} failed: ${error.message}`);
+        }
+    }
+
+    // Restore original campaign name
+    state.campaignName = baseName;
+
+    hideLoading();
+
+    // Show results modal
+    showDuplicateLaunchResults(results, successCount, failedCount);
+}
+
+// Show duplicate launch results
+function showDuplicateLaunchResults(results, successCount, failedCount) {
+    const modalHtml = `
+        <div id="duplicate-results-modal" style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.3s ease;
+        ">
+            <div style="
+                background: white;
+                border-radius: 20px;
+                padding: 40px;
+                max-width: 600px;
+                width: 90%;
+                max-height: 80vh;
+                overflow-y: auto;
+                text-align: center;
+                animation: slideIn 0.3s ease;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            ">
+                <div style="font-size: 72px; margin-bottom: 20px;">
+                    ${failedCount === 0 ? '🎉' : (successCount > 0 ? '⚠️' : '❌')}
+                </div>
+                <h2 style="color: ${failedCount === 0 ? '#22c55e' : '#1e9df1'}; margin-bottom: 10px; font-size: 28px;">
+                    ${failedCount === 0 ? 'All Campaigns Created!' : 'Campaign Creation Complete'}
+                </h2>
+                <p style="color: #333; margin-bottom: 20px; font-size: 18px;">
+                    ${successCount} of ${results.length} campaigns created successfully
+                    ${failedCount > 0 ? `, ${failedCount} failed` : ''}
+                </p>
+
+                <div style="text-align: left; background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; max-height: 200px; overflow-y: auto;">
+                    ${results.map(r => `
+                        <div style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 14px;">${r.name}</span>
+                            <span style="color: ${r.status === 'success' ? '#22c55e' : '#ef4444'}; font-size: 13px;">
+                                ${r.status === 'success' ? `✓ ${r.campaign_id}` : `✗ ${r.error}`}
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div style="display: flex; gap: 15px; justify-content: center;">
+                    <button onclick="createNewCampaign()" style="
+                        background: #1e9df1;
+                        color: white;
+                        border: 2px solid #1e9df1;
+                        padding: 14px 35px;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        cursor: pointer;
+                    ">Create More</button>
+                    <button onclick="document.getElementById('duplicate-results-modal').remove(); switchMainView('campaigns');" style="
+                        background: #f3f4f6;
+                        color: #374151;
+                        border: 2px solid #e5e7eb;
+                        padding: 14px 35px;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        cursor: pointer;
+                    ">View Campaigns</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
 // Execute bulk launch
@@ -3009,6 +3196,10 @@ async function executeBulkLaunch() {
 
     addLog('info', `Starting bulk launch to ${bulkLaunchState.selectedAccounts.length} accounts`);
 
+    // Get duplicate settings
+    const duplicatesEnabled = document.getElementById('bulk-enable-duplicates')?.checked || false;
+    const duplicateCount = duplicatesEnabled ? parseInt(document.getElementById('bulk-duplicate-count')?.value) || 1 : 1;
+
     // Build campaign config
     const campaignConfig = {
         campaign_name: state.campaignName,
@@ -3022,7 +3213,8 @@ async function executeBulkLaunch() {
         creatives: state.creatives.map(c => ({
             video_id: c.video_id,
             ad_text: c.ad_text
-        }))
+        })),
+        duplicate_count: duplicateCount  // Add duplicate count to config
     };
 
     // Prepare accounts with video mappings
@@ -3035,11 +3227,14 @@ async function executeBulkLaunch() {
         video_mapping: account.video_mapping || {}
     }));
 
+    addLog('info', `Bulk launch config: ${accountsToLaunch.length} accounts, ${duplicateCount} copies each`);
+
     try {
         const result = await apiRequest('execute_bulk_launch', {
             campaign_config: campaignConfig,
             accounts: accountsToLaunch,
-            primary_advertiser_id: bulkLaunchState.accounts.find(a => a.is_current)?.advertiser_id
+            primary_advertiser_id: bulkLaunchState.accounts.find(a => a.is_current)?.advertiser_id,
+            duplicate_count: duplicateCount  // Also pass at top level
         });
 
         if (result.success && result.data) {
@@ -3179,6 +3374,317 @@ function showSuccessModalBulk() {
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
+
+// ==========================================
+// DUPLICATE CAMPAIGN FUNCTIONALITY
+// ==========================================
+
+// Toggle duplicate settings visibility (Single launch)
+function toggleDuplicates() {
+    const enabled = document.getElementById('enable-duplicates').checked;
+    const settingsDiv = document.getElementById('duplicate-settings');
+
+    if (enabled) {
+        settingsDiv.style.display = 'block';
+        updateDuplicatePreview();
+    } else {
+        settingsDiv.style.display = 'none';
+    }
+
+    addLog('info', `Duplicate campaigns ${enabled ? 'enabled' : 'disabled'}`);
+}
+
+// Update the preview of duplicate campaign names
+function updateDuplicatePreview() {
+    const count = parseInt(document.getElementById('duplicate-count')?.value) || 2;
+    const baseName = state.campaignName || 'Campaign';
+    const previewDiv = document.getElementById('duplicate-preview-names');
+
+    if (!previewDiv) return;
+
+    let previewHtml = '';
+    for (let i = 1; i <= Math.min(count, 5); i++) {
+        previewHtml += `<div style="margin: 3px 0;">• ${baseName} (${i})</div>`;
+    }
+    if (count > 5) {
+        previewHtml += `<div style="margin: 3px 0; font-style: italic;">... and ${count - 5} more</div>`;
+    }
+
+    previewDiv.innerHTML = previewHtml;
+}
+
+// Add event listener for duplicate count change
+document.addEventListener('DOMContentLoaded', function() {
+    const duplicateCountInput = document.getElementById('duplicate-count');
+    if (duplicateCountInput) {
+        duplicateCountInput.addEventListener('change', updateDuplicatePreview);
+        duplicateCountInput.addEventListener('input', updateDuplicatePreview);
+    }
+});
+
+// Toggle bulk duplicates (in Bulk Launch modal)
+function toggleBulkDuplicates() {
+    const enabled = document.getElementById('bulk-enable-duplicates').checked;
+    const settingsDiv = document.getElementById('bulk-duplicate-settings');
+
+    if (enabled) {
+        settingsDiv.style.display = 'block';
+    } else {
+        settingsDiv.style.display = 'none';
+    }
+
+    // Update bulk launch state
+    bulkLaunchState.duplicatesEnabled = enabled;
+    bulkLaunchState.duplicateCount = enabled ? (parseInt(document.getElementById('bulk-duplicate-count')?.value) || 2) : 1;
+
+    updateBulkModalCounts();
+    addLog('info', `Bulk duplicates ${enabled ? 'enabled' : 'disabled'}, count: ${bulkLaunchState.duplicateCount}`);
+}
+
+// ==========================================
+// VIDEO UPLOAD FUNCTIONALITY (Bulk Launch)
+// ==========================================
+
+// Video upload state
+let videoUploadState = {
+    isUploading: false,
+    uploadedVideos: {}, // { advertiserId: { sourceVideoId: newVideoId } }
+    uploadProgress: 0,
+    totalUploads: 0,
+    completedUploads: 0,
+    failedUploads: 0
+};
+
+// Toggle video distribution mode (updated to show upload UI)
+function toggleVideoDistribution() {
+    const mode = document.querySelector('input[name="video_distribution"]:checked').value;
+    bulkLaunchState.videoDistributionMode = mode;
+
+    const uploadSection = document.getElementById('video-upload-section');
+    const uploadVideoCount = document.getElementById('upload-video-count');
+
+    if (mode === 'upload') {
+        uploadSection.style.display = 'block';
+        // Update video count
+        if (uploadVideoCount) {
+            uploadVideoCount.textContent = state.selectedVideos.length;
+        }
+        // Reset upload state
+        resetVideoUploadState();
+    } else {
+        uploadSection.style.display = 'none';
+    }
+
+    addLog('info', `Video distribution mode: ${mode}`);
+}
+
+// Reset video upload state
+function resetVideoUploadState() {
+    videoUploadState = {
+        isUploading: false,
+        uploadedVideos: {},
+        uploadProgress: 0,
+        totalUploads: 0,
+        completedUploads: 0,
+        failedUploads: 0
+    };
+
+    // Reset UI
+    const progressContainer = document.getElementById('video-upload-progress-container');
+    const startBtn = document.getElementById('start-upload-btn');
+    const completeStatus = document.getElementById('upload-complete-status');
+    const progressBar = document.getElementById('video-upload-bar');
+    const progressText = document.getElementById('upload-progress-text');
+    const detailsDiv = document.getElementById('video-upload-details');
+
+    if (progressContainer) progressContainer.style.display = 'none';
+    if (startBtn) {
+        startBtn.style.display = 'block';
+        startBtn.disabled = false;
+        startBtn.textContent = '📤 Upload Videos to Selected Accounts';
+    }
+    if (completeStatus) completeStatus.style.display = 'none';
+    if (progressBar) progressBar.style.width = '0%';
+    if (progressText) progressText.textContent = '0 / 0';
+    if (detailsDiv) detailsDiv.innerHTML = '';
+}
+
+// Start bulk video upload
+async function startBulkVideoUpload() {
+    if (videoUploadState.isUploading) {
+        showToast('Upload already in progress', 'warning');
+        return;
+    }
+
+    if (bulkLaunchState.selectedAccounts.length === 0) {
+        showToast('Please select at least one account first', 'error');
+        return;
+    }
+
+    if (state.selectedVideos.length === 0) {
+        showToast('No videos selected for upload', 'error');
+        return;
+    }
+
+    videoUploadState.isUploading = true;
+    videoUploadState.uploadedVideos = {};
+
+    const accounts = bulkLaunchState.selectedAccounts;
+    const videos = state.selectedVideos;
+    const totalUploads = accounts.length * videos.length;
+
+    videoUploadState.totalUploads = totalUploads;
+    videoUploadState.completedUploads = 0;
+    videoUploadState.failedUploads = 0;
+
+    // Show progress UI
+    const progressContainer = document.getElementById('video-upload-progress-container');
+    const startBtn = document.getElementById('start-upload-btn');
+    const progressBar = document.getElementById('video-upload-bar');
+    const progressText = document.getElementById('upload-progress-text');
+    const detailsDiv = document.getElementById('video-upload-details');
+
+    progressContainer.style.display = 'block';
+    startBtn.disabled = true;
+    startBtn.textContent = 'Uploading...';
+    progressText.textContent = `0 / ${totalUploads}`;
+    detailsDiv.innerHTML = '';
+
+    addLog('info', `Starting video upload: ${videos.length} videos to ${accounts.length} accounts (${totalUploads} total)`);
+
+    // Upload videos to each account
+    for (const account of accounts) {
+        const advertiserId = account.advertiser_id;
+        const accountName = account.advertiser_name;
+
+        // Initialize upload map for this account
+        videoUploadState.uploadedVideos[advertiserId] = {};
+
+        // Add account header to details
+        detailsDiv.innerHTML += `<div class="upload-account-header" style="font-weight: 600; margin-top: 10px; color: #333;">📁 ${accountName}</div>`;
+
+        for (const video of videos) {
+            try {
+                // Get the video URL for upload
+                const videoUrl = video.video_url || video.url;
+
+                if (!videoUrl) {
+                    throw new Error('No video URL available');
+                }
+
+                // Add uploading status
+                const statusId = `upload-status-${advertiserId}-${video.id}`;
+                detailsDiv.innerHTML += `<div id="${statusId}" style="margin-left: 15px; color: #666;">⏳ Uploading: ${video.name || 'Video'}...</div>`;
+                detailsDiv.scrollTop = detailsDiv.scrollHeight;
+
+                // Call API to upload video
+                const result = await apiRequest('upload_video_to_account', {
+                    target_advertiser_id: advertiserId,
+                    video_url: videoUrl,
+                    file_name: video.name || `video_${video.id}`
+                });
+
+                if (result.success && result.data?.video_id) {
+                    // Store the mapping
+                    videoUploadState.uploadedVideos[advertiserId][video.id] = result.data.video_id;
+                    videoUploadState.completedUploads++;
+
+                    // Update status
+                    const statusEl = document.getElementById(statusId);
+                    if (statusEl) {
+                        statusEl.innerHTML = `<span style="color: #22c55e;">✓</span> ${video.name || 'Video'} → ${result.data.video_id}`;
+                    }
+
+                    addLog('info', `Uploaded video "${video.name}" to ${accountName}: ${result.data.video_id}`);
+                } else {
+                    throw new Error(result.message || 'Upload failed');
+                }
+            } catch (error) {
+                videoUploadState.failedUploads++;
+
+                // Update status with error
+                const statusId = `upload-status-${advertiserId}-${video.id}`;
+                const statusEl = document.getElementById(statusId);
+                if (statusEl) {
+                    statusEl.innerHTML = `<span style="color: #ef4444;">✗</span> ${video.name || 'Video'}: ${error.message}`;
+                }
+
+                addLog('error', `Failed to upload video "${video.name}" to ${accountName}: ${error.message}`);
+            }
+
+            // Update progress
+            const completed = videoUploadState.completedUploads + videoUploadState.failedUploads;
+            const progress = Math.round((completed / totalUploads) * 100);
+            progressBar.style.width = `${progress}%`;
+            progressText.textContent = `${completed} / ${totalUploads}`;
+        }
+
+        // Update account's video mapping in bulkLaunchState
+        if (Object.keys(videoUploadState.uploadedVideos[advertiserId]).length > 0) {
+            const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+            if (selectedAccount) {
+                selectedAccount.video_mapping = videoUploadState.uploadedVideos[advertiserId];
+            }
+
+            // Initialize accountAssets if needed and update videoMatch
+            if (!bulkLaunchState.accountAssets[advertiserId]) {
+                bulkLaunchState.accountAssets[advertiserId] = {};
+            }
+
+            // Mark videos as matched
+            const uploadedCount = Object.keys(videoUploadState.uploadedVideos[advertiserId]).length;
+            bulkLaunchState.accountAssets[advertiserId].videoMatch = {
+                matched: Object.entries(videoUploadState.uploadedVideos[advertiserId]).map(([srcId, tgtId]) => ({
+                    source_video_id: srcId,
+                    target_video_id: tgtId
+                })),
+                unmatched: [],
+                match_rate: Math.round((uploadedCount / videos.length) * 100)
+            };
+        }
+    }
+
+    // Upload complete
+    videoUploadState.isUploading = false;
+
+    // Show completion status
+    const completeStatus = document.getElementById('upload-complete-status');
+    const completeDetails = document.getElementById('upload-complete-details');
+
+    if (videoUploadState.failedUploads === 0) {
+        completeStatus.style.display = 'block';
+        completeStatus.style.background = '#e8f5e9';
+        completeStatus.style.borderColor = '#4caf50';
+        completeStatus.querySelector('p').innerHTML = `<span style="font-size: 18px;">✅</span> Videos uploaded successfully!`;
+        completeDetails.textContent = `${videoUploadState.completedUploads} videos uploaded to ${accounts.length} accounts.`;
+        startBtn.style.display = 'none';
+    } else if (videoUploadState.completedUploads > 0) {
+        completeStatus.style.display = 'block';
+        completeStatus.style.background = '#fff3cd';
+        completeStatus.style.borderColor = '#ffc107';
+        completeStatus.querySelector('p').innerHTML = `<span style="font-size: 18px;">⚠️</span> Upload completed with some failures`;
+        completeDetails.textContent = `${videoUploadState.completedUploads} succeeded, ${videoUploadState.failedUploads} failed.`;
+        startBtn.textContent = '🔄 Retry Failed Uploads';
+        startBtn.disabled = false;
+    } else {
+        completeStatus.style.display = 'block';
+        completeStatus.style.background = '#fee2e2';
+        completeStatus.style.borderColor = '#ef4444';
+        completeStatus.querySelector('p').innerHTML = `<span style="font-size: 18px;">❌</span> Upload failed`;
+        completeDetails.textContent = `All ${videoUploadState.failedUploads} uploads failed. Please check your connection and try again.`;
+        startBtn.textContent = '🔄 Retry Upload';
+        startBtn.disabled = false;
+    }
+
+    // Update modal counts
+    updateBulkModalCounts();
+
+    addLog('info', `Video upload complete: ${videoUploadState.completedUploads} success, ${videoUploadState.failedUploads} failed`);
+}
+
+// Update bulkLaunchState with duplicate settings
+bulkLaunchState.duplicatesEnabled = false;
+bulkLaunchState.duplicateCount = 1;
 
 // ==========================================
 // CAMPAIGN LISTING FUNCTIONALITY

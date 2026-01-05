@@ -1866,6 +1866,11 @@ switch ($action) {
         $campaignConfig = $data['campaign_config'];
         $accounts = $data['accounts'];
         $primaryAdvertiserId = $data['primary_advertiser_id'] ?? $advertiserId;
+        $duplicateCount = intval($data['duplicate_count'] ?? $campaignConfig['duplicate_count'] ?? 1);
+
+        // Validate duplicate count
+        if ($duplicateCount < 1) $duplicateCount = 1;
+        if ($duplicateCount > 10) $duplicateCount = 10;
 
         // Generate job ID
         $jobId = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
@@ -1877,11 +1882,12 @@ switch ($action) {
         );
 
         logSmartPlus("Bulk Job ID: $jobId");
-        logSmartPlus("Processing " . count($accounts) . " accounts");
+        logSmartPlus("Processing " . count($accounts) . " accounts with $duplicateCount campaign copies each");
 
         $results = [
             'job_id' => $jobId,
-            'total' => count($accounts),
+            'total' => count($accounts) * $duplicateCount,
+            'duplicate_count' => $duplicateCount,
             'success' => [],
             'failed' => []
         ];
@@ -1902,15 +1908,73 @@ switch ($action) {
                 usleep(200000);
             }
 
-            try {
-                // Clear caches for this advertiser
-                $GLOBALS['imageLibraryCache'] = null;
-                $GLOBALS['videoInfoCache'] = [];
+            // Clear caches for this advertiser (outside the duplicate loop)
+            $GLOBALS['imageLibraryCache'] = null;
+            $GLOBALS['videoInfoCache'] = [];
 
+            // CTA Portfolio - get or create once per account
+            $ctaPortfolioId = null;
+            try {
+                require_once __DIR__ . '/database/Database.php';
+                $db = Database::getInstance();
+
+                $existingPortfolio = $db->fetchOne(
+                    "SELECT creative_portfolio_id FROM tool_portfolios
+                     WHERE advertiser_id = :advertiser_id
+                     AND portfolio_name = 'Frequently Used CTAs'
+                     AND portfolio_type = 'CTA'",
+                    ['advertiser_id' => $targetAdvertiserId]
+                );
+
+                if ($existingPortfolio) {
+                    $ctaPortfolioId = $existingPortfolio['creative_portfolio_id'];
+                } else {
+                    // Create new portfolio
+                    $frequentlyUsedCTAs = [
+                        ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]],
+                        ['asset_content' => 'GET_QUOTE', 'asset_ids' => ["0"]],
+                        ['asset_content' => 'SIGN_UP', 'asset_ids' => ["0"]],
+                        ['asset_content' => 'CONTACT_US', 'asset_ids' => ["0"]],
+                        ['asset_content' => 'APPLY_NOW', 'asset_ids' => ["0"]]
+                    ];
+
+                    $portfolioResult = makeApiCall('/creative/portfolio/create/', [
+                        'advertiser_id' => $targetAdvertiserId,
+                        'creative_portfolio_type' => 'CTA',
+                        'portfolio_content' => $frequentlyUsedCTAs
+                    ], $accessToken);
+
+                    if ($portfolioResult['code'] == 0 && isset($portfolioResult['data']['creative_portfolio_id'])) {
+                        $ctaPortfolioId = $portfolioResult['data']['creative_portfolio_id'];
+
+                        $db->insert('tool_portfolios', [
+                            'advertiser_id' => $targetAdvertiserId,
+                            'creative_portfolio_id' => $ctaPortfolioId,
+                            'portfolio_name' => 'Frequently Used CTAs',
+                            'portfolio_type' => 'CTA',
+                            'portfolio_content' => json_encode($frequentlyUsedCTAs),
+                            'created_by_tool' => 1
+                        ]);
+                    }
+                }
+            } catch (Exception $e) {
+                logSmartPlus("Warning: Could not get/create CTA portfolio: " . $e->getMessage());
+            }
+
+            // Loop for creating duplicate campaigns
+            for ($copyNum = 1; $copyNum <= $duplicateCount; $copyNum++) {
+                // Generate campaign name with copy number (if duplicates > 1)
+                $campaignName = $duplicateCount > 1
+                    ? $campaignConfig['campaign_name'] . ' (' . $copyNum . ')'
+                    : $campaignConfig['campaign_name'];
+
+                logSmartPlus("Creating campaign copy $copyNum/$duplicateCount: $campaignName");
+
+            try {
                 // 1. CREATE CAMPAIGN
                 $campaignParams = [
                     'advertiser_id' => $targetAdvertiserId,
-                    'campaign_name' => $campaignConfig['campaign_name'],
+                    'campaign_name' => $campaignName,
                     'objective_type' => 'LEAD_GENERATION',
                     'request_id' => generateRequestId(),
                     'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
@@ -1937,7 +2001,7 @@ switch ($action) {
                     'advertiser_id' => $targetAdvertiserId,
                     'request_id' => generateRequestId(),
                     'campaign_id' => $campaignId,
-                    'adgroup_name' => $campaignConfig['campaign_name'] . ' - Ad Group',
+                    'adgroup_name' => $campaignName . ' - Ad Group',
                     'promotion_type' => 'LEAD_GENERATION',
                     'promotion_target_type' => 'EXTERNAL_WEBSITE',
                     'optimization_goal' => 'CONVERT',
@@ -2012,59 +2076,9 @@ switch ($action) {
                     $creativeList[] = ['creative_info' => $creativeInfo];
                 }
 
-                // Get or create CTA portfolio for this account
-                $ctaPortfolioId = null;
-                try {
-                    // Check for existing "Frequently Used CTAs" portfolio
-                    require_once __DIR__ . '/database/Database.php';
-                    $db = Database::getInstance();
-
-                    $existingPortfolio = $db->fetchOne(
-                        "SELECT creative_portfolio_id FROM tool_portfolios
-                         WHERE advertiser_id = :advertiser_id
-                         AND portfolio_name = 'Frequently Used CTAs'
-                         AND portfolio_type = 'CTA'",
-                        ['advertiser_id' => $targetAdvertiserId]
-                    );
-
-                    if ($existingPortfolio) {
-                        $ctaPortfolioId = $existingPortfolio['creative_portfolio_id'];
-                    } else {
-                        // Create new portfolio
-                        $frequentlyUsedCTAs = [
-                            ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]],
-                            ['asset_content' => 'GET_QUOTE', 'asset_ids' => ["0"]],
-                            ['asset_content' => 'SIGN_UP', 'asset_ids' => ["0"]],
-                            ['asset_content' => 'CONTACT_US', 'asset_ids' => ["0"]],
-                            ['asset_content' => 'APPLY_NOW', 'asset_ids' => ["0"]]
-                        ];
-
-                        $portfolioResult = makeApiCall('/creative/portfolio/create/', [
-                            'advertiser_id' => $targetAdvertiserId,
-                            'creative_portfolio_type' => 'CTA',
-                            'portfolio_content' => $frequentlyUsedCTAs
-                        ], $accessToken);
-
-                        if ($portfolioResult['code'] == 0 && isset($portfolioResult['data']['creative_portfolio_id'])) {
-                            $ctaPortfolioId = $portfolioResult['data']['creative_portfolio_id'];
-
-                            // Save to database
-                            $db->insert('tool_portfolios', [
-                                'advertiser_id' => $targetAdvertiserId,
-                                'creative_portfolio_id' => $ctaPortfolioId,
-                                'portfolio_name' => 'Frequently Used CTAs',
-                                'portfolio_type' => 'CTA',
-                                'portfolio_content' => json_encode($frequentlyUsedCTAs),
-                                'created_by_tool' => 1
-                            ]);
-                        }
-                    }
-                } catch (Exception $e) {
-                    logSmartPlus("Warning: Could not get/create CTA portfolio: " . $e->getMessage());
-                }
-
+                // Check that CTA portfolio was created earlier
                 if (!$ctaPortfolioId) {
-                    throw new Exception('Failed to get or create CTA portfolio for this account');
+                    throw new Exception('CTA portfolio not available for this account');
                 }
 
                 // Build ad text list
@@ -2085,7 +2099,7 @@ switch ($action) {
                 $adParams = [
                     'advertiser_id' => $targetAdvertiserId,
                     'adgroup_id' => $adgroupId,
-                    'ad_name' => $campaignConfig['campaign_name'] . ' - Ad',
+                    'ad_name' => $campaignName . ' - Ad',
                     'creative_list' => $creativeList,
                     'landing_page_url_list' => $landingPageList,
                     'ad_text_list' => $adTextList,
@@ -2112,20 +2126,30 @@ switch ($action) {
                 $results['success'][] = [
                     'advertiser_id' => $targetAdvertiserId,
                     'advertiser_name' => $accountName,
+                    'campaign_name' => $campaignName,
+                    'copy_number' => $copyNum,
                     'campaign_id' => $campaignId,
                     'adgroup_id' => $adgroupId,
                     'ad_id' => $adId
                 ];
 
+                // Small delay between duplicate creations
+                if ($copyNum < $duplicateCount) {
+                    usleep(100000); // 100ms between copies
+                }
+
             } catch (Exception $e) {
-                logSmartPlus("ERROR for $targetAdvertiserId: " . $e->getMessage());
+                logSmartPlus("ERROR for $targetAdvertiserId (copy $copyNum): " . $e->getMessage());
                 $results['failed'][] = [
                     'advertiser_id' => $targetAdvertiserId,
                     'advertiser_name' => $accountName,
+                    'campaign_name' => $campaignName,
+                    'copy_number' => $copyNum,
                     'error' => $e->getMessage()
                 ];
             }
-        }
+            } // End of duplicate loop (for $copyNum)
+        } // End of accounts loop
 
         // Summary
         $results['success_count'] = count($results['success']);

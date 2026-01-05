@@ -592,6 +592,38 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     </div>
                 </div>
 
+                <!-- Duplicate Campaign Section (Single Launch) -->
+                <div class="review-section" style="margin-top: 30px;">
+                    <h3>Campaign Copies</h3>
+                    <div class="duplicate-campaign-section" style="padding: 20px; background: #f8f9ff; border-radius: 8px; border: 2px solid #e0e0e0;">
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="checkbox" id="enable-duplicates" onchange="toggleDuplicates()" style="width: 20px; height: 20px; accent-color: #667eea;">
+                                <span style="font-weight: 600;">Create multiple copies of this campaign</span>
+                            </label>
+                            <small style="display: block; margin-top: 8px; margin-left: 30px; color: #666;">
+                                Launch several identical campaigns at once with auto-numbered names.
+                            </small>
+                        </div>
+                        <div id="duplicate-settings" style="display: none;">
+                            <div class="form-group" style="margin-bottom: 10px;">
+                                <label style="font-weight: 500;">Number of campaign copies:</label>
+                                <div style="display: flex; align-items: center; gap: 15px; margin-top: 8px;">
+                                    <input type="number" id="duplicate-count" min="2" max="20" value="2"
+                                           style="width: 80px; padding: 10px; border: 2px solid #667eea; border-radius: 6px; font-size: 16px; text-align: center;">
+                                    <span style="color: #666;">campaigns (max 20)</span>
+                                </div>
+                            </div>
+                            <div class="duplicate-preview" style="margin-top: 15px; padding: 12px; background: white; border-radius: 6px; border: 1px solid #ddd;">
+                                <p style="margin: 0 0 8px 0; font-weight: 500; color: #333;">Preview:</p>
+                                <div id="duplicate-preview-names" style="font-size: 13px; color: #666;">
+                                    <!-- Will be populated by JS -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Launch Options Section -->
                 <div class="review-section" style="margin-top: 30px;">
                     <h3>Launch Options</h3>
@@ -724,6 +756,29 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                         <strong>Budget:</strong> $<span id="bulk-campaign-budget">0</span>/day per account
                     </div>
 
+                    <!-- Duplicate Campaign Section -->
+                    <div class="bulk-section">
+                        <h4>📋 Campaign Copies</h4>
+                        <p class="bulk-section-desc">Create multiple copies of this campaign per account.</p>
+                        <div class="duplicate-options">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="checkbox" id="bulk-enable-duplicates" onchange="toggleBulkDuplicates()" style="width: 18px; height: 18px;">
+                                    <span>Create multiple campaign copies per account</span>
+                                </label>
+                            </div>
+                            <div id="bulk-duplicate-settings" style="display: none; margin-top: 15px; padding: 15px; background: #f8f9ff; border-radius: 8px; border: 1px solid #667eea;">
+                                <div class="form-group" style="margin-bottom: 10px;">
+                                    <label>Number of copies per account:</label>
+                                    <input type="number" id="bulk-duplicate-count" min="2" max="10" value="2" style="width: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                </div>
+                                <p style="margin: 0; font-size: 12px; color: #666;">
+                                    Campaign names will be auto-numbered: "Campaign Name (1)", "Campaign Name (2)", etc.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Video Distribution Section -->
                     <div class="bulk-section">
                         <h4>📹 Video Distribution</h4>
@@ -738,12 +793,43 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                                 <span>Upload videos to selected accounts now</span>
                             </label>
                         </div>
-                        <div id="video-upload-progress" style="display: none; margin-top: 15px;">
-                            <div class="upload-progress-container">
-                                <div id="video-upload-status">Ready to upload</div>
-                                <div class="progress-bar-container">
-                                    <div id="video-upload-bar" class="progress-bar-fill" style="width: 0%;"></div>
+
+                        <!-- Video Upload UI (shown when upload option selected) -->
+                        <div id="video-upload-section" style="display: none; margin-top: 15px;">
+                            <div class="video-upload-info" style="padding: 15px; background: #fff8e6; border-radius: 8px; border: 1px solid #ffc107; margin-bottom: 15px;">
+                                <p style="margin: 0 0 10px 0; font-weight: 600; color: #856404;">
+                                    <span style="font-size: 18px;">📤</span> Video Upload Required
+                                </p>
+                                <p style="margin: 0; font-size: 13px; color: #856404;">
+                                    Your <span id="upload-video-count">0</span> selected videos will be uploaded to each selected account before launching.
+                                </p>
+                            </div>
+
+                            <!-- Upload Progress Container -->
+                            <div id="video-upload-progress-container" style="display: none;">
+                                <div class="upload-progress-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                    <span style="font-weight: 600;">Uploading Videos...</span>
+                                    <span id="upload-progress-text">0 / 0</span>
                                 </div>
+                                <div class="progress-bar-container" style="background: #e0e0e0; border-radius: 10px; height: 12px; overflow: hidden; margin-bottom: 10px;">
+                                    <div id="video-upload-bar" class="progress-bar-fill" style="background: linear-gradient(135deg, #667eea, #764ba2); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                                </div>
+                                <div id="video-upload-details" style="max-height: 150px; overflow-y: auto; font-size: 12px; background: #f9f9f9; border-radius: 6px; padding: 10px;">
+                                    <!-- Upload status per account will be shown here -->
+                                </div>
+                            </div>
+
+                            <!-- Upload Button -->
+                            <button type="button" id="start-upload-btn" class="btn-primary" onclick="startBulkVideoUpload()" style="width: 100%; margin-top: 10px; background: linear-gradient(135deg, #667eea, #764ba2);">
+                                📤 Upload Videos to Selected Accounts
+                            </button>
+
+                            <!-- Upload Complete Status -->
+                            <div id="upload-complete-status" style="display: none; padding: 15px; background: #e8f5e9; border-radius: 8px; border: 1px solid #4caf50; margin-top: 15px;">
+                                <p style="margin: 0; color: #2e7d32; font-weight: 600;">
+                                    <span style="font-size: 18px;">✅</span> Videos uploaded successfully!
+                                </p>
+                                <p id="upload-complete-details" style="margin: 5px 0 0 0; font-size: 13px; color: #2e7d32;"></p>
                             </div>
                         </div>
                     </div>
