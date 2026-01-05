@@ -3008,7 +3008,7 @@ async function launchDuplicateCampaigns(count) {
             addLog('info', `Creating campaign ${i}/${count}: "${campaignName}"`);
 
             // Create campaign with new name
-            const campaignResult = await apiRequest('create_smart_campaign', {
+            const campaignResult = await apiRequest('create_smartplus_campaign', {
                 campaign_name: campaignName,
                 budget: state.budget,
                 budget_mode: 'BUDGET_MODE_DAY',
@@ -3022,7 +3022,7 @@ async function launchDuplicateCampaigns(count) {
             const newCampaignId = campaignResult.campaign_id || campaignResult.data?.campaign_id;
 
             // Create ad group for this campaign
-            const adGroupResult = await apiRequest('create_smart_adgroup', {
+            const adGroupResult = await apiRequest('create_smartplus_adgroup', {
                 campaign_id: newCampaignId,
                 pixel_id: state.pixelId,
                 optimization_event: state.optimizationEvent,
@@ -3039,7 +3039,7 @@ async function launchDuplicateCampaigns(count) {
             const newAdGroupId = adGroupResult.adgroup_id || adGroupResult.data?.adgroup_id;
 
             // Create ad for this campaign
-            const adResult = await apiRequest('create_smart_ad', {
+            const adResult = await apiRequest('create_smartplus_ad', {
                 campaign_id: newCampaignId,
                 adgroup_id: newAdGroupId,
                 creatives: state.creatives,
