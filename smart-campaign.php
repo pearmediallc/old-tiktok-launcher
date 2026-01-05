@@ -607,12 +607,16 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                         </div>
                         <div id="duplicate-settings" style="display: none;">
                             <div class="form-group" style="margin-bottom: 10px;">
-                                <label style="font-weight: 500;">Number of campaign copies:</label>
+                                <label style="font-weight: 500;">Total number of campaigns to create:</label>
                                 <div style="display: flex; align-items: center; gap: 15px; margin-top: 8px;">
-                                    <input type="number" id="duplicate-count" min="2" max="20" value="2"
-                                           style="width: 80px; padding: 10px; border: 2px solid #667eea; border-radius: 6px; font-size: 16px; text-align: center;">
-                                    <span style="color: #666;">campaigns (max 20)</span>
+                                    <input type="number" id="duplicate-count" min="1" max="20" value="2"
+                                           style="width: 80px; padding: 10px; border: 2px solid #667eea; border-radius: 6px; font-size: 16px; text-align: center;"
+                                           onchange="updateDuplicatePreview()" oninput="updateDuplicatePreview()">
+                                    <span style="color: #666;">campaigns (1-20)</span>
                                 </div>
+                                <small style="display: block; margin-top: 8px; color: #888;">
+                                    Enter 1 to create just the original campaign, or more to create multiple copies.
+                                </small>
                             </div>
                             <div class="duplicate-preview" style="margin-top: 15px; padding: 12px; background: white; border-radius: 6px; border: 1px solid #ddd;">
                                 <p style="margin: 0 0 8px 0; font-weight: 500; color: #333;">Preview:</p>
@@ -769,8 +773,8 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                             </div>
                             <div id="bulk-duplicate-settings" style="display: none; margin-top: 15px; padding: 15px; background: #f8f9ff; border-radius: 8px; border: 1px solid #667eea;">
                                 <div class="form-group" style="margin-bottom: 10px;">
-                                    <label>Number of copies per account:</label>
-                                    <input type="number" id="bulk-duplicate-count" min="2" max="10" value="2" style="width: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                    <label>Total campaigns per account:</label>
+                                    <input type="number" id="bulk-duplicate-count" min="1" max="10" value="2" style="width: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
                                 </div>
                                 <p style="margin: 0; font-size: 12px; color: #666;">
                                     Campaign names will be auto-numbered: "Campaign Name (1)", "Campaign Name (2)", etc.

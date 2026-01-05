@@ -3015,8 +3015,8 @@ async function launchDuplicateCampaigns(count) {
     const results = [];
 
     for (let i = 1; i <= count; i++) {
-        // Generate numbered campaign name
-        const campaignName = `${baseName} (${i})`;
+        // Generate campaign name - no numbering if count is 1
+        const campaignName = count === 1 ? baseName : `${baseName} (${i})`;
 
         try {
             addLog('info', `Creating campaign ${i}/${count}: "${campaignName}"`);
@@ -3410,18 +3410,25 @@ function toggleDuplicates() {
 
 // Update the preview of duplicate campaign names
 function updateDuplicatePreview() {
-    const count = parseInt(document.getElementById('duplicate-count')?.value) || 2;
+    const count = parseInt(document.getElementById('duplicate-count')?.value) || 1;
     const baseName = state.campaignName || 'Campaign';
     const previewDiv = document.getElementById('duplicate-preview-names');
 
     if (!previewDiv) return;
 
     let previewHtml = '';
-    for (let i = 1; i <= Math.min(count, 5); i++) {
-        previewHtml += `<div style="margin: 3px 0;">• ${baseName} (${i})</div>`;
-    }
-    if (count > 5) {
-        previewHtml += `<div style="margin: 3px 0; font-style: italic;">... and ${count - 5} more</div>`;
+
+    if (count === 1) {
+        // Single campaign - no numbering
+        previewHtml = `<div style="margin: 3px 0;">• ${baseName} <span style="color: #888;">(original only)</span></div>`;
+    } else {
+        // Multiple campaigns - with numbering
+        for (let i = 1; i <= Math.min(count, 5); i++) {
+            previewHtml += `<div style="margin: 3px 0;">• ${baseName} (${i})</div>`;
+        }
+        if (count > 5) {
+            previewHtml += `<div style="margin: 3px 0; font-style: italic;">... and ${count - 5} more</div>`;
+        }
     }
 
     previewDiv.innerHTML = previewHtml;
