@@ -36,6 +36,10 @@ set_exception_handler(function($exception) {
 session_start();
 header('Content-Type: application/json');
 
+// Load Cache system
+require_once __DIR__ . '/includes/Cache.php';
+$cache = Cache::getInstance();
+
 // Load environment
 $envPath = __DIR__ . '/.env';
 if (file_exists($envPath)) {
@@ -445,14 +449,30 @@ logSmartPlus("=== Action: $action ===");
 switch ($action) {
 
     // ==========================================
-    // GET PIXELS
+    // GET PIXELS (Cached - 10 min TTL)
     // ==========================================
     case 'get_pixels':
+        $cacheKey = $cache->generateKey('pixels', $advertiserId);
+        $cachedData = $cache->get($cacheKey);
+
+        if ($cachedData !== null) {
+            logSmartPlus("Cache HIT for pixels - Advertiser: $advertiserId");
+            echo json_encode([
+                'success' => true,
+                'data' => ['pixels' => $cachedData],
+                'cached' => true
+            ]);
+            break;
+        }
+
+        logSmartPlus("Cache MISS for pixels - Advertiser: $advertiserId");
         $result = makeApiCall('/pixel/list/', [
             'advertiser_id' => $advertiserId
         ], $accessToken, 'GET');
 
         if ($result['code'] == 0 && isset($result['data']['pixels'])) {
+            // Cache the pixels for 10 minutes
+            $cache->set($cacheKey, $result['data']['pixels'], Cache::TTL_LONG);
             echo json_encode([
                 'success' => true,
                 'data' => ['pixels' => $result['data']['pixels']]
@@ -466,9 +486,23 @@ switch ($action) {
         break;
 
     // ==========================================
-    // GET IDENTITIES - All types for Smart+
+    // GET IDENTITIES - All types for Smart+ (Cached - 10 min TTL)
     // ==========================================
     case 'get_identities':
+        $cacheKey = $cache->generateKey('identities', $advertiserId);
+        $cachedData = $cache->get($cacheKey);
+
+        if ($cachedData !== null) {
+            logSmartPlus("Cache HIT for identities - Advertiser: $advertiserId");
+            echo json_encode([
+                'success' => true,
+                'data' => ['list' => $cachedData],
+                'cached' => true
+            ]);
+            break;
+        }
+
+        logSmartPlus("Cache MISS for identities - Advertiser: $advertiserId");
         // For Smart+, we need TT_USER, AUTH_CODE, or BC_AUTH_TT identities
         // NOT CUSTOMIZED_USER (that's only for regular campaigns)
         $allIdentities = [];
@@ -482,6 +516,9 @@ switch ($action) {
             $allIdentities = $result['data']['identity_list'];
         }
 
+        // Cache identities for 10 minutes
+        $cache->set($cacheKey, $allIdentities, Cache::TTL_LONG);
+
         echo json_encode([
             'success' => true,
             'data' => ['list' => $allIdentities]
@@ -489,9 +526,23 @@ switch ($action) {
         break;
 
     // ==========================================
-    // GET VIDEOS FROM CREATIVE LIBRARY
+    // GET VIDEOS FROM CREATIVE LIBRARY (Cached - 5 min TTL)
     // ==========================================
     case 'get_videos':
+        $cacheKey = $cache->generateKey('videos', $advertiserId);
+        $cachedData = $cache->get($cacheKey);
+
+        if ($cachedData !== null) {
+            logSmartPlus("Cache HIT for videos - Advertiser: $advertiserId");
+            echo json_encode([
+                'success' => true,
+                'data' => $cachedData,
+                'cached' => true
+            ]);
+            break;
+        }
+
+        logSmartPlus("Cache MISS for videos - Advertiser: $advertiserId");
         $result = makeApiCall('/file/video/ad/search/', [
             'advertiser_id' => $advertiserId,
             'page' => 1,
@@ -499,6 +550,8 @@ switch ($action) {
         ], $accessToken, 'GET');
 
         if ($result['code'] == 0 && isset($result['data']['list'])) {
+            // Cache videos for 5 minutes (shorter TTL as videos may be added)
+            $cache->set($cacheKey, $result['data']['list'], Cache::TTL_MEDIUM);
             echo json_encode([
                 'success' => true,
                 'data' => $result['data']['list']
@@ -512,9 +565,23 @@ switch ($action) {
         break;
 
     // ==========================================
-    // GET IMAGES FROM CREATIVE LIBRARY
+    // GET IMAGES FROM CREATIVE LIBRARY (Cached - 5 min TTL)
     // ==========================================
     case 'get_images':
+        $cacheKey = $cache->generateKey('images', $advertiserId);
+        $cachedData = $cache->get($cacheKey);
+
+        if ($cachedData !== null) {
+            logSmartPlus("Cache HIT for images - Advertiser: $advertiserId");
+            echo json_encode([
+                'success' => true,
+                'data' => $cachedData,
+                'cached' => true
+            ]);
+            break;
+        }
+
+        logSmartPlus("Cache MISS for images - Advertiser: $advertiserId");
         $result = makeApiCall('/file/image/ad/search/', [
             'advertiser_id' => $advertiserId,
             'page' => 1,
@@ -522,6 +589,8 @@ switch ($action) {
         ], $accessToken, 'GET');
 
         if ($result['code'] == 0 && isset($result['data']['list'])) {
+            // Cache images for 5 minutes
+            $cache->set($cacheKey, $result['data']['list'], Cache::TTL_MEDIUM);
             echo json_encode([
                 'success' => true,
                 'data' => $result['data']['list']
@@ -2432,6 +2501,74 @@ switch ($action) {
                 'details' => $result
             ]);
         }
+        break;
+
+    // ==========================================
+    // CLEAR CACHE - For refreshing data
+    // ==========================================
+    case 'clear_cache':
+        $type = $input['type'] ?? 'all';
+        logSmartPlus("=== CLEARING CACHE ===");
+        logSmartPlus("Type: $type, Advertiser: $advertiserId");
+
+        switch ($type) {
+            case 'pixels':
+                $cacheKey = $cache->generateKey('pixels', $advertiserId);
+                $cache->delete($cacheKey);
+                $message = 'Pixels cache cleared';
+                break;
+            case 'identities':
+                $cacheKey = $cache->generateKey('identities', $advertiserId);
+                $cache->delete($cacheKey);
+                $message = 'Identities cache cleared';
+                break;
+            case 'videos':
+                $cacheKey = $cache->generateKey('videos', $advertiserId);
+                $cache->delete($cacheKey);
+                $message = 'Videos cache cleared';
+                break;
+            case 'images':
+                $cacheKey = $cache->generateKey('images', $advertiserId);
+                $cache->delete($cacheKey);
+                $message = 'Images cache cleared';
+                break;
+            case 'campaigns':
+                $cacheKey = $cache->generateKey('campaigns', $advertiserId);
+                $cache->delete($cacheKey);
+                $message = 'Campaigns cache cleared';
+                break;
+            case 'advertiser':
+                // Clear all cache for this advertiser
+                $cache->delete($cache->generateKey('pixels', $advertiserId));
+                $cache->delete($cache->generateKey('identities', $advertiserId));
+                $cache->delete($cache->generateKey('videos', $advertiserId));
+                $cache->delete($cache->generateKey('images', $advertiserId));
+                $cache->delete($cache->generateKey('campaigns', $advertiserId));
+                $message = 'All cache cleared for advertiser';
+                break;
+            case 'all':
+            default:
+                $count = $cache->clearAll();
+                $message = "All cache cleared ($count files)";
+                break;
+        }
+
+        logSmartPlus("Cache cleared: $message");
+        echo json_encode([
+            'success' => true,
+            'message' => $message
+        ]);
+        break;
+
+    // ==========================================
+    // CACHE STATS - Get cache statistics
+    // ==========================================
+    case 'cache_stats':
+        $stats = $cache->getStats();
+        echo json_encode([
+            'success' => true,
+            'stats' => $stats
+        ]);
         break;
 
     // ==========================================
