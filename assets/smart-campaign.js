@@ -2989,9 +2989,26 @@ async function launchDuplicateCampaigns(count) {
         return;
     }
 
+    // Validate CTA portfolio is selected
+    if (!state.globalCtaPortfolioId) {
+        showToast('CTA Portfolio is required. Please go back and select a portfolio.', 'error');
+        return;
+    }
+
     const baseName = state.campaignName;
     addLog('info', `Starting duplicate campaign launch: ${count} copies of "${baseName}"`);
     showLoading(`Creating ${count} campaign copies...`);
+
+    // Get identity type
+    const identity = state.identities.find(i => i.identity_id === state.globalIdentityId);
+    const identityType = identity?.identity_type || 'CUSTOMIZED_USER';
+
+    // Prepare creative list
+    const creativeList = state.creatives.map(creative => ({
+        video_id: creative.video_id,
+        ad_text: creative.ad_text,
+        image_id: creative.image_id || null
+    }));
 
     let successCount = 0;
     let failedCount = 0;
@@ -3002,9 +3019,6 @@ async function launchDuplicateCampaigns(count) {
         const campaignName = `${baseName} (${i})`;
 
         try {
-            // Update state with new name
-            state.campaignName = campaignName;
-
             addLog('info', `Creating campaign ${i}/${count}: "${campaignName}"`);
 
             // Create campaign with new name
@@ -3038,16 +3052,16 @@ async function launchDuplicateCampaigns(count) {
 
             const newAdGroupId = adGroupResult.adgroup_id || adGroupResult.data?.adgroup_id;
 
-            // Create ad for this campaign
+            // Create ad for this campaign (using same params as createAd function)
             const adResult = await apiRequest('create_smartplus_ad', {
-                campaign_id: newCampaignId,
                 adgroup_id: newAdGroupId,
-                creatives: state.creatives,
-                identity_id: state.identityId,
-                identity_type: state.identityType,
+                ad_name: campaignName + ' - Ad',
+                identity_id: state.globalIdentityId,
+                identity_type: identityType,
                 landing_page_url: state.globalLandingUrl,
-                ad_texts: state.adTexts,
-                cta_portfolio_id: state.selectedPortfolioId
+                call_to_action_id: state.globalCtaPortfolioId,
+                creatives: creativeList,
+                ad_texts: state.adTexts
             });
 
             if (adResult.success) {
