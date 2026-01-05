@@ -3035,9 +3035,16 @@ async function launchDuplicateCampaigns(count) {
 
             const newCampaignId = campaignResult.campaign_id || campaignResult.data?.campaign_id;
 
+            // Generate ad group and ad names based on campaign name
+            const adGroupName = campaignName + ' Ad Group';
+            const adName = campaignName + ' Ad';
+
+            addLog('info', `Creating ad group: "${adGroupName}"`);
+
             // Create ad group for this campaign
             const adGroupResult = await apiRequest('create_smartplus_adgroup', {
                 campaign_id: newCampaignId,
+                adgroup_name: adGroupName,
                 pixel_id: state.pixelId,
                 optimization_event: state.optimizationEvent,
                 location_ids: state.locationIds,
@@ -3052,10 +3059,12 @@ async function launchDuplicateCampaigns(count) {
 
             const newAdGroupId = adGroupResult.adgroup_id || adGroupResult.data?.adgroup_id;
 
+            addLog('info', `Creating ad: "${adName}"`);
+
             // Create ad for this campaign (using same params as createAd function)
             const adResult = await apiRequest('create_smartplus_ad', {
                 adgroup_id: newAdGroupId,
-                ad_name: campaignName + ' - Ad',
+                ad_name: adName,
                 identity_id: state.globalIdentityId,
                 identity_type: identityType,
                 landing_page_url: state.globalLandingUrl,
@@ -3064,16 +3073,19 @@ async function launchDuplicateCampaigns(count) {
                 ad_texts: state.adTexts
             });
 
-            if (adResult.success) {
+            if (adResult.success && (adResult.smart_plus_ad_id || adResult.ad_id)) {
+                const adId = adResult.smart_plus_ad_id || adResult.ad_id;
                 successCount++;
                 results.push({
                     name: campaignName,
                     campaign_id: newCampaignId,
+                    adgroup_id: newAdGroupId,
+                    ad_id: adId,
                     status: 'success'
                 });
-                addLog('success', `Campaign ${i}/${count} created successfully: ${newCampaignId}`);
+                addLog('success', `Campaign ${i}/${count} created successfully: Campaign=${newCampaignId}, AdGroup=${newAdGroupId}, Ad=${adId}`);
             } else {
-                throw new Error(adResult.message || 'Failed to create ad');
+                throw new Error(adResult.message || adResult.error || 'Failed to create ad');
             }
         } catch (error) {
             failedCount++;
@@ -3083,6 +3095,11 @@ async function launchDuplicateCampaigns(count) {
                 error: error.message
             });
             addLog('error', `Campaign ${i}/${count} failed: ${error.message}`);
+        }
+
+        // Small delay between campaign creations to avoid rate limiting
+        if (i < count) {
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
     }
 
