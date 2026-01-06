@@ -2996,8 +2996,8 @@ async function launchDuplicateCampaigns(count) {
     }
 
     const baseName = state.campaignName;
-    addLog('info', `Starting duplicate campaign launch: ${count} copies of "${baseName}"`);
-    showLoading(`Creating ${count} campaign copies...`);
+    addLog('info', `Starting duplicate campaign launch: 1 original + ${count - 1} copies of "${baseName}"`);
+    showLoading(`Creating ${count} campaigns (1 original + ${count - 1} copies)...`);
 
     // Get identity type
     const identity = state.identities.find(i => i.identity_id === state.globalIdentityId);
@@ -3014,50 +3014,63 @@ async function launchDuplicateCampaigns(count) {
     let failedCount = 0;
     const results = [];
 
-    for (let i = 1; i <= count; i++) {
-        // Generate campaign name - no numbering if count is 1
-        const campaignName = count === 1 ? baseName : `${baseName} (${i})`;
+    // Loop from 0 to count-1: i=0 is original, i>0 are copies
+    for (let i = 0; i < count; i++) {
+        // Generate campaign name - i=0 is original (no number), i>0 gets copy number
+        const campaignName = i === 0 ? baseName : `${baseName} (${i})`;
+        const isOriginal = i === 0;
 
         try {
-            addLog('info', `Creating campaign ${i}/${count}: "${campaignName}"`);
+            let newCampaignId, newAdGroupId;
 
-            // Create campaign with new name
-            const campaignResult = await apiRequest('create_smartplus_campaign', {
-                campaign_name: campaignName,
-                budget: state.budget,
-                budget_mode: 'BUDGET_MODE_DAY',
-                cbo_enabled: state.cboEnabled
-            });
+            if (isOriginal && state.campaignId && state.adGroupId) {
+                // Use existing campaign and ad group from Steps 1-2
+                newCampaignId = state.campaignId;
+                newAdGroupId = state.adGroupId;
+                addLog('info', `Using existing campaign ${i + 1}/${count}: "${campaignName}" (ID: ${newCampaignId})`);
+            } else {
+                // Create new campaign
+                addLog('info', `Creating campaign ${i + 1}/${count}: "${campaignName}"`);
 
-            if (!campaignResult.success) {
-                throw new Error(campaignResult.message || 'Failed to create campaign');
+                const campaignResult = await apiRequest('create_smartplus_campaign', {
+                    campaign_name: campaignName,
+                    budget: state.budget,
+                    budget_mode: 'BUDGET_MODE_DAY',
+                    cbo_enabled: state.cboEnabled
+                });
+
+                if (!campaignResult.success) {
+                    throw new Error(campaignResult.message || 'Failed to create campaign');
+                }
+
+                newCampaignId = campaignResult.campaign_id || campaignResult.data?.campaign_id;
+
+                // Generate ad group name based on campaign name
+                const adGroupName = campaignName + ' Ad Group';
+
+                addLog('info', `Creating ad group: "${adGroupName}"`);
+
+                // Create ad group for this campaign
+                const adGroupResult = await apiRequest('create_smartplus_adgroup', {
+                    campaign_id: newCampaignId,
+                    adgroup_name: adGroupName,
+                    pixel_id: state.pixelId,
+                    optimization_event: state.optimizationEvent,
+                    location_ids: state.locationIds,
+                    age_groups: state.ageGroups,
+                    dayparting: state.dayparting,
+                    budget: state.cboEnabled ? null : state.adGroupBudget
+                });
+
+                if (!adGroupResult.success) {
+                    throw new Error(adGroupResult.message || 'Failed to create ad group');
+                }
+
+                newAdGroupId = adGroupResult.adgroup_id || adGroupResult.data?.adgroup_id;
             }
 
-            const newCampaignId = campaignResult.campaign_id || campaignResult.data?.campaign_id;
-
-            // Generate ad group and ad names based on campaign name
-            const adGroupName = campaignName + ' Ad Group';
+            // Generate ad name based on campaign name
             const adName = campaignName + ' Ad';
-
-            addLog('info', `Creating ad group: "${adGroupName}"`);
-
-            // Create ad group for this campaign
-            const adGroupResult = await apiRequest('create_smartplus_adgroup', {
-                campaign_id: newCampaignId,
-                adgroup_name: adGroupName,
-                pixel_id: state.pixelId,
-                optimization_event: state.optimizationEvent,
-                location_ids: state.locationIds,
-                age_groups: state.ageGroups,
-                dayparting: state.dayparting,
-                budget: state.cboEnabled ? null : state.adGroupBudget
-            });
-
-            if (!adGroupResult.success) {
-                throw new Error(adGroupResult.message || 'Failed to create ad group');
-            }
-
-            const newAdGroupId = adGroupResult.adgroup_id || adGroupResult.data?.adgroup_id;
 
             addLog('info', `Creating ad: "${adName}"`);
 
@@ -3081,9 +3094,10 @@ async function launchDuplicateCampaigns(count) {
                     campaign_id: newCampaignId,
                     adgroup_id: newAdGroupId,
                     ad_id: adId,
-                    status: 'success'
+                    status: 'success',
+                    isOriginal: isOriginal
                 });
-                addLog('success', `Campaign ${i}/${count} created successfully: Campaign=${newCampaignId}, AdGroup=${newAdGroupId}, Ad=${adId}`);
+                addLog('success', `Campaign ${i + 1}/${count} created successfully: Campaign=${newCampaignId}, AdGroup=${newAdGroupId}, Ad=${adId}`);
             } else {
                 throw new Error(adResult.message || adResult.error || 'Failed to create ad');
             }
@@ -3092,13 +3106,14 @@ async function launchDuplicateCampaigns(count) {
             results.push({
                 name: campaignName,
                 status: 'failed',
-                error: error.message
+                error: error.message,
+                isOriginal: isOriginal
             });
-            addLog('error', `Campaign ${i}/${count} failed: ${error.message}`);
+            addLog('error', `Campaign ${i + 1}/${count} failed: ${error.message}`);
         }
 
         // Small delay between campaign creations to avoid rate limiting
-        if (i < count) {
+        if (i < count - 1) {
             await new Promise(resolve => setTimeout(resolve, 500));
         }
     }
@@ -3154,7 +3169,7 @@ function showDuplicateLaunchResults(results, successCount, failedCount) {
                 <div style="text-align: left; background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; max-height: 200px; overflow-y: auto;">
                     ${results.map(r => `
                         <div style="padding: 8px 0; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-size: 14px;">${r.name}</span>
+                            <span style="font-size: 14px;">${r.name}${r.isOriginal ? ' <span style="color:#667eea;font-size:11px;">(original)</span>' : ''}</span>
                             <span style="color: ${r.status === 'success' ? '#22c55e' : '#ef4444'}; font-size: 13px;">
                                 ${r.status === 'success' ? `✓ ${r.campaign_id}` : `✗ ${r.error}`}
                             </span>
@@ -3439,12 +3454,16 @@ function updateDuplicatePreview() {
         // Single campaign - no numbering
         previewHtml = `<div style="margin: 3px 0;">• ${baseName} <span style="color: #888;">(original only)</span></div>`;
     } else {
-        // Multiple campaigns - with numbering
-        for (let i = 1; i <= Math.min(count, 5); i++) {
+        // Multiple campaigns: original (no number) + copies with numbering
+        // First show the original
+        previewHtml = `<div style="margin: 3px 0;">• ${baseName} <span style="color: #22c55e;">(original)</span></div>`;
+        // Then show copies (1), (2), (3), etc.
+        const copiesToShow = Math.min(count - 1, 4); // Show up to 4 copies in preview
+        for (let i = 1; i <= copiesToShow; i++) {
             previewHtml += `<div style="margin: 3px 0;">• ${baseName} (${i})</div>`;
         }
-        if (count > 5) {
-            previewHtml += `<div style="margin: 3px 0; font-style: italic;">... and ${count - 5} more</div>`;
+        if (count - 1 > 4) {
+            previewHtml += `<div style="margin: 3px 0; font-style: italic;">... and ${count - 1 - 4} more copies</div>`;
         }
     }
 
