@@ -40,6 +40,9 @@ header('Content-Type: application/json');
 require_once __DIR__ . '/includes/Cache.php';
 $cache = Cache::getInstance();
 
+// Load Security helper for data redaction
+require_once __DIR__ . '/includes/Security.php';
+
 // Load environment
 $envPath = __DIR__ . '/.env';
 if (file_exists($envPath)) {
@@ -58,15 +61,23 @@ if (file_exists($envPath)) {
 $accessToken = $_SESSION['oauth_access_token'] ?? $_ENV['TIKTOK_ACCESS_TOKEN'] ?? $_SESSION['access_token'] ?? '';
 $advertiserId = $_SESSION['selected_advertiser_id'] ?? '';
 
-// Log function
-function logSmartPlus($message) {
+// Log function with optional data redaction
+function logSmartPlus($message, $data = null) {
     $logDir = __DIR__ . '/logs';
     if (!is_dir($logDir)) {
         mkdir($logDir, 0755, true);
     }
     $logFile = $logDir . '/smartplus_' . date('Y-m-d') . '.log';
     $timestamp = date('Y-m-d H:i:s');
-    file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND);
+
+    $logMessage = "[$timestamp] $message";
+    if ($data !== null) {
+        // Redact sensitive data before logging
+        $safeData = Security::redactSensitiveData($data);
+        $logMessage .= "\n" . json_encode($safeData, JSON_PRETTY_PRINT);
+    }
+
+    file_put_contents($logFile, "$logMessage\n", FILE_APPEND);
 }
 
 // Generate unique request ID (must be numeric string for TikTok API)

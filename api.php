@@ -20,6 +20,9 @@ if (!isset($_SESSION['authenticated']) || !$_SESSION['authenticated']) {
     exit;
 }
 
+// Load Security helper for data redaction
+require_once __DIR__ . '/includes/Security.php';
+
 // Load environment variables
 if (file_exists(__DIR__ . '/.env')) {
     $lines = file(__DIR__ . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
@@ -157,7 +160,7 @@ function downloadAndStoreImage($imageUrl, $imageId, $fileName) {
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         
         $imageData = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -207,8 +210,11 @@ logToFile("Action: {$action}");
 logToFile("=== API REQUEST RECEIVED ===");
 logToFile("Action: " . $action);
 logToFile("Advertiser ID: " . $advertiser_id);
-logToFile("Request Data: " . json_encode($requestData, JSON_PRETTY_PRINT));
-logToFile("HTTP Headers: " . json_encode(getallheaders(), JSON_PRETTY_PRINT));
+// Redact sensitive data before logging
+$safeRequestData = Security::redactSensitiveData($requestData);
+$safeHeaders = Security::redactSensitiveData(getallheaders());
+logToFile("Request Data: " . json_encode($safeRequestData, JSON_PRETTY_PRINT));
+logToFile("HTTP Headers: " . json_encode($safeHeaders, JSON_PRETTY_PRINT));
 logToFile("==============================");
 
 header('Content-Type: application/json');

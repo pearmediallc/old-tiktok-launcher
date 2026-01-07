@@ -45,6 +45,237 @@ let state = {
     currentView: 'create'        // Current main view: 'create' or 'campaigns'
 };
 
+// ============================================
+// INPUT VALIDATION & ERROR MESSAGES
+// ============================================
+
+const Validation = {
+    // Validation rules
+    rules: {
+        campaignName: {
+            minLength: 1,
+            maxLength: 100,
+            pattern: /^[a-zA-Z0-9_\-\s\.\(\)]+$/,
+            patternMessage: 'Campaign name can only contain letters, numbers, spaces, and basic punctuation (._-())'
+        },
+        budget: {
+            min: 20,
+            max: 50000
+        },
+        adText: {
+            maxLength: 100
+        },
+        url: {
+            pattern: /^https?:\/\/.+/,
+            patternMessage: 'Please enter a valid URL starting with http:// or https://'
+        }
+    },
+
+    // User-friendly error messages
+    messages: {
+        // API Errors
+        'INVALID_BUDGET': 'Budget must be between $20 and $50,000 per day.',
+        'PIXEL_NOT_FOUND': 'The selected pixel is no longer available. Please select a different pixel.',
+        'CAMPAIGN_LIMIT': 'Your account has reached the maximum number of campaigns.',
+        'IDENTITY_NOT_FOUND': 'The selected identity is no longer available. Please refresh and try again.',
+        'ADGROUP_LIMIT': 'Maximum ad groups reached for this campaign.',
+        'VIDEO_NOT_FOUND': 'One or more selected videos could not be found.',
+        'DUPLICATE_CAMPAIGN_NAME': 'A campaign with this name already exists. Please choose a different name.',
+        'INSUFFICIENT_BALANCE': 'Insufficient account balance to create this campaign.',
+        'INVALID_LOCATION': 'One or more selected locations are invalid.',
+        'CTA_REQUIRED': 'A Call-to-Action is required for Lead Generation campaigns.',
+
+        // Network errors
+        'NETWORK_ERROR': 'Network error. Please check your internet connection and try again.',
+        'TIMEOUT': 'Request timed out. Please try again.',
+        'SERVER_ERROR': 'Server error. Please try again later.',
+
+        // Default
+        'UNKNOWN': 'An unexpected error occurred. Please try again.'
+    },
+
+    // Validate campaign name
+    validateCampaignName(name) {
+        const rules = this.rules.campaignName;
+
+        if (!name || name.trim().length === 0) {
+            return { valid: false, message: 'Campaign name is required.' };
+        }
+
+        if (name.length < rules.minLength) {
+            return { valid: false, message: 'Campaign name is too short.' };
+        }
+
+        if (name.length > rules.maxLength) {
+            return { valid: false, message: `Campaign name must be ${rules.maxLength} characters or less.` };
+        }
+
+        if (!rules.pattern.test(name)) {
+            return { valid: false, message: rules.patternMessage };
+        }
+
+        return { valid: true };
+    },
+
+    // Validate budget
+    validateBudget(budget) {
+        const rules = this.rules.budget;
+        const value = parseFloat(budget);
+
+        if (isNaN(value)) {
+            return { valid: false, message: 'Please enter a valid budget amount.' };
+        }
+
+        if (value < rules.min) {
+            return { valid: false, message: `Minimum budget is $${rules.min} per day.` };
+        }
+
+        if (value > rules.max) {
+            return { valid: false, message: `Maximum budget is $${rules.max.toLocaleString()} per day.` };
+        }
+
+        return { valid: true };
+    },
+
+    // Validate URL
+    validateUrl(url) {
+        if (!url || url.trim().length === 0) {
+            return { valid: false, message: 'URL is required.' };
+        }
+
+        if (!this.rules.url.pattern.test(url)) {
+            return { valid: false, message: this.rules.url.patternMessage };
+        }
+
+        return { valid: true };
+    },
+
+    // Get friendly error message from API response
+    getFriendlyError(response) {
+        if (!response) {
+            return this.messages['UNKNOWN'];
+        }
+
+        // Check for specific error codes
+        const errorCode = response.error_code || response.code;
+        if (errorCode && this.messages[errorCode]) {
+            return this.messages[errorCode];
+        }
+
+        // Check message content for known patterns
+        const message = (response.message || response.error || '').toLowerCase();
+
+        if (message.includes('budget')) {
+            return this.messages['INVALID_BUDGET'];
+        }
+        if (message.includes('pixel')) {
+            return this.messages['PIXEL_NOT_FOUND'];
+        }
+        if (message.includes('identity')) {
+            return this.messages['IDENTITY_NOT_FOUND'];
+        }
+        if (message.includes('duplicate') || message.includes('already exist')) {
+            return this.messages['DUPLICATE_CAMPAIGN_NAME'];
+        }
+        if (message.includes('balance') || message.includes('fund')) {
+            return this.messages['INSUFFICIENT_BALANCE'];
+        }
+        if (message.includes('cta') || message.includes('call to action') || message.includes('portfolio')) {
+            return this.messages['CTA_REQUIRED'];
+        }
+        if (message.includes('network') || message.includes('connection')) {
+            return this.messages['NETWORK_ERROR'];
+        }
+        if (message.includes('timeout')) {
+            return this.messages['TIMEOUT'];
+        }
+
+        // Return original message if no friendly version found
+        return response.message || response.error || this.messages['UNKNOWN'];
+    },
+
+    // Show inline validation error
+    showFieldError(fieldId, message) {
+        const field = document.getElementById(fieldId);
+        if (!field) return;
+
+        // Remove existing error
+        this.clearFieldError(fieldId);
+
+        // Add error styling
+        field.style.borderColor = '#ef4444';
+        field.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.1)';
+
+        // Add error message
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'field-error';
+        errorDiv.id = `${fieldId}-error`;
+        errorDiv.style.cssText = 'color: #ef4444; font-size: 12px; margin-top: 5px;';
+        errorDiv.textContent = message;
+
+        field.parentNode.appendChild(errorDiv);
+    },
+
+    // Clear inline validation error
+    clearFieldError(fieldId) {
+        const field = document.getElementById(fieldId);
+        if (!field) return;
+
+        // Remove error styling
+        field.style.borderColor = '';
+        field.style.boxShadow = '';
+
+        // Remove error message
+        const errorDiv = document.getElementById(`${fieldId}-error`);
+        if (errorDiv) {
+            errorDiv.remove();
+        }
+    },
+
+    // Validate on input (real-time validation)
+    setupRealTimeValidation() {
+        // Campaign name validation
+        const campaignNameField = document.getElementById('campaign-name');
+        if (campaignNameField) {
+            campaignNameField.addEventListener('blur', () => {
+                const result = this.validateCampaignName(campaignNameField.value);
+                if (!result.valid) {
+                    this.showFieldError('campaign-name', result.message);
+                } else {
+                    this.clearFieldError('campaign-name');
+                }
+            });
+
+            campaignNameField.addEventListener('input', () => {
+                // Clear error on input
+                this.clearFieldError('campaign-name');
+            });
+        }
+
+        // Budget validation
+        const budgetField = document.getElementById('campaign-budget');
+        if (budgetField) {
+            budgetField.addEventListener('blur', () => {
+                const result = this.validateBudget(budgetField.value);
+                if (!result.valid) {
+                    this.showFieldError('campaign-budget', result.message);
+                } else {
+                    this.clearFieldError('campaign-budget');
+                }
+            });
+
+            budgetField.addEventListener('input', () => {
+                this.clearFieldError('campaign-budget');
+            });
+        }
+    }
+};
+
+// Initialize validation when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    Validation.setupRealTimeValidation();
+});
+
 // US States with TikTok location IDs (verified from TikTok API)
 const US_STATES = [
     { id: '4829764', name: 'Alabama', abbr: 'AL' },
@@ -986,13 +1217,19 @@ async function createCampaign() {
     const campaignName = document.getElementById('campaign-name').value.trim();
     const campaignBudget = parseFloat(document.getElementById('campaign-budget').value) || 50;
 
-    if (!campaignName) {
-        showToast('Please enter a campaign name', 'error');
+    // Validate campaign name
+    const nameValidation = Validation.validateCampaignName(campaignName);
+    if (!nameValidation.valid) {
+        Validation.showFieldError('campaign-name', nameValidation.message);
+        showToast(nameValidation.message, 'error');
         return;
     }
 
-    if (campaignBudget < 20) {
-        showToast('Minimum budget is $20', 'error');
+    // Validate budget
+    const budgetValidation = Validation.validateBudget(campaignBudget);
+    if (!budgetValidation.valid) {
+        Validation.showFieldError('campaign-budget', budgetValidation.message);
+        showToast(budgetValidation.message, 'error');
         return;
     }
 
@@ -1046,11 +1283,13 @@ async function createCampaign() {
             addLog('info', `Campaign created (disabled): ${result.campaign_id}`);
             nextStep();
         } else {
-            showToast('Failed to create campaign: ' + (result.message || 'Unknown error'), 'error');
+            const friendlyError = Validation.getFriendlyError(result);
+            showToast(friendlyError, 'error');
         }
     } catch (error) {
         hideLoading();
-        showToast('Error creating campaign: ' + error.message, 'error');
+        const friendlyError = Validation.getFriendlyError({ message: error.message });
+        showToast(friendlyError, 'error');
     }
 }
 

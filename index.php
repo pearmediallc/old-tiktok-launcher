@@ -1,4 +1,11 @@
 <?php
+// Include security helper
+require_once __DIR__ . '/includes/Security.php';
+
+// Initialize security settings
+Security::init();
+
+// Start session with secure settings
 session_start();
 
 // Load environment variables
@@ -6,31 +13,84 @@ if (file_exists(__DIR__ . '/.env')) {
     $lines = file(__DIR__ . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
         if (strpos(trim($line), '#') === 0) continue;
-        list($name, $value) = explode('=', $line, 2);
-        $_ENV[trim($name)] = trim($value);
+        if (strpos($line, '=') !== false) {
+            list($name, $value) = explode('=', $line, 2);
+            $_ENV[trim($name)] = trim($value);
+        }
     }
 }
+
+$error = null;
+$rateLimitError = null;
+$clientIP = Security::getClientIP();
 
 // Handle login
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = $_POST['username'] ?? '';
-    $password = $_POST['password'] ?? '';
-
-    if ($username === $_ENV['AUTH_USERNAME'] && $password === $_ENV['AUTH_PASSWORD']) {
-        $_SESSION['authenticated'] = true;
-        $_SESSION['username'] = $username;
-        header('Location: select-advertiser.php');
-        exit;
+    // Validate CSRF token
+    $csrfToken = $_POST['csrf_token'] ?? '';
+    if (!Security::validateCSRFToken($csrfToken)) {
+        $error = 'Invalid request. Please try again.';
     } else {
-        $error = 'Invalid credentials';
+        // Check rate limit
+        $rateLimit = Security::checkRateLimit($clientIP, 5, 900); // 5 attempts per 15 minutes
+
+        if (!$rateLimit['allowed']) {
+            $rateLimitError = 'Too many login attempts. Please try again in ' . Security::formatTimeRemaining($rateLimit['reset_in']) . '.';
+        } else {
+            $username = $_POST['username'] ?? '';
+            $password = $_POST['password'] ?? '';
+
+            // Verify credentials
+            $validUsername = $username === ($_ENV['AUTH_USERNAME'] ?? '');
+            $validPassword = Security::verifyPassword($password, $_ENV['AUTH_PASSWORD'] ?? '');
+
+            if ($validUsername && $validPassword) {
+                // Clear rate limit on successful login
+                Security::clearRateLimit($clientIP);
+
+                // Regenerate session ID to prevent session fixation
+                Security::regenerateSession();
+
+                $_SESSION['authenticated'] = true;
+                $_SESSION['username'] = $username;
+                $_SESSION['login_time'] = time();
+                $_SESSION['last_activity'] = time();
+
+                header('Location: select-advertiser.php');
+                exit;
+            } else {
+                // Record failed attempt
+                $attempts = Security::recordFailedAttempt($clientIP);
+                $remaining = 5 - $attempts;
+
+                if ($remaining > 0) {
+                    $error = 'Invalid credentials. ' . $remaining . ' attempts remaining.';
+                } else {
+                    $rateLimitError = 'Too many login attempts. Please try again in 15 minutes.';
+                }
+            }
+        }
     }
 }
 
-// If already logged in, redirect to advertiser selection
+// Check session timeout (1 hour of inactivity)
 if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
-    header('Location: select-advertiser.php');
-    exit;
+    $lastActivity = $_SESSION['last_activity'] ?? 0;
+    if (time() - $lastActivity > 3600) {
+        // Session expired
+        session_destroy();
+        session_start();
+        $error = 'Session expired. Please login again.';
+    } else {
+        // Update last activity and redirect
+        $_SESSION['last_activity'] = time();
+        header('Location: select-advertiser.php');
+        exit;
+    }
 }
+
+// Generate CSRF token for form
+$csrfToken = Security::generateCSRFToken();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -133,12 +193,48 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
         .error {
             background: rgba(244, 33, 46, 0.1);
             color: rgb(244, 33, 46);
-            padding: 10px;
+            padding: 12px 15px;
             border-radius: calc(1.3rem - 6px);
             margin-bottom: 20px;
             font-size: 14px;
             text-align: center;
             border: 1px solid rgba(244, 33, 46, 0.2);
+        }
+
+        .rate-limit-error {
+            background: rgba(255, 152, 0, 0.1);
+            color: #e65100;
+            padding: 12px 15px;
+            border-radius: calc(1.3rem - 6px);
+            margin-bottom: 20px;
+            font-size: 14px;
+            text-align: center;
+            border: 1px solid rgba(255, 152, 0, 0.3);
+        }
+
+        .rate-limit-error strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .btn-login:disabled {
+            background: #ccc;
+            border-color: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .security-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 20px;
+            padding: 10px;
+            background: rgba(34, 197, 94, 0.1);
+            border-radius: 8px;
+            font-size: 12px;
+            color: #16a34a;
         }
 
         .divider {
@@ -241,23 +337,48 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
             <p>Login to access the dashboard</p>
         </div>
 
-        <?php if (isset($error)): ?>
+        <?php if ($rateLimitError): ?>
+            <div class="rate-limit-error">
+                <strong>Account Temporarily Locked</strong>
+                <?php echo htmlspecialchars($rateLimitError); ?>
+            </div>
+        <?php elseif ($error): ?>
             <div class="error"><?php echo htmlspecialchars($error); ?></div>
         <?php endif; ?>
 
-        <form method="POST" action="">
+        <form method="POST" action="" id="login-form">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+
             <div class="form-group">
                 <label for="username">Username</label>
-                <input type="text" id="username" name="username" required autofocus>
+                <input type="text" id="username" name="username" required autofocus
+                       autocomplete="username" <?php echo $rateLimitError ? 'disabled' : ''; ?>>
             </div>
 
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
+                <input type="password" id="password" name="password" required
+                       autocomplete="current-password" <?php echo $rateLimitError ? 'disabled' : ''; ?>>
             </div>
 
-            <button type="submit" class="btn-login">Login</button>
+            <button type="submit" class="btn-login" <?php echo $rateLimitError ? 'disabled' : ''; ?>>
+                <?php echo $rateLimitError ? 'Please Wait...' : 'Login'; ?>
+            </button>
         </form>
+
+        <div class="security-badge">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            Secure Login
+        </div>
     </div>
+
+    <script>
+        // Prevent form resubmission on refresh
+        if (window.history.replaceState) {
+            window.history.replaceState(null, null, window.location.href);
+        }
+    </script>
 </body>
 </html>
