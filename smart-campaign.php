@@ -1031,6 +1031,25 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 </button>
             </div>
 
+            <!-- Bulk Actions Bar -->
+            <div class="bulk-actions-bar" id="bulk-actions-bar">
+                <div class="bulk-select-controls">
+                    <label class="select-all-checkbox">
+                        <input type="checkbox" id="select-all-campaigns" onchange="toggleSelectAllCampaigns()">
+                        <span>Select All</span>
+                    </label>
+                    <span class="selected-count" id="selected-campaigns-count">0 selected</span>
+                </div>
+                <div class="bulk-action-buttons" id="bulk-action-buttons" style="display: none;">
+                    <button class="btn-bulk-action btn-enable" onclick="bulkToggleCampaigns('ENABLE')">
+                        <span class="btn-icon">▶</span> Turn ON Selected
+                    </button>
+                    <button class="btn-bulk-action btn-disable" onclick="bulkToggleCampaigns('DISABLE')">
+                        <span class="btn-icon">⏸</span> Turn OFF Selected
+                    </button>
+                </div>
+            </div>
+
             <!-- Search Bar -->
             <div class="campaign-search-container">
                 <input type="text"

@@ -42,7 +42,8 @@ let state = {
     campaignFilter: 'all',       // Current filter: 'all', 'active', 'inactive'
     campaignSearchQuery: '',     // Search query
     campaignsLoaded: false,      // Whether campaigns have been fetched
-    currentView: 'create'        // Current main view: 'create' or 'campaigns'
+    currentView: 'create',       // Current main view: 'create' or 'campaigns'
+    selectedCampaigns: []        // Array of selected campaign IDs for bulk operations
 };
 
 // ============================================
@@ -4065,6 +4066,9 @@ function refreshCampaignList() {
 function filterCampaignsByStatus(status) {
     state.campaignFilter = status;
 
+    // Clear selection when changing filters
+    state.selectedCampaigns = [];
+
     // Update filter button active states
     document.querySelectorAll('.campaign-filter-btn').forEach(btn => {
         btn.classList.remove('active');
@@ -4074,6 +4078,7 @@ function filterCampaignsByStatus(status) {
     });
 
     applyFiltersAndRender();
+    updateBulkSelectionUI();
 }
 
 // Search campaigns
@@ -4157,6 +4162,8 @@ function renderCampaignCard(campaign) {
     const statusClass = isActive ? 'active' : 'inactive';
     const statusLabel = isActive ? 'Active' : 'Inactive';
     const toggleClass = isActive ? 'on' : '';
+    const isSelected = state.selectedCampaigns.includes(campaign.campaign_id);
+    const selectedClass = isSelected ? 'selected' : '';
 
     // Format budget
     const budget = campaign.budget ? `$${parseFloat(campaign.budget).toFixed(2)}` : 'N/A';
@@ -4176,7 +4183,15 @@ function renderCampaignCard(campaign) {
         : '';
 
     return `
-        <div class="my-campaign-card" data-campaign-id="${campaign.campaign_id}">
+        <div class="my-campaign-card ${selectedClass}" data-campaign-id="${campaign.campaign_id}">
+            <div class="campaign-checkbox-wrapper">
+                <input type="checkbox"
+                       class="campaign-checkbox"
+                       data-campaign-id="${campaign.campaign_id}"
+                       ${isSelected ? 'checked' : ''}
+                       onchange="toggleCampaignSelection('${campaign.campaign_id}')"
+                       onclick="event.stopPropagation()">
+            </div>
             <div class="my-campaign-card-info">
                 <div class="my-campaign-card-name">
                     ${campaign.campaign_name}
@@ -4286,4 +4301,171 @@ async function toggleCampaignStatus(campaignId, currentStatus) {
         showToast(`Failed to update campaign: ${error.message}`, 'error');
         addLog('error', `Failed to update campaign ${campaignId}: ${error.message}`);
     }
+}
+
+// ============================================
+// BULK CAMPAIGN SELECTION & OPERATIONS
+// ============================================
+
+// Toggle individual campaign selection
+function toggleCampaignSelection(campaignId) {
+    const index = state.selectedCampaigns.indexOf(campaignId);
+    if (index > -1) {
+        state.selectedCampaigns.splice(index, 1);
+    } else {
+        state.selectedCampaigns.push(campaignId);
+    }
+    updateBulkSelectionUI();
+}
+
+// Toggle select all campaigns
+function toggleSelectAllCampaigns() {
+    const selectAllCheckbox = document.getElementById('select-all-campaigns');
+    if (selectAllCheckbox.checked) {
+        // Select all filtered campaigns
+        state.selectedCampaigns = state.filteredCampaigns.map(c => c.campaign_id);
+    } else {
+        // Deselect all
+        state.selectedCampaigns = [];
+    }
+    updateBulkSelectionUI();
+    renderCampaignList();
+}
+
+// Update bulk selection UI (counters, buttons, checkboxes)
+function updateBulkSelectionUI() {
+    const selectedCount = state.selectedCampaigns.length;
+    const totalFiltered = state.filteredCampaigns.length;
+
+    // Update selected count display
+    const countEl = document.getElementById('selected-campaigns-count');
+    if (countEl) {
+        countEl.textContent = `${selectedCount} selected`;
+    }
+
+    // Show/hide bulk action buttons
+    const buttonsEl = document.getElementById('bulk-action-buttons');
+    if (buttonsEl) {
+        buttonsEl.style.display = selectedCount > 0 ? 'flex' : 'none';
+    }
+
+    // Update select all checkbox state
+    const selectAllCheckbox = document.getElementById('select-all-campaigns');
+    if (selectAllCheckbox) {
+        if (selectedCount === 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+        } else if (selectedCount === totalFiltered) {
+            selectAllCheckbox.checked = true;
+            selectAllCheckbox.indeterminate = false;
+        } else {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = true;
+        }
+    }
+
+    // Update individual card checkboxes and highlight
+    document.querySelectorAll('.campaign-checkbox').forEach(checkbox => {
+        const campaignId = checkbox.dataset.campaignId;
+        const isSelected = state.selectedCampaigns.includes(campaignId);
+        checkbox.checked = isSelected;
+
+        // Update card highlight
+        const card = checkbox.closest('.my-campaign-card');
+        if (card) {
+            card.classList.toggle('selected', isSelected);
+        }
+    });
+}
+
+// Bulk toggle campaigns (ON/OFF)
+async function bulkToggleCampaigns(targetStatus) {
+    if (state.selectedCampaigns.length === 0) {
+        showToast('Please select at least one campaign', 'warning');
+        return;
+    }
+
+    const actionWord = targetStatus === 'ENABLE' ? 'enable' : 'disable';
+    const count = state.selectedCampaigns.length;
+
+    // Confirm action
+    if (!confirm(`Are you sure you want to ${actionWord} ${count} campaign${count > 1 ? 's' : ''}?`)) {
+        return;
+    }
+
+    addLog('info', `Bulk ${actionWord} started for ${count} campaigns...`);
+    showToast(`${actionWord.charAt(0).toUpperCase() + actionWord.slice(1)}ing ${count} campaign${count > 1 ? 's' : ''}...`, 'info');
+
+    // Disable bulk action buttons during operation
+    const buttons = document.querySelectorAll('.btn-bulk-action');
+    buttons.forEach(btn => btn.disabled = true);
+
+    let successCount = 0;
+    let failCount = 0;
+    const results = [];
+
+    // Process campaigns sequentially to avoid rate limiting
+    for (const campaignId of state.selectedCampaigns) {
+        const campaign = state.campaignsList.find(c => c.campaign_id === campaignId);
+        if (!campaign) continue;
+
+        // Skip if already in target status
+        if (campaign.operation_status === targetStatus) {
+            results.push({ campaignId, success: true, skipped: true });
+            successCount++;
+            continue;
+        }
+
+        try {
+            const result = await apiRequest('update_campaign_status', {
+                campaign_id: campaignId,
+                status: targetStatus
+            });
+
+            if (result.success) {
+                // Update local state
+                campaign.operation_status = targetStatus;
+                results.push({ campaignId, success: true });
+                successCount++;
+            } else {
+                results.push({ campaignId, success: false, error: result.message });
+                failCount++;
+            }
+        } catch (error) {
+            results.push({ campaignId, success: false, error: error.message });
+            failCount++;
+        }
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 200));
+    }
+
+    // Re-enable buttons
+    buttons.forEach(btn => btn.disabled = false);
+
+    // Update UI
+    updateCampaignCounts();
+    renderCampaignList();
+
+    // Clear selection after bulk operation
+    state.selectedCampaigns = [];
+    updateBulkSelectionUI();
+
+    // Show results
+    if (failCount === 0) {
+        showToast(`Successfully ${actionWord}d ${successCount} campaign${successCount > 1 ? 's' : ''}`, 'success');
+        addLog('success', `Bulk ${actionWord} completed: ${successCount} success, ${failCount} failed`);
+    } else if (successCount === 0) {
+        showToast(`Failed to ${actionWord} campaigns`, 'error');
+        addLog('error', `Bulk ${actionWord} failed: ${failCount} campaigns failed`);
+    } else {
+        showToast(`${actionWord.charAt(0).toUpperCase() + actionWord.slice(1)}d ${successCount}, failed ${failCount}`, 'warning');
+        addLog('warning', `Bulk ${actionWord} partial: ${successCount} success, ${failCount} failed`);
+    }
+}
+
+// Clear campaign selection when switching views or filters
+function clearCampaignSelection() {
+    state.selectedCampaigns = [];
+    updateBulkSelectionUI();
 }
