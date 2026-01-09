@@ -4214,6 +4214,11 @@ function renderCampaignCard(campaign) {
                 </div>
             </div>
             <div class="my-campaign-card-actions">
+                <button class="btn-duplicate-campaign"
+                        onclick="openDuplicateCampaignModal('${campaign.campaign_id}', '${campaign.campaign_name.replace(/'/g, "\\'")}'); event.stopPropagation();"
+                        title="Duplicate this campaign">
+                    📋 Duplicate
+                </button>
                 <span class="campaign-status-badge ${statusClass}">${statusLabel}</span>
                 <div class="campaign-toggle ${toggleClass}"
                      data-campaign-id="${campaign.campaign_id}"
@@ -4468,4 +4473,336 @@ async function bulkToggleCampaigns(targetStatus) {
 function clearCampaignSelection() {
     state.selectedCampaigns = [];
     updateBulkSelectionUI();
+}
+
+// ============================================
+// DUPLICATE CAMPAIGN FEATURE
+// ============================================
+
+// State for duplicate modal
+let duplicateState = {
+    campaignId: null,
+    campaignName: null,
+    campaignDetails: null, // { campaign, adgroup, ad }
+    isLoading: false,
+    isProcessing: false
+};
+
+// Open duplicate campaign modal
+async function openDuplicateCampaignModal(campaignId, campaignName) {
+    duplicateState.campaignId = campaignId;
+    duplicateState.campaignName = campaignName;
+    duplicateState.campaignDetails = null;
+
+    // Show modal
+    const modal = document.getElementById('duplicate-campaign-modal');
+    modal.style.display = 'flex';
+
+    // Update campaign info
+    document.getElementById('duplicate-campaign-name').textContent = campaignName;
+    document.getElementById('duplicate-campaign-id').textContent = campaignId;
+
+    // Reset sections
+    document.getElementById('duplicate-loading-state').style.display = 'block';
+    document.getElementById('duplicate-details-section').style.display = 'none';
+    document.getElementById('duplicate-progress-section').style.display = 'none';
+    document.getElementById('duplicate-success-section').style.display = 'none';
+
+    // Reset footer buttons
+    const footer = document.getElementById('duplicate-modal-footer');
+    footer.innerHTML = `
+        <button class="btn-secondary" onclick="closeDuplicateCampaignModal()">Cancel</button>
+        <button class="btn-primary" id="duplicate-create-btn" onclick="executeDuplicateCampaign()" disabled>
+            📋 Create Copies
+        </button>
+    `;
+
+    // Fetch campaign details
+    addLog('info', `Fetching details for campaign ${campaignId}...`);
+
+    try {
+        const result = await apiRequest('get_campaign_details', { campaign_id: campaignId });
+
+        if (result.success) {
+            duplicateState.campaignDetails = result;
+
+            // Update structure summary
+            document.getElementById('dup-detail-campaign').textContent =
+                `${result.campaign?.campaign_name || 'N/A'} (Budget: $${result.campaign?.budget || 0})`;
+            document.getElementById('dup-detail-adgroup').textContent =
+                result.adgroup?.adgroup_name || 'Not found';
+            document.getElementById('dup-detail-ad').textContent =
+                result.ad?.ad_name || 'Not found';
+
+            // Show details section
+            document.getElementById('duplicate-loading-state').style.display = 'none';
+            document.getElementById('duplicate-details-section').style.display = 'block';
+
+            // Enable create button
+            document.getElementById('duplicate-create-btn').disabled = false;
+
+            // Set default count and update preview
+            document.getElementById('duplicate-copy-count').value = 1;
+            updateDuplicatePreviewList();
+
+            addLog('success', `Campaign details loaded: ${result.campaign?.campaign_name}`);
+        } else {
+            throw new Error(result.message || 'Failed to load campaign details');
+        }
+    } catch (error) {
+        console.error('Error fetching campaign details:', error);
+        document.getElementById('duplicate-loading-state').innerHTML = `
+            <div style="color: var(--destructive); text-align: center; padding: 20px;">
+                <p style="font-size: 24px;">❌</p>
+                <p style="font-weight: 600;">Failed to load campaign details</p>
+                <p style="font-size: 13px; margin-top: 10px;">${error.message}</p>
+            </div>
+        `;
+        addLog('error', `Failed to fetch campaign details: ${error.message}`);
+    }
+}
+
+// Close duplicate modal
+function closeDuplicateCampaignModal() {
+    const modal = document.getElementById('duplicate-campaign-modal');
+    modal.style.display = 'none';
+
+    // Reset state
+    duplicateState = {
+        campaignId: null,
+        campaignName: null,
+        campaignDetails: null,
+        isLoading: false,
+        isProcessing: false
+    };
+
+    // Reset loading state for next open
+    document.getElementById('duplicate-loading-state').innerHTML = `
+        <div class="spinner"></div>
+        <p style="margin-top: 15px; color: #666;">Fetching campaign details...</p>
+    `;
+}
+
+// Adjust duplicate count with +/- buttons
+function adjustDuplicateCount(delta) {
+    const input = document.getElementById('duplicate-copy-count');
+    let value = parseInt(input.value) || 1;
+    value = Math.max(1, Math.min(20, value + delta));
+    input.value = value;
+    updateDuplicatePreviewList();
+}
+
+// Update the preview list showing campaign names
+function updateDuplicatePreviewList() {
+    const count = parseInt(document.getElementById('duplicate-copy-count').value) || 1;
+    const baseName = duplicateState.campaignName || 'Campaign';
+    const previewList = document.getElementById('duplicate-preview-list');
+
+    let html = '';
+    for (let i = 1; i <= Math.min(count, 20); i++) {
+        const newName = `${baseName} (${i})`;
+        html += `
+            <div class="preview-item">
+                <span class="preview-number">${i}</span>
+                <span class="preview-name">${newName}</span>
+            </div>
+        `;
+    }
+
+    previewList.innerHTML = html;
+}
+
+// Execute the duplicate operation
+async function executeDuplicateCampaign() {
+    if (!duplicateState.campaignDetails) {
+        showToast('Campaign details not loaded', 'error');
+        return;
+    }
+
+    const count = parseInt(document.getElementById('duplicate-copy-count').value) || 1;
+    if (count < 1 || count > 20) {
+        showToast('Please enter a valid number between 1 and 20', 'error');
+        return;
+    }
+
+    duplicateState.isProcessing = true;
+
+    // Hide details, show progress
+    document.getElementById('duplicate-details-section').style.display = 'none';
+    document.getElementById('duplicate-progress-section').style.display = 'block';
+
+    // Update footer
+    const footer = document.getElementById('duplicate-modal-footer');
+    footer.innerHTML = `
+        <button class="btn-secondary" disabled>Please wait...</button>
+    `;
+
+    const progressBar = document.getElementById('duplicate-progress-bar');
+    const progressText = document.getElementById('duplicate-progress-text');
+    const progressLog = document.getElementById('duplicate-progress-log');
+
+    progressLog.innerHTML = '';
+    progressText.textContent = `0 / ${count}`;
+    progressBar.style.width = '0%';
+
+    const { campaign, adgroup, ad } = duplicateState.campaignDetails;
+    const baseName = campaign.campaign_name;
+    const results = [];
+
+    addLog('info', `Starting duplication: ${count} copies of "${baseName}"`);
+
+    for (let i = 1; i <= count; i++) {
+        const newName = `${baseName} (${i})`;
+
+        // Update progress
+        progressText.textContent = `${i} / ${count}`;
+        progressBar.style.width = `${(i / count) * 100}%`;
+
+        // Add pending log entry
+        const logId = `dup-log-${i}`;
+        progressLog.innerHTML += `
+            <div class="progress-log-item pending" id="${logId}">
+                <span>⏳</span>
+                <span>Creating "${newName}"...</span>
+            </div>
+        `;
+        progressLog.scrollTop = progressLog.scrollHeight;
+
+        try {
+            // Step 1: Create Campaign
+            addLog('info', `Creating campaign: ${newName}`);
+            const campaignResult = await apiRequest('create_campaign', {
+                campaign_name: newName,
+                objective_type: campaign.objective_type,
+                budget: campaign.budget,
+                budget_mode: campaign.budget_mode || 'BUDGET_MODE_DAY',
+                is_smart_performance_campaign: campaign.is_smart_performance_campaign
+            });
+
+            if (!campaignResult.success) {
+                throw new Error(campaignResult.message || 'Failed to create campaign');
+            }
+
+            const newCampaignId = campaignResult.campaign_id;
+            addLog('success', `Campaign created: ${newCampaignId}`);
+
+            // Step 2: Create Ad Group (if original had one)
+            let newAdGroupId = null;
+            if (adgroup) {
+                addLog('info', `Creating ad group for campaign ${newCampaignId}`);
+                const adgroupResult = await apiRequest('create_smart_adgroup', {
+                    campaign_id: newCampaignId,
+                    adgroup_name: newName,
+                    pixel_id: adgroup.pixel_id,
+                    optimization_event: adgroup.optimization_event,
+                    optimization_goal: adgroup.optimization_goal || 'VALUE',
+                    location_ids: adgroup.location_ids,
+                    age_groups: adgroup.age_groups,
+                    schedule_type: adgroup.schedule_type || 'SCHEDULE_FROM_NOW',
+                    dayparting: adgroup.dayparting
+                });
+
+                if (!adgroupResult.success) {
+                    throw new Error(adgroupResult.message || 'Failed to create ad group');
+                }
+
+                newAdGroupId = adgroupResult.adgroup_id;
+                addLog('success', `Ad group created: ${newAdGroupId}`);
+            }
+
+            // Step 3: Create Ad (if original had one)
+            if (ad && newAdGroupId) {
+                addLog('info', `Creating ad for ad group ${newAdGroupId}`);
+
+                // Prepare ad data
+                const adData = {
+                    adgroup_id: newAdGroupId,
+                    ad_name: newName,
+                    identity_id: ad.identity_id,
+                    identity_type: ad.identity_type || 'CUSTOMIZED_USER',
+                    ad_format: ad.ad_format || 'SINGLE_VIDEO',
+                    ad_text: ad.ad_text,
+                    ad_texts: ad.ad_texts,
+                    call_to_action_id: ad.call_to_action_id,
+                    landing_page_url: ad.landing_page_url,
+                    landing_page_urls: ad.landing_page_urls,
+                    video_id: ad.video_id,
+                    video_ids: ad.video_ids,
+                    smart_creative_request: ad.smart_creative_request
+                };
+
+                const adResult = await apiRequest('create_smart_ad', adData);
+
+                if (!adResult.success) {
+                    throw new Error(adResult.message || 'Failed to create ad');
+                }
+
+                addLog('success', `Ad created: ${adResult.ad_id}`);
+            }
+
+            // Update log entry to success
+            document.getElementById(logId).className = 'progress-log-item success';
+            document.getElementById(logId).innerHTML = `
+                <span>✅</span>
+                <span>"${newName}" created successfully</span>
+            `;
+
+            results.push({ name: newName, success: true });
+
+        } catch (error) {
+            console.error(`Error creating duplicate ${i}:`, error);
+            addLog('error', `Failed to create "${newName}": ${error.message}`);
+
+            // Update log entry to error
+            document.getElementById(logId).className = 'progress-log-item error';
+            document.getElementById(logId).innerHTML = `
+                <span>❌</span>
+                <span>"${newName}" failed: ${error.message}</span>
+            `;
+
+            results.push({ name: newName, success: false, error: error.message });
+        }
+
+        // Small delay between creations to avoid rate limiting
+        if (i < count) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+
+    // Show success section
+    duplicateState.isProcessing = false;
+
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+
+    document.getElementById('duplicate-progress-section').style.display = 'none';
+    document.getElementById('duplicate-success-section').style.display = 'block';
+
+    document.getElementById('duplicate-success-message').textContent =
+        `Successfully created ${successCount} of ${count} campaign${count > 1 ? 's' : ''}.`;
+
+    // Show results summary
+    const summaryHtml = results.map(r => `
+        <div class="result-item ${r.success ? 'success' : 'error'}">
+            <span class="result-icon">${r.success ? '✅' : '❌'}</span>
+            <span>${r.name}</span>
+        </div>
+    `).join('');
+    document.getElementById('duplicate-results-summary').innerHTML = summaryHtml;
+
+    // Update footer
+    footer.innerHTML = `
+        <button class="btn-primary" onclick="closeDuplicateCampaignModal(); refreshCampaignList();">
+            Done
+        </button>
+    `;
+
+    // Show toast
+    if (failCount === 0) {
+        showToast(`Successfully created ${successCount} campaign copies`, 'success');
+    } else {
+        showToast(`Created ${successCount}, failed ${failCount}`, failCount === count ? 'error' : 'warning');
+    }
+
+    addLog('info', `Duplication complete: ${successCount} success, ${failCount} failed`);
 }

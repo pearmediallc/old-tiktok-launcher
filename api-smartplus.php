@@ -2539,6 +2539,135 @@ switch ($action) {
         break;
 
     // ==========================================
+    // GET CAMPAIGN DETAILS (Campaign + AdGroup + Ad)
+    // For duplicating existing campaigns
+    // ==========================================
+    case 'get_campaign_details':
+        $campaignId = $input['campaign_id'] ?? '';
+
+        logSmartPlus("=== FETCHING CAMPAIGN DETAILS FOR DUPLICATION ===");
+        logSmartPlus("Campaign ID: $campaignId");
+
+        if (empty($campaignId)) {
+            echo json_encode(['success' => false, 'message' => 'Campaign ID is required']);
+            exit;
+        }
+
+        $response = [
+            'success' => true,
+            'campaign' => null,
+            'adgroup' => null,
+            'ad' => null
+        ];
+
+        // Step 1: Get Campaign Details
+        logSmartPlus("Step 1: Fetching campaign details...");
+        $campaignResult = makeApiCall('/campaign/get/', [
+            'advertiser_id' => $advertiserId,
+            'filtering' => json_encode(['campaign_ids' => [$campaignId]])
+        ], $accessToken, 'GET');
+
+        if ($campaignResult['code'] == 0 && !empty($campaignResult['data']['list'])) {
+            $campaign = $campaignResult['data']['list'][0];
+            $response['campaign'] = [
+                'campaign_id' => $campaign['campaign_id'] ?? '',
+                'campaign_name' => $campaign['campaign_name'] ?? '',
+                'objective_type' => $campaign['objective_type'] ?? '',
+                'budget' => $campaign['budget'] ?? 0,
+                'budget_mode' => $campaign['budget_mode'] ?? '',
+                'operation_status' => $campaign['operation_status'] ?? '',
+                'is_smart_performance_campaign' => $campaign['is_smart_performance_campaign'] ?? false
+            ];
+            logSmartPlus("Campaign found: " . ($campaign['campaign_name'] ?? 'Unknown'));
+        } else {
+            logSmartPlus("Failed to get campaign: " . ($campaignResult['message'] ?? 'Not found'));
+            echo json_encode([
+                'success' => false,
+                'message' => 'Campaign not found or error: ' . ($campaignResult['message'] ?? 'Unknown')
+            ]);
+            exit;
+        }
+
+        // Step 2: Get Ad Groups for this campaign
+        logSmartPlus("Step 2: Fetching ad groups...");
+        $adgroupResult = makeApiCall('/adgroup/get/', [
+            'advertiser_id' => $advertiserId,
+            'filtering' => json_encode(['campaign_ids' => [$campaignId]]),
+            'page_size' => 100
+        ], $accessToken, 'GET');
+
+        if ($adgroupResult['code'] == 0 && !empty($adgroupResult['data']['list'])) {
+            $adgroup = $adgroupResult['data']['list'][0]; // Get first adgroup
+            $response['adgroup'] = [
+                'adgroup_id' => $adgroup['adgroup_id'] ?? '',
+                'adgroup_name' => $adgroup['adgroup_name'] ?? '',
+                'pixel_id' => $adgroup['pixel_id'] ?? '',
+                'optimization_event' => $adgroup['optimization_event'] ?? '',
+                'optimization_goal' => $adgroup['optimization_goal'] ?? '',
+                'billing_event' => $adgroup['billing_event'] ?? '',
+                'bid_type' => $adgroup['bid_type'] ?? '',
+                'budget' => $adgroup['budget'] ?? 0,
+                'budget_mode' => $adgroup['budget_mode'] ?? '',
+                'schedule_type' => $adgroup['schedule_type'] ?? '',
+                'schedule_start_time' => $adgroup['schedule_start_time'] ?? '',
+                'schedule_end_time' => $adgroup['schedule_end_time'] ?? '',
+                'dayparting' => $adgroup['dayparting'] ?? null,
+                'location_ids' => $adgroup['location_ids'] ?? [],
+                'age_groups' => $adgroup['age_groups'] ?? [],
+                'gender' => $adgroup['gender'] ?? '',
+                'placement_type' => $adgroup['placement_type'] ?? '',
+                'placements' => $adgroup['placements'] ?? [],
+                'is_smart_performance_campaign' => $adgroup['is_smart_performance_campaign'] ?? false,
+                'smart_creative_enabled' => $adgroup['smart_creative_enabled'] ?? false
+            ];
+            logSmartPlus("Ad Group found: " . ($adgroup['adgroup_name'] ?? 'Unknown'));
+
+            // Step 3: Get Ads for this ad group
+            logSmartPlus("Step 3: Fetching ads...");
+            $adResult = makeApiCall('/ad/get/', [
+                'advertiser_id' => $advertiserId,
+                'filtering' => json_encode(['adgroup_ids' => [$adgroup['adgroup_id']]]),
+                'page_size' => 100
+            ], $accessToken, 'GET');
+
+            if ($adResult['code'] == 0 && !empty($adResult['data']['list'])) {
+                $ad = $adResult['data']['list'][0]; // Get first ad
+                $response['ad'] = [
+                    'ad_id' => $ad['ad_id'] ?? '',
+                    'ad_name' => $ad['ad_name'] ?? '',
+                    'identity_id' => $ad['identity_id'] ?? '',
+                    'identity_type' => $ad['identity_type'] ?? '',
+                    'ad_format' => $ad['ad_format'] ?? '',
+                    'ad_text' => $ad['ad_text'] ?? '',
+                    'ad_texts' => $ad['ad_texts'] ?? [],
+                    'call_to_action_id' => $ad['call_to_action_id'] ?? '',
+                    'landing_page_url' => $ad['landing_page_url'] ?? '',
+                    'landing_page_urls' => $ad['landing_page_urls'] ?? [],
+                    'creative_type' => $ad['creative_type'] ?? '',
+                    'video_id' => $ad['video_id'] ?? '',
+                    'video_ids' => $ad['video_ids'] ?? [],
+                    'image_ids' => $ad['image_ids'] ?? [],
+                    'card_id' => $ad['card_id'] ?? '',
+                    'tiktok_item_id' => $ad['tiktok_item_id'] ?? '',
+                    'smart_creative_request' => $ad['smart_creative_request'] ?? null
+                ];
+                logSmartPlus("Ad found: " . ($ad['ad_name'] ?? 'Unknown'));
+            } else {
+                logSmartPlus("No ads found for ad group or error: " . ($adResult['message'] ?? 'Empty'));
+            }
+        } else {
+            logSmartPlus("No ad groups found for campaign or error: " . ($adgroupResult['message'] ?? 'Empty'));
+        }
+
+        logSmartPlus("Campaign details fetch complete");
+        logSmartPlus("Has campaign: " . ($response['campaign'] ? 'Yes' : 'No'));
+        logSmartPlus("Has adgroup: " . ($response['adgroup'] ? 'Yes' : 'No'));
+        logSmartPlus("Has ad: " . ($response['ad'] ? 'Yes' : 'No'));
+
+        echo json_encode($response);
+        break;
+
+    // ==========================================
     // CLEAR CACHE - For refreshing data
     // ==========================================
     case 'clear_cache':

@@ -1135,6 +1135,118 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         </div>
     </div>
 
+    <!-- Duplicate Campaign Modal -->
+    <div id="duplicate-campaign-modal" class="modal" style="display: none;">
+        <div class="modal-content duplicate-modal-content">
+            <div class="modal-header">
+                <h3>📋 Duplicate Campaign</h3>
+                <span class="modal-close" onclick="closeDuplicateCampaignModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <!-- Campaign Info -->
+                <div class="duplicate-campaign-info">
+                    <div class="info-row">
+                        <span class="info-label">Campaign:</span>
+                        <span class="info-value" id="duplicate-campaign-name">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Campaign ID:</span>
+                        <span class="info-value" id="duplicate-campaign-id">-</span>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div id="duplicate-loading-state" style="display: none; text-align: center; padding: 30px;">
+                    <div class="spinner"></div>
+                    <p style="margin-top: 15px; color: #666;">Fetching campaign details...</p>
+                </div>
+
+                <!-- Campaign Details (shown after loading) -->
+                <div id="duplicate-details-section" style="display: none;">
+                    <div class="duplicate-details-summary">
+                        <h4>Campaign Structure</h4>
+                        <div class="structure-item">
+                            <span class="structure-icon">📢</span>
+                            <span class="structure-label">Campaign:</span>
+                            <span class="structure-value" id="dup-detail-campaign">-</span>
+                        </div>
+                        <div class="structure-item">
+                            <span class="structure-icon">📦</span>
+                            <span class="structure-label">Ad Group:</span>
+                            <span class="structure-value" id="dup-detail-adgroup">-</span>
+                        </div>
+                        <div class="structure-item">
+                            <span class="structure-icon">🎬</span>
+                            <span class="structure-label">Ad:</span>
+                            <span class="structure-value" id="dup-detail-ad">-</span>
+                        </div>
+                    </div>
+
+                    <!-- Number of Copies Input -->
+                    <div class="duplicate-count-section">
+                        <label for="duplicate-copy-count">Number of copies to create:</label>
+                        <div class="count-input-wrapper">
+                            <button type="button" class="count-btn minus" onclick="adjustDuplicateCount(-1)">−</button>
+                            <input type="number" id="duplicate-copy-count" min="1" max="20" value="1"
+                                   onchange="updateDuplicatePreviewList()" oninput="updateDuplicatePreviewList()">
+                            <button type="button" class="count-btn plus" onclick="adjustDuplicateCount(1)">+</button>
+                        </div>
+                        <small>Maximum 20 copies at a time</small>
+                    </div>
+
+                    <!-- Preview of Names -->
+                    <div class="duplicate-preview-section">
+                        <h4>Preview</h4>
+                        <p class="preview-description">The following campaigns will be created:</p>
+                        <div class="duplicate-preview-list" id="duplicate-preview-list">
+                            <!-- Preview items will be rendered here -->
+                        </div>
+                    </div>
+
+                    <!-- What will be duplicated -->
+                    <div class="duplicate-includes-section">
+                        <h4>Each copy will include:</h4>
+                        <ul class="includes-list">
+                            <li><span class="check-icon">✓</span> Campaign settings (budget, objective)</li>
+                            <li><span class="check-icon">✓</span> Ad Group (targeting, pixel, schedule)</li>
+                            <li><span class="check-icon">✓</span> Ad (videos, identity, CTA, landing URL)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Progress Section (shown during duplication) -->
+                <div id="duplicate-progress-section" style="display: none;">
+                    <div class="duplicate-progress-header">
+                        <span>Creating duplicates...</span>
+                        <span id="duplicate-progress-text">0 / 0</span>
+                    </div>
+                    <div class="duplicate-progress-bar-container">
+                        <div class="duplicate-progress-bar" id="duplicate-progress-bar" style="width: 0%;"></div>
+                    </div>
+                    <div class="duplicate-progress-log" id="duplicate-progress-log">
+                        <!-- Progress log items will be added here -->
+                    </div>
+                </div>
+
+                <!-- Success Section (shown after completion) -->
+                <div id="duplicate-success-section" style="display: none;">
+                    <div class="duplicate-success-icon">✅</div>
+                    <h4>Duplication Complete!</h4>
+                    <p id="duplicate-success-message">Successfully created 0 campaigns.</p>
+                    <div class="duplicate-results-summary" id="duplicate-results-summary">
+                        <!-- Results will be shown here -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" id="duplicate-modal-footer">
+                <button class="btn-secondary" onclick="closeDuplicateCampaignModal()">Cancel</button>
+                <button class="btn-primary" id="duplicate-create-btn" onclick="executeDuplicateCampaign()" disabled>
+                    📋 Create Copies
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="assets/smart-campaign.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>
