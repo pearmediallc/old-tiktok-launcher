@@ -4669,14 +4669,11 @@ async function executeDuplicateCampaign() {
         progressLog.scrollTop = progressLog.scrollHeight;
 
         try {
-            // Step 1: Create Campaign
+            // Step 1: Create Campaign (using correct Smart+ API action)
             addLog('info', `Creating campaign: ${newName}`);
-            const campaignResult = await apiRequest('create_campaign', {
+            const campaignResult = await apiRequest('create_smartplus_campaign', {
                 campaign_name: newName,
-                objective_type: campaign.objective_type,
-                budget: campaign.budget,
-                budget_mode: campaign.budget_mode || 'BUDGET_MODE_DAY',
-                is_smart_performance_campaign: campaign.is_smart_performance_campaign
+                budget: campaign.budget
             });
 
             if (!campaignResult.success) {
@@ -4690,16 +4687,13 @@ async function executeDuplicateCampaign() {
             let newAdGroupId = null;
             if (adgroup) {
                 addLog('info', `Creating ad group for campaign ${newCampaignId}`);
-                const adgroupResult = await apiRequest('create_smart_adgroup', {
+                const adgroupResult = await apiRequest('create_smartplus_adgroup', {
                     campaign_id: newCampaignId,
                     adgroup_name: newName,
                     pixel_id: adgroup.pixel_id,
                     optimization_event: adgroup.optimization_event,
-                    optimization_goal: adgroup.optimization_goal || 'VALUE',
-                    location_ids: adgroup.location_ids,
-                    age_groups: adgroup.age_groups,
-                    schedule_type: adgroup.schedule_type || 'SCHEDULE_FROM_NOW',
-                    dayparting: adgroup.dayparting
+                    location_ids: adgroup.location_ids || [],
+                    age_groups: adgroup.age_groups || []
                 });
 
                 if (!adgroupResult.success) {
@@ -4714,24 +4708,50 @@ async function executeDuplicateCampaign() {
             if (ad && newAdGroupId) {
                 addLog('info', `Creating ad for ad group ${newAdGroupId}`);
 
-                // Prepare ad data
+                // Build creatives array from video_ids or smart_creative_request
+                let creatives = [];
+
+                // Check if we have smart_creative_request (Smart+ ad format)
+                if (ad.smart_creative_request && ad.smart_creative_request.creative_list) {
+                    // Extract video IDs from smart_creative_request
+                    ad.smart_creative_request.creative_list.forEach(item => {
+                        if (item.creative_info && item.creative_info.video_info) {
+                            creatives.push({
+                                video_id: item.creative_info.video_info.video_id
+                            });
+                        }
+                    });
+                } else if (ad.video_ids && ad.video_ids.length > 0) {
+                    // Use video_ids array
+                    creatives = ad.video_ids.map(vid => ({ video_id: vid }));
+                } else if (ad.video_id) {
+                    // Single video_id
+                    creatives = [{ video_id: ad.video_id }];
+                }
+
+                // Get landing page URL
+                let landingPageUrl = ad.landing_page_url;
+                if (!landingPageUrl && ad.landing_page_urls && ad.landing_page_urls.length > 0) {
+                    // Extract from landing_page_urls array
+                    if (typeof ad.landing_page_urls[0] === 'object') {
+                        landingPageUrl = ad.landing_page_urls[0].landing_page_url;
+                    } else {
+                        landingPageUrl = ad.landing_page_urls[0];
+                    }
+                }
+
+                // Prepare ad data for Smart+ ad creation
                 const adData = {
                     adgroup_id: newAdGroupId,
                     ad_name: newName,
                     identity_id: ad.identity_id,
-                    identity_type: ad.identity_type || 'CUSTOMIZED_USER',
-                    ad_format: ad.ad_format || 'SINGLE_VIDEO',
-                    ad_text: ad.ad_text,
-                    ad_texts: ad.ad_texts,
                     call_to_action_id: ad.call_to_action_id,
-                    landing_page_url: ad.landing_page_url,
-                    landing_page_urls: ad.landing_page_urls,
-                    video_id: ad.video_id,
-                    video_ids: ad.video_ids,
-                    smart_creative_request: ad.smart_creative_request
+                    landing_page_url: landingPageUrl,
+                    creatives: creatives,
+                    ad_texts: ad.ad_texts || (ad.ad_text ? [ad.ad_text] : [])
                 };
 
-                const adResult = await apiRequest('create_smart_ad', adData);
+                const adResult = await apiRequest('create_smartplus_ad', adData);
 
                 if (!adResult.success) {
                     throw new Error(adResult.message || 'Failed to create ad');
