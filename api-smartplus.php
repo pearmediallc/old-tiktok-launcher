@@ -2639,6 +2639,25 @@ switch ($action) {
 
             if ($adResult['code'] == 0 && !empty($adResult['data']['list'])) {
                 $ad = $adResult['data']['list'][0]; // Get first ad
+
+                // Log the full ad response to see all available fields
+                logSmartPlus("Full ad response from TikTok API: " . json_encode($ad, JSON_PRETTY_PRINT));
+
+                // Extract call_to_action_id from multiple possible locations
+                $callToActionId = $ad['call_to_action_id'] ?? '';
+
+                // Check if it's in ad_configuration (Smart+ ads store it there)
+                if (empty($callToActionId) && isset($ad['ad_configuration']['call_to_action_id'])) {
+                    $callToActionId = $ad['ad_configuration']['call_to_action_id'];
+                    logSmartPlus("Found call_to_action_id in ad_configuration: $callToActionId");
+                }
+
+                // Check if it's in creative_authorized_info
+                if (empty($callToActionId) && isset($ad['creative_authorized_info']['call_to_action_id'])) {
+                    $callToActionId = $ad['creative_authorized_info']['call_to_action_id'];
+                    logSmartPlus("Found call_to_action_id in creative_authorized_info: $callToActionId");
+                }
+
                 $response['ad'] = [
                     'ad_id' => $ad['ad_id'] ?? '',
                     'ad_name' => $ad['ad_name'] ?? '',
@@ -2647,7 +2666,7 @@ switch ($action) {
                     'ad_format' => $ad['ad_format'] ?? '',
                     'ad_text' => $ad['ad_text'] ?? '',
                     'ad_texts' => $ad['ad_texts'] ?? [],
-                    'call_to_action_id' => $ad['call_to_action_id'] ?? '',
+                    'call_to_action_id' => $callToActionId,
                     'landing_page_url' => $ad['landing_page_url'] ?? '',
                     'landing_page_urls' => $ad['landing_page_urls'] ?? [],
                     'creative_type' => $ad['creative_type'] ?? '',
@@ -2656,9 +2675,10 @@ switch ($action) {
                     'image_ids' => $ad['image_ids'] ?? [],
                     'card_id' => $ad['card_id'] ?? '',
                     'tiktok_item_id' => $ad['tiktok_item_id'] ?? '',
-                    'smart_creative_request' => $ad['smart_creative_request'] ?? null
+                    'smart_creative_request' => $ad['smart_creative_request'] ?? null,
+                    'ad_configuration' => $ad['ad_configuration'] ?? null
                 ];
-                logSmartPlus("Ad found: " . ($ad['ad_name'] ?? 'Unknown'));
+                logSmartPlus("Ad found: " . ($ad['ad_name'] ?? 'Unknown') . ", call_to_action_id: $callToActionId");
             } else {
                 logSmartPlus("No ads found for ad group or error: " . ($adResult['message'] ?? 'Empty'));
             }

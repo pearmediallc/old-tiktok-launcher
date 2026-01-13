@@ -4782,11 +4782,24 @@ async function executeDuplicateCampaign() {
                 }
 
                 // Prepare ad data for Smart+ ad creation
+                // Get call_to_action_id from ad or ad_configuration
+                let callToActionId = ad.call_to_action_id;
+                if (!callToActionId && ad.ad_configuration?.call_to_action_id) {
+                    callToActionId = ad.ad_configuration.call_to_action_id;
+                }
+
+                console.log('call_to_action_id:', callToActionId);
+
+                if (!callToActionId) {
+                    addLog('warning', 'No CTA Portfolio ID found in original ad');
+                    throw new Error('Original ad does not have a CTA Portfolio ID. Please duplicate a campaign that has a CTA portfolio configured.');
+                }
+
                 const adData = {
                     adgroup_id: newAdGroupId,
                     ad_name: newName,
                     identity_id: ad.identity_id,
-                    call_to_action_id: ad.call_to_action_id,
+                    call_to_action_id: callToActionId,
                     landing_page_url: landingPageUrl,
                     creatives: creatives,
                     ad_texts: ad.ad_texts || (ad.ad_text ? [ad.ad_text] : [])
