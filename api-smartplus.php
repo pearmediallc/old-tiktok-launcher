@@ -2686,10 +2686,45 @@ switch ($action) {
             logSmartPlus("No ad groups found for campaign or error: " . ($adgroupResult['message'] ?? 'Empty'));
         }
 
+        // If ad exists but has no call_to_action_id, try to get a default CTA portfolio
+        if ($response['ad'] && empty($response['ad']['call_to_action_id'])) {
+            logSmartPlus("Ad has no call_to_action_id, fetching default CTA portfolio from database");
+            try {
+                require_once __DIR__ . '/database/Database.php';
+                $db = Database::getInstance();
+
+                // Get the most recently created CTA portfolio for this advertiser
+                $defaultPortfolio = $db->fetchOne(
+                    "SELECT creative_portfolio_id, portfolio_name
+                     FROM tool_portfolios
+                     WHERE advertiser_id = :advertiser_id
+                     AND portfolio_type = 'CTA'
+                     AND created_by_tool = TRUE
+                     ORDER BY created_at DESC
+                     LIMIT 1",
+                    ['advertiser_id' => $advertiserId]
+                );
+
+                if ($defaultPortfolio) {
+                    $response['ad']['call_to_action_id'] = $defaultPortfolio['creative_portfolio_id'];
+                    $response['default_cta_portfolio'] = [
+                        'id' => $defaultPortfolio['creative_portfolio_id'],
+                        'name' => $defaultPortfolio['portfolio_name']
+                    ];
+                    logSmartPlus("Using default CTA portfolio: " . $defaultPortfolio['portfolio_name'] . " (ID: " . $defaultPortfolio['creative_portfolio_id'] . ")");
+                } else {
+                    logSmartPlus("No CTA portfolios found in database for advertiser $advertiserId");
+                }
+            } catch (Exception $e) {
+                logSmartPlus("Error fetching default CTA portfolio: " . $e->getMessage());
+            }
+        }
+
         logSmartPlus("Campaign details fetch complete");
         logSmartPlus("Has campaign: " . ($response['campaign'] ? 'Yes' : 'No'));
         logSmartPlus("Has adgroup: " . ($response['adgroup'] ? 'Yes' : 'No'));
         logSmartPlus("Has ad: " . ($response['ad'] ? 'Yes' : 'No'));
+        logSmartPlus("Ad call_to_action_id: " . ($response['ad']['call_to_action_id'] ?? 'None'));
 
         echo json_encode($response);
         break;
