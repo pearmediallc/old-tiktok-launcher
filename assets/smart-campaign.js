@@ -4705,6 +4705,9 @@ async function executeDuplicateCampaign() {
             }
 
             // Step 3: Create Ad (if original had one)
+            console.log('Ad data from get_campaign_details:', JSON.stringify(ad, null, 2));
+            addLog('info', `Ad data received: ${ad ? 'Yes' : 'No'}, AdGroup ID: ${newAdGroupId}`);
+
             if (ad && newAdGroupId) {
                 addLog('info', `Creating ad for ad group ${newAdGroupId}`);
 
@@ -4748,9 +4751,20 @@ async function executeDuplicateCampaign() {
                     creatives = [creative];
                 }
 
+                // Log creative extraction details
+                console.log('Creatives extracted:', JSON.stringify(creatives, null, 2));
+                console.log('Ad structure:', {
+                    has_smart_creative_request: !!ad.smart_creative_request,
+                    has_creative_list: !!(ad.smart_creative_request?.creative_list),
+                    video_ids: ad.video_ids,
+                    video_id: ad.video_id,
+                    image_ids: ad.image_ids
+                });
+
                 // Validate we have at least one creative
                 if (creatives.length === 0) {
                     addLog('warning', 'No video creatives found in original ad, skipping ad creation');
+                    addLog('error', `Ad structure: smart_creative_request=${!!ad.smart_creative_request}, video_ids=${JSON.stringify(ad.video_ids)}, video_id=${ad.video_id}`);
                     throw new Error('No video creatives found in the original ad to duplicate');
                 }
 
