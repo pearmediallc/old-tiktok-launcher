@@ -814,6 +814,13 @@ switch ($action) {
                 // Get cover image - use provided, or from batch result
                 $imageId = $creative['image_id'] ?? $coverMap[$videoId] ?? null;
 
+                // If still no image_id, try to fetch it directly for this video (duplication scenario)
+                if (empty($imageId)) {
+                    logSmartPlus("No cached cover for video $videoId, attempting direct fetch for duplication");
+                    $singleCoverMap = batchGetVideoCoverImages([$videoId], $advertiserId, $accessToken);
+                    $imageId = $singleCoverMap[$videoId] ?? null;
+                }
+
                 if (!empty($imageId)) {
                     // Per TikTok SDK docs: image_info only requires web_uri (not image_id)
                     $creativeInfo['image_info'] = [[

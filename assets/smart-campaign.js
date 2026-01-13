@@ -4713,21 +4713,48 @@ async function executeDuplicateCampaign() {
 
                 // Check if we have smart_creative_request (Smart+ ad format)
                 if (ad.smart_creative_request && ad.smart_creative_request.creative_list) {
-                    // Extract video IDs from smart_creative_request
+                    // Extract video IDs AND image IDs from smart_creative_request
                     ad.smart_creative_request.creative_list.forEach(item => {
                         if (item.creative_info && item.creative_info.video_info) {
-                            creatives.push({
+                            const creative = {
                                 video_id: item.creative_info.video_info.video_id
-                            });
+                            };
+                            // Also extract image_id (cover image) if available
+                            if (item.creative_info.image_info && item.creative_info.image_info.length > 0) {
+                                // image_info can contain web_uri or image_id
+                                const imageInfo = item.creative_info.image_info[0];
+                                creative.image_id = imageInfo.web_uri || imageInfo.image_id || null;
+                            }
+                            creatives.push(creative);
                         }
                     });
                 } else if (ad.video_ids && ad.video_ids.length > 0) {
-                    // Use video_ids array
-                    creatives = ad.video_ids.map(vid => ({ video_id: vid }));
+                    // Use video_ids array - try to match with image_ids if available
+                    creatives = ad.video_ids.map((vid, index) => {
+                        const creative = { video_id: vid };
+                        // Try to get corresponding image_id if available
+                        if (ad.image_ids && ad.image_ids[index]) {
+                            creative.image_id = ad.image_ids[index];
+                        }
+                        return creative;
+                    });
                 } else if (ad.video_id) {
                     // Single video_id
-                    creatives = [{ video_id: ad.video_id }];
+                    const creative = { video_id: ad.video_id };
+                    // Try to get image_id if available
+                    if (ad.image_ids && ad.image_ids.length > 0) {
+                        creative.image_id = ad.image_ids[0];
+                    }
+                    creatives = [creative];
                 }
+
+                // Validate we have at least one creative
+                if (creatives.length === 0) {
+                    addLog('warning', 'No video creatives found in original ad, skipping ad creation');
+                    throw new Error('No video creatives found in the original ad to duplicate');
+                }
+
+                addLog('info', `Found ${creatives.length} creative(s) to duplicate`);
 
                 // Get landing page URL
                 let landingPageUrl = ad.landing_page_url;
@@ -4757,7 +4784,7 @@ async function executeDuplicateCampaign() {
                     throw new Error(adResult.message || 'Failed to create ad');
                 }
 
-                addLog('success', `Ad created: ${adResult.ad_id}`);
+                addLog('success', `Ad created: ${adResult.smart_plus_ad_id || adResult.ad_id}`);
             }
 
             // Update log entry to success
