@@ -4526,6 +4526,20 @@ async function openDuplicateCampaignModal(campaignId, campaignName) {
         if (result.success) {
             duplicateState.campaignDetails = result;
 
+            // Log full response for debugging
+            console.log('Full get_campaign_details response:', JSON.stringify(result, null, 2));
+
+            // Check for missing CTA portfolio
+            if (result.missing_cta_portfolio) {
+                addLog('warning', 'No CTA Portfolio found in database. Please create one first.');
+            }
+
+            // Log the call_to_action_id we received
+            console.log('call_to_action_id from backend:', result.ad?.call_to_action_id);
+            if (result.default_cta_portfolio) {
+                console.log('Using default CTA portfolio:', result.default_cta_portfolio);
+            }
+
             // Update structure summary
             document.getElementById('dup-detail-campaign').textContent =
                 `${result.campaign?.campaign_name || 'N/A'} (Budget: $${result.campaign?.budget || 0})`;

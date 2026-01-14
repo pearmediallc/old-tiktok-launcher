@@ -2689,21 +2689,30 @@ switch ($action) {
         // If ad exists but has no call_to_action_id, try to get a default CTA portfolio
         if ($response['ad'] && empty($response['ad']['call_to_action_id'])) {
             logSmartPlus("Ad has no call_to_action_id, fetching default CTA portfolio from database");
+            logSmartPlus("Advertiser ID for portfolio lookup: $advertiserId");
             try {
                 require_once __DIR__ . '/database/Database.php';
                 $db = Database::getInstance();
 
-                // Get the most recently created CTA portfolio for this advertiser
+                // First, log how many portfolios exist for this advertiser
+                $countResult = $db->fetchOne(
+                    "SELECT COUNT(*) as count FROM tool_portfolios WHERE advertiser_id = :advertiser_id",
+                    ['advertiser_id' => $advertiserId]
+                );
+                logSmartPlus("Total portfolios for advertiser: " . ($countResult['count'] ?? 0));
+
+                // Get any CTA portfolio for this advertiser (removed created_by_tool restriction)
                 $defaultPortfolio = $db->fetchOne(
                     "SELECT creative_portfolio_id, portfolio_name
                      FROM tool_portfolios
                      WHERE advertiser_id = :advertiser_id
                      AND portfolio_type = 'CTA'
-                     AND created_by_tool = TRUE
                      ORDER BY created_at DESC
                      LIMIT 1",
                     ['advertiser_id' => $advertiserId]
                 );
+
+                logSmartPlus("Portfolio query result: " . json_encode($defaultPortfolio));
 
                 if ($defaultPortfolio) {
                     $response['ad']['call_to_action_id'] = $defaultPortfolio['creative_portfolio_id'];
@@ -2714,9 +2723,12 @@ switch ($action) {
                     logSmartPlus("Using default CTA portfolio: " . $defaultPortfolio['portfolio_name'] . " (ID: " . $defaultPortfolio['creative_portfolio_id'] . ")");
                 } else {
                     logSmartPlus("No CTA portfolios found in database for advertiser $advertiserId");
+                    // Return information to frontend about missing CTA portfolio
+                    $response['missing_cta_portfolio'] = true;
                 }
             } catch (Exception $e) {
                 logSmartPlus("Error fetching default CTA portfolio: " . $e->getMessage());
+                logSmartPlus("Exception trace: " . $e->getTraceAsString());
             }
         }
 
