@@ -850,11 +850,35 @@ switch ($action) {
             logSmartPlus("Final creative $idx: video_id=$vid");
         }
 
-        // Build landing_page_urls as array of OBJECTS with landing_page_url key
-        // Per TikTok docs: landing_page_urls for Website destination (not page_list)
+        // Build landing_page_urls OR page_list depending on what's provided
+        // landing_page_url = Website destination
+        // page_id = Instant Form (Lead Gen)
         $landingPageList = [];
+        $pageList = [];
+        $hasDestination = false;
+
         if (!empty($data['landing_page_url'])) {
             $landingPageList[] = ['landing_page_url' => $data['landing_page_url']];
+            $hasDestination = true;
+            logSmartPlus("Using landing_page_url: " . $data['landing_page_url']);
+        }
+
+        // Check for page_id (Instant Form for Lead Gen)
+        if (!empty($data['page_id'])) {
+            $pageList[] = ['page_id' => $data['page_id']];
+            $hasDestination = true;
+            logSmartPlus("Using page_id (Instant Form): " . $data['page_id']);
+        }
+
+        // If neither landing_page_url nor page_id provided, this is an error
+        if (!$hasDestination) {
+            logSmartPlus("ERROR: No destination provided (neither landing_page_url nor page_id)");
+            echo json_encode([
+                'success' => false,
+                'message' => 'Please enter the landing page URL or select an Instant Form.',
+                'error_code' => 'NO_DESTINATION'
+            ]);
+            exit;
         }
 
         // For Lead Gen Smart+ Ads: use call_to_action_id (Dynamic CTA Portfolio)
@@ -915,9 +939,16 @@ switch ($action) {
             'adgroup_id' => $data['adgroup_id'],
             'ad_name' => $data['ad_name'] ?? 'Smart+ Ad',
             'creative_list' => $creativeList,
-            'landing_page_url_list' => $landingPageList,
             'ad_text_list' => $adTextList
         ];
+
+        // Add landing page or instant form destination
+        if (!empty($landingPageList)) {
+            $adParams['landing_page_url_list'] = $landingPageList;
+        }
+        if (!empty($pageList)) {
+            $adParams['page_list'] = $pageList;
+        }
 
         // Build ad_configuration - per SDK docs, call_to_action_id belongs INSIDE ad_configuration
         $adConfig = [
@@ -2658,6 +2689,35 @@ switch ($action) {
                     logSmartPlus("Found call_to_action_id in creative_authorized_info: $callToActionId");
                 }
 
+                // Extract landing_page_url from multiple possible locations
+                $landingPageUrl = $ad['landing_page_url'] ?? '';
+
+                // Check landing_page_urls array
+                if (empty($landingPageUrl) && !empty($ad['landing_page_urls'])) {
+                    if (is_array($ad['landing_page_urls']) && isset($ad['landing_page_urls'][0])) {
+                        if (is_array($ad['landing_page_urls'][0])) {
+                            $landingPageUrl = $ad['landing_page_urls'][0]['landing_page_url'] ?? '';
+                        } else {
+                            $landingPageUrl = $ad['landing_page_urls'][0];
+                        }
+                    }
+                }
+
+                // Check landing_page_url_list (Smart+ format)
+                if (empty($landingPageUrl) && !empty($ad['landing_page_url_list'])) {
+                    if (is_array($ad['landing_page_url_list']) && isset($ad['landing_page_url_list'][0])) {
+                        $landingPageUrl = $ad['landing_page_url_list'][0]['landing_page_url'] ?? $ad['landing_page_url_list'][0] ?? '';
+                    }
+                }
+
+                // Check page_id for instant forms (Lead Gen)
+                $pageId = $ad['page_id'] ?? '';
+                if (empty($pageId) && isset($ad['page_list']) && !empty($ad['page_list'])) {
+                    $pageId = $ad['page_list'][0]['page_id'] ?? '';
+                }
+
+                logSmartPlus("Landing page extraction: url='$landingPageUrl', page_id='$pageId'");
+
                 $response['ad'] = [
                     'ad_id' => $ad['ad_id'] ?? '',
                     'ad_name' => $ad['ad_name'] ?? '',
@@ -2667,8 +2727,11 @@ switch ($action) {
                     'ad_text' => $ad['ad_text'] ?? '',
                     'ad_texts' => $ad['ad_texts'] ?? [],
                     'call_to_action_id' => $callToActionId,
-                    'landing_page_url' => $ad['landing_page_url'] ?? '',
+                    'landing_page_url' => $landingPageUrl,
                     'landing_page_urls' => $ad['landing_page_urls'] ?? [],
+                    'landing_page_url_list' => $ad['landing_page_url_list'] ?? [],
+                    'page_id' => $pageId,
+                    'page_list' => $ad['page_list'] ?? [],
                     'creative_type' => $ad['creative_type'] ?? '',
                     'video_id' => $ad['video_id'] ?? '',
                     'video_ids' => $ad['video_ids'] ?? [],
@@ -2678,7 +2741,7 @@ switch ($action) {
                     'smart_creative_request' => $ad['smart_creative_request'] ?? null,
                     'ad_configuration' => $ad['ad_configuration'] ?? null
                 ];
-                logSmartPlus("Ad found: " . ($ad['ad_name'] ?? 'Unknown') . ", call_to_action_id: $callToActionId");
+                logSmartPlus("Ad found: " . ($ad['ad_name'] ?? 'Unknown') . ", call_to_action_id: $callToActionId, landing_page_url: $landingPageUrl");
             } else {
                 logSmartPlus("No ads found for ad group or error: " . ($adResult['message'] ?? 'Empty'));
             }

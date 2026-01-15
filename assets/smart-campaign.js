@@ -4795,16 +4795,34 @@ async function executeDuplicateCampaign() {
 
                 addLog('info', `Found ${creatives.length} creative(s) to duplicate`);
 
-                // Get landing page URL
+                // Get landing page URL or page_id (Instant Form for Lead Gen)
                 let landingPageUrl = ad.landing_page_url;
+                let pageId = ad.page_id;
+
+                // Try to extract from landing_page_urls array
                 if (!landingPageUrl && ad.landing_page_urls && ad.landing_page_urls.length > 0) {
-                    // Extract from landing_page_urls array
                     if (typeof ad.landing_page_urls[0] === 'object') {
                         landingPageUrl = ad.landing_page_urls[0].landing_page_url;
                     } else {
                         landingPageUrl = ad.landing_page_urls[0];
                     }
                 }
+
+                // Try landing_page_url_list (Smart+ format)
+                if (!landingPageUrl && ad.landing_page_url_list && ad.landing_page_url_list.length > 0) {
+                    if (typeof ad.landing_page_url_list[0] === 'object') {
+                        landingPageUrl = ad.landing_page_url_list[0].landing_page_url;
+                    } else {
+                        landingPageUrl = ad.landing_page_url_list[0];
+                    }
+                }
+
+                // Try page_list for Instant Forms (Lead Gen)
+                if (!pageId && ad.page_list && ad.page_list.length > 0) {
+                    pageId = ad.page_list[0].page_id || ad.page_list[0];
+                }
+
+                console.log('Destination extraction:', { landingPageUrl, pageId });
 
                 // Prepare ad data for Smart+ ad creation
                 // Get call_to_action_id from multiple possible sources
@@ -4830,15 +4848,28 @@ async function executeDuplicateCampaign() {
                     throw new Error('No CTA Portfolio ID available. The system could not find or create one.');
                 }
 
+                // Validate we have a destination (either landing page or instant form)
+                if (!landingPageUrl && !pageId) {
+                    addLog('warning', 'No landing page URL or Instant Form found in original ad');
+                    throw new Error('Original ad does not have a landing page URL or Instant Form. Cannot duplicate.');
+                }
+
                 const adData = {
                     adgroup_id: newAdGroupId,
                     ad_name: newName,
                     identity_id: ad.identity_id,
                     call_to_action_id: callToActionId,
-                    landing_page_url: landingPageUrl,
                     creatives: creatives,
                     ad_texts: ad.ad_texts || (ad.ad_text ? [ad.ad_text] : [])
                 };
+
+                // Add destination - either landing_page_url or page_id
+                if (landingPageUrl) {
+                    adData.landing_page_url = landingPageUrl;
+                }
+                if (pageId) {
+                    adData.page_id = pageId;
+                }
 
                 const adResult = await apiRequest('create_smartplus_ad', adData);
 
