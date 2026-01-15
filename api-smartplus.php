@@ -2688,20 +2688,16 @@ switch ($action) {
 
         // If ad exists but has no call_to_action_id, try to get a default CTA portfolio
         if ($response['ad'] && empty($response['ad']['call_to_action_id'])) {
-            logSmartPlus("Ad has no call_to_action_id, fetching default CTA portfolio from database");
+            logSmartPlus("Ad has no call_to_action_id, fetching default CTA portfolio");
             logSmartPlus("Advertiser ID for portfolio lookup: $advertiserId");
+
+            $foundPortfolio = false;
+
+            // Step 1: Try to get from database first
             try {
                 require_once __DIR__ . '/database/Database.php';
                 $db = Database::getInstance();
 
-                // First, log how many portfolios exist for this advertiser
-                $countResult = $db->fetchOne(
-                    "SELECT COUNT(*) as count FROM tool_portfolios WHERE advertiser_id = :advertiser_id",
-                    ['advertiser_id' => $advertiserId]
-                );
-                logSmartPlus("Total portfolios for advertiser: " . ($countResult['count'] ?? 0));
-
-                // Get any CTA portfolio for this advertiser (removed created_by_tool restriction)
                 $defaultPortfolio = $db->fetchOne(
                     "SELECT creative_portfolio_id, portfolio_name
                      FROM tool_portfolios
@@ -2712,23 +2708,105 @@ switch ($action) {
                     ['advertiser_id' => $advertiserId]
                 );
 
-                logSmartPlus("Portfolio query result: " . json_encode($defaultPortfolio));
-
-                if ($defaultPortfolio) {
+                if ($defaultPortfolio && !empty($defaultPortfolio['creative_portfolio_id'])) {
                     $response['ad']['call_to_action_id'] = $defaultPortfolio['creative_portfolio_id'];
                     $response['default_cta_portfolio'] = [
                         'id' => $defaultPortfolio['creative_portfolio_id'],
                         'name' => $defaultPortfolio['portfolio_name']
                     ];
-                    logSmartPlus("Using default CTA portfolio: " . $defaultPortfolio['portfolio_name'] . " (ID: " . $defaultPortfolio['creative_portfolio_id'] . ")");
-                } else {
-                    logSmartPlus("No CTA portfolios found in database for advertiser $advertiserId");
-                    // Return information to frontend about missing CTA portfolio
-                    $response['missing_cta_portfolio'] = true;
+                    logSmartPlus("Using CTA portfolio from database: " . $defaultPortfolio['portfolio_name'] . " (ID: " . $defaultPortfolio['creative_portfolio_id'] . ")");
+                    $foundPortfolio = true;
                 }
             } catch (Exception $e) {
-                logSmartPlus("Error fetching default CTA portfolio: " . $e->getMessage());
-                logSmartPlus("Exception trace: " . $e->getTraceAsString());
+                logSmartPlus("Database lookup failed: " . $e->getMessage());
+            }
+
+            // Step 2: If not found in database, try TikTok API
+            if (!$foundPortfolio) {
+                logSmartPlus("No portfolio in database, fetching from TikTok API...");
+                try {
+                    $portfolioResult = makeApiCall('/creative/portfolio/list/', [
+                        'advertiser_id' => $advertiserId,
+                        'page' => 1,
+                        'page_size' => 100
+                    ], $accessToken, 'GET');
+
+                    logSmartPlus("TikTok portfolio API response: " . json_encode($portfolioResult));
+
+                    if ($portfolioResult['code'] == 0 && !empty($portfolioResult['data']['portfolios'])) {
+                        // Find a CTA portfolio
+                        foreach ($portfolioResult['data']['portfolios'] as $portfolio) {
+                            if (isset($portfolio['creative_portfolio_type']) && $portfolio['creative_portfolio_type'] === 'CTA') {
+                                $response['ad']['call_to_action_id'] = $portfolio['creative_portfolio_id'];
+                                $response['default_cta_portfolio'] = [
+                                    'id' => $portfolio['creative_portfolio_id'],
+                                    'name' => $portfolio['portfolio_name'] ?? 'CTA Portfolio'
+                                ];
+                                logSmartPlus("Using CTA portfolio from TikTok API: " . ($portfolio['portfolio_name'] ?? 'CTA Portfolio') . " (ID: " . $portfolio['creative_portfolio_id'] . ")");
+                                $foundPortfolio = true;
+                                break;
+                            }
+                        }
+                    }
+                } catch (Exception $e) {
+                    logSmartPlus("TikTok API portfolio lookup failed: " . $e->getMessage());
+                }
+            }
+
+            // Step 3: If still not found, create a new CTA portfolio
+            if (!$foundPortfolio) {
+                logSmartPlus("No CTA portfolio found, creating one...");
+                try {
+                    $frequentlyUsedCTAs = [
+                        ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]],
+                        ['asset_content' => 'GET_QUOTE', 'asset_ids' => ["0"]],
+                        ['asset_content' => 'SIGN_UP', 'asset_ids' => ["0"]]
+                    ];
+
+                    $createParams = [
+                        'advertiser_id' => $advertiserId,
+                        'creative_portfolio_type' => 'CTA',
+                        'portfolio_name' => 'Auto-Generated CTAs',
+                        'portfolio_content' => $frequentlyUsedCTAs
+                    ];
+
+                    $createResult = makeApiCall('/creative/portfolio/create/', $createParams, $accessToken);
+
+                    if ($createResult['code'] == 0 && isset($createResult['data']['creative_portfolio_id'])) {
+                        $newPortfolioId = $createResult['data']['creative_portfolio_id'];
+                        $response['ad']['call_to_action_id'] = $newPortfolioId;
+                        $response['default_cta_portfolio'] = [
+                            'id' => $newPortfolioId,
+                            'name' => 'Auto-Generated CTAs'
+                        ];
+                        logSmartPlus("Created new CTA portfolio: $newPortfolioId");
+                        $foundPortfolio = true;
+
+                        // Save to database for future use
+                        try {
+                            $db = Database::getInstance();
+                            $db->upsert('tool_portfolios', [
+                                'advertiser_id' => $advertiserId,
+                                'creative_portfolio_id' => $newPortfolioId,
+                                'portfolio_name' => 'Auto-Generated CTAs',
+                                'portfolio_type' => 'CTA',
+                                'portfolio_content' => json_encode($frequentlyUsedCTAs),
+                                'created_by_tool' => 1
+                            ], ['advertiser_id', 'creative_portfolio_id']);
+                        } catch (Exception $dbE) {
+                            logSmartPlus("Warning: Could not save portfolio to database: " . $dbE->getMessage());
+                        }
+                    } else {
+                        logSmartPlus("Failed to create CTA portfolio: " . json_encode($createResult));
+                    }
+                } catch (Exception $e) {
+                    logSmartPlus("Failed to create CTA portfolio: " . $e->getMessage());
+                }
+            }
+
+            if (!$foundPortfolio) {
+                logSmartPlus("WARNING: Could not find or create CTA portfolio for advertiser $advertiserId");
+                $response['missing_cta_portfolio'] = true;
             }
         }
 
