@@ -4663,6 +4663,17 @@ async function executeDuplicateCampaign() {
     const baseName = campaign.campaign_name;
     const results = [];
 
+    // CRITICAL DEBUG: Log what we're working with
+    console.log('=== DUPLICATE CAMPAIGN DEBUG ===');
+    console.log('duplicateState.campaignDetails:', duplicateState.campaignDetails);
+    console.log('ad object:', ad);
+    console.log('ad.call_to_action_id:', ad?.call_to_action_id);
+    console.log('ad.video_id:', ad?.video_id);
+    console.log('ad.video_ids:', ad?.video_ids);
+    console.log('ad.identity_id:', ad?.identity_id);
+    console.log('default_cta_portfolio:', duplicateState.campaignDetails?.default_cta_portfolio);
+    console.log('=== END DEBUG ===');
+
     addLog('info', `Starting duplication: ${count} copies of "${baseName}"`);
 
     for (let i = 1; i <= count; i++) {
@@ -4796,17 +4807,27 @@ async function executeDuplicateCampaign() {
                 }
 
                 // Prepare ad data for Smart+ ad creation
-                // Get call_to_action_id from ad or ad_configuration
+                // Get call_to_action_id from multiple possible sources
                 let callToActionId = ad.call_to_action_id;
+
+                // Fallback 1: Check ad_configuration
                 if (!callToActionId && ad.ad_configuration?.call_to_action_id) {
                     callToActionId = ad.ad_configuration.call_to_action_id;
+                    console.log('Using call_to_action_id from ad_configuration');
                 }
 
-                console.log('call_to_action_id:', callToActionId);
+                // Fallback 2: Check default_cta_portfolio from backend
+                if (!callToActionId && duplicateState.campaignDetails?.default_cta_portfolio?.id) {
+                    callToActionId = duplicateState.campaignDetails.default_cta_portfolio.id;
+                    console.log('Using call_to_action_id from default_cta_portfolio:', callToActionId);
+                }
+
+                console.log('Final call_to_action_id:', callToActionId);
 
                 if (!callToActionId) {
-                    addLog('warning', 'No CTA Portfolio ID found in original ad');
-                    throw new Error('Original ad does not have a CTA Portfolio ID. Please duplicate a campaign that has a CTA portfolio configured.');
+                    addLog('warning', 'No CTA Portfolio ID found');
+                    addLog('error', 'Backend did not provide a CTA portfolio. Check server logs.');
+                    throw new Error('No CTA Portfolio ID available. The system could not find or create one.');
                 }
 
                 const adData = {
