@@ -4848,10 +4848,19 @@ async function executeDuplicateCampaign() {
                     throw new Error('No CTA Portfolio ID available. The system could not find or create one.');
                 }
 
+                // Get landing page URL from input field (user-provided since TikTok API doesn't return it for Smart+ ads)
+                const userProvidedLandingUrl = document.getElementById('duplicate-landing-url')?.value?.trim();
+
+                // Use user-provided URL if available, otherwise try extracted value
+                if (userProvidedLandingUrl) {
+                    landingPageUrl = userProvidedLandingUrl;
+                    console.log('Using user-provided landing page URL:', landingPageUrl);
+                }
+
                 // Validate we have a destination (either landing page or instant form)
                 if (!landingPageUrl && !pageId) {
-                    addLog('warning', 'No landing page URL or Instant Form found in original ad');
-                    throw new Error('Original ad does not have a landing page URL or Instant Form. Cannot duplicate.');
+                    addLog('warning', 'No landing page URL provided');
+                    throw new Error('Please enter a landing page URL in the input field above.');
                 }
 
                 const adData = {

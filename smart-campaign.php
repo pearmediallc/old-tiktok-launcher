@@ -1182,6 +1182,18 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                         </div>
                     </div>
 
+                    <!-- Landing Page URL Input (required for Smart+ duplication) -->
+                    <div class="duplicate-landing-url-section" id="duplicate-landing-url-section" style="margin-bottom: 20px;">
+                        <label for="duplicate-landing-url" style="font-weight: 600; margin-bottom: 8px; display: block;">
+                            Landing Page URL <span style="color: #ef4444;">*</span>
+                        </label>
+                        <input type="url" id="duplicate-landing-url" placeholder="https://example.com/landing-page"
+                               style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        <small style="color: #666; margin-top: 4px; display: block;">
+                            Enter the landing page URL for the duplicated campaigns (TikTok API doesn't return this for Smart+ ads)
+                        </small>
+                    </div>
+
                     <!-- Number of Copies Input -->
                     <div class="duplicate-count-section">
                         <label for="duplicate-copy-count">Number of copies to create:</label>
