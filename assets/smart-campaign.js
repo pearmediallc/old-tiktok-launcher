@@ -43,7 +43,16 @@ let state = {
     campaignSearchQuery: '',     // Search query
     campaignsLoaded: false,      // Whether campaigns have been fetched
     currentView: 'create',       // Current main view: 'create' or 'campaigns'
-    selectedCampaigns: []        // Array of selected campaign IDs for bulk operations
+    selectedCampaigns: [],       // Array of selected campaign IDs for bulk operations
+
+    // Date range for metrics
+    dateRangePreset: 'today',    // Current preset: 'today', '7days', '30days', 'custom'
+    dateRangeStart: null,        // Start date (YYYY-MM-DD)
+    dateRangeEnd: null,          // End date (YYYY-MM-DD)
+
+    // Expanded rows state
+    expandedCampaigns: {},       // { campaignId: { adgroups: [...], loaded: true } }
+    expandedAdgroups: {}         // { adgroupId: { ads: [...], loaded: true } }
 };
 
 // ============================================
@@ -466,6 +475,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeLocationTargeting();
     initializeAgeTargeting();  // Initialize age selection buttons
     loadBulkAccounts();  // Pre-load accounts for bulk launch feature
+    initializeDateRange();  // Initialize date range filter (default: today)
 
     state.cboEnabled = true;
 
@@ -3996,6 +4006,192 @@ bulkLaunchState.duplicateCount = 1;
 // CAMPAIGN LISTING FUNCTIONALITY
 // ==========================================
 
+// ==========================================
+// DATE RANGE FILTER FUNCTIONS
+// ==========================================
+
+// Initialize date range on page load (default to today)
+function initializeDateRange() {
+    const today = new Date();
+    const todayStr = formatDateForInput(today);
+
+    state.dateRangeStart = todayStr;
+    state.dateRangeEnd = todayStr;
+    state.dateRangePreset = 'today';
+
+    // Set date inputs
+    const dateFrom = document.getElementById('date-from');
+    const dateTo = document.getElementById('date-to');
+    if (dateFrom) dateFrom.value = todayStr;
+    if (dateTo) dateTo.value = todayStr;
+
+    // Update display
+    updateDateRangeDisplay();
+}
+
+// Format date for input element (YYYY-MM-DD)
+function formatDateForInput(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// Format date for display (e.g., "Jan 17, 2026")
+function formatDateForDisplay(dateStr) {
+    const date = new Date(dateStr + 'T00:00:00');
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Set date preset (today, 7days, 30days)
+function setDatePreset(preset) {
+    const today = new Date();
+    let startDate, endDate;
+
+    switch (preset) {
+        case 'today':
+            startDate = today;
+            endDate = today;
+            break;
+        case '7days':
+            startDate = new Date(today);
+            startDate.setDate(today.getDate() - 6); // Last 7 days including today
+            endDate = today;
+            break;
+        case '30days':
+            startDate = new Date(today);
+            startDate.setDate(today.getDate() - 29); // Last 30 days including today
+            endDate = today;
+            break;
+        case 'custom':
+            // Don't change dates, just show the picker
+            toggleCustomDatePicker();
+            return;
+        default:
+            startDate = today;
+            endDate = today;
+    }
+
+    state.dateRangePreset = preset;
+    state.dateRangeStart = formatDateForInput(startDate);
+    state.dateRangeEnd = formatDateForInput(endDate);
+
+    // Update UI
+    updateDatePresetButtons(preset);
+    updateDateRangeDisplay();
+
+    // Hide custom picker if visible
+    const picker = document.getElementById('date-range-picker');
+    if (picker) picker.style.display = 'none';
+
+    // Reload campaigns with new date range
+    state.campaignsLoaded = false;
+    loadCampaigns();
+}
+
+// Toggle custom date picker visibility
+function toggleCustomDatePicker() {
+    const picker = document.getElementById('date-range-picker');
+    const isVisible = picker.style.display !== 'none';
+
+    if (isVisible) {
+        picker.style.display = 'none';
+    } else {
+        picker.style.display = 'flex';
+        // Set current values
+        const dateFrom = document.getElementById('date-from');
+        const dateTo = document.getElementById('date-to');
+        if (dateFrom) dateFrom.value = state.dateRangeStart;
+        if (dateTo) dateTo.value = state.dateRangeEnd;
+    }
+
+    // Update button state
+    updateDatePresetButtons('custom');
+}
+
+// Apply custom date range
+function applyCustomDateRange() {
+    const dateFrom = document.getElementById('date-from');
+    const dateTo = document.getElementById('date-to');
+
+    if (!dateFrom.value || !dateTo.value) {
+        showToast('Please select both start and end dates', 'error');
+        return;
+    }
+
+    if (dateFrom.value > dateTo.value) {
+        showToast('Start date must be before end date', 'error');
+        return;
+    }
+
+    state.dateRangePreset = 'custom';
+    state.dateRangeStart = dateFrom.value;
+    state.dateRangeEnd = dateTo.value;
+
+    // Update UI
+    updateDatePresetButtons('custom');
+    updateDateRangeDisplay();
+
+    // Hide picker
+    const picker = document.getElementById('date-range-picker');
+    if (picker) picker.style.display = 'none';
+
+    // Reload campaigns with new date range
+    state.campaignsLoaded = false;
+    loadCampaigns();
+}
+
+// Update date preset button active states
+function updateDatePresetButtons(activePreset) {
+    document.querySelectorAll('.date-preset-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.preset === activePreset) {
+            btn.classList.add('active');
+        }
+    });
+}
+
+// Update the date range display text
+function updateDateRangeDisplay() {
+    const displayEl = document.getElementById('date-range-display');
+    if (!displayEl) return;
+
+    let displayText;
+    switch (state.dateRangePreset) {
+        case 'today':
+            displayText = 'Today';
+            break;
+        case '7days':
+            displayText = 'Last 7 Days';
+            break;
+        case '30days':
+            displayText = 'Last 30 Days';
+            break;
+        case 'custom':
+            const start = formatDateForDisplay(state.dateRangeStart);
+            const end = formatDateForDisplay(state.dateRangeEnd);
+            displayText = start === end ? start : `${start} - ${end}`;
+            break;
+        default:
+            displayText = 'Today';
+    }
+
+    displayEl.textContent = displayText;
+}
+
+// Get current date range for API calls
+function getCurrentDateRange() {
+    // If not initialized, default to today
+    if (!state.dateRangeStart || !state.dateRangeEnd) {
+        const today = formatDateForInput(new Date());
+        return { start_date: today, end_date: today };
+    }
+    return {
+        start_date: state.dateRangeStart,
+        end_date: state.dateRangeEnd
+    };
+}
+
 // Switch between Create and My Campaigns views
 function switchMainView(view) {
     state.currentView = view;
@@ -4042,11 +4238,13 @@ async function loadCampaigns() {
     state.expandedCampaigns = {};
     state.expandedAdgroups = {};
 
-    addLog('info', 'Loading campaigns with metrics...');
+    // Get current date range
+    const dateRange = getCurrentDateRange();
+    addLog('info', `Loading campaigns with metrics for ${dateRange.start_date} to ${dateRange.end_date}...`);
 
     try {
-        // Use the new endpoint that fetches metrics
-        const result = await apiRequest('get_campaigns_with_metrics', {});
+        // Use the new endpoint that fetches metrics with date range
+        const result = await apiRequest('get_campaigns_with_metrics', dateRange);
 
         if (result.success) {
             state.campaignsList = result.campaigns || [];
@@ -4300,7 +4498,12 @@ async function toggleCampaignExpand(campaignId) {
         campaignRow.after(loadingRow);
 
         try {
-            const result = await apiRequest('get_adgroups_for_campaign', { campaign_id: campaignId });
+            // Pass date range for metrics
+            const dateRange = getCurrentDateRange();
+            const result = await apiRequest('get_adgroups_for_campaign', {
+                campaign_id: campaignId,
+                ...dateRange
+            });
 
             // Remove loading row
             loadingRow.remove();
@@ -4417,7 +4620,12 @@ async function toggleAdgroupExpand(adgroupId, parentCampaignId) {
         adgroupRow.after(loadingRow);
 
         try {
-            const result = await apiRequest('get_ads_for_adgroup', { adgroup_id: adgroupId });
+            // Pass date range for metrics
+            const dateRange = getCurrentDateRange();
+            const result = await apiRequest('get_ads_for_adgroup', {
+                adgroup_id: adgroupId,
+                ...dateRange
+            });
 
             // Remove loading row
             loadingRow.remove();

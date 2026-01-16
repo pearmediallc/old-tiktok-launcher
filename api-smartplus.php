@@ -2536,6 +2536,11 @@ switch ($action) {
         logSmartPlus("=== FETCHING CAMPAIGNS WITH METRICS ===");
         logSmartPlus("Advertiser ID: $advertiserId");
 
+        // Get date range from request (default to today)
+        $startDate = $input['start_date'] ?? date('Y-m-d');
+        $endDate = $input['end_date'] ?? date('Y-m-d');
+        logSmartPlus("Date range: $startDate to $endDate");
+
         // Build request params for campaigns
         $params = [
             'advertiser_id' => $advertiserId,
@@ -2564,10 +2569,6 @@ switch ($action) {
 
         $metricsData = [];
         if (!empty($campaignIds)) {
-            // Get campaign-level metrics using date range (last 365 days for lifetime-like data)
-            $startDate = date('Y-m-d', strtotime('-365 days'));
-            $endDate = date('Y-m-d');
-
             // Build filters array in TikTok's required format
             $filters = [
                 [
@@ -2648,7 +2649,11 @@ switch ($action) {
             'success' => true,
             'campaigns' => $formattedCampaigns,
             'total_count' => count($formattedCampaigns),
-            'debug_metrics_count' => count($metricsData)
+            'debug_metrics_count' => count($metricsData),
+            'date_range' => [
+                'start_date' => $startDate,
+                'end_date' => $endDate
+            ]
         ]);
         break;
 
@@ -2657,6 +2662,9 @@ switch ($action) {
     // ==========================================
     case 'get_adgroups_for_campaign':
         $campaignId = $input['campaign_id'] ?? null;
+        // Get date range from request (inherit from campaigns view)
+        $startDate = $input['start_date'] ?? date('Y-m-d');
+        $endDate = $input['end_date'] ?? date('Y-m-d');
 
         if (!$campaignId) {
             echo json_encode(['success' => false, 'message' => 'Campaign ID is required']);
@@ -2664,6 +2672,7 @@ switch ($action) {
         }
 
         logSmartPlus("=== FETCHING AD GROUPS FOR CAMPAIGN $campaignId ===");
+        logSmartPlus("Date range: $startDate to $endDate");
 
         // Get ad groups
         $adgroupParams = [
@@ -2692,9 +2701,7 @@ switch ($action) {
         $metricsData = [];
 
         if (!empty($adgroupIds)) {
-            $startDate = date('Y-m-d', strtotime('-365 days'));
-            $endDate = date('Y-m-d');
-
+            // Use date range from request (already set above)
             // Build filters array in TikTok's required format
             $filters = [
                 [
@@ -2775,6 +2782,9 @@ switch ($action) {
     // ==========================================
     case 'get_ads_for_adgroup':
         $adgroupId = $input['adgroup_id'] ?? null;
+        // Get date range from request (inherit from campaigns view)
+        $startDate = $input['start_date'] ?? date('Y-m-d');
+        $endDate = $input['end_date'] ?? date('Y-m-d');
 
         if (!$adgroupId) {
             echo json_encode(['success' => false, 'message' => 'Ad Group ID is required']);
@@ -2782,6 +2792,7 @@ switch ($action) {
         }
 
         logSmartPlus("=== FETCHING ADS FOR AD GROUP $adgroupId ===");
+        logSmartPlus("Date range: $startDate to $endDate");
 
         // Get ads
         $adParams = [
@@ -2810,9 +2821,7 @@ switch ($action) {
         $metricsData = [];
 
         if (!empty($adIds)) {
-            $startDate = date('Y-m-d', strtotime('-365 days'));
-            $endDate = date('Y-m-d');
-
+            // Use date range from request (already set above)
             // Build filters array in TikTok's required format
             $filters = [
                 [

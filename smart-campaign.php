@@ -393,6 +393,124 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
         /* Indent for nested rows */
         .indent-1 { padding-left: 30px !important; }
         .indent-2 { padding-left: 50px !important; }
+
+        /* Date Range Filter Styles */
+        .date-range-filter-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 15px 20px;
+            background: #fff;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            flex-wrap: wrap;
+        }
+        .date-range-presets {
+            display: flex;
+            gap: 8px;
+        }
+        .date-preset-btn {
+            padding: 8px 16px;
+            border: 1px solid #e2e8f0;
+            background: #fff;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #64748b;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .date-preset-btn:hover {
+            border-color: #1e9df1;
+            color: #1e9df1;
+            background: #f0f9ff;
+        }
+        .date-preset-btn.active {
+            background: linear-gradient(135deg, #1e9df1, #1a8ad8);
+            color: #fff;
+            border-color: #1e9df1;
+        }
+        .date-range-picker {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 15px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        .date-input-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .date-input-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+        }
+        .date-input-group input[type="date"] {
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #1e293b;
+            background: #fff;
+            cursor: pointer;
+        }
+        .date-input-group input[type="date"]:focus {
+            outline: none;
+            border-color: #1e9df1;
+            box-shadow: 0 0 0 3px rgba(30, 157, 241, 0.1);
+        }
+        .btn-apply-date {
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #1e9df1, #1a8ad8);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-apply-date:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(30, 157, 241, 0.3);
+        }
+        .date-range-display {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: auto;
+            padding: 8px 15px;
+            background: #f0f9ff;
+            border-radius: 8px;
+            border: 1px solid #bae6fd;
+        }
+        .date-range-label {
+            font-size: 12px;
+            color: #0369a1;
+        }
+        .date-range-value {
+            font-size: 13px;
+            font-weight: 600;
+            color: #0c4a6e;
+        }
+        @media (max-width: 768px) {
+            .date-range-filter-container {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .date-range-presets {
+                flex-wrap: wrap;
+            }
+            .date-range-display {
+                margin-left: 0;
+                justify-content: center;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1248,6 +1366,31 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 <button class="campaign-filter-btn" data-filter="inactive" onclick="filterCampaignsByStatus('inactive')">
                     Inactive <span class="filter-count" id="count-inactive">0</span>
                 </button>
+            </div>
+
+            <!-- Date Range Filter -->
+            <div class="date-range-filter-container">
+                <div class="date-range-presets">
+                    <button class="date-preset-btn active" data-preset="today" onclick="setDatePreset('today')">Today</button>
+                    <button class="date-preset-btn" data-preset="7days" onclick="setDatePreset('7days')">Last 7 Days</button>
+                    <button class="date-preset-btn" data-preset="30days" onclick="setDatePreset('30days')">Last 30 Days</button>
+                    <button class="date-preset-btn" data-preset="custom" onclick="toggleCustomDatePicker()">Custom</button>
+                </div>
+                <div class="date-range-picker" id="date-range-picker" style="display: none;">
+                    <div class="date-input-group">
+                        <label>From</label>
+                        <input type="date" id="date-from" onchange="applyCustomDateRange()">
+                    </div>
+                    <div class="date-input-group">
+                        <label>To</label>
+                        <input type="date" id="date-to" onchange="applyCustomDateRange()">
+                    </div>
+                    <button class="btn-apply-date" onclick="applyCustomDateRange()">Apply</button>
+                </div>
+                <div class="date-range-display">
+                    <span class="date-range-label">📅 Showing data for:</span>
+                    <span class="date-range-value" id="date-range-display">Today</span>
+                </div>
             </div>
 
             <!-- Bulk Actions Bar -->
