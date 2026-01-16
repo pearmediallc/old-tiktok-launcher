@@ -174,6 +174,64 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             content: ' ✓';
             font-size: 12px;
         }
+        /* Duplicate Mode Options */
+        .duplicate-mode-options {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .duplicate-mode-option {
+            display: block;
+            padding: 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: #fff;
+        }
+        .duplicate-mode-option:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        .duplicate-mode-option.selected {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        .duplicate-mode-option input[type="radio"] {
+            display: none;
+        }
+        .mode-option-content {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .mode-icon {
+            font-size: 28px;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f1f5f9;
+            border-radius: 10px;
+        }
+        .duplicate-mode-option.selected .mode-icon {
+            background: #e0e7ff;
+        }
+        .mode-details {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .mode-title {
+            font-weight: 600;
+            font-size: 15px;
+            color: #1e293b;
+        }
+        .mode-desc {
+            font-size: 13px;
+            color: #64748b;
+        }
     </style>
 </head>
 <body>
@@ -1161,6 +1219,33 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     <p style="margin-top: 15px; color: #666;">Fetching campaign details...</p>
                 </div>
 
+                <!-- Duplicate Mode Selection (shown after loading) -->
+                <div id="duplicate-mode-section" style="display: none;">
+                    <h4 style="margin-bottom: 15px;">Choose Duplication Mode</h4>
+                    <div class="duplicate-mode-options">
+                        <label class="duplicate-mode-option selected" id="mode-option-same">
+                            <input type="radio" name="duplicate_mode" value="same" checked onchange="toggleDuplicateMode('same')">
+                            <div class="mode-option-content">
+                                <span class="mode-icon">📋</span>
+                                <div class="mode-details">
+                                    <span class="mode-title">Duplicate with Same Details</span>
+                                    <span class="mode-desc">Create exact copies with auto-numbered names</span>
+                                </div>
+                            </div>
+                        </label>
+                        <label class="duplicate-mode-option" id="mode-option-edit">
+                            <input type="radio" name="duplicate_mode" value="edit" onchange="toggleDuplicateMode('edit')">
+                            <div class="mode-option-content">
+                                <span class="mode-icon">✏️</span>
+                                <div class="mode-details">
+                                    <span class="mode-title">Duplicate and Edit Details</span>
+                                    <span class="mode-desc">Customize budget, landing page, and other settings</span>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
                 <!-- Campaign Details (shown after loading) -->
                 <div id="duplicate-details-section" style="display: none;">
                     <div class="duplicate-details-summary">
@@ -1182,8 +1267,8 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                         </div>
                     </div>
 
-                    <!-- Number of Copies Input -->
-                    <div class="duplicate-count-section">
+                    <!-- Number of Copies Input (for "same" mode) -->
+                    <div class="duplicate-count-section" id="duplicate-count-section">
                         <label for="duplicate-copy-count">Number of copies to create:</label>
                         <div class="count-input-wrapper">
                             <button type="button" class="count-btn minus" onclick="adjustDuplicateCount(-1)">−</button>
@@ -1192,6 +1277,53 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                             <button type="button" class="count-btn plus" onclick="adjustDuplicateCount(1)">+</button>
                         </div>
                         <small>Maximum 20 copies at a time</small>
+                    </div>
+
+                    <!-- Edit Details Section (for "edit" mode) -->
+                    <div id="duplicate-edit-section" style="display: none;">
+                        <h4 style="margin-top: 20px; margin-bottom: 15px;">Edit Campaign Details</h4>
+
+                        <!-- Campaign Name -->
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">Campaign Name</label>
+                            <input type="text" id="dup-edit-campaign-name" placeholder="Enter campaign name"
+                                   style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+                                   oninput="updateDuplicatePreviewList()">
+                        </div>
+
+                        <!-- Budget -->
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">Daily Budget ($)</label>
+                            <input type="number" id="dup-edit-budget" placeholder="50" min="20"
+                                   style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                            <small style="color: #666; margin-top: 4px; display: block;">Minimum $20 daily budget</small>
+                        </div>
+
+                        <!-- Landing Page URL -->
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">Landing Page URL</label>
+                            <input type="url" id="dup-edit-landing-url" placeholder="https://example.com/landing-page"
+                                   style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        </div>
+
+                        <!-- Ad Text -->
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">Ad Text</label>
+                            <textarea id="dup-edit-ad-text" placeholder="Enter ad text" rows="3"
+                                      style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; resize: vertical;"></textarea>
+                        </div>
+
+                        <!-- Number of copies for edit mode -->
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">Number of copies to create</label>
+                            <div class="count-input-wrapper">
+                                <button type="button" class="count-btn minus" onclick="adjustDuplicateCount(-1)">−</button>
+                                <input type="number" id="duplicate-edit-copy-count" min="1" max="20" value="1"
+                                       onchange="updateDuplicatePreviewList()" oninput="updateDuplicatePreviewList()">
+                                <button type="button" class="count-btn plus" onclick="adjustDuplicateCount(1)">+</button>
+                            </div>
+                            <small style="color: #666;">Maximum 20 copies at a time</small>
+                        </div>
                     </div>
 
                     <!-- Preview of Names -->
@@ -1204,7 +1336,7 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     </div>
 
                     <!-- What will be duplicated -->
-                    <div class="duplicate-includes-section">
+                    <div class="duplicate-includes-section" id="duplicate-includes-section">
                         <h4>Each copy will include:</h4>
                         <ul class="includes-list">
                             <li><span class="check-icon">✓</span> Campaign settings (budget, objective)</li>

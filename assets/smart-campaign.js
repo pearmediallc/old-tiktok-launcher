@@ -4493,6 +4493,7 @@ async function openDuplicateCampaignModal(campaignId, campaignName) {
     duplicateState.campaignId = campaignId;
     duplicateState.campaignName = campaignName;
     duplicateState.campaignDetails = null;
+    duplicateState.mode = 'same'; // Default mode
 
     // Show modal
     const modal = document.getElementById('duplicate-campaign-modal');
@@ -4504,9 +4505,15 @@ async function openDuplicateCampaignModal(campaignId, campaignName) {
 
     // Reset sections
     document.getElementById('duplicate-loading-state').style.display = 'block';
+    document.getElementById('duplicate-mode-section').style.display = 'none';
     document.getElementById('duplicate-details-section').style.display = 'none';
     document.getElementById('duplicate-progress-section').style.display = 'none';
     document.getElementById('duplicate-success-section').style.display = 'none';
+
+    // Reset mode selection to default
+    document.getElementById('mode-option-same').classList.add('selected');
+    document.getElementById('mode-option-edit').classList.remove('selected');
+    document.querySelector('input[name="duplicate_mode"][value="same"]').checked = true;
 
     // Reset footer buttons
     const footer = document.getElementById('duplicate-modal-footer');
@@ -4548,8 +4555,12 @@ async function openDuplicateCampaignModal(campaignId, campaignName) {
             document.getElementById('dup-detail-ad').textContent =
                 result.ad?.ad_name || 'Not found';
 
-            // Show details section
+            // Populate edit fields with original values
+            populateDuplicateEditFields(result);
+
+            // Show mode selection and details section
             document.getElementById('duplicate-loading-state').style.display = 'none';
+            document.getElementById('duplicate-mode-section').style.display = 'block';
             document.getElementById('duplicate-details-section').style.display = 'block';
 
             // Enable create button
@@ -4557,6 +4568,8 @@ async function openDuplicateCampaignModal(campaignId, campaignName) {
 
             // Set default count and update preview
             document.getElementById('duplicate-copy-count').value = 1;
+            document.getElementById('duplicate-edit-copy-count').value = 1;
+            toggleDuplicateMode('same'); // Reset to same mode
             updateDuplicatePreviewList();
 
             addLog('success', `Campaign details loaded: ${result.campaign?.campaign_name}`);
@@ -4574,6 +4587,62 @@ async function openDuplicateCampaignModal(campaignId, campaignName) {
         `;
         addLog('error', `Failed to fetch campaign details: ${error.message}`);
     }
+}
+
+// Populate edit fields with original campaign values
+function populateDuplicateEditFields(result) {
+    const { campaign, adgroup, ad } = result;
+
+    // Campaign name (add "Copy" suffix)
+    document.getElementById('dup-edit-campaign-name').value =
+        (campaign?.campaign_name || '') + ' - Copy';
+
+    // Budget
+    document.getElementById('dup-edit-budget').value = campaign?.budget || 50;
+
+    // Landing page URL
+    let landingPageUrl = ad?.landing_page_url || '';
+    if (!landingPageUrl && ad?.landing_page_url_list?.length > 0) {
+        if (typeof ad.landing_page_url_list[0] === 'object') {
+            landingPageUrl = ad.landing_page_url_list[0].landing_page_url || '';
+        } else {
+            landingPageUrl = ad.landing_page_url_list[0] || '';
+        }
+    }
+    document.getElementById('dup-edit-landing-url').value = landingPageUrl;
+
+    // Ad text
+    const adTexts = ad?.ad_texts || ad?.ad_text_list || [];
+    document.getElementById('dup-edit-ad-text').value =
+        Array.isArray(adTexts) ? adTexts.join('\n') : (adTexts || '');
+}
+
+// Toggle between duplicate modes (same vs edit)
+function toggleDuplicateMode(mode) {
+    duplicateState.mode = mode;
+
+    // Update UI selection
+    const sameOption = document.getElementById('mode-option-same');
+    const editOption = document.getElementById('mode-option-edit');
+    const countSection = document.getElementById('duplicate-count-section');
+    const editSection = document.getElementById('duplicate-edit-section');
+    const includesSection = document.getElementById('duplicate-includes-section');
+
+    if (mode === 'same') {
+        sameOption.classList.add('selected');
+        editOption.classList.remove('selected');
+        countSection.style.display = 'block';
+        editSection.style.display = 'none';
+        includesSection.style.display = 'block';
+    } else {
+        sameOption.classList.remove('selected');
+        editOption.classList.add('selected');
+        countSection.style.display = 'none';
+        editSection.style.display = 'block';
+        includesSection.style.display = 'none';
+    }
+
+    updateDuplicatePreviewList();
 }
 
 // Close duplicate modal
@@ -4599,22 +4668,40 @@ function closeDuplicateCampaignModal() {
 
 // Adjust duplicate count with +/- buttons
 function adjustDuplicateCount(delta) {
-    const input = document.getElementById('duplicate-copy-count');
+    // Determine which input to use based on current mode
+    const inputId = duplicateState.mode === 'edit' ? 'duplicate-edit-copy-count' : 'duplicate-copy-count';
+    const input = document.getElementById(inputId);
     let value = parseInt(input.value) || 1;
     value = Math.max(1, Math.min(20, value + delta));
     input.value = value;
+
+    // Sync both inputs
+    document.getElementById('duplicate-copy-count').value = value;
+    document.getElementById('duplicate-edit-copy-count').value = value;
+
     updateDuplicatePreviewList();
 }
 
 // Update the preview list showing campaign names
 function updateDuplicatePreviewList() {
-    const count = parseInt(document.getElementById('duplicate-copy-count').value) || 1;
-    const baseName = duplicateState.campaignName || 'Campaign';
+    const mode = duplicateState.mode || 'same';
+    const countInput = mode === 'edit' ? 'duplicate-edit-copy-count' : 'duplicate-copy-count';
+    const count = parseInt(document.getElementById(countInput).value) || 1;
+
+    let baseName;
+    if (mode === 'edit') {
+        // Use edited name for preview
+        baseName = document.getElementById('dup-edit-campaign-name').value || duplicateState.campaignName || 'Campaign';
+    } else {
+        // Use original name for "same" mode
+        baseName = duplicateState.campaignName || 'Campaign';
+    }
+
     const previewList = document.getElementById('duplicate-preview-list');
 
     let html = '';
     for (let i = 1; i <= Math.min(count, 20); i++) {
-        const newName = `${baseName} (${i})`;
+        const newName = count === 1 && mode === 'edit' ? baseName : `${baseName} (${i})`;
         html += `
             <div class="preview-item">
                 <span class="preview-number">${i}</span>
@@ -4633,15 +4720,49 @@ async function executeDuplicateCampaign() {
         return;
     }
 
-    const count = parseInt(document.getElementById('duplicate-copy-count').value) || 1;
+    const mode = duplicateState.mode || 'same';
+    const countInput = mode === 'edit' ? 'duplicate-edit-copy-count' : 'duplicate-copy-count';
+    const count = parseInt(document.getElementById(countInput).value) || 1;
+
     if (count < 1 || count > 20) {
         showToast('Please enter a valid number between 1 and 20', 'error');
         return;
     }
 
+    // Get edited values if in edit mode
+    let editedValues = null;
+    if (mode === 'edit') {
+        const editedName = document.getElementById('dup-edit-campaign-name').value.trim();
+        const editedBudget = parseFloat(document.getElementById('dup-edit-budget').value) || 50;
+        const editedLandingUrl = document.getElementById('dup-edit-landing-url').value.trim();
+        const editedAdText = document.getElementById('dup-edit-ad-text').value.trim();
+
+        // Validation for edit mode
+        if (!editedName) {
+            showToast('Please enter a campaign name', 'error');
+            return;
+        }
+        if (editedBudget < 20) {
+            showToast('Budget must be at least $20', 'error');
+            return;
+        }
+        if (!editedLandingUrl) {
+            showToast('Please enter a landing page URL', 'error');
+            return;
+        }
+
+        editedValues = {
+            campaignName: editedName,
+            budget: editedBudget,
+            landingPageUrl: editedLandingUrl,
+            adTexts: editedAdText ? editedAdText.split('\n').filter(t => t.trim()) : []
+        };
+    }
+
     duplicateState.isProcessing = true;
 
-    // Hide details, show progress
+    // Hide details and mode section, show progress
+    document.getElementById('duplicate-mode-section').style.display = 'none';
     document.getElementById('duplicate-details-section').style.display = 'none';
     document.getElementById('duplicate-progress-section').style.display = 'block';
 
@@ -4660,7 +4781,10 @@ async function executeDuplicateCampaign() {
     progressBar.style.width = '0%';
 
     const { campaign, adgroup, ad } = duplicateState.campaignDetails;
-    const baseName = campaign.campaign_name;
+
+    // Use edited name if in edit mode, otherwise original name
+    const baseName = editedValues ? editedValues.campaignName : campaign.campaign_name;
+    const budgetToUse = editedValues ? editedValues.budget : campaign.budget;
     const results = [];
 
     // CRITICAL DEBUG: Log what we're working with
@@ -4698,7 +4822,7 @@ async function executeDuplicateCampaign() {
             addLog('info', `Creating campaign: ${newName}`);
             const campaignResult = await apiRequest('create_smartplus_campaign', {
                 campaign_name: newName,
-                budget: campaign.budget
+                budget: budgetToUse
             });
 
             if (!campaignResult.success) {
@@ -4811,11 +4935,19 @@ async function executeDuplicateCampaign() {
                     callToActionId = duplicateState.campaignDetails.default_cta_portfolio.id;
                 }
 
+                // Override with edited values if in edit mode
+                if (editedValues) {
+                    landingPageUrl = editedValues.landingPageUrl;
+                    console.log('Using edited landing page URL:', landingPageUrl);
+                }
+
                 console.log('Extracted from Smart+ API:', {
                     landing_page_url: landingPageUrl,
                     call_to_action_id: callToActionId,
                     page_id: pageId,
-                    identity_id: ad.identity_id
+                    identity_id: ad.identity_id,
+                    mode: mode,
+                    editedValues: editedValues
                 });
 
                 // Validate call_to_action_id
@@ -4830,20 +4962,26 @@ async function executeDuplicateCampaign() {
                     throw new Error('No landing page URL found in the original ad.');
                 }
 
+                // Use edited ad texts if in edit mode, otherwise use original
+                const adTextsToUse = editedValues && editedValues.adTexts.length > 0
+                    ? editedValues.adTexts
+                    : (ad.ad_texts || []);
+
                 const adData = {
                     adgroup_id: newAdGroupId,
                     ad_name: newName,
                     identity_id: ad.identity_id,
                     call_to_action_id: callToActionId,
                     creatives: creatives,
-                    ad_texts: ad.ad_texts || []
+                    ad_texts: adTextsToUse
                 };
 
                 // Add destination
                 if (landingPageUrl) {
                     adData.landing_page_url = landingPageUrl;
                 }
-                if (pageId) {
+                if (pageId && !landingPageUrl) {
+                    // Only use page_id if no landing page URL is set
                     adData.page_id = pageId;
                 }
 
