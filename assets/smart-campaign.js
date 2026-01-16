@@ -4016,27 +4016,34 @@ function switchMainView(view) {
     addLog('info', `Switched to ${view} view`);
 }
 
-// Load campaigns from API
+// Load campaigns from API (with metrics)
 async function loadCampaigns() {
     const loadingEl = document.getElementById('campaign-loading');
     const emptyEl = document.getElementById('campaign-empty-state');
-    const cardsContainer = document.getElementById('campaign-cards-container');
+    const tableWrapper = document.getElementById('metrics-table-wrapper');
+    const tableBody = document.getElementById('campaign-table-body');
 
     // Show loading state
     loadingEl.style.display = 'flex';
     emptyEl.style.display = 'none';
-    cardsContainer.innerHTML = '';
+    if (tableWrapper) tableWrapper.style.display = 'none';
+    if (tableBody) tableBody.innerHTML = '';
 
-    addLog('info', 'Loading campaigns...');
+    // Reset expansion state
+    state.expandedCampaigns = {};
+    state.expandedAdgroups = {};
+
+    addLog('info', 'Loading campaigns with metrics...');
 
     try {
-        const result = await apiRequest('get_campaigns', {});
+        // Use the new endpoint that fetches metrics
+        const result = await apiRequest('get_campaigns_with_metrics', {});
 
         if (result.success) {
             state.campaignsList = result.campaigns || [];
             state.campaignsLoaded = true;
 
-            addLog('success', `Loaded ${state.campaignsList.length} campaigns`);
+            addLog('success', `Loaded ${state.campaignsList.length} campaigns with metrics`);
 
             // Apply current filter and render
             applyFiltersAndRender();
@@ -4127,11 +4134,12 @@ function updateCampaignCounts() {
     document.getElementById('count-inactive').textContent = inactiveCount;
 }
 
-// Render campaign list
+// Render campaign list (table-based with metrics)
 function renderCampaignList() {
     const loadingEl = document.getElementById('campaign-loading');
     const emptyEl = document.getElementById('campaign-empty-state');
-    const cardsContainer = document.getElementById('campaign-cards-container');
+    const tableWrapper = document.getElementById('metrics-table-wrapper');
+    const tableBody = document.getElementById('campaign-table-body');
 
     // Hide loading
     loadingEl.style.display = 'none';
@@ -4139,6 +4147,7 @@ function renderCampaignList() {
     // Check if empty
     if (state.filteredCampaigns.length === 0) {
         emptyEl.style.display = 'block';
+        if (tableWrapper) tableWrapper.style.display = 'none';
         emptyEl.querySelector('h3').textContent = 'No campaigns found';
         emptyEl.querySelector('p').textContent =
             state.campaignSearchQuery
@@ -4146,14 +4155,345 @@ function renderCampaignList() {
                 : state.campaignFilter !== 'all'
                     ? `No ${state.campaignFilter} campaigns found.`
                     : "You haven't created any campaigns yet.";
-        cardsContainer.innerHTML = '';
         return;
     }
 
     emptyEl.style.display = 'none';
+    if (tableWrapper) tableWrapper.style.display = 'block';
 
-    // Render campaign cards
-    cardsContainer.innerHTML = state.filteredCampaigns.map(campaign => renderCampaignCard(campaign)).join('');
+    // Render campaign table rows
+    if (tableBody) {
+        tableBody.innerHTML = state.filteredCampaigns.map(campaign => renderCampaignTableRow(campaign)).join('');
+    }
+}
+
+// Render single campaign table row
+function renderCampaignTableRow(campaign) {
+    const isActive = campaign.operation_status === 'ENABLE';
+    const statusClass = isActive ? 'active' : 'inactive';
+    const statusLabel = isActive ? 'Active' : 'Paused';
+    const toggleClass = isActive ? 'on' : '';
+    const isSelected = state.selectedCampaigns.includes(campaign.campaign_id);
+    const isExpanded = state.expandedCampaigns && state.expandedCampaigns[campaign.campaign_id];
+
+    // Format budget
+    const budget = campaign.budget ? `$${parseFloat(campaign.budget).toFixed(2)}` : '-';
+
+    // Smart+ badge
+    const smartPlusBadge = campaign.is_smart_performance_campaign
+        ? '<span class="smart-badge-small">Smart+</span>'
+        : '';
+
+    return `
+        <tr class="row-campaign" data-campaign-id="${campaign.campaign_id}">
+            <td class="col-checkbox">
+                <input type="checkbox"
+                       class="campaign-checkbox"
+                       data-campaign-id="${campaign.campaign_id}"
+                       ${isSelected ? 'checked' : ''}
+                       onchange="toggleCampaignSelection('${campaign.campaign_id}')">
+            </td>
+            <td class="col-toggle">
+                <div class="toggle-table ${toggleClass}"
+                     data-campaign-id="${campaign.campaign_id}"
+                     data-status="${campaign.operation_status}"
+                     onclick="toggleCampaignStatus('${campaign.campaign_id}', '${campaign.operation_status}')"
+                     title="${isActive ? 'Click to disable' : 'Click to enable'}">
+                    <div class="toggle-slider-table"></div>
+                </div>
+            </td>
+            <td class="col-name">
+                <div class="name-cell">
+                    <button class="expand-btn ${isExpanded ? 'expanded' : ''}"
+                            onclick="toggleCampaignExpand('${campaign.campaign_id}')"
+                            title="Expand to see ad groups">▶</button>
+                    <span class="entity-icon">📢</span>
+                    <span class="entity-name">${escapeHtml(campaign.campaign_name)}</span>
+                    ${smartPlusBadge}
+                </div>
+            </td>
+            <td class="col-status">
+                <span class="status-badge-table ${statusClass}">${statusLabel}</span>
+            </td>
+            <td class="col-budget" style="text-align: right;">${budget}</td>
+            <td class="col-spend" style="text-align: right;">${formatCurrency(campaign.spend)}</td>
+            <td class="col-cpc" style="text-align: right;">${formatCurrency(campaign.cpc)}</td>
+            <td class="col-impressions" style="text-align: right;">${formatNumber(campaign.impressions)}</td>
+            <td class="col-clicks" style="text-align: right;">${formatNumber(campaign.clicks)}</td>
+            <td class="col-ctr" style="text-align: right;">${formatPercent(campaign.ctr)}</td>
+            <td class="col-conversions" style="text-align: right;">${formatNumber(campaign.conversions)}</td>
+            <td class="col-cpr" style="text-align: right;">${formatCurrency(campaign.cost_per_result)}</td>
+            <td class="col-results" style="text-align: right;">${formatNumber(campaign.results)}</td>
+            <td class="col-actions">
+                <button class="action-btn-table"
+                        onclick="openDuplicateCampaignModal('${campaign.campaign_id}', '${escapeHtml(campaign.campaign_name).replace(/'/g, "\\'")}'); event.stopPropagation();"
+                        title="Duplicate">📋</button>
+            </td>
+        </tr>
+    `;
+}
+
+// Format currency for display
+function formatCurrency(value) {
+    const num = parseFloat(value) || 0;
+    return '$' + num.toFixed(2);
+}
+
+// Format number for display
+function formatNumber(value) {
+    const num = parseInt(value) || 0;
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+}
+
+// Format percent for display
+function formatPercent(value) {
+    const num = parseFloat(value) || 0;
+    return num.toFixed(2) + '%';
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Toggle campaign expansion to show ad groups
+async function toggleCampaignExpand(campaignId) {
+    // Initialize expansion state if needed
+    if (!state.expandedCampaigns) state.expandedCampaigns = {};
+
+    const isCurrentlyExpanded = state.expandedCampaigns[campaignId];
+    const expandBtn = document.querySelector(`tr[data-campaign-id="${campaignId}"] .expand-btn`);
+    const campaignRow = document.querySelector(`tr[data-campaign-id="${campaignId}"]`);
+
+    if (isCurrentlyExpanded) {
+        // Collapse: Remove all ad group and ad rows for this campaign
+        state.expandedCampaigns[campaignId] = false;
+        if (expandBtn) expandBtn.classList.remove('expanded');
+
+        // Remove child rows
+        document.querySelectorAll(`tr[data-parent-campaign="${campaignId}"]`).forEach(row => row.remove());
+        document.querySelectorAll(`tr[data-grandparent-campaign="${campaignId}"]`).forEach(row => row.remove());
+    } else {
+        // Expand: Fetch and show ad groups
+        state.expandedCampaigns[campaignId] = true;
+        if (expandBtn) expandBtn.classList.add('expanded');
+
+        // Show loading row
+        const loadingRow = document.createElement('tr');
+        loadingRow.className = 'loading-row';
+        loadingRow.setAttribute('data-parent-campaign', campaignId);
+        loadingRow.innerHTML = `<td colspan="14"><span class="mini-spinner"></span>Loading ad groups...</td>`;
+        campaignRow.after(loadingRow);
+
+        try {
+            const result = await apiRequest('get_adgroups_for_campaign', { campaign_id: campaignId });
+
+            // Remove loading row
+            loadingRow.remove();
+
+            if (result.success && result.adgroups && result.adgroups.length > 0) {
+                // Store ad groups in state for later use
+                if (!state.adgroupsData) state.adgroupsData = {};
+                state.adgroupsData[campaignId] = result.adgroups;
+
+                // Insert ad group rows after the campaign row
+                let insertAfter = campaignRow;
+                result.adgroups.forEach(adgroup => {
+                    const adgroupRow = createAdgroupTableRow(adgroup, campaignId);
+                    insertAfter.after(adgroupRow);
+                    insertAfter = adgroupRow;
+                });
+            } else {
+                // Show "no ad groups" message
+                const emptyRow = document.createElement('tr');
+                emptyRow.className = 'row-adgroup';
+                emptyRow.setAttribute('data-parent-campaign', campaignId);
+                emptyRow.innerHTML = `<td colspan="14" class="indent-1" style="color: #94a3b8; font-style: italic;">No ad groups found</td>`;
+                campaignRow.after(emptyRow);
+            }
+        } catch (error) {
+            loadingRow.remove();
+            console.error('Error loading ad groups:', error);
+            showToast('Failed to load ad groups: ' + error.message, 'error');
+        }
+    }
+}
+
+// Create ad group table row element
+function createAdgroupTableRow(adgroup, parentCampaignId) {
+    const isActive = adgroup.operation_status === 'ENABLE';
+    const statusClass = isActive ? 'active' : 'inactive';
+    const statusLabel = isActive ? 'Active' : 'Paused';
+    const toggleClass = isActive ? 'on' : '';
+
+    if (!state.expandedAdgroups) state.expandedAdgroups = {};
+    const isExpanded = state.expandedAdgroups[adgroup.adgroup_id];
+
+    const budget = adgroup.budget ? `$${parseFloat(adgroup.budget).toFixed(2)}` : '-';
+
+    const row = document.createElement('tr');
+    row.className = 'row-adgroup';
+    row.setAttribute('data-adgroup-id', adgroup.adgroup_id);
+    row.setAttribute('data-parent-campaign', parentCampaignId);
+
+    row.innerHTML = `
+        <td class="col-checkbox"></td>
+        <td class="col-toggle">
+            <div class="toggle-table ${toggleClass}"
+                 data-adgroup-id="${adgroup.adgroup_id}"
+                 data-status="${adgroup.operation_status}"
+                 onclick="toggleAdgroupStatus('${adgroup.adgroup_id}', '${adgroup.operation_status}')"
+                 title="${isActive ? 'Click to disable' : 'Click to enable'}">
+                <div class="toggle-slider-table"></div>
+            </div>
+        </td>
+        <td class="col-name indent-1">
+            <div class="name-cell">
+                <button class="expand-btn ${isExpanded ? 'expanded' : ''}"
+                        onclick="toggleAdgroupExpand('${adgroup.adgroup_id}', '${parentCampaignId}')"
+                        title="Expand to see ads">▶</button>
+                <span class="entity-icon">📦</span>
+                <span class="entity-name">${escapeHtml(adgroup.adgroup_name)}</span>
+            </div>
+        </td>
+        <td class="col-status">
+            <span class="status-badge-table ${statusClass}">${statusLabel}</span>
+        </td>
+        <td class="col-budget" style="text-align: right;">${budget}</td>
+        <td class="col-spend" style="text-align: right;">${formatCurrency(adgroup.spend)}</td>
+        <td class="col-cpc" style="text-align: right;">${formatCurrency(adgroup.cpc)}</td>
+        <td class="col-impressions" style="text-align: right;">${formatNumber(adgroup.impressions)}</td>
+        <td class="col-clicks" style="text-align: right;">${formatNumber(adgroup.clicks)}</td>
+        <td class="col-ctr" style="text-align: right;">${formatPercent(adgroup.ctr)}</td>
+        <td class="col-conversions" style="text-align: right;">${formatNumber(adgroup.conversions)}</td>
+        <td class="col-cpr" style="text-align: right;">${formatCurrency(adgroup.cost_per_result)}</td>
+        <td class="col-results" style="text-align: right;">${formatNumber(adgroup.results)}</td>
+        <td class="col-actions"></td>
+    `;
+
+    return row;
+}
+
+// Toggle ad group expansion to show ads
+async function toggleAdgroupExpand(adgroupId, parentCampaignId) {
+    if (!state.expandedAdgroups) state.expandedAdgroups = {};
+
+    const isCurrentlyExpanded = state.expandedAdgroups[adgroupId];
+    const expandBtn = document.querySelector(`tr[data-adgroup-id="${adgroupId}"] .expand-btn`);
+    const adgroupRow = document.querySelector(`tr[data-adgroup-id="${adgroupId}"]`);
+
+    if (isCurrentlyExpanded) {
+        // Collapse: Remove all ad rows for this ad group
+        state.expandedAdgroups[adgroupId] = false;
+        if (expandBtn) expandBtn.classList.remove('expanded');
+
+        // Remove child rows
+        document.querySelectorAll(`tr[data-parent-adgroup="${adgroupId}"]`).forEach(row => row.remove());
+    } else {
+        // Expand: Fetch and show ads
+        state.expandedAdgroups[adgroupId] = true;
+        if (expandBtn) expandBtn.classList.add('expanded');
+
+        // Show loading row
+        const loadingRow = document.createElement('tr');
+        loadingRow.className = 'loading-row';
+        loadingRow.setAttribute('data-parent-adgroup', adgroupId);
+        loadingRow.setAttribute('data-grandparent-campaign', parentCampaignId);
+        loadingRow.innerHTML = `<td colspan="14"><span class="mini-spinner"></span>Loading ads...</td>`;
+        adgroupRow.after(loadingRow);
+
+        try {
+            const result = await apiRequest('get_ads_for_adgroup', { adgroup_id: adgroupId });
+
+            // Remove loading row
+            loadingRow.remove();
+
+            if (result.success && result.ads && result.ads.length > 0) {
+                // Insert ad rows after the ad group row
+                let insertAfter = adgroupRow;
+                result.ads.forEach(ad => {
+                    const adRow = createAdTableRow(ad, adgroupId, parentCampaignId);
+                    insertAfter.after(adRow);
+                    insertAfter = adRow;
+                });
+            } else {
+                // Show "no ads" message
+                const emptyRow = document.createElement('tr');
+                emptyRow.className = 'row-ad';
+                emptyRow.setAttribute('data-parent-adgroup', adgroupId);
+                emptyRow.setAttribute('data-grandparent-campaign', parentCampaignId);
+                emptyRow.innerHTML = `<td colspan="14" class="indent-2" style="color: #94a3b8; font-style: italic;">No ads found</td>`;
+                adgroupRow.after(emptyRow);
+            }
+        } catch (error) {
+            loadingRow.remove();
+            console.error('Error loading ads:', error);
+            showToast('Failed to load ads: ' + error.message, 'error');
+        }
+    }
+}
+
+// Create ad table row element
+function createAdTableRow(ad, parentAdgroupId, parentCampaignId) {
+    const isActive = ad.operation_status === 'ENABLE';
+    const statusClass = isActive ? 'active' : 'inactive';
+    const statusLabel = isActive ? 'Active' : 'Paused';
+    const toggleClass = isActive ? 'on' : '';
+
+    const row = document.createElement('tr');
+    row.className = 'row-ad';
+    row.setAttribute('data-ad-id', ad.ad_id);
+    row.setAttribute('data-parent-adgroup', parentAdgroupId);
+    row.setAttribute('data-grandparent-campaign', parentCampaignId);
+
+    row.innerHTML = `
+        <td class="col-checkbox"></td>
+        <td class="col-toggle">
+            <div class="toggle-table ${toggleClass}"
+                 data-ad-id="${ad.ad_id}"
+                 data-status="${ad.operation_status}"
+                 onclick="toggleAdStatus('${ad.ad_id}', '${ad.operation_status}')"
+                 title="${isActive ? 'Click to disable' : 'Click to enable'}">
+                <div class="toggle-slider-table"></div>
+            </div>
+        </td>
+        <td class="col-name indent-2">
+            <div class="name-cell">
+                <span class="entity-icon">🎬</span>
+                <span class="entity-name">${escapeHtml(ad.ad_name)}</span>
+            </div>
+        </td>
+        <td class="col-status">
+            <span class="status-badge-table ${statusClass}">${statusLabel}</span>
+        </td>
+        <td class="col-budget" style="text-align: right;">-</td>
+        <td class="col-spend" style="text-align: right;">${formatCurrency(ad.spend)}</td>
+        <td class="col-cpc" style="text-align: right;">${formatCurrency(ad.cpc)}</td>
+        <td class="col-impressions" style="text-align: right;">${formatNumber(ad.impressions)}</td>
+        <td class="col-clicks" style="text-align: right;">${formatNumber(ad.clicks)}</td>
+        <td class="col-ctr" style="text-align: right;">${formatPercent(ad.ctr)}</td>
+        <td class="col-conversions" style="text-align: right;">${formatNumber(ad.conversions)}</td>
+        <td class="col-cpr" style="text-align: right;">${formatCurrency(ad.cost_per_result)}</td>
+        <td class="col-results" style="text-align: right;">${formatNumber(ad.results)}</td>
+        <td class="col-actions"></td>
+    `;
+
+    return row;
+}
+
+// Toggle ad group status (placeholder - implement if needed)
+async function toggleAdgroupStatus(adgroupId, currentStatus) {
+    showToast('Ad group status toggle coming soon', 'info');
+}
+
+// Toggle ad status (placeholder - implement if needed)
+async function toggleAdStatus(adId, currentStatus) {
+    showToast('Ad status toggle coming soon', 'info');
 }
 
 // Render single campaign card
@@ -4249,8 +4589,15 @@ function formatObjectiveType(objectiveType) {
 
 // Toggle campaign status (ON/OFF)
 async function toggleCampaignStatus(campaignId, currentStatus) {
-    const toggleEl = document.querySelector(`.campaign-toggle[data-campaign-id="${campaignId}"]`);
-    const cardEl = document.querySelector(`.my-campaign-card[data-campaign-id="${campaignId}"]`);
+    // Support both table view and legacy card view
+    let toggleEl = document.querySelector(`.toggle-table[data-campaign-id="${campaignId}"]`);
+    let rowEl = document.querySelector(`tr[data-campaign-id="${campaignId}"]`);
+
+    // Fallback to legacy card view selectors
+    if (!toggleEl) {
+        toggleEl = document.querySelector(`.campaign-toggle[data-campaign-id="${campaignId}"]`);
+        rowEl = document.querySelector(`.my-campaign-card[data-campaign-id="${campaignId}"]`);
+    }
 
     if (!toggleEl) return;
 
@@ -4275,16 +4622,20 @@ async function toggleCampaignStatus(campaignId, currentStatus) {
                 campaign.operation_status = newStatus;
             }
 
-            // Update UI
+            // Update UI - toggle element
             toggleEl.classList.remove('loading');
             toggleEl.classList.toggle('on', newStatus === 'ENABLE');
             toggleEl.dataset.status = newStatus;
 
-            // Update status badge
-            const badgeEl = cardEl.querySelector('.campaign-status-badge');
-            if (badgeEl) {
-                badgeEl.className = `campaign-status-badge ${newStatus === 'ENABLE' ? 'active' : 'inactive'}`;
-                badgeEl.textContent = newStatus === 'ENABLE' ? 'Active' : 'Inactive';
+            // Update status badge (works for both table and card view)
+            if (rowEl) {
+                const badgeEl = rowEl.querySelector('.status-badge-table') || rowEl.querySelector('.campaign-status-badge');
+                if (badgeEl) {
+                    badgeEl.className = badgeEl.classList.contains('status-badge-table')
+                        ? `status-badge-table ${newStatus === 'ENABLE' ? 'active' : 'inactive'}`
+                        : `campaign-status-badge ${newStatus === 'ENABLE' ? 'active' : 'inactive'}`;
+                    badgeEl.textContent = newStatus === 'ENABLE' ? 'Active' : 'Paused';
+                }
             }
 
             // Update counts

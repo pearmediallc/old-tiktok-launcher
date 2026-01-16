@@ -2530,6 +2530,329 @@ switch ($action) {
         break;
 
     // ==========================================
+    // GET CAMPAIGNS WITH METRICS (for expandable view)
+    // ==========================================
+    case 'get_campaigns_with_metrics':
+        logSmartPlus("=== FETCHING CAMPAIGNS WITH METRICS ===");
+        logSmartPlus("Advertiser ID: $advertiserId");
+
+        // Build request params for campaigns
+        $params = [
+            'advertiser_id' => $advertiserId,
+            'page' => 1,
+            'page_size' => 100
+        ];
+
+        // Call TikTok API to get campaigns
+        $result = makeApiCall('/campaign/get/', $params, $accessToken, 'GET');
+
+        if ($result['code'] != 0) {
+            logSmartPlus("Failed to get campaigns: " . ($result['message'] ?? 'Unknown error'));
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to fetch campaigns: ' . ($result['message'] ?? 'Unknown error'),
+                'campaigns' => []
+            ]);
+            break;
+        }
+
+        $campaigns = $result['data']['list'] ?? [];
+        logSmartPlus("Found " . count($campaigns) . " campaigns");
+
+        // Now fetch metrics for these campaigns using integrated reports
+        $campaignIds = array_column($campaigns, 'campaign_id');
+
+        $metricsData = [];
+        if (!empty($campaignIds)) {
+            // Get campaign-level metrics
+            $reportParams = [
+                'advertiser_id' => $advertiserId,
+                'report_type' => 'BASIC',
+                'dimensions' => json_encode(['campaign_id']),
+                'metrics' => json_encode([
+                    'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'cpm',
+                    'conversion', 'cost_per_conversion', 'conversion_rate',
+                    'result', 'cost_per_result', 'result_rate'
+                ]),
+                'data_level' => 'AUCTION_CAMPAIGN',
+                'lifetime' => true,
+                'page' => 1,
+                'page_size' => 100,
+                'filtering' => json_encode([
+                    'campaign_ids' => $campaignIds
+                ])
+            ];
+
+            $reportResult = makeApiCall('/report/integrated/get/', $reportParams, $accessToken, 'GET');
+
+            if ($reportResult['code'] == 0) {
+                $reportData = $reportResult['data']['list'] ?? [];
+                foreach ($reportData as $row) {
+                    $cid = $row['dimensions']['campaign_id'] ?? null;
+                    if ($cid) {
+                        $metricsData[$cid] = $row['metrics'] ?? [];
+                    }
+                }
+                logSmartPlus("Got metrics for " . count($metricsData) . " campaigns");
+            } else {
+                logSmartPlus("Failed to get campaign metrics: " . ($reportResult['message'] ?? 'Unknown error'));
+            }
+        }
+
+        // Format campaigns with metrics
+        $formattedCampaigns = [];
+        foreach ($campaigns as $campaign) {
+            $cid = $campaign['campaign_id'] ?? '';
+            $metrics = $metricsData[$cid] ?? [];
+
+            $formattedCampaigns[] = [
+                'campaign_id' => $cid,
+                'campaign_name' => $campaign['campaign_name'] ?? 'Unnamed Campaign',
+                'operation_status' => $campaign['operation_status'] ?? 'UNKNOWN',
+                'budget' => $campaign['budget'] ?? 0,
+                'budget_mode' => $campaign['budget_mode'] ?? '',
+                'objective_type' => $campaign['objective_type'] ?? '',
+                'is_smart_performance_campaign' => $campaign['is_smart_performance_campaign'] ?? false,
+                'create_time' => $campaign['create_time'] ?? '',
+                'modify_time' => $campaign['modify_time'] ?? '',
+                // Metrics
+                'spend' => $metrics['spend'] ?? '0.00',
+                'impressions' => $metrics['impressions'] ?? '0',
+                'clicks' => $metrics['clicks'] ?? '0',
+                'ctr' => $metrics['ctr'] ?? '0.00',
+                'cpc' => $metrics['cpc'] ?? '0.00',
+                'cpm' => $metrics['cpm'] ?? '0.00',
+                'conversions' => $metrics['conversion'] ?? '0',
+                'cost_per_conversion' => $metrics['cost_per_conversion'] ?? '0.00',
+                'conversion_rate' => $metrics['conversion_rate'] ?? '0.00',
+                'results' => $metrics['result'] ?? '0',
+                'cost_per_result' => $metrics['cost_per_result'] ?? '0.00',
+                'result_rate' => $metrics['result_rate'] ?? '0.00'
+            ];
+        }
+
+        echo json_encode([
+            'success' => true,
+            'campaigns' => $formattedCampaigns,
+            'total_count' => count($formattedCampaigns)
+        ]);
+        break;
+
+    // ==========================================
+    // GET AD GROUPS FOR CAMPAIGN (for expansion)
+    // ==========================================
+    case 'get_adgroups_for_campaign':
+        $campaignId = $input['campaign_id'] ?? null;
+
+        if (!$campaignId) {
+            echo json_encode(['success' => false, 'message' => 'Campaign ID is required']);
+            break;
+        }
+
+        logSmartPlus("=== FETCHING AD GROUPS FOR CAMPAIGN $campaignId ===");
+
+        // Get ad groups
+        $adgroupParams = [
+            'advertiser_id' => $advertiserId,
+            'filtering' => json_encode(['campaign_ids' => [$campaignId]]),
+            'page' => 1,
+            'page_size' => 100
+        ];
+
+        $adgroupResult = makeApiCall('/adgroup/get/', $adgroupParams, $accessToken, 'GET');
+
+        if ($adgroupResult['code'] != 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to fetch ad groups: ' . ($adgroupResult['message'] ?? 'Unknown error'),
+                'adgroups' => []
+            ]);
+            break;
+        }
+
+        $adgroups = $adgroupResult['data']['list'] ?? [];
+        logSmartPlus("Found " . count($adgroups) . " ad groups");
+
+        // Get metrics for ad groups
+        $adgroupIds = array_column($adgroups, 'adgroup_id');
+        $metricsData = [];
+
+        if (!empty($adgroupIds)) {
+            $reportParams = [
+                'advertiser_id' => $advertiserId,
+                'report_type' => 'BASIC',
+                'dimensions' => json_encode(['adgroup_id']),
+                'metrics' => json_encode([
+                    'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'cpm',
+                    'conversion', 'cost_per_conversion', 'conversion_rate',
+                    'result', 'cost_per_result', 'result_rate'
+                ]),
+                'data_level' => 'AUCTION_ADGROUP',
+                'lifetime' => true,
+                'page' => 1,
+                'page_size' => 100,
+                'filtering' => json_encode([
+                    'adgroup_ids' => $adgroupIds
+                ])
+            ];
+
+            $reportResult = makeApiCall('/report/integrated/get/', $reportParams, $accessToken, 'GET');
+
+            if ($reportResult['code'] == 0) {
+                $reportData = $reportResult['data']['list'] ?? [];
+                foreach ($reportData as $row) {
+                    $aid = $row['dimensions']['adgroup_id'] ?? null;
+                    if ($aid) {
+                        $metricsData[$aid] = $row['metrics'] ?? [];
+                    }
+                }
+            }
+        }
+
+        // Format ad groups with metrics
+        $formattedAdgroups = [];
+        foreach ($adgroups as $adgroup) {
+            $aid = $adgroup['adgroup_id'] ?? '';
+            $metrics = $metricsData[$aid] ?? [];
+
+            $formattedAdgroups[] = [
+                'adgroup_id' => $aid,
+                'adgroup_name' => $adgroup['adgroup_name'] ?? 'Unnamed Ad Group',
+                'operation_status' => $adgroup['operation_status'] ?? 'UNKNOWN',
+                'budget' => $adgroup['budget'] ?? 0,
+                'bid' => $adgroup['bid'] ?? null,
+                'schedule_type' => $adgroup['schedule_type'] ?? '',
+                'schedule_start_time' => $adgroup['schedule_start_time'] ?? '',
+                'schedule_end_time' => $adgroup['schedule_end_time'] ?? '',
+                // Metrics
+                'spend' => $metrics['spend'] ?? '0.00',
+                'impressions' => $metrics['impressions'] ?? '0',
+                'clicks' => $metrics['clicks'] ?? '0',
+                'ctr' => $metrics['ctr'] ?? '0.00',
+                'cpc' => $metrics['cpc'] ?? '0.00',
+                'cpm' => $metrics['cpm'] ?? '0.00',
+                'conversions' => $metrics['conversion'] ?? '0',
+                'cost_per_conversion' => $metrics['cost_per_conversion'] ?? '0.00',
+                'conversion_rate' => $metrics['conversion_rate'] ?? '0.00',
+                'results' => $metrics['result'] ?? '0',
+                'cost_per_result' => $metrics['cost_per_result'] ?? '0.00',
+                'result_rate' => $metrics['result_rate'] ?? '0.00'
+            ];
+        }
+
+        echo json_encode([
+            'success' => true,
+            'adgroups' => $formattedAdgroups,
+            'campaign_id' => $campaignId
+        ]);
+        break;
+
+    // ==========================================
+    // GET ADS FOR AD GROUP (for expansion)
+    // ==========================================
+    case 'get_ads_for_adgroup':
+        $adgroupId = $input['adgroup_id'] ?? null;
+
+        if (!$adgroupId) {
+            echo json_encode(['success' => false, 'message' => 'Ad Group ID is required']);
+            break;
+        }
+
+        logSmartPlus("=== FETCHING ADS FOR AD GROUP $adgroupId ===");
+
+        // Get ads
+        $adParams = [
+            'advertiser_id' => $advertiserId,
+            'filtering' => json_encode(['adgroup_ids' => [$adgroupId]]),
+            'page' => 1,
+            'page_size' => 100
+        ];
+
+        $adResult = makeApiCall('/ad/get/', $adParams, $accessToken, 'GET');
+
+        if ($adResult['code'] != 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to fetch ads: ' . ($adResult['message'] ?? 'Unknown error'),
+                'ads' => []
+            ]);
+            break;
+        }
+
+        $ads = $adResult['data']['list'] ?? [];
+        logSmartPlus("Found " . count($ads) . " ads");
+
+        // Get metrics for ads
+        $adIds = array_column($ads, 'ad_id');
+        $metricsData = [];
+
+        if (!empty($adIds)) {
+            $reportParams = [
+                'advertiser_id' => $advertiserId,
+                'report_type' => 'BASIC',
+                'dimensions' => json_encode(['ad_id']),
+                'metrics' => json_encode([
+                    'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'cpm',
+                    'conversion', 'cost_per_conversion', 'conversion_rate',
+                    'result', 'cost_per_result', 'result_rate'
+                ]),
+                'data_level' => 'AUCTION_AD',
+                'lifetime' => true,
+                'page' => 1,
+                'page_size' => 100,
+                'filtering' => json_encode([
+                    'ad_ids' => $adIds
+                ])
+            ];
+
+            $reportResult = makeApiCall('/report/integrated/get/', $reportParams, $accessToken, 'GET');
+
+            if ($reportResult['code'] == 0) {
+                $reportData = $reportResult['data']['list'] ?? [];
+                foreach ($reportData as $row) {
+                    $adId = $row['dimensions']['ad_id'] ?? null;
+                    if ($adId) {
+                        $metricsData[$adId] = $row['metrics'] ?? [];
+                    }
+                }
+            }
+        }
+
+        // Format ads with metrics
+        $formattedAds = [];
+        foreach ($ads as $ad) {
+            $adId = $ad['ad_id'] ?? '';
+            $metrics = $metricsData[$adId] ?? [];
+
+            $formattedAds[] = [
+                'ad_id' => $adId,
+                'ad_name' => $ad['ad_name'] ?? 'Unnamed Ad',
+                'operation_status' => $ad['operation_status'] ?? 'UNKNOWN',
+                'ad_format' => $ad['ad_format'] ?? '',
+                // Metrics
+                'spend' => $metrics['spend'] ?? '0.00',
+                'impressions' => $metrics['impressions'] ?? '0',
+                'clicks' => $metrics['clicks'] ?? '0',
+                'ctr' => $metrics['ctr'] ?? '0.00',
+                'cpc' => $metrics['cpc'] ?? '0.00',
+                'cpm' => $metrics['cpm'] ?? '0.00',
+                'conversions' => $metrics['conversion'] ?? '0',
+                'cost_per_conversion' => $metrics['cost_per_conversion'] ?? '0.00',
+                'conversion_rate' => $metrics['conversion_rate'] ?? '0.00',
+                'results' => $metrics['result'] ?? '0',
+                'cost_per_result' => $metrics['cost_per_result'] ?? '0.00',
+                'result_rate' => $metrics['result_rate'] ?? '0.00'
+            ];
+        }
+
+        echo json_encode([
+            'success' => true,
+            'ads' => $formattedAds,
+            'adgroup_id' => $adgroupId
+        ]);
+        break;
+
+    // ==========================================
     // UPDATE CAMPAIGN STATUS (ON/OFF)
     // ==========================================
     case 'update_campaign_status':

@@ -232,6 +232,167 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             font-size: 13px;
             color: #64748b;
         }
+        /* Campaign Metrics Table Styles */
+        .campaign-metrics-table-container {
+            background: #fff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .metrics-table-wrapper {
+            overflow-x: auto;
+        }
+        .metrics-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .metrics-table thead {
+            background: #f8fafc;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .metrics-table th {
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: 600;
+            color: #64748b;
+            border-bottom: 2px solid #e2e8f0;
+            white-space: nowrap;
+        }
+        .metrics-table td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+        .metrics-table tbody tr:hover {
+            background: #f8fafc;
+        }
+        .metrics-table .col-checkbox { width: 40px; text-align: center; }
+        .metrics-table .col-toggle { width: 60px; }
+        .metrics-table .col-name { min-width: 200px; }
+        .metrics-table .col-status { width: 100px; }
+        .metrics-table .col-budget,
+        .metrics-table .col-spend,
+        .metrics-table .col-cpc,
+        .metrics-table .col-cpr { width: 90px; text-align: right; }
+        .metrics-table .col-impressions,
+        .metrics-table .col-clicks,
+        .metrics-table .col-conversions,
+        .metrics-table .col-results { width: 100px; text-align: right; }
+        .metrics-table .col-ctr { width: 70px; text-align: right; }
+        .metrics-table .col-actions { width: 100px; text-align: center; }
+        /* Row Levels (Campaign, Ad Group, Ad) */
+        .metrics-table .row-campaign { background: #fff; }
+        .metrics-table .row-adgroup { background: #f8fafc; }
+        .metrics-table .row-ad { background: #f1f5f9; }
+        .metrics-table .row-adgroup td:first-child,
+        .metrics-table .row-ad td:first-child { padding-left: 20px; }
+        /* Expand/Collapse */
+        .expand-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: #64748b;
+            transition: all 0.2s;
+        }
+        .expand-btn:hover { background: #e2e8f0; color: #1e293b; }
+        .expand-btn.expanded { transform: rotate(90deg); }
+        /* Name Cell with Icon */
+        .name-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .name-cell .entity-icon {
+            font-size: 16px;
+            width: 24px;
+            text-align: center;
+        }
+        .name-cell .entity-name {
+            font-weight: 500;
+            color: #1e293b;
+        }
+        .name-cell .entity-id {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-left: 8px;
+        }
+        .name-cell .smart-badge-small {
+            font-size: 10px;
+            padding: 2px 6px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-radius: 4px;
+            margin-left: 8px;
+        }
+        /* Status Badge in Table */
+        .status-badge-table {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .status-badge-table.active { background: #dcfce7; color: #16a34a; }
+        .status-badge-table.inactive { background: #fee2e2; color: #dc2626; }
+        .status-badge-table.paused { background: #fef3c7; color: #d97706; }
+        /* Toggle in Table */
+        .toggle-table {
+            width: 44px;
+            height: 24px;
+            background: #e2e8f0;
+            border-radius: 12px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .toggle-table.on { background: #22c55e; }
+        .toggle-table .toggle-slider-table {
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: all 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .toggle-table.on .toggle-slider-table { left: 22px; }
+        .toggle-table.loading { opacity: 0.5; pointer-events: none; }
+        /* Action Buttons in Table */
+        .action-btn-table {
+            background: none;
+            border: 1px solid #e2e8f0;
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #64748b;
+            transition: all 0.2s;
+        }
+        .action-btn-table:hover { background: #f1f5f9; border-color: #cbd5e1; color: #1e293b; }
+        /* Loading Row */
+        .loading-row td { text-align: center; color: #94a3b8; padding: 20px; }
+        .loading-row .mini-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        /* Indent for nested rows */
+        .indent-1 { padding-left: 30px !important; }
+        .indent-2 { padding-left: 50px !important; }
     </style>
 </head>
 <body>
@@ -1117,12 +1278,12 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                        oninput="searchCampaigns()">
             </div>
 
-            <!-- Campaign List -->
-            <div class="campaign-list" id="campaign-list">
+            <!-- Campaign Metrics Table -->
+            <div class="campaign-metrics-table-container">
                 <!-- Loading State -->
                 <div class="campaign-loading" id="campaign-loading">
                     <div class="spinner"></div>
-                    <p>Loading campaigns...</p>
+                    <p>Loading campaigns with metrics...</p>
                 </div>
 
                 <!-- Empty State (hidden by default) -->
@@ -1133,9 +1294,35 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     <button class="btn-primary" onclick="switchMainView('create')">Create Your First Campaign</button>
                 </div>
 
-                <!-- Campaign Cards Container -->
-                <div id="campaign-cards-container">
-                    <!-- Campaign cards will be rendered here by JavaScript -->
+                <!-- Metrics Table -->
+                <div class="metrics-table-wrapper" id="metrics-table-wrapper" style="display: none;">
+                    <table class="metrics-table" id="campaign-metrics-table">
+                        <thead>
+                            <tr>
+                                <th class="col-checkbox"><input type="checkbox" id="select-all-campaigns-table" onchange="toggleSelectAllCampaigns()"></th>
+                                <th class="col-toggle">On/Off</th>
+                                <th class="col-name">Name</th>
+                                <th class="col-status">Status</th>
+                                <th class="col-budget">Budget</th>
+                                <th class="col-spend">Cost</th>
+                                <th class="col-cpc">CPC</th>
+                                <th class="col-impressions">Impressions</th>
+                                <th class="col-clicks">Clicks</th>
+                                <th class="col-ctr">CTR</th>
+                                <th class="col-conversions">Conversions</th>
+                                <th class="col-cpr">Cost/Result</th>
+                                <th class="col-results">Results</th>
+                                <th class="col-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="campaign-table-body">
+                            <!-- Campaign rows will be rendered here by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Legacy Campaign Cards Container (hidden) -->
+                <div id="campaign-cards-container" style="display: none;">
                 </div>
             </div>
         </div>
