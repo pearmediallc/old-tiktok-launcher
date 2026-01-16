@@ -469,6 +469,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     state.cboEnabled = true;
 
+    // Check for URL parameter to auto-switch to campaigns view
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('view') === 'campaigns') {
+        // Use setTimeout to ensure DOM is fully ready
+        setTimeout(() => {
+            switchMainView('campaigns');
+        }, 100);
+    }
+
     // Initialize launch mode (single is default and selected)
     const singleOption = document.getElementById('single-launch-option');
     if (singleOption) singleOption.classList.add('selected');

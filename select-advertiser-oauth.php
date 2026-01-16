@@ -614,30 +614,30 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
 
                 <!-- Step 2: Select Campaign Type -->
                 <div class="section" id="section-2">
-                    <div class="section-title">Choose Your Campaign Type</div>
-                    <div class="section-subtitle">Select the campaign type that best fits your marketing goals</div>
+                    <div class="section-title">What would you like to do?</div>
+                    <div class="section-subtitle">Create a new campaign or view your existing campaigns</div>
 
                     <div class="campaign-type-grid">
-                        <div class="campaign-card" onclick="selectCampaignType('manual', this)">
+                        <div class="campaign-card" onclick="selectCampaignType('view', this)">
                             <div class="check-icon">✓</div>
-                            <div class="campaign-icon">🎯</div>
-                            <div class="campaign-title">Manual Campaign</div>
+                            <div class="campaign-icon">📊</div>
+                            <div class="campaign-title">View Campaigns</div>
                             <div class="campaign-description">
-                                Full control over your campaign settings, targeting, and optimization strategies.
+                                View and manage your existing campaigns with detailed metrics and performance data.
                             </div>
                             <ul class="campaign-features">
-                                <li>Custom audience targeting</li>
-                                <li>Manual bid management</li>
-                                <li>Advanced optimization controls</li>
-                                <li>Detailed performance tracking</li>
-                                <li>Flexible budget allocation</li>
+                                <li>See all your campaigns</li>
+                                <li>View metrics & performance</li>
+                                <li>Turn campaigns ON/OFF</li>
+                                <li>Duplicate existing campaigns</li>
+                                <li>Expand to see ad groups & ads</li>
                             </ul>
                         </div>
 
                         <div class="campaign-card" onclick="selectCampaignType('smart', this)">
                             <div class="check-icon">✓</div>
                             <div class="campaign-icon">⚡</div>
-                            <div class="campaign-title">Smart+ Campaign</div>
+                            <div class="campaign-title">Create Smart+ Campaign</div>
                             <div class="campaign-description">
                                 AI-powered automation that optimizes your campaigns for maximum performance.
                             </div>
@@ -649,12 +649,28 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
                                 <li>Simplified campaign setup</li>
                             </ul>
                         </div>
+
+                        <div class="campaign-card" onclick="selectCampaignType('manual', this)">
+                            <div class="check-icon">✓</div>
+                            <div class="campaign-icon">🎯</div>
+                            <div class="campaign-title">Create Manual Campaign</div>
+                            <div class="campaign-description">
+                                Full control over your campaign settings, targeting, and optimization strategies.
+                            </div>
+                            <ul class="campaign-features">
+                                <li>Custom audience targeting</li>
+                                <li>Manual bid management</li>
+                                <li>Advanced optimization controls</li>
+                                <li>Detailed performance tracking</li>
+                                <li>Flexible budget allocation</li>
+                            </ul>
+                        </div>
                     </div>
 
                     <div class="button-group">
                         <button class="btn btn-secondary" onclick="goToStep(1)">← Back</button>
                         <button class="btn btn-primary" id="btn-next-2" onclick="launchDashboard()" disabled>
-                            Launch Dashboard →
+                            Continue →
                         </button>
                     </div>
                 </div>
@@ -763,7 +779,9 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
             .then(result => {
                 if (result.success) {
                     // Redirect based on campaign type
-                    if (selectedCampaignType === 'smart') {
+                    if (selectedCampaignType === 'view') {
+                        window.location.href = 'smart-campaign.php?view=campaigns';
+                    } else if (selectedCampaignType === 'smart') {
                         window.location.href = 'smart-campaign.php';
                     } else {
                         window.location.href = 'dashboard.php';

@@ -2564,18 +2564,21 @@ switch ($action) {
 
         $metricsData = [];
         if (!empty($campaignIds)) {
-            // Get campaign-level metrics
+            // Get campaign-level metrics using date range (last 365 days for lifetime-like data)
+            $startDate = date('Y-m-d', strtotime('-365 days'));
+            $endDate = date('Y-m-d');
+
             $reportParams = [
                 'advertiser_id' => $advertiserId,
                 'report_type' => 'BASIC',
                 'dimensions' => json_encode(['campaign_id']),
                 'metrics' => json_encode([
                     'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'cpm',
-                    'conversion', 'cost_per_conversion', 'conversion_rate',
-                    'result', 'cost_per_result', 'result_rate'
+                    'conversion', 'cost_per_conversion', 'conversion_rate'
                 ]),
                 'data_level' => 'AUCTION_CAMPAIGN',
-                'lifetime' => true,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
                 'page' => 1,
                 'page_size' => 100,
                 'filtering' => json_encode([
@@ -2583,7 +2586,10 @@ switch ($action) {
                 ])
             ];
 
+            logSmartPlus("Report params: " . json_encode($reportParams));
             $reportResult = makeApiCall('/report/integrated/get/', $reportParams, $accessToken, 'GET');
+            logSmartPlus("Report result code: " . ($reportResult['code'] ?? 'null'));
+            logSmartPlus("Report result: " . json_encode($reportResult));
 
             if ($reportResult['code'] == 0) {
                 $reportData = $reportResult['data']['list'] ?? [];
@@ -2596,6 +2602,7 @@ switch ($action) {
                 logSmartPlus("Got metrics for " . count($metricsData) . " campaigns");
             } else {
                 logSmartPlus("Failed to get campaign metrics: " . ($reportResult['message'] ?? 'Unknown error'));
+                logSmartPlus("Error details: " . json_encode($reportResult));
             }
         }
 
@@ -2615,7 +2622,7 @@ switch ($action) {
                 'is_smart_performance_campaign' => $campaign['is_smart_performance_campaign'] ?? false,
                 'create_time' => $campaign['create_time'] ?? '',
                 'modify_time' => $campaign['modify_time'] ?? '',
-                // Metrics
+                // Metrics - use string values from API
                 'spend' => $metrics['spend'] ?? '0.00',
                 'impressions' => $metrics['impressions'] ?? '0',
                 'clicks' => $metrics['clicks'] ?? '0',
@@ -2625,16 +2632,16 @@ switch ($action) {
                 'conversions' => $metrics['conversion'] ?? '0',
                 'cost_per_conversion' => $metrics['cost_per_conversion'] ?? '0.00',
                 'conversion_rate' => $metrics['conversion_rate'] ?? '0.00',
-                'results' => $metrics['result'] ?? '0',
-                'cost_per_result' => $metrics['cost_per_result'] ?? '0.00',
-                'result_rate' => $metrics['result_rate'] ?? '0.00'
+                'results' => $metrics['conversion'] ?? '0',  // Use conversion as results for now
+                'cost_per_result' => $metrics['cost_per_conversion'] ?? '0.00'
             ];
         }
 
         echo json_encode([
             'success' => true,
             'campaigns' => $formattedCampaigns,
-            'total_count' => count($formattedCampaigns)
+            'total_count' => count($formattedCampaigns),
+            'debug_metrics_count' => count($metricsData)
         ]);
         break;
 
@@ -2678,17 +2685,20 @@ switch ($action) {
         $metricsData = [];
 
         if (!empty($adgroupIds)) {
+            $startDate = date('Y-m-d', strtotime('-365 days'));
+            $endDate = date('Y-m-d');
+
             $reportParams = [
                 'advertiser_id' => $advertiserId,
                 'report_type' => 'BASIC',
                 'dimensions' => json_encode(['adgroup_id']),
                 'metrics' => json_encode([
                     'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'cpm',
-                    'conversion', 'cost_per_conversion', 'conversion_rate',
-                    'result', 'cost_per_result', 'result_rate'
+                    'conversion', 'cost_per_conversion', 'conversion_rate'
                 ]),
                 'data_level' => 'AUCTION_ADGROUP',
-                'lifetime' => true,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
                 'page' => 1,
                 'page_size' => 100,
                 'filtering' => json_encode([
@@ -2734,9 +2744,8 @@ switch ($action) {
                 'conversions' => $metrics['conversion'] ?? '0',
                 'cost_per_conversion' => $metrics['cost_per_conversion'] ?? '0.00',
                 'conversion_rate' => $metrics['conversion_rate'] ?? '0.00',
-                'results' => $metrics['result'] ?? '0',
-                'cost_per_result' => $metrics['cost_per_result'] ?? '0.00',
-                'result_rate' => $metrics['result_rate'] ?? '0.00'
+                'results' => $metrics['conversion'] ?? '0',
+                'cost_per_result' => $metrics['cost_per_conversion'] ?? '0.00'
             ];
         }
 
@@ -2787,17 +2796,20 @@ switch ($action) {
         $metricsData = [];
 
         if (!empty($adIds)) {
+            $startDate = date('Y-m-d', strtotime('-365 days'));
+            $endDate = date('Y-m-d');
+
             $reportParams = [
                 'advertiser_id' => $advertiserId,
                 'report_type' => 'BASIC',
                 'dimensions' => json_encode(['ad_id']),
                 'metrics' => json_encode([
                     'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'cpm',
-                    'conversion', 'cost_per_conversion', 'conversion_rate',
-                    'result', 'cost_per_result', 'result_rate'
+                    'conversion', 'cost_per_conversion', 'conversion_rate'
                 ]),
                 'data_level' => 'AUCTION_AD',
-                'lifetime' => true,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
                 'page' => 1,
                 'page_size' => 100,
                 'filtering' => json_encode([
@@ -2839,9 +2851,8 @@ switch ($action) {
                 'conversions' => $metrics['conversion'] ?? '0',
                 'cost_per_conversion' => $metrics['cost_per_conversion'] ?? '0.00',
                 'conversion_rate' => $metrics['conversion_rate'] ?? '0.00',
-                'results' => $metrics['result'] ?? '0',
-                'cost_per_result' => $metrics['cost_per_result'] ?? '0.00',
-                'result_rate' => $metrics['result_rate'] ?? '0.00'
+                'results' => $metrics['conversion'] ?? '0',
+                'cost_per_result' => $metrics['cost_per_conversion'] ?? '0.00'
             ];
         }
 
