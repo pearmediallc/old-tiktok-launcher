@@ -2568,6 +2568,15 @@ switch ($action) {
             $startDate = date('Y-m-d', strtotime('-365 days'));
             $endDate = date('Y-m-d');
 
+            // Build filters array in TikTok's required format
+            $filters = [
+                [
+                    'field_name' => 'campaign_ids',
+                    'filter_type' => 'IN',
+                    'filter_value' => json_encode($campaignIds)
+                ]
+            ];
+
             $reportParams = [
                 'advertiser_id' => $advertiserId,
                 'report_type' => 'BASIC',
@@ -2581,9 +2590,7 @@ switch ($action) {
                 'end_date' => $endDate,
                 'page' => 1,
                 'page_size' => 100,
-                'filtering' => json_encode([
-                    'campaign_ids' => $campaignIds
-                ])
+                'filters' => json_encode($filters)
             ];
 
             logSmartPlus("Report params: " . json_encode($reportParams));
@@ -2688,6 +2695,15 @@ switch ($action) {
             $startDate = date('Y-m-d', strtotime('-365 days'));
             $endDate = date('Y-m-d');
 
+            // Build filters array in TikTok's required format
+            $filters = [
+                [
+                    'field_name' => 'adgroup_ids',
+                    'filter_type' => 'IN',
+                    'filter_value' => json_encode($adgroupIds)
+                ]
+            ];
+
             $reportParams = [
                 'advertiser_id' => $advertiserId,
                 'report_type' => 'BASIC',
@@ -2701,9 +2717,7 @@ switch ($action) {
                 'end_date' => $endDate,
                 'page' => 1,
                 'page_size' => 100,
-                'filtering' => json_encode([
-                    'adgroup_ids' => $adgroupIds
-                ])
+                'filters' => json_encode($filters)
             ];
 
             $reportResult = makeApiCall('/report/integrated/get/', $reportParams, $accessToken, 'GET');
@@ -2799,6 +2813,15 @@ switch ($action) {
             $startDate = date('Y-m-d', strtotime('-365 days'));
             $endDate = date('Y-m-d');
 
+            // Build filters array in TikTok's required format
+            $filters = [
+                [
+                    'field_name' => 'ad_ids',
+                    'filter_type' => 'IN',
+                    'filter_value' => json_encode($adIds)
+                ]
+            ];
+
             $reportParams = [
                 'advertiser_id' => $advertiserId,
                 'report_type' => 'BASIC',
@@ -2812,9 +2835,7 @@ switch ($action) {
                 'end_date' => $endDate,
                 'page' => 1,
                 'page_size' => 100,
-                'filtering' => json_encode([
-                    'ad_ids' => $adIds
-                ])
+                'filters' => json_encode($filters)
             ];
 
             $reportResult = makeApiCall('/report/integrated/get/', $reportParams, $accessToken, 'GET');
