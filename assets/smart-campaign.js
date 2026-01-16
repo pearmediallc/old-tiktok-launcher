@@ -4736,79 +4736,60 @@ async function executeDuplicateCampaign() {
             if (ad && newAdGroupId) {
                 addLog('info', `Creating ad for ad group ${newAdGroupId}`);
 
-                // Build creatives array from video_ids or smart_creative_request
+                // Build creatives array from creative_list (Smart+ format) or video_ids
                 let creatives = [];
 
-                // Check if we have smart_creative_request (Smart+ ad format)
-                if (ad.smart_creative_request && ad.smart_creative_request.creative_list) {
-                    // Extract video IDs AND image IDs from smart_creative_request
-                    ad.smart_creative_request.creative_list.forEach(item => {
+                // Check if we have creative_list from Smart+ ad/get response
+                if (ad.creative_list && ad.creative_list.length > 0) {
+                    ad.creative_list.forEach(item => {
                         if (item.creative_info && item.creative_info.video_info) {
                             const creative = {
                                 video_id: item.creative_info.video_info.video_id
                             };
                             // Also extract image_id (cover image) if available
                             if (item.creative_info.image_info && item.creative_info.image_info.length > 0) {
-                                // image_info can contain web_uri or image_id
                                 const imageInfo = item.creative_info.image_info[0];
                                 creative.image_id = imageInfo.web_uri || imageInfo.image_id || null;
                             }
                             creatives.push(creative);
                         }
                     });
+                    console.log('Extracted creatives from creative_list:', creatives);
                 } else if (ad.video_ids && ad.video_ids.length > 0) {
                     // Use video_ids array - try to match with image_ids if available
                     creatives = ad.video_ids.map((vid, index) => {
                         const creative = { video_id: vid };
-                        // Try to get corresponding image_id if available
                         if (ad.image_ids && ad.image_ids[index]) {
                             creative.image_id = ad.image_ids[index];
                         }
                         return creative;
                     });
-                } else if (ad.video_id) {
-                    // Single video_id
-                    const creative = { video_id: ad.video_id };
-                    // Try to get image_id if available
-                    if (ad.image_ids && ad.image_ids.length > 0) {
-                        creative.image_id = ad.image_ids[0];
-                    }
-                    creatives = [creative];
+                    console.log('Extracted creatives from video_ids:', creatives);
                 }
 
                 // Log creative extraction details
-                console.log('Creatives extracted:', JSON.stringify(creatives, null, 2));
+                console.log('Final creatives:', JSON.stringify(creatives, null, 2));
                 console.log('Ad structure:', {
-                    has_smart_creative_request: !!ad.smart_creative_request,
-                    has_creative_list: !!(ad.smart_creative_request?.creative_list),
+                    has_creative_list: !!(ad.creative_list?.length),
+                    creative_list_count: ad.creative_list?.length || 0,
                     video_ids: ad.video_ids,
-                    video_id: ad.video_id,
                     image_ids: ad.image_ids
                 });
 
                 // Validate we have at least one creative
                 if (creatives.length === 0) {
-                    addLog('warning', 'No video creatives found in original ad, skipping ad creation');
-                    addLog('error', `Ad structure: smart_creative_request=${!!ad.smart_creative_request}, video_ids=${JSON.stringify(ad.video_ids)}, video_id=${ad.video_id}`);
+                    addLog('warning', 'No video creatives found in original ad');
+                    addLog('error', `Ad structure: creative_list=${ad.creative_list?.length || 0}, video_ids=${JSON.stringify(ad.video_ids)}`);
                     throw new Error('No video creatives found in the original ad to duplicate');
                 }
 
                 addLog('info', `Found ${creatives.length} creative(s) to duplicate`);
 
-                // Get landing page URL or page_id (Instant Form for Lead Gen)
+                // Get landing page URL (now properly returned from /smart_plus/ad/get/)
                 let landingPageUrl = ad.landing_page_url;
                 let pageId = ad.page_id;
 
-                // Try to extract from landing_page_urls array
-                if (!landingPageUrl && ad.landing_page_urls && ad.landing_page_urls.length > 0) {
-                    if (typeof ad.landing_page_urls[0] === 'object') {
-                        landingPageUrl = ad.landing_page_urls[0].landing_page_url;
-                    } else {
-                        landingPageUrl = ad.landing_page_urls[0];
-                    }
-                }
-
-                // Try landing_page_url_list (Smart+ format)
+                // Fallback: Try landing_page_url_list if landing_page_url not directly available
                 if (!landingPageUrl && ad.landing_page_url_list && ad.landing_page_url_list.length > 0) {
                     if (typeof ad.landing_page_url_list[0] === 'object') {
                         landingPageUrl = ad.landing_page_url_list[0].landing_page_url;
@@ -4817,50 +4798,36 @@ async function executeDuplicateCampaign() {
                     }
                 }
 
-                // Try page_list for Instant Forms (Lead Gen)
-                if (!pageId && ad.page_list && ad.page_list.length > 0) {
-                    pageId = ad.page_list[0].page_id || ad.page_list[0];
-                }
-
-                console.log('Destination extraction:', { landingPageUrl, pageId });
-
-                // Prepare ad data for Smart+ ad creation
-                // Get call_to_action_id from multiple possible sources
+                // Get call_to_action_id (now properly returned from /smart_plus/ad/get/)
                 let callToActionId = ad.call_to_action_id;
 
-                // Fallback 1: Check ad_configuration
+                // Fallback: Check ad_configuration
                 if (!callToActionId && ad.ad_configuration?.call_to_action_id) {
                     callToActionId = ad.ad_configuration.call_to_action_id;
-                    console.log('Using call_to_action_id from ad_configuration');
                 }
 
-                // Fallback 2: Check default_cta_portfolio from backend
+                // Fallback: Check default_cta_portfolio from backend
                 if (!callToActionId && duplicateState.campaignDetails?.default_cta_portfolio?.id) {
                     callToActionId = duplicateState.campaignDetails.default_cta_portfolio.id;
-                    console.log('Using call_to_action_id from default_cta_portfolio:', callToActionId);
                 }
 
-                console.log('Final call_to_action_id:', callToActionId);
+                console.log('Extracted from Smart+ API:', {
+                    landing_page_url: landingPageUrl,
+                    call_to_action_id: callToActionId,
+                    page_id: pageId,
+                    identity_id: ad.identity_id
+                });
 
+                // Validate call_to_action_id
                 if (!callToActionId) {
                     addLog('warning', 'No CTA Portfolio ID found');
-                    addLog('error', 'Backend did not provide a CTA portfolio. Check server logs.');
-                    throw new Error('No CTA Portfolio ID available. The system could not find or create one.');
+                    throw new Error('No CTA Portfolio ID available. Please check the original ad has a CTA configured.');
                 }
 
-                // Get landing page URL from input field (user-provided since TikTok API doesn't return it for Smart+ ads)
-                const userProvidedLandingUrl = document.getElementById('duplicate-landing-url')?.value?.trim();
-
-                // Use user-provided URL if available, otherwise try extracted value
-                if (userProvidedLandingUrl) {
-                    landingPageUrl = userProvidedLandingUrl;
-                    console.log('Using user-provided landing page URL:', landingPageUrl);
-                }
-
-                // Validate we have a destination (either landing page or instant form)
+                // Validate destination
                 if (!landingPageUrl && !pageId) {
-                    addLog('warning', 'No landing page URL provided');
-                    throw new Error('Please enter a landing page URL in the input field above.');
+                    addLog('warning', 'No landing page URL found');
+                    throw new Error('No landing page URL found in the original ad.');
                 }
 
                 const adData = {
@@ -4869,10 +4836,10 @@ async function executeDuplicateCampaign() {
                     identity_id: ad.identity_id,
                     call_to_action_id: callToActionId,
                     creatives: creatives,
-                    ad_texts: ad.ad_texts || (ad.ad_text ? [ad.ad_text] : [])
+                    ad_texts: ad.ad_texts || []
                 };
 
-                // Add destination - either landing_page_url or page_id
+                // Add destination
                 if (landingPageUrl) {
                     adData.landing_page_url = landingPageUrl;
                 }

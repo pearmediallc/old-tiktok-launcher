@@ -2660,90 +2660,107 @@ switch ($action) {
             ];
             logSmartPlus("Ad Group found: " . ($adgroup['adgroup_name'] ?? 'Unknown'));
 
-            // Step 3: Get Ads for this ad group
-            logSmartPlus("Step 3: Fetching ads...");
-            $adResult = makeApiCall('/ad/get/', [
+            // Step 3: Get Ads for this ad group using Smart+ Ad Get endpoint
+            logSmartPlus("Step 3: Fetching Smart+ ads using /smart_plus/ad/get/...");
+            $adResult = makeApiCall('/smart_plus/ad/get/', [
                 'advertiser_id' => $advertiserId,
                 'filtering' => json_encode(['adgroup_ids' => [$adgroup['adgroup_id']]]),
                 'page_size' => 100
             ], $accessToken, 'GET');
 
+            logSmartPlus("Smart+ Ad API Response: " . json_encode($adResult, JSON_PRETTY_PRINT));
+
             if ($adResult['code'] == 0 && !empty($adResult['data']['list'])) {
                 $ad = $adResult['data']['list'][0]; // Get first ad
 
                 // Log the full ad response to see all available fields
-                logSmartPlus("Full ad response from TikTok API: " . json_encode($ad, JSON_PRETTY_PRINT));
+                logSmartPlus("Full Smart+ ad response: " . json_encode($ad, JSON_PRETTY_PRINT));
 
-                // Extract call_to_action_id from multiple possible locations
-                $callToActionId = $ad['call_to_action_id'] ?? '';
-
-                // Check if it's in ad_configuration (Smart+ ads store it there)
-                if (empty($callToActionId) && isset($ad['ad_configuration']['call_to_action_id'])) {
+                // Extract call_to_action_id from ad_configuration (Smart+ format)
+                $callToActionId = '';
+                if (isset($ad['ad_configuration']['call_to_action_id'])) {
                     $callToActionId = $ad['ad_configuration']['call_to_action_id'];
                     logSmartPlus("Found call_to_action_id in ad_configuration: $callToActionId");
                 }
 
-                // Check if it's in creative_authorized_info
-                if (empty($callToActionId) && isset($ad['creative_authorized_info']['call_to_action_id'])) {
-                    $callToActionId = $ad['creative_authorized_info']['call_to_action_id'];
-                    logSmartPlus("Found call_to_action_id in creative_authorized_info: $callToActionId");
+                // Extract landing_page_url from landing_page_url_list (Smart+ format)
+                $landingPageUrl = '';
+                if (!empty($ad['landing_page_url_list']) && is_array($ad['landing_page_url_list'])) {
+                    if (isset($ad['landing_page_url_list'][0]['landing_page_url'])) {
+                        $landingPageUrl = $ad['landing_page_url_list'][0]['landing_page_url'];
+                    } elseif (is_string($ad['landing_page_url_list'][0])) {
+                        $landingPageUrl = $ad['landing_page_url_list'][0];
+                    }
+                    logSmartPlus("Found landing_page_url from landing_page_url_list: $landingPageUrl");
                 }
 
-                // Extract landing_page_url from multiple possible locations
-                $landingPageUrl = $ad['landing_page_url'] ?? '';
-
-                // Check landing_page_urls array
-                if (empty($landingPageUrl) && !empty($ad['landing_page_urls'])) {
-                    if (is_array($ad['landing_page_urls']) && isset($ad['landing_page_urls'][0])) {
-                        if (is_array($ad['landing_page_urls'][0])) {
-                            $landingPageUrl = $ad['landing_page_urls'][0]['landing_page_url'] ?? '';
-                        } else {
-                            $landingPageUrl = $ad['landing_page_urls'][0];
+                // Extract creatives from creative_list (Smart+ format)
+                $creativeList = $ad['creative_list'] ?? [];
+                $videoIds = [];
+                $imageIds = [];
+                if (!empty($creativeList)) {
+                    foreach ($creativeList as $creative) {
+                        if (isset($creative['creative_info']['video_info']['video_id'])) {
+                            $videoIds[] = $creative['creative_info']['video_info']['video_id'];
+                        }
+                        if (isset($creative['creative_info']['image_info']) && is_array($creative['creative_info']['image_info'])) {
+                            foreach ($creative['creative_info']['image_info'] as $imgInfo) {
+                                if (isset($imgInfo['web_uri'])) {
+                                    $imageIds[] = $imgInfo['web_uri'];
+                                }
+                            }
                         }
                     }
+                    logSmartPlus("Extracted " . count($videoIds) . " video(s) and " . count($imageIds) . " image(s) from creative_list");
                 }
 
-                // Check landing_page_url_list (Smart+ format)
-                if (empty($landingPageUrl) && !empty($ad['landing_page_url_list'])) {
-                    if (is_array($ad['landing_page_url_list']) && isset($ad['landing_page_url_list'][0])) {
-                        $landingPageUrl = $ad['landing_page_url_list'][0]['landing_page_url'] ?? $ad['landing_page_url_list'][0] ?? '';
+                // Extract ad_text_list (Smart+ format)
+                $adTexts = [];
+                if (!empty($ad['ad_text_list']) && is_array($ad['ad_text_list'])) {
+                    foreach ($ad['ad_text_list'] as $textItem) {
+                        if (isset($textItem['ad_text'])) {
+                            $adTexts[] = $textItem['ad_text'];
+                        }
                     }
+                    logSmartPlus("Extracted " . count($adTexts) . " ad text(s)");
                 }
+
+                // Extract identity from ad_configuration
+                $identityId = $ad['ad_configuration']['identity_id'] ?? '';
+                $identityType = $ad['ad_configuration']['identity_type'] ?? 'CUSTOMIZED_USER';
 
                 // Check page_id for instant forms (Lead Gen)
-                $pageId = $ad['page_id'] ?? '';
-                if (empty($pageId) && isset($ad['page_list']) && !empty($ad['page_list'])) {
+                $pageId = '';
+                if (!empty($ad['page_list']) && is_array($ad['page_list'])) {
                     $pageId = $ad['page_list'][0]['page_id'] ?? '';
                 }
 
-                logSmartPlus("Landing page extraction: url='$landingPageUrl', page_id='$pageId'");
+                logSmartPlus("Extracted: landing_page_url='$landingPageUrl', call_to_action_id='$callToActionId', identity_id='$identityId', page_id='$pageId'");
 
                 $response['ad'] = [
-                    'ad_id' => $ad['ad_id'] ?? '',
+                    'ad_id' => $ad['smart_plus_ad_id'] ?? $ad['ad_id'] ?? '',
+                    'smart_plus_ad_id' => $ad['smart_plus_ad_id'] ?? '',
                     'ad_name' => $ad['ad_name'] ?? '',
-                    'identity_id' => $ad['identity_id'] ?? '',
-                    'identity_type' => $ad['identity_type'] ?? '',
+                    'identity_id' => $identityId,
+                    'identity_type' => $identityType,
                     'ad_format' => $ad['ad_format'] ?? '',
-                    'ad_text' => $ad['ad_text'] ?? '',
-                    'ad_texts' => $ad['ad_texts'] ?? [],
+                    'ad_texts' => $adTexts,
+                    'ad_text_list' => $ad['ad_text_list'] ?? [],
                     'call_to_action_id' => $callToActionId,
                     'landing_page_url' => $landingPageUrl,
-                    'landing_page_urls' => $ad['landing_page_urls'] ?? [],
                     'landing_page_url_list' => $ad['landing_page_url_list'] ?? [],
                     'page_id' => $pageId,
                     'page_list' => $ad['page_list'] ?? [],
                     'creative_type' => $ad['creative_type'] ?? '',
-                    'video_id' => $ad['video_id'] ?? '',
-                    'video_ids' => $ad['video_ids'] ?? [],
-                    'image_ids' => $ad['image_ids'] ?? [],
-                    'card_id' => $ad['card_id'] ?? '',
-                    'tiktok_item_id' => $ad['tiktok_item_id'] ?? '',
-                    'smart_creative_request' => $ad['smart_creative_request'] ?? null,
-                    'ad_configuration' => $ad['ad_configuration'] ?? null
+                    'video_ids' => $videoIds,
+                    'image_ids' => $imageIds,
+                    'creative_list' => $creativeList,
+                    'ad_configuration' => $ad['ad_configuration'] ?? null,
+                    'operation_status' => $ad['operation_status'] ?? ''
                 ];
-                logSmartPlus("Ad found: " . ($ad['ad_name'] ?? 'Unknown') . ", call_to_action_id: $callToActionId, landing_page_url: $landingPageUrl");
+                logSmartPlus("Smart+ Ad found: " . ($ad['ad_name'] ?? 'Unknown') . ", call_to_action_id: $callToActionId, landing_page_url: $landingPageUrl");
             } else {
-                logSmartPlus("No ads found for ad group or error: " . ($adResult['message'] ?? 'Empty'));
+                logSmartPlus("No Smart+ ads found or error: " . ($adResult['message'] ?? 'Empty'));
             }
         } else {
             logSmartPlus("No ad groups found for campaign or error: " . ($adgroupResult['message'] ?? 'Empty'));
