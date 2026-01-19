@@ -1437,16 +1437,21 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
             <div class="ad-account-selector-container">
                 <span class="ad-account-label">🏢 Ad Account:</span>
                 <select id="ad-account-select" class="ad-account-select" onchange="switchAdAccount(this.value)">
-                    <?php foreach ($advertiserIds as $advId):
-                        $advName = '';
-                        foreach ($advertiserDetails as $detail) {
-                            if (($detail['advertiser_id'] ?? '') === $advId) {
-                                $advName = $detail['advertiser_name'] ?? '';
-                                break;
-                            }
+                    <?php
+                    $accountIndex = 1;
+                    foreach ($advertiserIds as $advId):
+                        // Get details - advertiserDetails is keyed by advertiser_id
+                        $details = $advertiserDetails[$advId] ?? null;
+                        $advName = $details['name'] ?? '';
+
+                        // Format: "Account Name • ID: 123456" or just ID if no name
+                        if ($advName && $advName !== 'Account') {
+                            $displayName = $advName . ' • ID: ' . substr($advId, -6);
+                        } else {
+                            $displayName = 'Ad Account #' . $accountIndex . ' • ID: ' . substr($advId, -6);
                         }
-                        $displayName = $advName ? "$advName ($advId)" : $advId;
                         $selected = ($advId === $currentAdvertiserId) ? 'selected' : '';
+                        $accountIndex++;
                     ?>
                     <option value="<?php echo htmlspecialchars($advId); ?>" <?php echo $selected; ?>>
                         <?php echo htmlspecialchars($displayName); ?>
@@ -1454,7 +1459,7 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                     <?php endforeach; ?>
                 </select>
                 <div class="ad-account-info">
-                    <span class="account-count"><?php echo count($advertiserIds); ?></span> accounts available
+                    <span class="account-count"><?php echo count($advertiserIds); ?></span> accounts linked
                 </div>
                 <div class="ad-account-switching" id="ad-account-switching">
                     <span class="mini-spinner"></span>
@@ -1466,14 +1471,13 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                 <span class="ad-account-label">🏢 Ad Account:</span>
                 <span style="font-weight: 600; color: #1e293b;">
                     <?php
-                    $advName = '';
-                    foreach ($advertiserDetails as $detail) {
-                        if (($detail['advertiser_id'] ?? '') === $currentAdvertiserId) {
-                            $advName = $detail['advertiser_name'] ?? '';
-                            break;
-                        }
+                    $details = $advertiserDetails[$currentAdvertiserId] ?? null;
+                    $advName = $details['name'] ?? '';
+                    if ($advName && $advName !== 'Account') {
+                        echo htmlspecialchars($advName . ' • ID: ' . substr($currentAdvertiserId, -6));
+                    } else {
+                        echo 'ID: ' . htmlspecialchars($currentAdvertiserId);
                     }
-                    echo htmlspecialchars($advName ? "$advName ($currentAdvertiserId)" : $currentAdvertiserId);
                     ?>
                 </span>
             </div>
