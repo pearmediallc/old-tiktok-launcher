@@ -4192,6 +4192,71 @@ function getCurrentDateRange() {
     };
 }
 
+// ==========================================
+// AD ACCOUNT SWITCHING
+// ==========================================
+
+// Switch to a different ad account
+async function switchAdAccount(advertiserId) {
+    if (!advertiserId) return;
+
+    const selectEl = document.getElementById('ad-account-select');
+    const switchingEl = document.getElementById('ad-account-switching');
+
+    // Show switching indicator
+    if (selectEl) selectEl.disabled = true;
+    if (switchingEl) switchingEl.style.display = 'flex';
+
+    addLog('info', `Switching to ad account: ${advertiserId}`);
+
+    try {
+        // Call API to set the new advertiser
+        const response = await fetch('api.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'set_advertiser',
+                advertiser_id: advertiserId
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            addLog('success', `Switched to ad account: ${advertiserId}`);
+            showToast('Ad account switched successfully', 'success');
+
+            // Reset campaign state and reload
+            state.campaignsLoaded = false;
+            state.campaignsList = [];
+            state.filteredCampaigns = [];
+            state.expandedCampaigns = {};
+            state.expandedAdgroups = {};
+            state.selectedCampaigns = [];
+
+            // Reload campaigns with new ad account
+            await loadCampaigns();
+
+            // Also reload pixels and identities for the new account
+            loadPixels();
+            loadIdentities();
+        } else {
+            throw new Error(result.message || 'Failed to switch ad account');
+        }
+    } catch (error) {
+        console.error('Error switching ad account:', error);
+        addLog('error', `Failed to switch ad account: ${error.message}`);
+        showToast('Failed to switch ad account: ' + error.message, 'error');
+
+        // Revert the dropdown selection (reload page to get correct state)
+        window.location.reload();
+    } finally {
+        // Hide switching indicator
+        if (selectEl) selectEl.disabled = false;
+        if (switchingEl) switchingEl.style.display = 'none';
+    }
+}
+
 // Switch between Create and My Campaigns views
 function switchMainView(view) {
     state.currentView = view;

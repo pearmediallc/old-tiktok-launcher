@@ -12,6 +12,11 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
     header('Location: select-advertiser.php');
     exit;
 }
+
+// Get available advertiser accounts for the dropdown
+$advertiserIds = $_SESSION['oauth_advertiser_ids'] ?? [];
+$advertiserDetails = $_SESSION['oauth_advertiser_details'] ?? [];
+$currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -510,6 +515,78 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                 margin-left: 0;
                 justify-content: center;
             }
+        }
+
+        /* Ad Account Selector Styles */
+        .ad-account-selector-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-radius: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #bae6fd;
+        }
+        .ad-account-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #0369a1;
+            white-space: nowrap;
+        }
+        .ad-account-select {
+            flex: 1;
+            max-width: 400px;
+            padding: 10px 35px 10px 15px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #1e293b;
+            background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%230369a1' d='M6 8L1 3h10z'/%3E%3C/svg%3E") no-repeat right 12px center;
+            border: 2px solid #0ea5e9;
+            border-radius: 8px;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            transition: all 0.2s;
+        }
+        .ad-account-select:hover {
+            border-color: #0284c7;
+            box-shadow: 0 2px 8px rgba(14, 165, 233, 0.2);
+        }
+        .ad-account-select:focus {
+            outline: none;
+            border-color: #0284c7;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+        }
+        .ad-account-select option {
+            padding: 10px;
+        }
+        .ad-account-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #fff;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #64748b;
+        }
+        .ad-account-info .account-count {
+            font-weight: 600;
+            color: #0369a1;
+        }
+        .ad-account-switching {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            color: #0369a1;
+            font-size: 13px;
+        }
+        .ad-account-switching .mini-spinner {
+            width: 16px;
+            height: 16px;
+            border-width: 2px;
         }
     </style>
 </head>
@@ -1354,6 +1431,53 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
                     <button class="btn-secondary" onclick="refreshCampaignList()">🔄 Refresh</button>
                 </div>
             </div>
+
+            <!-- Ad Account Selector -->
+            <?php if (count($advertiserIds) > 1): ?>
+            <div class="ad-account-selector-container">
+                <span class="ad-account-label">🏢 Ad Account:</span>
+                <select id="ad-account-select" class="ad-account-select" onchange="switchAdAccount(this.value)">
+                    <?php foreach ($advertiserIds as $advId):
+                        $advName = '';
+                        foreach ($advertiserDetails as $detail) {
+                            if (($detail['advertiser_id'] ?? '') === $advId) {
+                                $advName = $detail['advertiser_name'] ?? '';
+                                break;
+                            }
+                        }
+                        $displayName = $advName ? "$advName ($advId)" : $advId;
+                        $selected = ($advId === $currentAdvertiserId) ? 'selected' : '';
+                    ?>
+                    <option value="<?php echo htmlspecialchars($advId); ?>" <?php echo $selected; ?>>
+                        <?php echo htmlspecialchars($displayName); ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+                <div class="ad-account-info">
+                    <span class="account-count"><?php echo count($advertiserIds); ?></span> accounts available
+                </div>
+                <div class="ad-account-switching" id="ad-account-switching">
+                    <span class="mini-spinner"></span>
+                    <span>Switching account...</span>
+                </div>
+            </div>
+            <?php else: ?>
+            <div class="ad-account-selector-container" style="justify-content: center;">
+                <span class="ad-account-label">🏢 Ad Account:</span>
+                <span style="font-weight: 600; color: #1e293b;">
+                    <?php
+                    $advName = '';
+                    foreach ($advertiserDetails as $detail) {
+                        if (($detail['advertiser_id'] ?? '') === $currentAdvertiserId) {
+                            $advName = $detail['advertiser_name'] ?? '';
+                            break;
+                        }
+                    }
+                    echo htmlspecialchars($advName ? "$advName ($currentAdvertiserId)" : $currentAdvertiserId);
+                    ?>
+                </span>
+            </div>
+            <?php endif; ?>
 
             <!-- Campaign Filters -->
             <div class="campaign-filters">
