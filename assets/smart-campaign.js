@@ -1077,7 +1077,7 @@ function updateStatesCount() {
     if (countEl) countEl.textContent = count;
 }
 
-// Apply bulk states from input box
+// Apply bulk states from input box - ADDS to existing selection (doesn't clear)
 function applyBulkStates() {
     const input = document.getElementById('bulk-state-input');
     const feedback = document.getElementById('bulk-state-feedback');
@@ -1099,13 +1099,14 @@ function applyBulkStates() {
         return;
     }
 
-    let matchedCount = 0;
+    let newlySelectedCount = 0;
+    let alreadySelectedCount = 0;
     let notFoundStates = [];
 
-    // First, clear all states
-    document.querySelectorAll('.state-checkbox').forEach(cb => cb.checked = false);
+    // Get current selection count before adding
+    const previousCount = document.querySelectorAll('.state-checkbox:checked').length;
 
-    // Then match and select states
+    // Match and ADD states to existing selection (don't clear!)
     stateInputs.forEach(stateInput => {
         let found = false;
 
@@ -1123,8 +1124,14 @@ function applyBulkStates() {
                 // Find and check the checkbox
                 const checkbox = document.querySelector(`.state-checkbox[value="${state.id}"]`);
                 if (checkbox) {
-                    checkbox.checked = true;
-                    matchedCount++;
+                    if (checkbox.checked) {
+                        // Already selected
+                        alreadySelectedCount++;
+                    } else {
+                        // Newly selected
+                        checkbox.checked = true;
+                        newlySelectedCount++;
+                    }
                     found = true;
                     break;
                 }
@@ -1139,9 +1146,21 @@ function applyBulkStates() {
     // Update count display
     updateStatesCount();
 
+    // Get new total
+    const newTotal = document.querySelectorAll('.state-checkbox:checked').length;
+
     // Show feedback
-    if (matchedCount > 0) {
-        let message = `Selected ${matchedCount} state${matchedCount > 1 ? 's' : ''}`;
+    if (newlySelectedCount > 0 || alreadySelectedCount > 0) {
+        let message = '';
+        if (newlySelectedCount > 0) {
+            message = `Added ${newlySelectedCount} new state${newlySelectedCount > 1 ? 's' : ''}`;
+        }
+        if (alreadySelectedCount > 0) {
+            if (message) message += ', ';
+            message += `${alreadySelectedCount} already selected`;
+        }
+        message += `. Total: ${newTotal} states`;
+
         if (notFoundStates.length > 0) {
             message += `. Not found: ${notFoundStates.join(', ')}`;
             showBulkStateFeedback(message, 'warning');
