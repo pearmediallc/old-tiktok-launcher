@@ -588,6 +588,23 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
             height: 16px;
             border-width: 2px;
         }
+
+        /* Ad Account Search Dropdown Styles */
+        .ad-account-option:hover {
+            background: #f1f5f9 !important;
+        }
+        .ad-account-option.selected {
+            background: #e0f2fe !important;
+            border-left: 3px solid #0284c7;
+        }
+        .ad-account-option:last-child {
+            border-bottom: none !important;
+        }
+        .ad-account-search-input:focus {
+            outline: none;
+            border-color: #0284c7;
+            box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
+        }
     </style>
 </head>
 <body>
@@ -707,6 +724,102 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                     <div id="cbo-budget-note" style="padding: 15px; background: #e8f5e9; border-radius: 6px; margin-bottom: 15px;">
                         <p style="margin: 0; color: #2e7d32;"><strong>✓ Campaign Budget Optimization is enabled</strong></p>
                         <small>Budget is managed at campaign level ($<span id="cbo-budget-display">50</span>/day). TikTok will optimize spend across ad groups.</small>
+                    </div>
+
+                    <!-- Schedule Options -->
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label style="font-weight: 600; margin-bottom: 12px; display: block;">Schedule</label>
+                        <div class="schedule-options-container" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <!-- Option 1: Start Now, Run Continuously -->
+                            <label class="schedule-option" style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border: 2px solid #1a1a1a; border-radius: 8px; cursor: pointer; margin-bottom: 10px;">
+                                <input type="radio" name="schedule_type" value="continuous" checked onchange="toggleScheduleType()" style="margin-top: 3px;">
+                                <div>
+                                    <strong style="color: #1e293b;">Start now and run continuously</strong>
+                                    <p style="margin: 4px 0 0; color: #64748b; font-size: 13px;">Ad group will start immediately and run until manually turned off</p>
+                                </div>
+                            </label>
+
+                            <!-- Option 2: Schedule Start Time Only (No End) -->
+                            <label class="schedule-option" style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer; margin-bottom: 10px;">
+                                <input type="radio" name="schedule_type" value="scheduled_start_only" onchange="toggleScheduleType()" style="margin-top: 3px;">
+                                <div>
+                                    <strong style="color: #1e293b;">Schedule start time (run continuously)</strong>
+                                    <p style="margin: 4px 0 0; color: #64748b; font-size: 13px;">Ad group will start at a specific date/time and run until manually turned off</p>
+                                </div>
+                            </label>
+
+                            <!-- Option 3: Set Start and End Time -->
+                            <label class="schedule-option" style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer;">
+                                <input type="radio" name="schedule_type" value="scheduled" onchange="toggleScheduleType()" style="margin-top: 3px;">
+                                <div>
+                                    <strong style="color: #1e293b;">Set start and end time</strong>
+                                    <p style="margin: 4px 0 0; color: #64748b; font-size: 13px;">Ad group will run during the specified time period only</p>
+                                </div>
+                            </label>
+
+                            <!-- Start Time Only Picker (for scheduled_start_only) -->
+                            <div id="schedule-start-only-container" style="display: none; margin-top: 15px; padding: 15px; background: white; border: 1px solid #e2e8f0; border-radius: 8px;">
+                                <div class="form-group" style="margin-bottom: 15px;">
+                                    <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time</label>
+                                    <input type="datetime-local" id="schedule-start-only-datetime" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                </div>
+
+                                <!-- Timezone Selector -->
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-weight: 500; color: #475569; font-size: 14px;">Timezone</label>
+                                    <select id="schedule-start-only-timezone" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                        <option value="America/Los_Angeles">Pacific Time (PT) - Los Angeles</option>
+                                        <option value="America/Denver">Mountain Time (MT) - Denver</option>
+                                        <option value="America/Chicago">Central Time (CT) - Chicago</option>
+                                        <option value="America/New_York" selected>Eastern Time (ET) - New York</option>
+                                        <option value="America/Anchorage">Alaska Time (AKT) - Anchorage</option>
+                                        <option value="Pacific/Honolulu">Hawaii Time (HT) - Honolulu</option>
+                                        <option value="UTC">UTC (Coordinated Universal Time)</option>
+                                    </select>
+                                </div>
+
+                                <p style="margin: 12px 0 0; color: #64748b; font-size: 12px; display: flex; align-items: center; gap: 6px;">
+                                    <span style="font-size: 14px;">ℹ️</span>
+                                    Ad group will start at this time and run until you manually turn it off
+                                </p>
+                            </div>
+
+                            <!-- DateTime Pickers for Start AND End (for scheduled) -->
+                            <div id="schedule-datetime-container" style="display: none; margin-top: 15px; padding: 15px; background: white; border: 1px solid #e2e8f0; border-radius: 8px;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                    <!-- Start Date/Time -->
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time</label>
+                                        <input type="datetime-local" id="schedule-start-datetime" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                    </div>
+
+                                    <!-- End Date/Time -->
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label style="font-weight: 500; color: #475569; font-size: 14px;">End Date & Time</label>
+                                        <input type="datetime-local" id="schedule-end-datetime" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                    </div>
+                                </div>
+
+                                <!-- Timezone Selector -->
+                                <div class="form-group" style="margin-top: 15px; margin-bottom: 0;">
+                                    <label style="font-weight: 500; color: #475569; font-size: 14px;">Timezone</label>
+                                    <select id="schedule-timezone" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                        <option value="America/Los_Angeles">Pacific Time (PT) - Los Angeles</option>
+                                        <option value="America/Denver">Mountain Time (MT) - Denver</option>
+                                        <option value="America/Chicago">Central Time (CT) - Chicago</option>
+                                        <option value="America/New_York" selected>Eastern Time (ET) - New York</option>
+                                        <option value="America/Anchorage">Alaska Time (AKT) - Anchorage</option>
+                                        <option value="Pacific/Honolulu">Hawaii Time (HT) - Honolulu</option>
+                                        <option value="UTC">UTC (Coordinated Universal Time)</option>
+                                    </select>
+                                </div>
+
+                                <p style="margin: 12px 0 0; color: #64748b; font-size: 12px; display: flex; align-items: center; gap: 6px;">
+                                    <span style="font-size: 14px;">ℹ️</span>
+                                    Ad group will automatically start and stop at the specified times
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1470,28 +1583,39 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
             <?php if (count($advertiserIds) > 1): ?>
             <div class="ad-account-selector-container">
                 <span class="ad-account-label">🏢 Ad Account:</span>
-                <select id="ad-account-select" class="ad-account-select" onchange="switchAdAccount(this.value)">
-                    <?php
-                    $accountIndex = 1;
-                    foreach ($advertiserIds as $advId):
-                        // Get details - advertiserDetails is keyed by advertiser_id
-                        $details = $advertiserDetails[$advId] ?? null;
-                        $advName = $details['name'] ?? '';
-
-                        // Format: "Account Name • ID: 123456" or just ID if no name
-                        if ($advName && $advName !== 'Account') {
-                            $displayName = $advName . ' • ID: ' . substr($advId, -6);
-                        } else {
-                            $displayName = 'Ad Account #' . $accountIndex . ' • ID: ' . substr($advId, -6);
-                        }
-                        $selected = ($advId === $currentAdvertiserId) ? 'selected' : '';
-                        $accountIndex++;
-                    ?>
-                    <option value="<?php echo htmlspecialchars($advId); ?>" <?php echo $selected; ?>>
-                        <?php echo htmlspecialchars($displayName); ?>
-                    </option>
-                    <?php endforeach; ?>
-                </select>
+                <div class="ad-account-search-wrapper" style="position: relative; display: inline-block;">
+                    <input type="text"
+                           id="ad-account-search"
+                           class="ad-account-search-input"
+                           placeholder="🔍 Search accounts..."
+                           oninput="filterAdAccountOptions()"
+                           onfocus="showAdAccountDropdown()"
+                           style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; width: 280px;">
+                    <div id="ad-account-dropdown" class="ad-account-dropdown" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 300px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; margin-top: 4px;">
+                        <?php
+                        $accountIndex = 1;
+                        foreach ($advertiserIds as $advId):
+                            $details = $advertiserDetails[$advId] ?? null;
+                            $advName = $details['name'] ?? '';
+                            if ($advName && $advName !== 'Account') {
+                                $displayName = $advName . ' • ID: ' . substr($advId, -6);
+                            } else {
+                                $displayName = 'Ad Account #' . $accountIndex . ' • ID: ' . substr($advId, -6);
+                            }
+                            $isSelected = ($advId === $currentAdvertiserId);
+                            $accountIndex++;
+                        ?>
+                        <div class="ad-account-option <?php echo $isSelected ? 'selected' : ''; ?>"
+                             data-advertiser-id="<?php echo htmlspecialchars($advId); ?>"
+                             data-name="<?php echo htmlspecialchars(strtolower($displayName)); ?>"
+                             onclick="selectAdAccount('<?php echo htmlspecialchars($advId); ?>', '<?php echo htmlspecialchars(addslashes($displayName)); ?>')"
+                             style="padding: 12px 15px; cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.2s;">
+                            <div style="font-weight: 500; color: #1e293b;"><?php echo htmlspecialchars($displayName); ?></div>
+                            <div style="font-size: 11px; color: #64748b; margin-top: 2px;">ID: <?php echo htmlspecialchars($advId); ?></div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
                 <div class="ad-account-info">
                     <span class="account-count"><?php echo count($advertiserIds); ?></span> accounts linked
                 </div>

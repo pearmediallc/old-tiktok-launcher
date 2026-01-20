@@ -590,12 +590,37 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
                             <a href="index.php" class="btn btn-primary">Back to Login</a>
                         </div>
                     <?php else: ?>
+                        <!-- Search Box for Ad Accounts -->
+                        <?php if (count($advertiser_ids) > 3): ?>
+                        <div class="account-search-container" style="margin-bottom: 20px;">
+                            <input type="text"
+                                   id="account-search-input"
+                                   placeholder="🔍 Search ad accounts by name or ID..."
+                                   oninput="filterAdvertiserCards()"
+                                   style="width: 100%; max-width: 400px; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 15px; transition: all 0.3s;">
+                            <div id="search-results-count" style="margin-top: 8px; font-size: 13px; color: #64748b;"></div>
+                        </div>
+                        <style>
+                            #account-search-input:focus {
+                                outline: none;
+                                border-color: rgb(30, 157, 241);
+                                box-shadow: 0 0 0 3px rgba(30, 157, 241, 0.1);
+                            }
+                            .selection-card.hidden {
+                                display: none !important;
+                            }
+                        </style>
+                        <?php endif; ?>
+
                         <div class="card-grid" id="advertiser-list">
                             <?php foreach ($advertiser_ids as $index => $advertiser_id):
                                 $details = $advertiser_details[$advertiser_id] ?? null;
                                 $name = $details ? $details['name'] : 'Advertiser Account ' . ($index + 1);
                             ?>
-                                <div class="selection-card" data-advertiser-id="<?php echo htmlspecialchars($advertiser_id); ?>">
+                                <div class="selection-card"
+                                     data-advertiser-id="<?php echo htmlspecialchars($advertiser_id); ?>"
+                                     data-name="<?php echo htmlspecialchars(strtolower($name)); ?>"
+                                     data-search="<?php echo htmlspecialchars(strtolower($name . ' ' . $advertiser_id)); ?>">
                                     <div onclick="selectAdvertiser('<?php echo htmlspecialchars($advertiser_id); ?>', this.parentElement)">
                                         <div class="check-icon">✓</div>
                                         <div class="card-icon">📊</div>
@@ -803,6 +828,49 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
                 selectAdvertiser('<?php echo htmlspecialchars($advertiser_ids[0]); ?>', firstCard);
             }
         <?php endif; ?>
+
+        // Filter advertiser cards based on search input
+        function filterAdvertiserCards() {
+            const searchInput = document.getElementById('account-search-input');
+            const resultsCount = document.getElementById('search-results-count');
+            const cards = document.querySelectorAll('.selection-card');
+
+            if (!searchInput) return;
+
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            let visibleCount = 0;
+            const totalCount = cards.length;
+
+            cards.forEach(card => {
+                const searchData = card.getAttribute('data-search') || '';
+                const advertiserId = card.getAttribute('data-advertiser-id') || '';
+
+                // Match against name, ID, or combined search data
+                const matches = searchTerm === '' ||
+                                searchData.includes(searchTerm) ||
+                                advertiserId.toLowerCase().includes(searchTerm);
+
+                if (matches) {
+                    card.classList.remove('hidden');
+                    visibleCount++;
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+
+            // Update results count
+            if (resultsCount) {
+                if (searchTerm === '') {
+                    resultsCount.textContent = '';
+                } else if (visibleCount === 0) {
+                    resultsCount.textContent = 'No accounts match your search';
+                    resultsCount.style.color = '#ef4444';
+                } else {
+                    resultsCount.textContent = `Showing ${visibleCount} of ${totalCount} accounts`;
+                    resultsCount.style.color = '#64748b';
+                }
+            }
+        }
     </script>
 </body>
 </html>

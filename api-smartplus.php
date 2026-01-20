@@ -681,8 +681,22 @@ switch ($action) {
             exit;
         }
 
-        // Schedule times
-        $scheduleStart = date('Y-m-d H:i:s', strtotime('+1 hour'));
+        // Schedule handling - support both continuous and scheduled options
+        $scheduleType = $data['schedule_type'] ?? 'SCHEDULE_FROM_NOW';
+        $scheduleStart = null;
+        $scheduleEnd = null;
+
+        if ($scheduleType === 'SCHEDULE_START_END' && !empty($data['schedule_start_time']) && !empty($data['schedule_end_time'])) {
+            // User specified start and end times
+            $scheduleStart = $data['schedule_start_time'];
+            $scheduleEnd = $data['schedule_end_time'];
+            logSmartPlus("Using SCHEDULE_START_END: $scheduleStart to $scheduleEnd");
+        } else {
+            // Default: Run continuously from now
+            $scheduleType = 'SCHEDULE_FROM_NOW';
+            $scheduleStart = date('Y-m-d H:i:s', strtotime('+1 hour'));
+            logSmartPlus("Using SCHEDULE_FROM_NOW starting at: $scheduleStart");
+        }
 
         $adgroupParams = [
             'advertiser_id' => $advertiserId,
@@ -694,7 +708,7 @@ switch ($action) {
             'optimization_goal' => 'CONVERT',  // Use CONVERT for Lead Gen with External Website
             'billing_event' => 'OCPM',
             'bid_type' => 'BID_TYPE_NO_BID',  // Lowest Cost strategy - no target CPA required
-            'schedule_type' => 'SCHEDULE_FROM_NOW',
+            'schedule_type' => $scheduleType,
             'schedule_start_time' => $scheduleStart,
             'operation_status' => 'ENABLE',
             'targeting_spec' => [
@@ -702,6 +716,11 @@ switch ($action) {
                 'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100']
             ]
         ];
+
+        // Add schedule_end_time only for SCHEDULE_START_END type
+        if ($scheduleType === 'SCHEDULE_START_END' && $scheduleEnd) {
+            $adgroupParams['schedule_end_time'] = $scheduleEnd;
+        }
 
         // Add pixel if provided
         if (!empty($data['pixel_id'])) {

@@ -1059,6 +1059,11 @@ function toggleLocationMethod() {
     const method = document.querySelector('input[name="location_method"]:checked').value;
     document.getElementById('country-targeting').style.display = method === 'country' ? 'block' : 'none';
     document.getElementById('states-targeting').style.display = method === 'states' ? 'block' : 'none';
+
+    // When switching to specific states, clear all selections by default
+    if (method === 'states') {
+        clearAllStates();
+    }
 }
 
 function selectAllStates() {
@@ -1069,6 +1074,204 @@ function selectAllStates() {
 function clearAllStates() {
     document.querySelectorAll('.state-checkbox').forEach(cb => cb.checked = false);
     updateStatesCount();
+}
+
+// ============================================
+// SCHEDULE FUNCTIONS
+// ============================================
+
+// Toggle schedule type UI (continuous vs scheduled_start_only vs scheduled)
+function toggleScheduleType() {
+    const scheduleType = document.querySelector('input[name="schedule_type"]:checked')?.value || 'continuous';
+    const startOnlyContainer = document.getElementById('schedule-start-only-container');
+    const dateTimeContainer = document.getElementById('schedule-datetime-container');
+    const scheduleOptions = document.querySelectorAll('.schedule-option');
+
+    // Hide both containers first
+    if (startOnlyContainer) {
+        startOnlyContainer.style.display = 'none';
+    }
+    if (dateTimeContainer) {
+        dateTimeContainer.style.display = 'none';
+    }
+
+    // Show appropriate container based on selection
+    if (scheduleType === 'scheduled_start_only' && startOnlyContainer) {
+        startOnlyContainer.style.display = 'block';
+    } else if (scheduleType === 'scheduled' && dateTimeContainer) {
+        dateTimeContainer.style.display = 'block';
+    }
+
+    // Update border styling to show selected option
+    scheduleOptions.forEach(option => {
+        const radio = option.querySelector('input[type="radio"]');
+        if (radio && radio.checked) {
+            option.style.borderColor = '#1a1a1a';
+        } else {
+            option.style.borderColor = '#e2e8f0';
+        }
+    });
+
+    // Set default start time if not set (now + 1 hour)
+    if (scheduleType === 'scheduled_start_only') {
+        const startInput = document.getElementById('schedule-start-only-datetime');
+
+        if (startInput && !startInput.value) {
+            const now = new Date();
+            now.setHours(now.getHours() + 1);
+            now.setMinutes(0, 0, 0);
+            startInput.value = formatDateTimeLocal(now);
+        }
+    } else if (scheduleType === 'scheduled') {
+        const startInput = document.getElementById('schedule-start-datetime');
+        const endInput = document.getElementById('schedule-end-datetime');
+
+        if (startInput && !startInput.value) {
+            const now = new Date();
+            now.setHours(now.getHours() + 1);
+            now.setMinutes(0, 0, 0);
+            startInput.value = formatDateTimeLocal(now);
+        }
+
+        if (endInput && !endInput.value) {
+            const endDate = new Date();
+            endDate.setDate(endDate.getDate() + 7); // Default: 1 week from now
+            endDate.setHours(23, 59, 0, 0);
+            endInput.value = formatDateTimeLocal(endDate);
+        }
+    }
+}
+
+// Format date for datetime-local input
+function formatDateTimeLocal(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+// Get schedule data for API
+function getScheduleData() {
+    const scheduleType = document.querySelector('input[name="schedule_type"]:checked')?.value || 'continuous';
+
+    // Format as YYYY-MM-DD HH:MM:SS
+    const formatForAPI = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    };
+
+    if (scheduleType === 'continuous') {
+        return {
+            schedule_type: 'SCHEDULE_FROM_NOW'
+        };
+    }
+
+    // Option 2: Schedule start time only (no end) - runs continuously from scheduled time
+    if (scheduleType === 'scheduled_start_only') {
+        const startDateTime = document.getElementById('schedule-start-only-datetime')?.value;
+        const timezone = document.getElementById('schedule-start-only-timezone')?.value || 'America/New_York';
+
+        if (!startDateTime) {
+            return {
+                schedule_type: 'SCHEDULE_FROM_NOW'
+            };
+        }
+
+        const startDate = new Date(startDateTime);
+
+        return {
+            schedule_type: 'SCHEDULE_FROM_NOW',  // TikTok API uses SCHEDULE_FROM_NOW with a future start time
+            schedule_start_time: formatForAPI(startDate),
+            schedule_timezone: timezone
+        };
+    }
+
+    // Option 3: Schedule start AND end time
+    const startDateTime = document.getElementById('schedule-start-datetime')?.value;
+    const endDateTime = document.getElementById('schedule-end-datetime')?.value;
+    const timezone = document.getElementById('schedule-timezone')?.value || 'America/New_York';
+
+    if (!startDateTime || !endDateTime) {
+        return {
+            schedule_type: 'SCHEDULE_FROM_NOW'
+        };
+    }
+
+    const startDate = new Date(startDateTime);
+    const endDate = new Date(endDateTime);
+
+    return {
+        schedule_type: 'SCHEDULE_START_END',
+        schedule_start_time: formatForAPI(startDate),
+        schedule_end_time: formatForAPI(endDate),
+        schedule_timezone: timezone
+    };
+}
+
+// Validate schedule dates
+function validateScheduleDates() {
+    const scheduleType = document.querySelector('input[name="schedule_type"]:checked')?.value || 'continuous';
+
+    if (scheduleType === 'continuous') {
+        return { valid: true };
+    }
+
+    const now = new Date();
+
+    // Validate scheduled_start_only option
+    if (scheduleType === 'scheduled_start_only') {
+        const startDateTime = document.getElementById('schedule-start-only-datetime')?.value;
+
+        if (!startDateTime) {
+            return { valid: false, message: 'Please select a start date and time' };
+        }
+
+        const startDate = new Date(startDateTime);
+
+        if (startDate < now) {
+            return { valid: false, message: 'Start time must be in the future' };
+        }
+
+        return { valid: true };
+    }
+
+    // Validate scheduled (start and end) option
+    const startDateTime = document.getElementById('schedule-start-datetime')?.value;
+    const endDateTime = document.getElementById('schedule-end-datetime')?.value;
+
+    if (!startDateTime) {
+        return { valid: false, message: 'Please select a start date and time' };
+    }
+
+    if (!endDateTime) {
+        return { valid: false, message: 'Please select an end date and time' };
+    }
+
+    const startDate = new Date(startDateTime);
+    const endDate = new Date(endDateTime);
+
+    if (startDate < now) {
+        return { valid: false, message: 'Start time must be in the future' };
+    }
+
+    if (endDate <= startDate) {
+        return { valid: false, message: 'End time must be after start time' };
+    }
+
+    // Minimum 1 hour duration
+    const durationHours = (endDate - startDate) / (1000 * 60 * 60);
+    if (durationHours < 1) {
+        return { valid: false, message: 'Ad group must run for at least 1 hour' };
+    }
+
+    return { valid: true };
 }
 
 function updateStatesCount() {
@@ -1585,6 +1788,20 @@ async function createAdGroup() {
         return;
     }
 
+    // Validate schedule dates if using scheduled option
+    const scheduleValidation = validateScheduleDates();
+    if (!scheduleValidation.valid) {
+        showToast(scheduleValidation.message, 'error');
+        return;
+    }
+
+    // Get schedule data
+    const scheduleData = getScheduleData();
+    addLog('info', `Schedule type: ${scheduleData.schedule_type}`);
+    if (scheduleData.schedule_start_time) {
+        addLog('info', `Schedule: ${scheduleData.schedule_start_time} to ${scheduleData.schedule_end_time}`);
+    }
+
     // Check if ad group already exists - determine if UPDATE or DELETE+CREATE needed
     if (state.adGroupCreated && state.adGroupId) {
         // Check if pixel or optimization event changed - these CANNOT be updated!
@@ -1623,7 +1840,12 @@ async function createAdGroup() {
             location_ids: locationIds,
             age_groups: state.ageGroups,  // Age targeting
             dayparting: dayparting,
-            budget: adGroupBudget  // Always at AdGroup level for LEAD_GENERATION
+            budget: adGroupBudget,  // Always at AdGroup level for LEAD_GENERATION
+            // Schedule parameters
+            schedule_type: scheduleData.schedule_type,
+            schedule_start_time: scheduleData.schedule_start_time || null,
+            schedule_end_time: scheduleData.schedule_end_time || null,
+            schedule_timezone: scheduleData.schedule_timezone || null
         });
 
         hideLoading();
@@ -4383,8 +4605,98 @@ function getCurrentDateRange() {
 }
 
 // ==========================================
-// AD ACCOUNT SWITCHING
+// AD ACCOUNT SWITCHING & SEARCH
 // ==========================================
+
+// Show the ad account dropdown
+function showAdAccountDropdown() {
+    const dropdown = document.getElementById('ad-account-dropdown');
+    if (dropdown) {
+        dropdown.style.display = 'block';
+    }
+}
+
+// Hide the ad account dropdown
+function hideAdAccountDropdown() {
+    const dropdown = document.getElementById('ad-account-dropdown');
+    if (dropdown) {
+        dropdown.style.display = 'none';
+    }
+}
+
+// Filter ad account options based on search input
+function filterAdAccountOptions() {
+    const searchInput = document.getElementById('ad-account-search');
+    const dropdown = document.getElementById('ad-account-dropdown');
+    if (!searchInput || !dropdown) return;
+
+    const searchTerm = searchInput.value.toLowerCase().trim();
+    const options = dropdown.querySelectorAll('.ad-account-option');
+
+    let visibleCount = 0;
+    options.forEach(option => {
+        const name = option.getAttribute('data-name') || '';
+        const advertiserId = option.getAttribute('data-advertiser-id') || '';
+
+        // Match against name or full advertiser ID
+        const matches = name.includes(searchTerm) || advertiserId.toLowerCase().includes(searchTerm);
+
+        option.style.display = matches ? 'block' : 'none';
+        if (matches) visibleCount++;
+    });
+
+    // Show dropdown if there's a search term
+    if (searchTerm.length > 0) {
+        showAdAccountDropdown();
+    }
+}
+
+// Select an ad account from the dropdown
+function selectAdAccount(advertiserId, displayName) {
+    const searchInput = document.getElementById('ad-account-search');
+    if (searchInput) {
+        searchInput.value = displayName;
+    }
+
+    // Hide dropdown
+    hideAdAccountDropdown();
+
+    // Update selected state in dropdown
+    const options = document.querySelectorAll('.ad-account-option');
+    options.forEach(option => {
+        option.classList.remove('selected');
+        if (option.getAttribute('data-advertiser-id') === advertiserId) {
+            option.classList.add('selected');
+        }
+    });
+
+    // Switch to the selected account
+    switchAdAccount(advertiserId);
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    const wrapper = document.querySelector('.ad-account-search-wrapper');
+    const dropdown = document.getElementById('ad-account-dropdown');
+
+    if (wrapper && dropdown && !wrapper.contains(event.target)) {
+        hideAdAccountDropdown();
+    }
+});
+
+// Initialize ad account search input with currently selected account
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('ad-account-search');
+    const selectedOption = document.querySelector('.ad-account-option.selected');
+
+    if (searchInput && selectedOption) {
+        // Get the display name from the selected option
+        const nameDiv = selectedOption.querySelector('div:first-child');
+        if (nameDiv) {
+            searchInput.value = nameDiv.textContent.trim();
+        }
+    }
+});
 
 // Switch to a different ad account
 async function switchAdAccount(advertiserId) {
