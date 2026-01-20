@@ -1897,11 +1897,14 @@ try {
             break;
 
         case 'upload_video':
+            // Start output buffering to catch any stray output
+            ob_start();
+
             try {
                 // Add memory and execution time limits for large video uploads
                 ini_set('memory_limit', '512M');
                 ini_set('max_execution_time', '300'); // 5 minutes
-                
+
                 $file = new File($config);
 
                 logToFile("============ VIDEO UPLOAD REQUEST ============");
@@ -1997,38 +2000,74 @@ try {
             }
 
             // Consider success if we got a video_id OR if code is 0/empty
-            $success = (empty($response->code) || $response->code == 0) || 
+            $success = (empty($response->code) || $response->code == 0) ||
                       (isset($response->data->video_id) && !empty($response->data->video_id));
-            
+
+            // Extract video data safely - convert objects to arrays
+            $videoId = null;
+            $responseData = null;
+
+            if (isset($response->data)) {
+                // Convert response data to array for safe JSON encoding
+                $responseData = json_decode(json_encode($response->data), true);
+                $videoId = $responseData['video_id'] ?? null;
+            }
+
             // If upload successful, store the video ID for later retrieval
-            if ($success && isset($response->data->video_id)) {
+            if ($success && $videoId) {
                 // Store in persistent storage
                 $storageFile = __DIR__ . '/media_storage.json';
-                $storage = json_decode(file_get_contents($storageFile), true) ?? ['images' => [], 'videos' => []];
-                
+                $storage = [];
+                if (file_exists($storageFile)) {
+                    $storageContent = file_get_contents($storageFile);
+                    if ($storageContent) {
+                        $storage = json_decode($storageContent, true) ?? [];
+                    }
+                }
+                if (!isset($storage['images'])) $storage['images'] = [];
+                if (!isset($storage['videos'])) $storage['videos'] = [];
+
                 $storage['videos'][] = [
-                    'video_id' => $response->data->video_id,
+                    'video_id' => $videoId,
                     'file_name' => $fileName,
                     'upload_time' => time(),
                     'advertiser_id' => $advertiser_id
                 ];
-                
+
                 file_put_contents($storageFile, json_encode($storage, JSON_PRETTY_PRINT));
-                
-                logToFile("Video uploaded successfully with ID: " . $response->data->video_id);
+
+                logToFile("Video uploaded successfully with ID: " . $videoId);
             }
-            
-                echo json_encode([
-                    'success' => $success,
-                    'data' => $response->data ?? null,
-                    'message' => $response->message ?? 'Video uploaded successfully',
-                    'code' => $response->code ?? null
-                ]);
-                
+
+            // Build response - ensure all data is JSON-serializable
+            $jsonResponse = [
+                'success' => $success,
+                'data' => $responseData,
+                'message' => isset($response->message) ? (string)$response->message : 'Video uploaded successfully',
+                'code' => isset($response->code) ? (int)$response->code : 0
+            ];
+
+            // Log what we're about to return
+            logToFile("Returning JSON response: " . json_encode($jsonResponse, JSON_PRETTY_PRINT));
+
+            // Clear any buffered output and send clean JSON
+            $bufferedOutput = ob_get_clean();
+            if (!empty($bufferedOutput)) {
+                logToFile("WARNING: Buffered output detected before JSON response: " . $bufferedOutput);
+            }
+
+            echo json_encode($jsonResponse);
+
             } catch (Exception $videoError) {
+                // Clear buffer on error too
+                $bufferedOutput = ob_get_clean();
+                if (!empty($bufferedOutput)) {
+                    logToFile("WARNING: Buffered output on error: " . $bufferedOutput);
+                }
+
                 logToFile("Video Upload Exception: " . $videoError->getMessage());
                 logToFile("Video Upload Stack Trace: " . $videoError->getTraceAsString());
-                
+
                 echo json_encode([
                     'success' => false,
                     'message' => 'Video upload failed: ' . $videoError->getMessage(),
