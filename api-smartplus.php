@@ -691,11 +691,15 @@ switch ($action) {
             $scheduleStart = $data['schedule_start_time'];
             $scheduleEnd = $data['schedule_end_time'];
             logSmartPlus("Using SCHEDULE_START_END: $scheduleStart to $scheduleEnd");
+        } elseif ($scheduleType === 'SCHEDULE_FROM_NOW' && !empty($data['schedule_start_time'])) {
+            // User specified a future start time but wants to run continuously (no end time)
+            $scheduleStart = $data['schedule_start_time'];
+            logSmartPlus("Using SCHEDULE_FROM_NOW with scheduled start: $scheduleStart");
         } else {
-            // Default: Run continuously from now
+            // Default: Run continuously from now (start immediately)
             $scheduleType = 'SCHEDULE_FROM_NOW';
             $scheduleStart = date('Y-m-d H:i:s', strtotime('+1 hour'));
-            logSmartPlus("Using SCHEDULE_FROM_NOW starting at: $scheduleStart");
+            logSmartPlus("Using SCHEDULE_FROM_NOW starting immediately at: $scheduleStart");
         }
 
         $adgroupParams = [
