@@ -1077,6 +1077,113 @@ function updateStatesCount() {
     if (countEl) countEl.textContent = count;
 }
 
+// Apply bulk states from input box
+function applyBulkStates() {
+    const input = document.getElementById('bulk-state-input');
+    const feedback = document.getElementById('bulk-state-feedback');
+
+    if (!input || !input.value.trim()) {
+        showBulkStateFeedback('Please enter state names or abbreviations', 'error');
+        return;
+    }
+
+    const inputText = input.value.trim();
+
+    // Split by comma, semicolon, or newline
+    const stateInputs = inputText.split(/[,;\n]+/)
+        .map(s => s.trim().toLowerCase())
+        .filter(s => s.length > 0);
+
+    if (stateInputs.length === 0) {
+        showBulkStateFeedback('No valid state names found', 'error');
+        return;
+    }
+
+    let matchedCount = 0;
+    let notFoundStates = [];
+
+    // First, clear all states
+    document.querySelectorAll('.state-checkbox').forEach(cb => cb.checked = false);
+
+    // Then match and select states
+    stateInputs.forEach(stateInput => {
+        let found = false;
+
+        // Try to match against US_STATES
+        for (const state of US_STATES) {
+            const nameLower = state.name.toLowerCase();
+            const abbrLower = state.abbr.toLowerCase();
+
+            // Match by name, abbreviation, or partial name
+            if (nameLower === stateInput ||
+                abbrLower === stateInput ||
+                nameLower.startsWith(stateInput) ||
+                nameLower.includes(stateInput)) {
+
+                // Find and check the checkbox
+                const checkbox = document.querySelector(`.state-checkbox[value="${state.id}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                    matchedCount++;
+                    found = true;
+                    break;
+                }
+            }
+        }
+
+        if (!found) {
+            notFoundStates.push(stateInput);
+        }
+    });
+
+    // Update count display
+    updateStatesCount();
+
+    // Show feedback
+    if (matchedCount > 0) {
+        let message = `Selected ${matchedCount} state${matchedCount > 1 ? 's' : ''}`;
+        if (notFoundStates.length > 0) {
+            message += `. Not found: ${notFoundStates.join(', ')}`;
+            showBulkStateFeedback(message, 'warning');
+        } else {
+            showBulkStateFeedback(message, 'success');
+        }
+        // Clear input on success
+        input.value = '';
+    } else {
+        showBulkStateFeedback(`No matching states found for: ${stateInputs.join(', ')}`, 'error');
+    }
+}
+
+// Show feedback for bulk state input
+function showBulkStateFeedback(message, type) {
+    const feedback = document.getElementById('bulk-state-feedback');
+    if (!feedback) return;
+
+    feedback.style.display = 'block';
+    feedback.textContent = message;
+
+    // Set styles based on type
+    if (type === 'success') {
+        feedback.style.background = '#e8f5e9';
+        feedback.style.color = '#2e7d32';
+        feedback.style.border = '1px solid #a5d6a7';
+    } else if (type === 'warning') {
+        feedback.style.background = '#fff3e0';
+        feedback.style.color = '#ef6c00';
+        feedback.style.border = '1px solid #ffcc80';
+    } else {
+        feedback.style.background = '#ffebee';
+        feedback.style.color = '#c62828';
+        feedback.style.border = '1px solid #ef9a9a';
+    }
+
+    // Hide after 5 seconds
+    setTimeout(() => {
+        feedback.style.display = 'none';
+    }, 5000);
+}
+
 function getSelectedLocationIds() {
     const method = document.querySelector('input[name="location_method"]:checked').value;
     console.log('Location method:', method);

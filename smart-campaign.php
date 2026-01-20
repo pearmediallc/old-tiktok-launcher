@@ -681,6 +681,13 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
 
             <!-- Step 2: Ad Group Creation -->
             <div class="step-content" id="step-2">
+                <!-- Top Navigation with Back Button -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <button class="btn-secondary" onclick="prevStep()" style="display: flex; align-items: center; gap: 6px;">
+                        <span>←</span> Back to Campaign
+                    </button>
+                    <span style="color: #666; font-size: 14px;">Step 2 of 4</span>
+                </div>
                 <h2>Smart+ Ad Group Settings</h2>
                 <div class="form-info" style="margin-bottom: 20px; background: #e8f5e9; padding: 12px; border-radius: 6px;">
                     <p><strong>Campaign:</strong> <span id="display-campaign-name">-</span></p>
@@ -772,7 +779,27 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                         </div>
 
                         <div id="states-targeting" style="display: none; margin-top: 10px;">
-                            <div style="margin-bottom: 10px;">
+                            <!-- Bulk State Input Section -->
+                            <div style="margin-bottom: 15px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 1px solid #90caf9;">
+                                <label style="font-weight: 600; display: block; margin-bottom: 8px; color: #1565c0;">
+                                    Quick Add States (Paste or Type)
+                                </label>
+                                <div style="display: flex; gap: 10px;">
+                                    <input type="text" id="bulk-state-input"
+                                           placeholder="Enter state names separated by commas (e.g., California, Texas, New York)"
+                                           style="flex: 1; padding: 10px 12px; border: 1px solid #90caf9; border-radius: 6px; font-size: 14px;"
+                                           onkeypress="if(event.key === 'Enter') { applyBulkStates(); event.preventDefault(); }">
+                                    <button type="button" class="btn-primary" onclick="applyBulkStates()" style="white-space: nowrap;">
+                                        Apply States
+                                    </button>
+                                </div>
+                                <small style="display: block; margin-top: 8px; color: #666;">
+                                    Paste comma-separated state names or abbreviations (e.g., "CA, TX, NY" or "California, Texas, New York"). Press Enter or click Apply.
+                                </small>
+                                <div id="bulk-state-feedback" style="display: none; margin-top: 10px; padding: 8px 12px; border-radius: 6px; font-size: 13px;"></div>
+                            </div>
+
+                            <div style="margin-bottom: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
                                 <button type="button" class="btn-secondary" onclick="selectAllStates()">Select All States</button>
                                 <button type="button" class="btn-secondary" onclick="clearAllStates()">Clear All</button>
                             </div>
@@ -859,6 +886,13 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
 
             <!-- Step 3: Ads Creation -->
             <div class="step-content" id="step-3">
+                <!-- Top Navigation with Back Button -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <button class="btn-secondary" onclick="prevStep()" style="display: flex; align-items: center; gap: 6px;">
+                        <span>←</span> Back to Ad Group
+                    </button>
+                    <span style="color: #666; font-size: 14px;">Step 3 of 4</span>
+                </div>
                 <h2>Create Smart+ Ad</h2>
                 <div class="form-info" style="margin-bottom: 20px; background: #e8f5e9; padding: 12px; border-radius: 6px;">
                     <p><strong>Campaign ID:</strong> <span id="display-campaign-id-step3" style="color: #22c55e; font-weight: bold;">-</span></p>
