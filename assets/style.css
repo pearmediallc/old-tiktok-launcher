@@ -116,6 +116,21 @@ body {
     text-align: center;
     position: relative;
     z-index: 1;
+    cursor: pointer;
+    transition: transform 0.2s, opacity 0.2s;
+}
+
+.step:hover {
+    transform: translateY(-2px);
+}
+
+.step:hover .step-number {
+    box-shadow: 0 4px 12px rgba(30, 157, 241, 0.4);
+}
+
+.step.completed:hover .step-label,
+.step.active:hover .step-label {
+    color: var(--primary);
 }
 
 .step-number {

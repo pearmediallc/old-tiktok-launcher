@@ -476,6 +476,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeAgeTargeting();  // Initialize age selection buttons
     loadBulkAccounts();  // Pre-load accounts for bulk launch feature
     initializeDateRange();  // Initialize date range filter (default: today)
+    initializeStepNavigation();  // Make step indicators clickable
 
     state.cboEnabled = true;
 
@@ -984,8 +985,27 @@ async function handleSmartMediaUpload(event) {
 
             showToast(`${isVideo ? 'Video' : 'Image'} uploaded successfully!`, 'success');
 
-            // Reload media library
-            await loadMediaLibrary();
+            // For videos, TikTok needs time to process before preview is available
+            // Retry loading media library with delays to ensure new video appears
+            if (isVideo) {
+                addLog('info', 'Video uploaded - waiting for TikTok to process...');
+                // First immediate reload
+                await loadMediaLibrary();
+
+                // Then retry after delays to catch the processed video
+                setTimeout(async () => {
+                    addLog('info', 'Refreshing media library (retry 1)...');
+                    await loadMediaLibrary();
+                }, 2000);
+
+                setTimeout(async () => {
+                    addLog('info', 'Refreshing media library (retry 2)...');
+                    await loadMediaLibrary();
+                }, 5000);
+            } else {
+                // For images, single reload is usually enough
+                await loadMediaLibrary();
+            }
 
             // Auto-close after 2 seconds
             setTimeout(() => {
@@ -1197,6 +1217,49 @@ function getDaypartingData() {
 // =====================
 // Step Navigation
 // =====================
+
+// Initialize clickable step indicators
+function initializeStepNavigation() {
+    document.querySelectorAll('.step').forEach((step) => {
+        step.style.cursor = 'pointer';
+        step.addEventListener('click', () => {
+            const stepNum = parseInt(step.dataset.step);
+            // Allow clicking on completed steps or the current step
+            // Don't allow jumping ahead to steps that haven't been reached
+            if (canNavigateToStep(stepNum)) {
+                goToStep(stepNum);
+            } else {
+                showToast('Please complete the current step first', 'info');
+            }
+        });
+    });
+}
+
+// Check if user can navigate to a specific step
+function canNavigateToStep(stepNumber) {
+    // Can always go back to previous steps
+    if (stepNumber <= state.currentStep) {
+        return true;
+    }
+
+    // Can go to step 2 if campaign is created
+    if (stepNumber === 2 && state.campaignCreated) {
+        return true;
+    }
+
+    // Can go to step 3 if ad group is created
+    if (stepNumber === 3 && state.adGroupCreated) {
+        return true;
+    }
+
+    // Can go to step 4 if we have selected videos
+    if (stepNumber === 4 && state.selectedVideos.length > 0) {
+        return true;
+    }
+
+    return false;
+}
+
 function goToStep(stepNumber) {
     document.querySelectorAll('.step').forEach((step, index) => {
         step.classList.remove('active', 'completed');
@@ -1215,6 +1278,7 @@ function goToStep(stepNumber) {
     });
 
     state.currentStep = stepNumber;
+    updateStepButtonLabels();  // Update button labels when navigating
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
