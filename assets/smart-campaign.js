@@ -600,31 +600,83 @@ async function loadPixels() {
     }
 }
 
-// Load Identities
+// Load Identities (Custom Identities + TikTok Pages)
 async function loadIdentities() {
     try {
         const result = await apiRequest('get_identities', {}, true);
         const select = document.getElementById('global-identity');
 
-        if (result.success && result.data && result.data.list) {
-            state.identities = result.data.list;
+        if (result.success && result.data) {
+            // Get both identities and pages
+            const customIdentities = result.data.identities || result.data.list || [];
+            const pages = result.data.pages || [];
+
+            // Combine for state (backward compatibility)
+            state.identities = [...customIdentities, ...pages];
+            state.customIdentities = customIdentities;
+            state.tiktokPages = pages;
+
             select.innerHTML = '<option value="">Select identity...</option>';
 
-            state.identities.forEach(identity => {
-                const option = document.createElement('option');
-                option.value = identity.identity_id;
-                option.textContent = `${identity.display_name || identity.identity_name} (${identity.identity_type || 'CUSTOMIZED_USER'})`;
-                select.appendChild(option);
-            });
+            // Add Custom Identities section
+            if (customIdentities.length > 0) {
+                const customGroup = document.createElement('optgroup');
+                customGroup.label = '👤 Custom Identities';
 
-            addLog('info', `Loaded ${state.identities.length} identities`);
+                customIdentities.forEach(identity => {
+                    const option = document.createElement('option');
+                    option.value = identity.identity_id;
+                    option.dataset.identityType = identity.identity_type || 'CUSTOMIZED_USER';
+                    option.dataset.sourceType = 'custom_identity';
+                    option.textContent = `${identity.display_name || identity.identity_name}`;
+                    customGroup.appendChild(option);
+                });
+
+                select.appendChild(customGroup);
+            }
+
+            // Add TikTok Pages section
+            if (pages.length > 0) {
+                const pagesGroup = document.createElement('optgroup');
+                pagesGroup.label = '📄 TikTok Pages & Authorized Accounts';
+
+                pages.forEach(page => {
+                    const option = document.createElement('option');
+                    option.value = page.identity_id;
+                    option.dataset.identityType = page.identity_type || 'BC_AUTH_TT';
+                    option.dataset.sourceType = page.source_type || 'tiktok_page';
+
+                    // Format display based on type
+                    let typeLabel = '';
+                    if (page.identity_type === 'BC_AUTH_TT') {
+                        typeLabel = ' (TikTok Page)';
+                    } else if (page.identity_type === 'AUTH_CODE') {
+                        typeLabel = ' (Authorized)';
+                    }
+                    option.textContent = `${page.display_name || page.identity_name || 'TikTok Page'}${typeLabel}`;
+                    pagesGroup.appendChild(option);
+                });
+
+                select.appendChild(pagesGroup);
+            }
+
+            const totalCount = customIdentities.length + pages.length;
+            addLog('info', `Loaded ${totalCount} identities (${customIdentities.length} custom, ${pages.length} pages/authorized)`);
+
+            if (totalCount === 0) {
+                select.innerHTML = '<option value="">No identities found</option>';
+            }
         } else {
             select.innerHTML = '<option value="">No identities found</option>';
             state.identities = [];
+            state.customIdentities = [];
+            state.tiktokPages = [];
         }
     } catch (error) {
         console.error('Error loading identities:', error);
         state.identities = [];
+        state.customIdentities = [];
+        state.tiktokPages = [];
     }
 }
 
@@ -2296,8 +2348,14 @@ async function createAd() {
     addLog('info', '=== Creating Smart+ Ad ===');
 
     try {
-        const identity = state.identities.find(i => i.identity_id === state.globalIdentityId);
-        const identityType = identity?.identity_type || 'CUSTOMIZED_USER';
+        // Get identity type from selected option or state
+        const identitySelect = document.getElementById('global-identity');
+        const selectedOption = identitySelect?.options[identitySelect.selectedIndex];
+        const identityType = selectedOption?.dataset?.identityType ||
+                            state.identities.find(i => i.identity_id === state.globalIdentityId)?.identity_type ||
+                            'CUSTOMIZED_USER';
+
+        addLog('info', `Using identity type: ${identityType} for identity ${state.globalIdentityId}`);
 
         const creativeList = state.creatives.map(creative => ({
             video_id: creative.video_id,
