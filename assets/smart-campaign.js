@@ -4929,6 +4929,8 @@ function renderCampaignList() {
                 : state.campaignFilter !== 'all'
                     ? `No ${state.campaignFilter} campaigns found.`
                     : "You haven't created any campaigns yet.";
+        // Clear totals when empty
+        renderCampaignTotals();
         return;
     }
 
@@ -4939,6 +4941,108 @@ function renderCampaignList() {
     if (tableBody) {
         tableBody.innerHTML = state.filteredCampaigns.map(campaign => renderCampaignTableRow(campaign)).join('');
     }
+
+    // Render totals footer
+    renderCampaignTotals();
+}
+
+// Calculate and render campaign totals in table footer
+function renderCampaignTotals() {
+    const tfoot = document.getElementById('campaign-table-totals');
+    if (!tfoot) return;
+
+    // If no campaigns, clear the footer
+    if (!state.campaignsList || state.campaignsList.length === 0) {
+        tfoot.innerHTML = '';
+        return;
+    }
+
+    // Separate campaigns by status
+    const allCampaigns = state.campaignsList;
+    const activeCampaigns = allCampaigns.filter(c => c.operation_status === 'ENABLE');
+    const inactiveCampaigns = allCampaigns.filter(c => c.operation_status === 'DISABLE');
+
+    // Calculate totals for each group
+    const calculateTotals = (campaigns) => {
+        return {
+            count: campaigns.length,
+            budget: campaigns.reduce((sum, c) => sum + (parseFloat(c.budget) || 0), 0),
+            spend: campaigns.reduce((sum, c) => sum + (parseFloat(c.spend) || 0), 0),
+            impressions: campaigns.reduce((sum, c) => sum + (parseInt(c.impressions) || 0), 0),
+            clicks: campaigns.reduce((sum, c) => sum + (parseInt(c.clicks) || 0), 0),
+            conversions: campaigns.reduce((sum, c) => sum + (parseInt(c.conversions) || 0), 0),
+            results: campaigns.reduce((sum, c) => sum + (parseInt(c.results) || 0), 0)
+        };
+    };
+
+    const allTotals = calculateTotals(allCampaigns);
+    const activeTotals = calculateTotals(activeCampaigns);
+    const inactiveTotals = calculateTotals(inactiveCampaigns);
+
+    // Calculate averages (CPC, CTR, Cost/Result)
+    const calculateAverages = (totals) => {
+        return {
+            cpc: totals.clicks > 0 ? totals.spend / totals.clicks : 0,
+            ctr: totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0,
+            costPerResult: totals.results > 0 ? totals.spend / totals.results : 0
+        };
+    };
+
+    const allAvg = calculateAverages(allTotals);
+    const activeAvg = calculateAverages(activeTotals);
+    const inactiveAvg = calculateAverages(inactiveTotals);
+
+    // Render totals row
+    const renderTotalsRow = (label, totals, averages, rowClass, badgeClass) => {
+        return `
+            <tr class="${rowClass}">
+                <td colspan="2"></td>
+                <td class="totals-label">
+                    ${label}
+                    <span class="totals-type-badge ${badgeClass}">${totals.count}</span>
+                </td>
+                <td></td>
+                <td style="text-align: right; font-weight: 600;">$${totals.budget.toFixed(2)}</td>
+                <td style="text-align: right; font-weight: 600; color: #dc2626;">$${totals.spend.toFixed(2)}</td>
+                <td style="text-align: right;">$${averages.cpc.toFixed(2)}</td>
+                <td style="text-align: right;">${formatNumberWithCommas(totals.impressions)}</td>
+                <td style="text-align: right;">${formatNumberWithCommas(totals.clicks)}</td>
+                <td style="text-align: right;">${averages.ctr.toFixed(2)}%</td>
+                <td style="text-align: right;">${formatNumberWithCommas(totals.conversions)}</td>
+                <td style="text-align: right;">$${averages.costPerResult.toFixed(2)}</td>
+                <td style="text-align: right;">${formatNumberWithCommas(totals.results)}</td>
+                <td></td>
+            </tr>
+        `;
+    };
+
+    // Build footer HTML with all three rows
+    let footerHtml = '';
+
+    // Show totals based on current filter or show all three
+    if (state.campaignFilter === 'all' || !state.campaignFilter) {
+        // Show all three totals when viewing "All" campaigns
+        footerHtml += renderTotalsRow('Total (All)', allTotals, allAvg, 'totals-row-all', 'badge-all');
+        if (activeCampaigns.length > 0) {
+            footerHtml += renderTotalsRow('Total (Active)', activeTotals, activeAvg, 'totals-row-active', 'badge-active');
+        }
+        if (inactiveCampaigns.length > 0) {
+            footerHtml += renderTotalsRow('Total (Inactive)', inactiveTotals, inactiveAvg, 'totals-row-inactive', 'badge-inactive');
+        }
+    } else if (state.campaignFilter === 'active') {
+        // Only show active total when filtered to active
+        footerHtml += renderTotalsRow('Total (Active)', activeTotals, activeAvg, 'totals-row-active', 'badge-active');
+    } else if (state.campaignFilter === 'inactive') {
+        // Only show inactive total when filtered to inactive
+        footerHtml += renderTotalsRow('Total (Inactive)', inactiveTotals, inactiveAvg, 'totals-row-inactive', 'badge-inactive');
+    }
+
+    tfoot.innerHTML = footerHtml;
+}
+
+// Format number with commas for totals display
+function formatNumberWithCommas(num) {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 // Render single campaign table row

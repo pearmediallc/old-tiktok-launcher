@@ -294,6 +294,51 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
         .metrics-table .row-ad { background: #f1f5f9; }
         .metrics-table .row-adgroup td:first-child,
         .metrics-table .row-ad td:first-child { padding-left: 20px; }
+        /* Totals Footer */
+        .metrics-table tfoot {
+            background: #f8fafc;
+            border-top: 2px solid #e2e8f0;
+        }
+        .metrics-table tfoot tr {
+            font-weight: 600;
+        }
+        .metrics-table tfoot td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .metrics-table tfoot .totals-label {
+            font-weight: 700;
+            color: #1e293b;
+        }
+        .metrics-table tfoot .totals-row-all {
+            background: #e0f2fe;
+        }
+        .metrics-table tfoot .totals-row-active {
+            background: #dcfce7;
+        }
+        .metrics-table tfoot .totals-row-inactive {
+            background: #fef3c7;
+        }
+        .metrics-table tfoot .totals-type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 6px;
+        }
+        .metrics-table tfoot .badge-all {
+            background: #0284c7;
+            color: white;
+        }
+        .metrics-table tfoot .badge-active {
+            background: #16a34a;
+            color: white;
+        }
+        .metrics-table tfoot .badge-inactive {
+            background: #d97706;
+            color: white;
+        }
         /* Expand/Collapse */
         .expand-btn {
             background: none;
@@ -1747,6 +1792,9 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                         <tbody id="campaign-table-body">
                             <!-- Campaign rows will be rendered here by JavaScript -->
                         </tbody>
+                        <tfoot id="campaign-table-totals">
+                            <!-- Totals will be rendered here by JavaScript -->
+                        </tfoot>
                     </table>
                 </div>
 
