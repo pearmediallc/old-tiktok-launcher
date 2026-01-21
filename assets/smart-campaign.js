@@ -5799,6 +5799,178 @@ function closeDuplicateCampaignModal() {
         <div class="spinner"></div>
         <p style="margin-top: 15px; color: #666;">Fetching campaign details...</p>
     `;
+
+    // Reset schedule options
+    resetDupScheduleOptions();
+}
+
+// Reset duplicate schedule options to default
+function resetDupScheduleOptions() {
+    // Reset to "continuous" option
+    const continuousRadio = document.querySelector('input[name="dup_schedule_type"][value="continuous"]');
+    if (continuousRadio) {
+        continuousRadio.checked = true;
+    }
+
+    // Hide date containers
+    const startOnlyContainer = document.getElementById('dup-schedule-start-only-container');
+    const dateTimeContainer = document.getElementById('dup-schedule-datetime-container');
+    if (startOnlyContainer) startOnlyContainer.style.display = 'none';
+    if (dateTimeContainer) dateTimeContainer.style.display = 'none';
+
+    // Reset option borders
+    document.querySelectorAll('.dup-schedule-option').forEach((opt, index) => {
+        opt.style.borderColor = index === 0 ? '#1a1a1a' : '#e2e8f0';
+    });
+
+    // Clear datetime inputs
+    const inputs = ['dup-schedule-start-only-datetime', 'dup-schedule-start-datetime', 'dup-schedule-end-datetime'];
+    inputs.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) input.value = '';
+    });
+}
+
+// Toggle duplicate schedule type UI
+function toggleDupScheduleType() {
+    const scheduleType = document.querySelector('input[name="dup_schedule_type"]:checked')?.value || 'continuous';
+    const startOnlyContainer = document.getElementById('dup-schedule-start-only-container');
+    const dateTimeContainer = document.getElementById('dup-schedule-datetime-container');
+
+    // Hide both containers first
+    if (startOnlyContainer) startOnlyContainer.style.display = 'none';
+    if (dateTimeContainer) dateTimeContainer.style.display = 'none';
+
+    // Show appropriate container
+    if (scheduleType === 'scheduled_start_only' && startOnlyContainer) {
+        startOnlyContainer.style.display = 'block';
+        // Set default start time
+        const startInput = document.getElementById('dup-schedule-start-only-datetime');
+        if (startInput && !startInput.value) {
+            const now = new Date();
+            now.setHours(now.getHours() + 1);
+            now.setMinutes(0, 0, 0);
+            startInput.value = formatDateTimeLocal(now);
+        }
+    } else if (scheduleType === 'scheduled' && dateTimeContainer) {
+        dateTimeContainer.style.display = 'block';
+        // Set default times
+        const startInput = document.getElementById('dup-schedule-start-datetime');
+        const endInput = document.getElementById('dup-schedule-end-datetime');
+        if (startInput && !startInput.value) {
+            const now = new Date();
+            now.setHours(now.getHours() + 1);
+            now.setMinutes(0, 0, 0);
+            startInput.value = formatDateTimeLocal(now);
+        }
+        if (endInput && !endInput.value) {
+            const endDate = new Date();
+            endDate.setDate(endDate.getDate() + 7);
+            endDate.setHours(23, 59, 0, 0);
+            endInput.value = formatDateTimeLocal(endDate);
+        }
+    }
+
+    // Update option borders
+    document.querySelectorAll('.dup-schedule-option').forEach(opt => {
+        const radio = opt.querySelector('input[type="radio"]');
+        opt.style.borderColor = radio && radio.checked ? '#1a1a1a' : '#e2e8f0';
+    });
+}
+
+// Get schedule data for duplicate campaign
+function getDupScheduleData() {
+    const scheduleType = document.querySelector('input[name="dup_schedule_type"]:checked')?.value || 'continuous';
+
+    const formatForAPI = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    };
+
+    if (scheduleType === 'continuous') {
+        return { schedule_type: 'SCHEDULE_FROM_NOW' };
+    }
+
+    if (scheduleType === 'scheduled_start_only') {
+        const startDateTime = document.getElementById('dup-schedule-start-only-datetime')?.value;
+        const timezone = document.getElementById('dup-schedule-start-only-timezone')?.value || 'America/New_York';
+
+        if (!startDateTime) {
+            return { schedule_type: 'SCHEDULE_FROM_NOW' };
+        }
+
+        return {
+            schedule_type: 'SCHEDULE_FROM_NOW',
+            schedule_start_time: formatForAPI(new Date(startDateTime)),
+            schedule_timezone: timezone
+        };
+    }
+
+    // scheduled (start and end)
+    const startDateTime = document.getElementById('dup-schedule-start-datetime')?.value;
+    const endDateTime = document.getElementById('dup-schedule-end-datetime')?.value;
+    const timezone = document.getElementById('dup-schedule-timezone')?.value || 'America/New_York';
+
+    if (!startDateTime || !endDateTime) {
+        return { schedule_type: 'SCHEDULE_FROM_NOW' };
+    }
+
+    return {
+        schedule_type: 'SCHEDULE_START_END',
+        schedule_start_time: formatForAPI(new Date(startDateTime)),
+        schedule_end_time: formatForAPI(new Date(endDateTime)),
+        schedule_timezone: timezone
+    };
+}
+
+// Validate duplicate schedule dates
+function validateDupScheduleDates() {
+    const scheduleType = document.querySelector('input[name="dup_schedule_type"]:checked')?.value || 'continuous';
+
+    if (scheduleType === 'continuous') {
+        return { valid: true };
+    }
+
+    const now = new Date();
+
+    if (scheduleType === 'scheduled_start_only') {
+        const startDateTime = document.getElementById('dup-schedule-start-only-datetime')?.value;
+        if (!startDateTime) {
+            return { valid: false, message: 'Please select a start date and time' };
+        }
+        if (new Date(startDateTime) < now) {
+            return { valid: false, message: 'Start time must be in the future' };
+        }
+        return { valid: true };
+    }
+
+    // scheduled (start and end)
+    const startDateTime = document.getElementById('dup-schedule-start-datetime')?.value;
+    const endDateTime = document.getElementById('dup-schedule-end-datetime')?.value;
+
+    if (!startDateTime) {
+        return { valid: false, message: 'Please select a start date and time' };
+    }
+    if (!endDateTime) {
+        return { valid: false, message: 'Please select an end date and time' };
+    }
+
+    const startDate = new Date(startDateTime);
+    const endDate = new Date(endDateTime);
+
+    if (startDate < now) {
+        return { valid: false, message: 'Start time must be in the future' };
+    }
+    if (endDate <= startDate) {
+        return { valid: false, message: 'End time must be after start time' };
+    }
+
+    return { valid: true };
 }
 
 // Adjust duplicate count with +/- buttons
@@ -5886,11 +6058,22 @@ async function executeDuplicateCampaign() {
             return;
         }
 
+        // Validate schedule dates in edit mode
+        const scheduleValidation = validateDupScheduleDates();
+        if (!scheduleValidation.valid) {
+            showToast(scheduleValidation.message, 'error');
+            return;
+        }
+
+        // Get schedule data
+        const scheduleData = getDupScheduleData();
+
         editedValues = {
             campaignName: editedName,
             budget: editedBudget,
             landingPageUrl: editedLandingUrl,
-            adTexts: editedAdText ? editedAdText.split('\n').filter(t => t.trim()) : []
+            adTexts: editedAdText ? editedAdText.split('\n').filter(t => t.trim()) : [],
+            schedule: scheduleData
         };
     }
 
@@ -5971,14 +6154,33 @@ async function executeDuplicateCampaign() {
             let newAdGroupId = null;
             if (adgroup) {
                 addLog('info', `Creating ad group for campaign ${newCampaignId}`);
-                const adgroupResult = await apiRequest('create_smartplus_adgroup', {
+
+                // Build ad group params
+                const adgroupParams = {
                     campaign_id: newCampaignId,
                     adgroup_name: newName,
                     pixel_id: adgroup.pixel_id,
                     optimization_event: adgroup.optimization_event,
                     location_ids: adgroup.location_ids || [],
                     age_groups: adgroup.age_groups || []
-                });
+                };
+
+                // Add schedule params if in edit mode with custom schedule
+                if (editedValues && editedValues.schedule) {
+                    adgroupParams.schedule_type = editedValues.schedule.schedule_type;
+                    if (editedValues.schedule.schedule_start_time) {
+                        adgroupParams.schedule_start_time = editedValues.schedule.schedule_start_time;
+                    }
+                    if (editedValues.schedule.schedule_end_time) {
+                        adgroupParams.schedule_end_time = editedValues.schedule.schedule_end_time;
+                    }
+                    if (editedValues.schedule.schedule_timezone) {
+                        adgroupParams.schedule_timezone = editedValues.schedule.schedule_timezone;
+                    }
+                    addLog('info', `Schedule: ${editedValues.schedule.schedule_type}${editedValues.schedule.schedule_start_time ? ' from ' + editedValues.schedule.schedule_start_time : ''}`);
+                }
+
+                const adgroupResult = await apiRequest('create_smartplus_adgroup', adgroupParams);
 
                 if (!adgroupResult.success) {
                     throw new Error(adgroupResult.message || 'Failed to create ad group');

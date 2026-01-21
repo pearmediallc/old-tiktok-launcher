@@ -1929,6 +1929,79 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                       style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; resize: vertical;"></textarea>
                         </div>
 
+                        <!-- Schedule Options for Duplicate -->
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">Ad Group Schedule</label>
+                            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+                                <!-- Option 1: Start Now -->
+                                <label class="dup-schedule-option" style="display: flex; align-items: flex-start; gap: 10px; padding: 10px; background: white; border: 2px solid #1a1a1a; border-radius: 6px; cursor: pointer; margin-bottom: 8px;">
+                                    <input type="radio" name="dup_schedule_type" value="continuous" checked onchange="toggleDupScheduleType()" style="margin-top: 3px;">
+                                    <div>
+                                        <strong style="color: #1e293b; font-size: 13px;">Start now and run continuously</strong>
+                                        <p style="margin: 2px 0 0; color: #64748b; font-size: 12px;">Ad group will start immediately</p>
+                                    </div>
+                                </label>
+
+                                <!-- Option 2: Schedule Start Only -->
+                                <label class="dup-schedule-option" style="display: flex; align-items: flex-start; gap: 10px; padding: 10px; background: white; border: 2px solid #e2e8f0; border-radius: 6px; cursor: pointer; margin-bottom: 8px;">
+                                    <input type="radio" name="dup_schedule_type" value="scheduled_start_only" onchange="toggleDupScheduleType()" style="margin-top: 3px;">
+                                    <div>
+                                        <strong style="color: #1e293b; font-size: 13px;">Schedule start time (run continuously)</strong>
+                                        <p style="margin: 2px 0 0; color: #64748b; font-size: 12px;">Start at a specific date/time</p>
+                                    </div>
+                                </label>
+
+                                <!-- Option 3: Start and End -->
+                                <label class="dup-schedule-option" style="display: flex; align-items: flex-start; gap: 10px; padding: 10px; background: white; border: 2px solid #e2e8f0; border-radius: 6px; cursor: pointer;">
+                                    <input type="radio" name="dup_schedule_type" value="scheduled" onchange="toggleDupScheduleType()" style="margin-top: 3px;">
+                                    <div>
+                                        <strong style="color: #1e293b; font-size: 13px;">Set start and end time</strong>
+                                        <p style="margin: 2px 0 0; color: #64748b; font-size: 12px;">Run during a specific time period</p>
+                                    </div>
+                                </label>
+
+                                <!-- Start Only DateTime Picker -->
+                                <div id="dup-schedule-start-only-container" style="display: none; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 6px;">
+                                    <div class="form-group" style="margin-bottom: 10px;">
+                                        <label style="font-weight: 500; color: #475569; font-size: 13px;">Start Date & Time</label>
+                                        <input type="datetime-local" id="dup-schedule-start-only-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label style="font-weight: 500; color: #475569; font-size: 13px;">Timezone</label>
+                                        <select id="dup-schedule-start-only-timezone" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                                            <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                                            <option value="America/Denver">Mountain Time (MT)</option>
+                                            <option value="America/Chicago">Central Time (CT)</option>
+                                            <option value="America/New_York" selected>Eastern Time (ET)</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Start AND End DateTime Pickers -->
+                                <div id="dup-schedule-datetime-container" style="display: none; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 6px;">
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label style="font-weight: 500; color: #475569; font-size: 13px;">Start Date & Time</label>
+                                            <input type="datetime-local" id="dup-schedule-start-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                                        </div>
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label style="font-weight: 500; color: #475569; font-size: 13px;">End Date & Time</label>
+                                            <input type="datetime-local" id="dup-schedule-end-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                                        </div>
+                                    </div>
+                                    <div class="form-group" style="margin-top: 10px; margin-bottom: 0;">
+                                        <label style="font-weight: 500; color: #475569; font-size: 13px;">Timezone</label>
+                                        <select id="dup-schedule-timezone" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                                            <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                                            <option value="America/Denver">Mountain Time (MT)</option>
+                                            <option value="America/Chicago">Central Time (CT)</option>
+                                            <option value="America/New_York" selected>Eastern Time (ET)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Number of copies for edit mode -->
                         <div class="form-group" style="margin-bottom: 15px;">
                             <label style="font-weight: 600; margin-bottom: 8px; display: block;">Number of copies to create</label>
