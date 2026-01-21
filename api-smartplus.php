@@ -529,99 +529,35 @@ switch ($action) {
         }
 
         logSmartPlus("Cache MISS for identities - Advertiser: $advertiserId");
-        // For Smart+, we need TT_USER, AUTH_CODE, or BC_AUTH_TT identities
-        // Also fetch TikTok Pages which can be used as identities
+        // Smart+ campaigns ONLY support CUSTOMIZED_USER identity type
+        // TikTok Pages (BC_AUTH_TT) and Authorized Accounts (AUTH_CODE) are NOT supported
         $allIdentities = [];
-        $allPages = [];
 
-        // Get Custom Identities
+        // Get Custom Identities only
         $result = makeApiCall('/identity/get/', [
             'advertiser_id' => $advertiserId
         ], $accessToken, 'GET');
 
         if ($result['code'] == 0 && isset($result['data']['identity_list'])) {
-            $allIdentities = $result['data']['identity_list'];
-            // Add type marker to each identity
-            foreach ($allIdentities as &$identity) {
-                $identity['source_type'] = 'custom_identity';
-            }
-            logSmartPlus("Found " . count($allIdentities) . " custom identities");
-        }
-
-        // Get TikTok Pages (BC authorized pages)
-        $pagesResult = makeApiCall('/bc/asset/get/', [
-            'advertiser_id' => $advertiserId,
-            'asset_type' => 'TT_PAGE'
-        ], $accessToken, 'GET');
-
-        if ($pagesResult['code'] == 0 && isset($pagesResult['data']['list'])) {
-            foreach ($pagesResult['data']['list'] as $page) {
-                $allPages[] = [
-                    'identity_id' => $page['asset_id'] ?? $page['page_id'] ?? null,
-                    'display_name' => $page['display_name'] ?? $page['page_name'] ?? 'TikTok Page',
-                    'profile_image' => $page['profile_image'] ?? $page['avatar_url'] ?? null,
-                    'identity_type' => 'BC_AUTH_TT',
-                    'source_type' => 'tiktok_page'
-                ];
-            }
-            logSmartPlus("Found " . count($allPages) . " TikTok pages from bc/asset/get");
-        } else {
-            logSmartPlus("bc/asset/get failed or no pages: " . json_encode($pagesResult));
-        }
-
-        // Also try identity/get with identity_type filter for BC_AUTH_TT
-        $bcAuthResult = makeApiCall('/identity/get/', [
-            'advertiser_id' => $advertiserId,
-            'identity_type' => 'BC_AUTH_TT'
-        ], $accessToken, 'GET');
-
-        if ($bcAuthResult['code'] == 0 && isset($bcAuthResult['data']['identity_list'])) {
-            foreach ($bcAuthResult['data']['identity_list'] as $bcIdentity) {
-                // Check if not already in pages list
-                $exists = false;
-                foreach ($allPages as $page) {
-                    if ($page['identity_id'] === $bcIdentity['identity_id']) {
-                        $exists = true;
-                        break;
-                    }
-                }
-                if (!$exists) {
-                    $bcIdentity['source_type'] = 'tiktok_page';
-                    $allPages[] = $bcIdentity;
+            // Filter to only include CUSTOMIZED_USER identities
+            foreach ($result['data']['identity_list'] as $identity) {
+                if (!isset($identity['identity_type']) || $identity['identity_type'] === 'CUSTOMIZED_USER') {
+                    $identity['source_type'] = 'custom_identity';
+                    $allIdentities[] = $identity;
                 }
             }
-            logSmartPlus("Found " . count($bcAuthResult['data']['identity_list']) . " BC_AUTH_TT identities");
+            logSmartPlus("Found " . count($allIdentities) . " custom identities (CUSTOMIZED_USER only)");
         }
-
-        // Also try AUTH_CODE type identities (authorized TikTok accounts)
-        $authCodeResult = makeApiCall('/identity/get/', [
-            'advertiser_id' => $advertiserId,
-            'identity_type' => 'AUTH_CODE'
-        ], $accessToken, 'GET');
-
-        if ($authCodeResult['code'] == 0 && isset($authCodeResult['data']['identity_list'])) {
-            foreach ($authCodeResult['data']['identity_list'] as $authIdentity) {
-                $authIdentity['source_type'] = 'authorized_account';
-                $allPages[] = $authIdentity;
-            }
-            logSmartPlus("Found " . count($authCodeResult['data']['identity_list']) . " AUTH_CODE identities");
-        }
-
-        // Combine data for caching
-        $combinedData = [
-            'identities' => $allIdentities,
-            'pages' => $allPages
-        ];
 
         // Cache identities for 10 minutes
-        $cache->set($cacheKey, $combinedData, Cache::TTL_LONG);
+        $cache->set($cacheKey, ['identities' => $allIdentities, 'pages' => []], Cache::TTL_LONG);
 
         echo json_encode([
             'success' => true,
             'data' => [
-                'list' => $allIdentities,  // Keep for backward compatibility
+                'list' => $allIdentities,
                 'identities' => $allIdentities,
-                'pages' => $allPages
+                'pages' => []  // Not supported for Smart+ campaigns
             ]
         ]);
         break;

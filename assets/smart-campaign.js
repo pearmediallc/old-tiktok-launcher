@@ -607,64 +607,36 @@ async function loadIdentities() {
         const select = document.getElementById('global-identity');
 
         if (result.success && result.data) {
-            // Get both identities and pages
-            const customIdentities = result.data.identities || result.data.list || [];
-            const pages = result.data.pages || [];
+            // Get custom identities only - Smart+ campaigns ONLY support CUSTOMIZED_USER type
+            // TikTok Pages (BC_AUTH_TT) and Authorized Accounts (AUTH_CODE) are NOT supported
+            const allIdentities = result.data.identities || result.data.list || [];
 
-            // Combine for state (backward compatibility)
-            state.identities = [...customIdentities, ...pages];
+            // Filter to only include CUSTOMIZED_USER identities
+            const customIdentities = allIdentities.filter(identity =>
+                !identity.identity_type || identity.identity_type === 'CUSTOMIZED_USER'
+            );
+
+            state.identities = customIdentities;
             state.customIdentities = customIdentities;
-            state.tiktokPages = pages;
+            state.tiktokPages = []; // Not supported for Smart+ campaigns
 
             select.innerHTML = '<option value="">Select identity...</option>';
 
-            // Add Custom Identities section
+            // Add Custom Identities
             if (customIdentities.length > 0) {
-                const customGroup = document.createElement('optgroup');
-                customGroup.label = '👤 Custom Identities';
-
                 customIdentities.forEach(identity => {
                     const option = document.createElement('option');
                     option.value = identity.identity_id;
-                    option.dataset.identityType = identity.identity_type || 'CUSTOMIZED_USER';
+                    option.dataset.identityType = 'CUSTOMIZED_USER';
                     option.dataset.sourceType = 'custom_identity';
                     option.textContent = `${identity.display_name || identity.identity_name}`;
-                    customGroup.appendChild(option);
+                    select.appendChild(option);
                 });
 
-                select.appendChild(customGroup);
-            }
-
-            // Add TikTok Pages section
-            if (pages.length > 0) {
-                const pagesGroup = document.createElement('optgroup');
-                pagesGroup.label = '📄 TikTok Pages & Authorized Accounts';
-
-                pages.forEach(page => {
-                    const option = document.createElement('option');
-                    option.value = page.identity_id;
-                    option.dataset.identityType = page.identity_type || 'BC_AUTH_TT';
-                    option.dataset.sourceType = page.source_type || 'tiktok_page';
-
-                    // Format display based on type
-                    let typeLabel = '';
-                    if (page.identity_type === 'BC_AUTH_TT') {
-                        typeLabel = ' (TikTok Page)';
-                    } else if (page.identity_type === 'AUTH_CODE') {
-                        typeLabel = ' (Authorized)';
-                    }
-                    option.textContent = `${page.display_name || page.identity_name || 'TikTok Page'}${typeLabel}`;
-                    pagesGroup.appendChild(option);
-                });
-
-                select.appendChild(pagesGroup);
-            }
-
-            const totalCount = customIdentities.length + pages.length;
-            addLog('info', `Loaded ${totalCount} identities (${customIdentities.length} custom, ${pages.length} pages/authorized)`);
-
-            if (totalCount === 0) {
-                select.innerHTML = '<option value="">No identities found</option>';
+                addLog('info', `Loaded ${customIdentities.length} custom identities`);
+            } else {
+                select.innerHTML = '<option value="">No custom identities found - Create one in TikTok Ads Manager</option>';
+                addLog('warn', 'No custom identities found. Smart+ campaigns require CUSTOMIZED_USER identities.');
             }
         } else {
             select.innerHTML = '<option value="">No identities found</option>';
