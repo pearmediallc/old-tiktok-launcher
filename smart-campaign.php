@@ -246,6 +246,9 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
         }
         .metrics-table-wrapper {
             overflow-x: auto;
+            max-height: calc(100vh - 380px);
+            overflow-y: auto;
+            position: relative;
         }
         .metrics-table {
             width: 100%;
@@ -294,10 +297,14 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
         .metrics-table .row-ad { background: #f1f5f9; }
         .metrics-table .row-adgroup td:first-child,
         .metrics-table .row-ad td:first-child { padding-left: 20px; }
-        /* Totals Footer */
+        /* Totals Footer - Sticky at bottom */
         .metrics-table tfoot {
             background: #f8fafc;
             border-top: 2px solid #e2e8f0;
+            position: sticky;
+            bottom: 0;
+            z-index: 5;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
         }
         .metrics-table tfoot tr {
             font-weight: 600;
@@ -1710,11 +1717,11 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                 <div class="date-range-picker" id="date-range-picker" style="display: none;">
                     <div class="date-input-group">
                         <label>From</label>
-                        <input type="date" id="date-from" onchange="applyCustomDateRange()">
+                        <input type="date" id="date-from">
                     </div>
                     <div class="date-input-group">
                         <label>To</label>
-                        <input type="date" id="date-to" onchange="applyCustomDateRange()">
+                        <input type="date" id="date-to">
                     </div>
                     <button class="btn-apply-date" onclick="applyCustomDateRange()">Apply</button>
                 </div>
@@ -1804,8 +1811,8 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
             </div>
         </div>
 
-        <!-- API Logs Panel -->
-        <div id="logs-panel" class="logs-panel collapsed">
+        <!-- API Logs Panel (Hidden in production) -->
+        <div id="logs-panel" class="logs-panel collapsed" style="display: none;">
             <div class="logs-header" onclick="toggleLogsPanel()" style="cursor: pointer;">
                 <h3>📋 API Request Logs <span id="logs-toggle-icon">▲ Show Logs</span></h3>
                 <div class="logs-controls" onclick="event.stopPropagation();">
