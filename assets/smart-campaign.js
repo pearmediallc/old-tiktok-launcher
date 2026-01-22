@@ -641,13 +641,21 @@ async function loadIdentities() {
                 pagesGroup.label = 'TikTok Pages (Authorized)';
 
                 pages.forEach(page => {
+                    // Log full page data for debugging
+                    console.log('BC_AUTH_TT page data:', page);
+
                     const option = document.createElement('option');
                     option.value = page.identity_id;
                     option.dataset.identityType = 'BC_AUTH_TT';
                     option.dataset.sourceType = 'bc_auth_tt';
                     // Store identity_authorized_bc_id if available
-                    if (page.identity_authorized_bc_id) {
-                        option.dataset.identityAuthorizedBcId = page.identity_authorized_bc_id;
+                    // TikTok may return this as 'identity_authorized_bc_id' or 'bc_id'
+                    const bcId = page.identity_authorized_bc_id || page.bc_id || page.authorized_bc_id;
+                    if (bcId) {
+                        option.dataset.identityAuthorizedBcId = bcId;
+                        console.log(`Page ${page.identity_id} has bc_id: ${bcId}`);
+                    } else {
+                        console.warn(`Page ${page.identity_id} missing identity_authorized_bc_id!`);
                     }
                     option.textContent = `${page.display_name || page.identity_name || 'TikTok Page'}`;
                     pagesGroup.appendChild(option);

@@ -561,8 +561,14 @@ switch ($action) {
             'identity_type' => 'BC_AUTH_TT'
         ], $accessToken, 'GET');
 
+        // Log full BC_AUTH_TT response for debugging
+        logSmartPlus("BC_AUTH_TT identity response: " . json_encode($bcAuthResult));
+
         if ($bcAuthResult['code'] == 0 && isset($bcAuthResult['data']['identity_list'])) {
             foreach ($bcAuthResult['data']['identity_list'] as $bcIdentity) {
+                // Log each identity to see what fields are returned
+                logSmartPlus("BC_AUTH_TT identity details: " . json_encode($bcIdentity));
+
                 // Check if not already in list
                 $exists = false;
                 foreach ($bcAuthIdentities as $existing) {
@@ -573,6 +579,8 @@ switch ($action) {
                 }
                 if (!$exists) {
                     $bcIdentity['source_type'] = 'bc_auth_tt';
+                    // The identity_authorized_bc_id should be returned by TikTok for BC_AUTH_TT identities
+                    // If not present, we may need to get it from Business Center API
                     $bcAuthIdentities[] = $bcIdentity;
                 }
             }
@@ -1546,7 +1554,7 @@ switch ($action) {
             $db = Database::getInstance();
 
             // Check if portfolio already exists
-            $existingPortfolio = $db->fetch(
+            $existingPortfolio = $db->fetchOne(
                 "SELECT creative_portfolio_id, portfolio_name
                  FROM tool_portfolios
                  WHERE advertiser_id = :advertiser_id
