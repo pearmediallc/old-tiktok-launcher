@@ -813,13 +813,13 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                             <div id="schedule-start-only-container" style="display: none; margin-top: 15px; padding: 15px; background: white; border: 1px solid #e2e8f0; border-radius: 8px;">
                                 <div class="form-group" style="margin-bottom: 15px;">
                                     <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time</label>
-                                    <input type="datetime-local" id="schedule-start-only-datetime" onchange="updateScheduleSummary()" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                    <input type="datetime-local" id="schedule-start-only-datetime" onchange="showSchedulePending('start_only')" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                 </div>
 
                                 <!-- Timezone Selector -->
                                 <div class="form-group" style="margin-bottom: 15px;">
                                     <label style="font-weight: 500; color: #475569; font-size: 14px;">Timezone</label>
-                                    <select id="schedule-start-only-timezone" onchange="updateScheduleSummary()" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                    <select id="schedule-start-only-timezone" onchange="showSchedulePending('start_only')" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                         <option value="America/Los_Angeles">Pacific Time (PT) - Los Angeles</option>
                                         <option value="America/Denver">Mountain Time (MT) - Denver</option>
                                         <option value="America/Chicago">Central Time (CT) - Chicago</option>
@@ -830,12 +830,17 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                     </select>
                                 </div>
 
+                                <!-- Pending indicator (shown when date selected but not applied) -->
+                                <div id="schedule-start-only-pending" style="display: none; padding: 10px 12px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; margin-bottom: 12px; font-size: 13px; color: #92400e;">
+                                    ⚠️ <strong>Click "Apply Schedule" button below to confirm your selection</strong>
+                                </div>
+
                                 <!-- Apply Button and Summary -->
-                                <div style="display: flex; align-items: center; gap: 12px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e2e8f0;">
-                                    <button type="button" onclick="applySchedule('start_only')" class="btn-primary" style="padding: 10px 20px; font-size: 14px; border-radius: 6px;">
+                                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e2e8f0;">
+                                    <button type="button" onclick="applySchedule('start_only')" class="btn-primary" style="padding: 12px 24px; font-size: 15px; font-weight: 600; border-radius: 8px; width: 100%;">
                                         ✓ Apply Schedule
                                     </button>
-                                    <div id="schedule-start-only-summary" style="flex: 1; padding: 8px 12px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; font-size: 13px; color: #166534; display: none;">
+                                    <div id="schedule-start-only-summary" style="padding: 10px 14px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; font-size: 13px; color: #166534; display: none;">
                                         <!-- Summary will be shown here -->
                                     </div>
                                 </div>
@@ -852,20 +857,20 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                     <!-- Start Date/Time -->
                                     <div class="form-group" style="margin-bottom: 0;">
                                         <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time</label>
-                                        <input type="datetime-local" id="schedule-start-datetime" onchange="updateScheduleSummary()" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                        <input type="datetime-local" id="schedule-start-datetime" onchange="showSchedulePending('start_end')" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                     </div>
 
                                     <!-- End Date/Time -->
                                     <div class="form-group" style="margin-bottom: 0;">
                                         <label style="font-weight: 500; color: #475569; font-size: 14px;">End Date & Time</label>
-                                        <input type="datetime-local" id="schedule-end-datetime" onchange="updateScheduleSummary()" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                        <input type="datetime-local" id="schedule-end-datetime" onchange="showSchedulePending('start_end')" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                     </div>
                                 </div>
 
                                 <!-- Timezone Selector -->
                                 <div class="form-group" style="margin-top: 15px; margin-bottom: 0;">
                                     <label style="font-weight: 500; color: #475569; font-size: 14px;">Timezone</label>
-                                    <select id="schedule-timezone" onchange="updateScheduleSummary()" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                    <select id="schedule-timezone" onchange="showSchedulePending('start_end')" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                         <option value="America/Los_Angeles">Pacific Time (PT) - Los Angeles</option>
                                         <option value="America/Denver">Mountain Time (MT) - Denver</option>
                                         <option value="America/Chicago">Central Time (CT) - Chicago</option>
@@ -876,12 +881,17 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                     </select>
                                 </div>
 
+                                <!-- Pending indicator (shown when date selected but not applied) -->
+                                <div id="schedule-datetime-pending" style="display: none; padding: 10px 12px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; margin-top: 15px; font-size: 13px; color: #92400e;">
+                                    ⚠️ <strong>Click "Apply Schedule" button below to confirm your selection</strong>
+                                </div>
+
                                 <!-- Apply Button and Summary -->
-                                <div style="display: flex; align-items: center; gap: 12px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e2e8f0;">
-                                    <button type="button" onclick="applySchedule('start_end')" class="btn-primary" style="padding: 10px 20px; font-size: 14px; border-radius: 6px;">
+                                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e2e8f0;">
+                                    <button type="button" onclick="applySchedule('start_end')" class="btn-primary" style="padding: 12px 24px; font-size: 15px; font-weight: 600; border-radius: 8px; width: 100%;">
                                         ✓ Apply Schedule
                                     </button>
-                                    <div id="schedule-datetime-summary" style="flex: 1; padding: 8px 12px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; font-size: 13px; color: #166534; display: none;">
+                                    <div id="schedule-datetime-summary" style="padding: 10px 14px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; font-size: 13px; color: #166534; display: none;">
                                         <!-- Summary will be shown here -->
                                     </div>
                                 </div>

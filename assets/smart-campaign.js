@@ -1040,7 +1040,31 @@ async function handleSmartMediaUpload(event) {
         clearInterval(progressInterval);
         progressBar.style.width = '100%';
 
-        const result = await response.json();
+        // Get raw response text first to handle potential JSON errors
+        const responseText = await response.text();
+        let result;
+
+        try {
+            // Try to parse as JSON
+            result = JSON.parse(responseText);
+        } catch (jsonError) {
+            // If JSON parsing fails, try to extract JSON from mixed output
+            console.error('JSON parse error:', jsonError);
+            console.log('Raw response:', responseText);
+
+            // Try to find JSON in the response (it might have PHP warnings before it)
+            const jsonMatch = responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
+            if (jsonMatch) {
+                try {
+                    result = JSON.parse(jsonMatch[0]);
+                    addLog('warning', 'Server returned extra output before JSON, but extracted result');
+                } catch (e) {
+                    throw new Error('Invalid JSON response from server');
+                }
+            } else {
+                throw new Error('Invalid JSON response from server: ' + responseText.substring(0, 200));
+            }
+        }
 
         addLog(result.success ? 'response' : 'error', `Upload ${result.success ? 'successful' : 'failed'}`, result);
 
@@ -1396,26 +1420,61 @@ function applySchedule(type) {
     if (summaryEl && summaryText) {
         summaryEl.innerHTML = `<strong>✓ Applied:</strong> ${summaryText}`;
         summaryEl.style.display = 'block';
+
+        // Hide pending indicator
+        if (type === 'start_only') {
+            const pendingEl = document.getElementById('schedule-start-only-pending');
+            if (pendingEl) pendingEl.style.display = 'none';
+        } else if (type === 'start_end') {
+            const pendingEl = document.getElementById('schedule-datetime-pending');
+            if (pendingEl) pendingEl.style.display = 'none';
+        }
+
         showToast('Schedule applied successfully!', 'success');
         addLog('info', `Schedule applied: ${summaryText}`);
     }
 }
 
-// Update schedule summary as user changes values
-function updateScheduleSummary() {
-    const scheduleType = document.querySelector('input[name="schedule_type"]:checked')?.value || 'continuous';
-
-    if (scheduleType === 'scheduled_start_only') {
+// Show pending state when user selects date but hasn't applied yet
+function showSchedulePending(type) {
+    if (type === 'start_only') {
+        const pendingEl = document.getElementById('schedule-start-only-pending');
         const summaryEl = document.getElementById('schedule-start-only-summary');
-        if (summaryEl) {
-            summaryEl.style.display = 'none'; // Hide until Apply is clicked
+        const datetime = document.getElementById('schedule-start-only-datetime')?.value;
+
+        if (pendingEl && datetime) {
+            // Only show pending if not already applied (summary not visible)
+            if (summaryEl && summaryEl.style.display === 'none') {
+                pendingEl.style.display = 'block';
+            } else {
+                // If something changed after applying, show pending again
+                pendingEl.style.display = 'block';
+                summaryEl.style.display = 'none';
+            }
         }
-    } else if (scheduleType === 'scheduled') {
+    } else if (type === 'start_end') {
+        const pendingEl = document.getElementById('schedule-datetime-pending');
         const summaryEl = document.getElementById('schedule-datetime-summary');
-        if (summaryEl) {
-            summaryEl.style.display = 'none'; // Hide until Apply is clicked
+        const startDatetime = document.getElementById('schedule-start-datetime')?.value;
+        const endDatetime = document.getElementById('schedule-end-datetime')?.value;
+
+        if (pendingEl && (startDatetime || endDatetime)) {
+            // Only show pending if not already applied (summary not visible)
+            if (summaryEl && summaryEl.style.display === 'none') {
+                pendingEl.style.display = 'block';
+            } else {
+                // If something changed after applying, show pending again
+                pendingEl.style.display = 'block';
+                summaryEl.style.display = 'none';
+            }
         }
     }
+}
+
+// Update schedule summary as user changes values (deprecated, use showSchedulePending)
+function updateScheduleSummary() {
+    // This function is now replaced by showSchedulePending
+    // Kept for backwards compatibility
 }
 
 // Format datetime for readable display
@@ -6874,7 +6933,8 @@ function renderVideoModalGrid(videos) {
         const isSelected = videoModalState.selectedVideos.some(v =>
             v.id === video.id || v.video_id === video.video_id || v.id === video.video_id
         );
-        const thumbnailUrl = video.thumbnail_url || video.cover_image_url || '';
+        // Get thumbnail from various possible fields
+        const thumbnailUrl = video.thumbnail_url || video.cover_image_url || video.url || video.preview_url || '';
 
         return `
             <div class="video-modal-item ${isSelected ? 'selected' : ''}"
@@ -6914,7 +6974,7 @@ function toggleVideoInModal(videoId) {
             id: video.id,
             video_id: video.video_id || video.id,
             name: video.name || video.file_name,
-            thumbnail_url: video.thumbnail_url || video.cover_image_url
+            thumbnail_url: video.thumbnail_url || video.cover_image_url || video.url || video.preview_url
         });
     }
 
@@ -7019,7 +7079,7 @@ function renderDuplicateCurrentVideos() {
                 return {
                     video_id: videoId,
                     name: video?.name || video?.file_name || `Video ${videoId?.slice(-6)}`,
-                    thumbnail_url: video?.thumbnail_url || video?.cover_image_url
+                    thumbnail_url: video?.thumbnail_url || video?.cover_image_url || video?.url || video?.preview_url
                 };
             });
         } else if (ad.video_ids) {
@@ -7028,7 +7088,7 @@ function renderDuplicateCurrentVideos() {
                 return {
                     video_id: vid,
                     name: video?.name || video?.file_name || `Video ${vid?.slice(-6)}`,
-                    thumbnail_url: video?.thumbnail_url || video?.cover_image_url
+                    thumbnail_url: video?.thumbnail_url || video?.cover_image_url || video?.url || video?.preview_url
                 };
             });
         }
