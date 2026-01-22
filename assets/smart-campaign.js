@@ -1000,17 +1000,28 @@ async function handleSmartMediaUpload(event) {
         return;
     }
 
-    // Show progress
+    // Add timestamp to filename to prevent duplicates
+    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14); // YYYYMMDDHHMMSS
+    const originalName = file.name;
+    const lastDotIndex = originalName.lastIndexOf('.');
+    const nameWithoutExt = lastDotIndex > 0 ? originalName.slice(0, lastDotIndex) : originalName;
+    const extension = lastDotIndex > 0 ? originalName.slice(lastDotIndex) : '';
+    const newFileName = `${nameWithoutExt}_${timestamp}${extension}`;
+
+    // Create a new File object with the timestamped name
+    const renamedFile = new File([file], newFileName, { type: file.type });
+
+    // Show progress with new filename
     document.getElementById('upload-area').style.display = 'none';
     document.getElementById('upload-progress').style.display = 'block';
     document.getElementById('upload-success').style.display = 'none';
-    document.getElementById('upload-status').textContent = `Uploading ${file.name}...`;
+    document.getElementById('upload-status').textContent = `Uploading ${newFileName}...`;
 
     const formData = new FormData();
-    formData.append(isVideo ? 'video' : 'image', file);
+    formData.append(isVideo ? 'video' : 'image', renamedFile);
 
     try {
-        addLog('request', `Uploading ${isVideo ? 'video' : 'image'}: ${file.name}`);
+        addLog('request', `Uploading ${isVideo ? 'video' : 'image'}: ${newFileName} (original: ${originalName})`);
 
         // Simulate progress
         let progress = 0;
@@ -1037,9 +1048,10 @@ async function handleSmartMediaUpload(event) {
             // Show success
             document.getElementById('upload-progress').style.display = 'none';
             document.getElementById('upload-success').style.display = 'block';
-            document.getElementById('upload-success-name').textContent = `${file.name} uploaded successfully!`;
+            document.getElementById('upload-success-name').textContent = `${newFileName} uploaded successfully!`;
 
             showToast(`${isVideo ? 'Video' : 'Image'} uploaded successfully!`, 'success');
+            addLog('info', `File renamed from "${originalName}" to "${newFileName}" with timestamp`);
 
             // For videos, TikTok needs time to process before preview is available
             // Retry loading media library with delays to ensure new video appears
@@ -1328,6 +1340,96 @@ function validateScheduleDates() {
     }
 
     return { valid: true };
+}
+
+// Apply schedule and show confirmation
+function applySchedule(type) {
+    const validation = validateScheduleDates();
+
+    if (!validation.valid) {
+        showToast(validation.message, 'error');
+        return;
+    }
+
+    let summaryText = '';
+    let summaryEl = null;
+
+    if (type === 'start_only') {
+        const startDateTime = document.getElementById('schedule-start-only-datetime')?.value;
+        const timezone = document.getElementById('schedule-start-only-timezone');
+        const timezoneText = timezone?.options[timezone.selectedIndex]?.text || 'Eastern Time';
+
+        if (startDateTime) {
+            const startDate = new Date(startDateTime);
+            summaryText = `📅 Starts: ${formatReadableDateTime(startDate)} (${timezoneText})`;
+            summaryEl = document.getElementById('schedule-start-only-summary');
+
+            // Store in state
+            state.appliedSchedule = {
+                type: 'scheduled_start_only',
+                startTime: startDateTime,
+                timezone: timezone?.value
+            };
+        }
+    } else if (type === 'start_end') {
+        const startDateTime = document.getElementById('schedule-start-datetime')?.value;
+        const endDateTime = document.getElementById('schedule-end-datetime')?.value;
+        const timezone = document.getElementById('schedule-timezone');
+        const timezoneText = timezone?.options[timezone.selectedIndex]?.text || 'Eastern Time';
+
+        if (startDateTime && endDateTime) {
+            const startDate = new Date(startDateTime);
+            const endDate = new Date(endDateTime);
+            summaryText = `📅 ${formatReadableDateTime(startDate)} → ${formatReadableDateTime(endDate)} (${timezoneText})`;
+            summaryEl = document.getElementById('schedule-datetime-summary');
+
+            // Store in state
+            state.appliedSchedule = {
+                type: 'scheduled',
+                startTime: startDateTime,
+                endTime: endDateTime,
+                timezone: timezone?.value
+            };
+        }
+    }
+
+    if (summaryEl && summaryText) {
+        summaryEl.innerHTML = `<strong>✓ Applied:</strong> ${summaryText}`;
+        summaryEl.style.display = 'block';
+        showToast('Schedule applied successfully!', 'success');
+        addLog('info', `Schedule applied: ${summaryText}`);
+    }
+}
+
+// Update schedule summary as user changes values
+function updateScheduleSummary() {
+    const scheduleType = document.querySelector('input[name="schedule_type"]:checked')?.value || 'continuous';
+
+    if (scheduleType === 'scheduled_start_only') {
+        const summaryEl = document.getElementById('schedule-start-only-summary');
+        if (summaryEl) {
+            summaryEl.style.display = 'none'; // Hide until Apply is clicked
+        }
+    } else if (scheduleType === 'scheduled') {
+        const summaryEl = document.getElementById('schedule-datetime-summary');
+        if (summaryEl) {
+            summaryEl.style.display = 'none'; // Hide until Apply is clicked
+        }
+    }
+}
+
+// Format datetime for readable display
+function formatReadableDateTime(date) {
+    const options = {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    };
+    return date.toLocaleString('en-US', options);
 }
 
 function updateStatesCount() {
@@ -6013,6 +6115,9 @@ function populateDuplicateEditFields(result) {
     const adTexts = ad?.ad_texts || ad?.ad_text_list || [];
     document.getElementById('dup-edit-ad-text').value =
         Array.isArray(adTexts) ? adTexts.join('\n') : (adTexts || '');
+
+    // Initialize videos display
+    initDuplicateVideosDisplay();
 }
 
 // Toggle between duplicate modes (same vs edit)
@@ -6092,6 +6197,17 @@ function resetDupScheduleOptions() {
         const input = document.getElementById(id);
         if (input) input.value = '';
     });
+
+    // Clear changed videos
+    duplicateState.changedVideos = null;
+}
+
+// Render current videos when duplicate modal opens
+function initDuplicateVideosDisplay() {
+    // Clear any previous changed videos
+    duplicateState.changedVideos = null;
+    // Render original videos
+    renderDuplicateCurrentVideos();
 }
 
 // Toggle duplicate schedule type UI
@@ -6500,6 +6616,16 @@ async function executeDuplicateCampaign() {
                     image_ids: ad.image_ids
                 });
 
+                // Check if user changed videos in duplicate modal (edit mode)
+                if (duplicateState.mode === 'edit' && duplicateState.changedVideos && duplicateState.changedVideos.length > 0) {
+                    // Use the changed videos instead of original
+                    creatives = duplicateState.changedVideos.map(v => ({
+                        video_id: v.video_id || v.id
+                    }));
+                    addLog('info', `Using ${creatives.length} changed video(s) for duplicate`);
+                    console.log('Using changed videos:', creatives);
+                }
+
                 // Validate we have at least one creative
                 if (creatives.length === 0) {
                     addLog('warning', 'No video creatives found in original ad');
@@ -6659,4 +6785,278 @@ async function executeDuplicateCampaign() {
     }
 
     addLog('info', `Duplication complete: ${successCount} success, ${failCount} failed`);
+}
+
+// ============================================
+// VIDEO SELECTION MODAL
+// ============================================
+
+// State for video selection modal
+let videoModalState = {
+    context: null, // 'duplicate', 'step3', etc.
+    selectedVideos: [],
+    allVideos: [],
+    onConfirm: null
+};
+
+// Open video selection modal
+function openVideoSelectionModal(context, preselectedVideos = []) {
+    videoModalState.context = context;
+    videoModalState.selectedVideos = [...preselectedVideos];
+
+    // Get videos from media library
+    const videos = state.mediaLibrary.filter(m => m.type === 'video');
+    videoModalState.allVideos = videos;
+
+    // Show modal
+    const modal = document.getElementById('video-selection-modal');
+    modal.style.display = 'flex';
+
+    // Render videos
+    renderVideoModalGrid(videos);
+
+    // Update counts
+    document.getElementById('video-modal-count').textContent = videoModalState.selectedVideos.length;
+    document.getElementById('video-modal-total').textContent = videos.length;
+
+    // Handle context-specific initialization
+    if (context === 'duplicate' && duplicateState.campaignDetails?.ad) {
+        // Preselect current videos from duplicate campaign
+        const ad = duplicateState.campaignDetails.ad;
+        const currentVideoIds = [];
+
+        if (ad.creative_list && ad.creative_list.length > 0) {
+            ad.creative_list.forEach(item => {
+                if (item.creative_info?.video_info?.video_id) {
+                    currentVideoIds.push(item.creative_info.video_info.video_id);
+                }
+            });
+        } else if (ad.video_ids) {
+            currentVideoIds.push(...ad.video_ids);
+        }
+
+        // Use duplicate's changed videos if set, otherwise use original
+        if (duplicateState.changedVideos && duplicateState.changedVideos.length > 0) {
+            videoModalState.selectedVideos = duplicateState.changedVideos.map(v => ({
+                id: v.video_id || v.id,
+                video_id: v.video_id || v.id
+            }));
+        } else {
+            videoModalState.selectedVideos = currentVideoIds.map(vid => {
+                const video = videos.find(v => v.id === vid || v.video_id === vid);
+                return video || { id: vid, video_id: vid };
+            });
+        }
+
+        // Re-render with selections
+        renderVideoModalGrid(videos);
+        document.getElementById('video-modal-count').textContent = videoModalState.selectedVideos.length;
+    }
+
+    addLog('info', `Video selection modal opened for context: ${context}`);
+}
+
+// Render video grid in modal
+function renderVideoModalGrid(videos) {
+    const grid = document.getElementById('video-modal-grid');
+    const emptyState = document.getElementById('video-modal-empty');
+
+    if (videos.length === 0) {
+        grid.style.display = 'none';
+        emptyState.style.display = 'block';
+        return;
+    }
+
+    grid.style.display = 'grid';
+    emptyState.style.display = 'none';
+
+    grid.innerHTML = videos.map(video => {
+        const isSelected = videoModalState.selectedVideos.some(v =>
+            v.id === video.id || v.video_id === video.video_id || v.id === video.video_id
+        );
+        const thumbnailUrl = video.thumbnail_url || video.cover_image_url || '';
+
+        return `
+            <div class="video-modal-item ${isSelected ? 'selected' : ''}"
+                 onclick="toggleVideoInModal('${video.id}')"
+                 data-video-id="${video.id}"
+                 data-name="${(video.name || video.file_name || '').toLowerCase()}">
+                <div class="video-modal-thumbnail">
+                    ${thumbnailUrl ?
+                        `<img src="${thumbnailUrl}" alt="${video.name || 'Video'}" onerror="this.parentElement.innerHTML='<div class=\\'video-placeholder\\'>🎬</div>'" />`
+                        : '<div class="video-placeholder">🎬</div>'}
+                    <div class="video-modal-check">✓</div>
+                </div>
+                <div class="video-modal-info">
+                    <div class="video-modal-name">${video.name || video.file_name || 'Untitled'}</div>
+                    ${video.duration ? `<div class="video-modal-duration">${formatDuration(video.duration)}</div>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Toggle video selection in modal
+function toggleVideoInModal(videoId) {
+    const video = videoModalState.allVideos.find(v => v.id === videoId);
+    if (!video) return;
+
+    const existingIndex = videoModalState.selectedVideos.findIndex(v =>
+        v.id === videoId || v.video_id === videoId
+    );
+
+    if (existingIndex >= 0) {
+        // Remove from selection
+        videoModalState.selectedVideos.splice(existingIndex, 1);
+    } else {
+        // Add to selection
+        videoModalState.selectedVideos.push({
+            id: video.id,
+            video_id: video.video_id || video.id,
+            name: video.name || video.file_name,
+            thumbnail_url: video.thumbnail_url || video.cover_image_url
+        });
+    }
+
+    // Update UI
+    const item = document.querySelector(`.video-modal-item[data-video-id="${videoId}"]`);
+    if (item) {
+        item.classList.toggle('selected');
+    }
+
+    document.getElementById('video-modal-count').textContent = videoModalState.selectedVideos.length;
+}
+
+// Filter videos by search term
+function filterVideosInModal() {
+    const searchTerm = document.getElementById('video-modal-search').value.toLowerCase().trim();
+    const items = document.querySelectorAll('.video-modal-item');
+
+    items.forEach(item => {
+        const name = item.getAttribute('data-name') || '';
+        const videoId = item.getAttribute('data-video-id') || '';
+
+        if (searchTerm === '' || name.includes(searchTerm) || videoId.includes(searchTerm)) {
+            item.style.display = 'block';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+// Confirm video selection
+function confirmVideoSelection() {
+    const context = videoModalState.context;
+    const selectedVideos = videoModalState.selectedVideos;
+
+    if (selectedVideos.length === 0) {
+        showToast('Please select at least one video', 'error');
+        return;
+    }
+
+    if (context === 'duplicate') {
+        // Store changed videos in duplicate state
+        duplicateState.changedVideos = selectedVideos.map(v => ({
+            video_id: v.video_id || v.id,
+            name: v.name,
+            thumbnail_url: v.thumbnail_url
+        }));
+
+        // Update the current videos display in duplicate modal
+        renderDuplicateCurrentVideos();
+
+        showToast(`Selected ${selectedVideos.length} video(s)`, 'success');
+        addLog('info', `Changed videos for duplicate: ${selectedVideos.length} selected`);
+    } else if (context === 'step3') {
+        // Update main state selectedVideos
+        state.selectedVideos = selectedVideos;
+        state.creatives = selectedVideos.map(v => ({
+            video_id: v.video_id || v.id,
+            name: v.name
+        }));
+
+        // Refresh the video selection grid in step 3
+        renderVideoSelectionGrid();
+        updateCreativesSection();
+
+        showToast(`Selected ${selectedVideos.length} video(s)`, 'success');
+    }
+
+    closeVideoSelectionModal();
+}
+
+// Close video selection modal
+function closeVideoSelectionModal() {
+    const modal = document.getElementById('video-selection-modal');
+    modal.style.display = 'none';
+
+    videoModalState = {
+        context: null,
+        selectedVideos: [],
+        allVideos: [],
+        onConfirm: null
+    };
+}
+
+// Render current videos in duplicate modal
+function renderDuplicateCurrentVideos() {
+    const container = document.getElementById('duplicate-current-videos');
+    if (!container) return;
+
+    let videos = [];
+
+    // Check if we have changed videos
+    if (duplicateState.changedVideos && duplicateState.changedVideos.length > 0) {
+        videos = duplicateState.changedVideos;
+    } else if (duplicateState.campaignDetails?.ad) {
+        // Get from original campaign
+        const ad = duplicateState.campaignDetails.ad;
+
+        if (ad.creative_list && ad.creative_list.length > 0) {
+            videos = ad.creative_list.map(item => {
+                const videoId = item.creative_info?.video_info?.video_id;
+                const video = state.mediaLibrary.find(v => v.id === videoId || v.video_id === videoId);
+                return {
+                    video_id: videoId,
+                    name: video?.name || video?.file_name || `Video ${videoId?.slice(-6)}`,
+                    thumbnail_url: video?.thumbnail_url || video?.cover_image_url
+                };
+            });
+        } else if (ad.video_ids) {
+            videos = ad.video_ids.map(vid => {
+                const video = state.mediaLibrary.find(v => v.id === vid || v.video_id === vid);
+                return {
+                    video_id: vid,
+                    name: video?.name || video?.file_name || `Video ${vid?.slice(-6)}`,
+                    thumbnail_url: video?.thumbnail_url || video?.cover_image_url
+                };
+            });
+        }
+    }
+
+    if (videos.length === 0) {
+        container.innerHTML = '<p style="color: #94a3b8; font-style: italic;">No videos found</p>';
+        return;
+    }
+
+    container.innerHTML = videos.map(video => `
+        <div class="duplicate-video-item" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; min-width: 150px;">
+            ${video.thumbnail_url ?
+                `<img src="${video.thumbnail_url}" style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover;" onerror="this.outerHTML='<div style=\\'width:40px;height:40px;background:#e2e8f0;border-radius:4px;display:flex;align-items:center;justify-content:center;\\'>🎬</div>'" />`
+                : '<div style="width:40px;height:40px;background:#e2e8f0;border-radius:4px;display:flex;align-items:center;justify-content:center;">🎬</div>'}
+            <div style="flex: 1; min-width: 0;">
+                <div style="font-weight: 500; font-size: 13px; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${video.name || 'Video'}
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Format duration in MM:SS
+function formatDuration(seconds) {
+    if (!seconds) return '';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
 }

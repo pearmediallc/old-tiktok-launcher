@@ -813,13 +813,13 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                             <div id="schedule-start-only-container" style="display: none; margin-top: 15px; padding: 15px; background: white; border: 1px solid #e2e8f0; border-radius: 8px;">
                                 <div class="form-group" style="margin-bottom: 15px;">
                                     <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time</label>
-                                    <input type="datetime-local" id="schedule-start-only-datetime" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                    <input type="datetime-local" id="schedule-start-only-datetime" onchange="updateScheduleSummary()" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                 </div>
 
                                 <!-- Timezone Selector -->
-                                <div class="form-group" style="margin-bottom: 0;">
+                                <div class="form-group" style="margin-bottom: 15px;">
                                     <label style="font-weight: 500; color: #475569; font-size: 14px;">Timezone</label>
-                                    <select id="schedule-start-only-timezone" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                    <select id="schedule-start-only-timezone" onchange="updateScheduleSummary()" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                         <option value="America/Los_Angeles">Pacific Time (PT) - Los Angeles</option>
                                         <option value="America/Denver">Mountain Time (MT) - Denver</option>
                                         <option value="America/Chicago">Central Time (CT) - Chicago</option>
@@ -828,6 +828,16 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                         <option value="Pacific/Honolulu">Hawaii Time (HT) - Honolulu</option>
                                         <option value="UTC">UTC (Coordinated Universal Time)</option>
                                     </select>
+                                </div>
+
+                                <!-- Apply Button and Summary -->
+                                <div style="display: flex; align-items: center; gap: 12px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e2e8f0;">
+                                    <button type="button" onclick="applySchedule('start_only')" class="btn-primary" style="padding: 10px 20px; font-size: 14px; border-radius: 6px;">
+                                        ✓ Apply Schedule
+                                    </button>
+                                    <div id="schedule-start-only-summary" style="flex: 1; padding: 8px 12px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; font-size: 13px; color: #166534; display: none;">
+                                        <!-- Summary will be shown here -->
+                                    </div>
                                 </div>
 
                                 <p style="margin: 12px 0 0; color: #64748b; font-size: 12px; display: flex; align-items: center; gap: 6px;">
@@ -842,20 +852,20 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                     <!-- Start Date/Time -->
                                     <div class="form-group" style="margin-bottom: 0;">
                                         <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time</label>
-                                        <input type="datetime-local" id="schedule-start-datetime" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                        <input type="datetime-local" id="schedule-start-datetime" onchange="updateScheduleSummary()" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                     </div>
 
                                     <!-- End Date/Time -->
                                     <div class="form-group" style="margin-bottom: 0;">
                                         <label style="font-weight: 500; color: #475569; font-size: 14px;">End Date & Time</label>
-                                        <input type="datetime-local" id="schedule-end-datetime" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                        <input type="datetime-local" id="schedule-end-datetime" onchange="updateScheduleSummary()" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                     </div>
                                 </div>
 
                                 <!-- Timezone Selector -->
                                 <div class="form-group" style="margin-top: 15px; margin-bottom: 0;">
                                     <label style="font-weight: 500; color: #475569; font-size: 14px;">Timezone</label>
-                                    <select id="schedule-timezone" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                    <select id="schedule-timezone" onchange="updateScheduleSummary()" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                         <option value="America/Los_Angeles">Pacific Time (PT) - Los Angeles</option>
                                         <option value="America/Denver">Mountain Time (MT) - Denver</option>
                                         <option value="America/Chicago">Central Time (CT) - Chicago</option>
@@ -864,6 +874,16 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                         <option value="Pacific/Honolulu">Hawaii Time (HT) - Honolulu</option>
                                         <option value="UTC">UTC (Coordinated Universal Time)</option>
                                     </select>
+                                </div>
+
+                                <!-- Apply Button and Summary -->
+                                <div style="display: flex; align-items: center; gap: 12px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e2e8f0;">
+                                    <button type="button" onclick="applySchedule('start_end')" class="btn-primary" style="padding: 10px 20px; font-size: 14px; border-radius: 6px;">
+                                        ✓ Apply Schedule
+                                    </button>
+                                    <div id="schedule-datetime-summary" style="flex: 1; padding: 8px 12px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; font-size: 13px; color: #166534; display: none;">
+                                        <!-- Summary will be shown here -->
+                                    </div>
                                 </div>
 
                                 <p style="margin: 12px 0 0; color: #64748b; font-size: 12px; display: flex; align-items: center; gap: 6px;">
@@ -2068,6 +2088,26 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                             </div>
                             <small style="color: #666;">Maximum 20 copies at a time</small>
                         </div>
+
+                        <!-- Video/Creative Change Section -->
+                        <div class="form-group" style="margin-bottom: 15px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                            <label style="font-weight: 600; margin-bottom: 8px; display: block;">
+                                <span>🎬</span> Videos/Creatives
+                            </label>
+                            <p style="color: #64748b; font-size: 13px; margin-bottom: 12px;">
+                                Current videos from the original campaign. You can change them for the duplicates.
+                            </p>
+
+                            <!-- Current Videos Display -->
+                            <div id="duplicate-current-videos" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+                                <!-- Videos will be rendered here -->
+                            </div>
+
+                            <!-- Change Videos Button -->
+                            <button type="button" onclick="openVideoSelectionModal('duplicate')" class="btn-secondary" style="width: 100%; padding: 12px; font-size: 14px;">
+                                🔄 Change Videos
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Preview of Names -->
@@ -2119,6 +2159,51 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                 <button class="btn-primary" id="duplicate-create-btn" onclick="executeDuplicateCampaign()" disabled>
                     📋 Create Copies
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Video Selection Modal -->
+    <div id="video-selection-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 900px; max-height: 85vh;">
+            <div class="modal-header">
+                <h3>🎬 Select Videos</h3>
+                <button class="modal-close" onclick="closeVideoSelectionModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <!-- Search and Filter -->
+                <div style="display: flex; gap: 15px; margin-bottom: 20px;">
+                    <input type="text" id="video-modal-search" placeholder="🔍 Search videos by name..."
+                           oninput="filterVideosInModal()"
+                           style="flex: 1; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                    <div style="display: flex; align-items: center; gap: 10px; padding: 0 15px; background: #f8fafc; border-radius: 8px;">
+                        <span style="font-weight: 600; color: #475569;">Selected:</span>
+                        <span id="video-modal-count" style="font-size: 18px; font-weight: 700; color: #1e9df1;">0</span>
+                    </div>
+                </div>
+
+                <!-- Video Grid -->
+                <div id="video-modal-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; max-height: 450px; overflow-y: auto; padding: 5px;">
+                    <!-- Videos will be rendered here -->
+                </div>
+
+                <!-- Empty State -->
+                <div id="video-modal-empty" style="display: none; text-align: center; padding: 40px;">
+                    <div style="font-size: 48px; margin-bottom: 15px;">📹</div>
+                    <p style="color: #64748b; font-size: 16px;">No videos found in your media library.</p>
+                    <p style="color: #94a3b8; font-size: 14px;">Upload videos via TikTok Ads Manager first.</p>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-top: 1px solid #e2e8f0;">
+                <div style="color: #64748b; font-size: 14px;">
+                    <span id="video-modal-total">0</span> videos available
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-secondary" onclick="closeVideoSelectionModal()">Cancel</button>
+                    <button class="btn-primary" id="video-modal-confirm" onclick="confirmVideoSelection()">
+                        ✓ Confirm Selection
+                    </button>
+                </div>
             </div>
         </div>
     </div>

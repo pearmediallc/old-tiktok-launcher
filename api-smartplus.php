@@ -927,16 +927,20 @@ switch ($action) {
                 ];
 
                 // For BC_AUTH_TT, add identity info to each creative_info
-                // CRITICAL: BC_AUTH_TT REQUIRES identity_authorized_bc_id according to TikTok API docs
+                // CRITICAL: BC_AUTH_TT REQUIRES identity_bc_id (or identity_authorized_bc_id) according to TikTok API
+                // TikTok error says 'identity_bc_id' is required, so we use that parameter name
                 if ($identityType === 'BC_AUTH_TT' && !empty($identityId)) {
                     $creativeInfo['identity_id'] = $identityId;
                     $creativeInfo['identity_type'] = 'BC_AUTH_TT';
                     if (!empty($identityAuthorizedBcId)) {
+                        // TikTok API expects 'identity_bc_id' for Smart+ ads (based on error message)
+                        $creativeInfo['identity_bc_id'] = $identityAuthorizedBcId;
+                        // Also include identity_authorized_bc_id for compatibility with other endpoints
                         $creativeInfo['identity_authorized_bc_id'] = $identityAuthorizedBcId;
-                        logSmartPlus("Added BC_AUTH_TT identity to creative: identity_id=$identityId, bc_id=$identityAuthorizedBcId");
+                        logSmartPlus("Added BC_AUTH_TT identity to creative: identity_id=$identityId, identity_bc_id=$identityAuthorizedBcId");
                     } else {
                         // WARNING: Missing BC ID - this will likely cause TikTok API error
-                        logSmartPlus("WARNING: BC_AUTH_TT identity missing identity_authorized_bc_id! identity_id=$identityId");
+                        logSmartPlus("WARNING: BC_AUTH_TT identity missing identity_bc_id! identity_id=$identityId");
                         logSmartPlus("This is REQUIRED by TikTok API - ad creation will likely fail.");
                     }
                 }
@@ -1335,6 +1339,8 @@ switch ($action) {
                     $creativeInfo['identity_id'] = $identityId;
                     $creativeInfo['identity_type'] = 'BC_AUTH_TT';
                     if (!empty($identityAuthorizedBcId)) {
+                        // TikTok API expects 'identity_bc_id' for Smart+ ads
+                        $creativeInfo['identity_bc_id'] = $identityAuthorizedBcId;
                         $creativeInfo['identity_authorized_bc_id'] = $identityAuthorizedBcId;
                     }
                 }
@@ -2278,6 +2284,8 @@ switch ($action) {
                         $creativeInfo['identity_id'] = $identityId;
                         $creativeInfo['identity_type'] = 'BC_AUTH_TT';
                         if (!empty($identityAuthorizedBcId)) {
+                            // TikTok API expects 'identity_bc_id' for Smart+ ads
+                            $creativeInfo['identity_bc_id'] = $identityAuthorizedBcId;
                             $creativeInfo['identity_authorized_bc_id'] = $identityAuthorizedBcId;
                         }
                     }
