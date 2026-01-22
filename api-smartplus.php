@@ -863,6 +863,12 @@ switch ($action) {
 
         logSmartPlus("=== CREATING SMART+ AD (OPTIMIZED) ===");
 
+        // Log incoming identity info FIRST for debugging
+        logSmartPlus("=== IDENTITY INFO RECEIVED FROM FRONTEND ===");
+        logSmartPlus("identity_id: " . ($data['identity_id'] ?? 'NULL'));
+        logSmartPlus("identity_type: " . ($data['identity_type'] ?? 'NOT SET'));
+        logSmartPlus("identity_authorized_bc_id: " . ($data['identity_authorized_bc_id'] ?? 'NULL/NOT PROVIDED'));
+
         if (empty($data['adgroup_id'])) {
             echo json_encode(['success' => false, 'message' => 'Ad Group ID is required']);
             exit;
@@ -902,6 +908,13 @@ switch ($action) {
         $identityType = $data['identity_type'] ?? 'CUSTOMIZED_USER';
         $identityAuthorizedBcId = $data['identity_authorized_bc_id'] ?? null;
 
+        // Additional check: if BC_AUTH_TT but no bc_id, log a critical warning
+        if ($identityType === 'BC_AUTH_TT' && empty($identityAuthorizedBcId)) {
+            logSmartPlus("!!! CRITICAL WARNING: BC_AUTH_TT identity type without identity_authorized_bc_id !!!");
+            logSmartPlus("This is REQUIRED by TikTok API. The ad creation will likely fail with:");
+            logSmartPlus("'You no longer have access to the TikTok account used in this ad'");
+        }
+
         foreach ($data['creatives'] ?? [] as $index => $creative) {
             logSmartPlus("Processing creative $index: video_id=" . ($creative['video_id'] ?? 'null'));
             if (!empty($creative['video_id'])) {
@@ -914,13 +927,18 @@ switch ($action) {
                 ];
 
                 // For BC_AUTH_TT, add identity info to each creative_info
+                // CRITICAL: BC_AUTH_TT REQUIRES identity_authorized_bc_id according to TikTok API docs
                 if ($identityType === 'BC_AUTH_TT' && !empty($identityId)) {
                     $creativeInfo['identity_id'] = $identityId;
                     $creativeInfo['identity_type'] = 'BC_AUTH_TT';
                     if (!empty($identityAuthorizedBcId)) {
                         $creativeInfo['identity_authorized_bc_id'] = $identityAuthorizedBcId;
+                        logSmartPlus("Added BC_AUTH_TT identity to creative: identity_id=$identityId, bc_id=$identityAuthorizedBcId");
+                    } else {
+                        // WARNING: Missing BC ID - this will likely cause TikTok API error
+                        logSmartPlus("WARNING: BC_AUTH_TT identity missing identity_authorized_bc_id! identity_id=$identityId");
+                        logSmartPlus("This is REQUIRED by TikTok API - ad creation will likely fail.");
                     }
-                    logSmartPlus("Added BC_AUTH_TT identity to creative: identity_id=$identityId, bc_id=$identityAuthorizedBcId");
                 }
 
                 // Get cover image - use provided, or from batch result

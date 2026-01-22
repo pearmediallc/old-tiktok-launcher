@@ -2275,7 +2275,55 @@ function reviewAds() {
     state.globalLandingUrl = landingUrl;
     state.globalCtaPortfolioId = portfolioId;
 
-    const identity = state.identities.find(i => i.identity_id === identityId);
+    // Get identity details from state or dropdown
+    const identitySelect = document.getElementById('global-identity');
+    const selectedOption = identitySelect?.options[identitySelect.selectedIndex];
+
+    // Find identity in state (check tiktokPages first since BC_AUTH_TT is there)
+    const identityFromPages = state.tiktokPages?.find(i => i.identity_id === identityId);
+    const identityFromCustom = state.customIdentities?.find(i => i.identity_id === identityId);
+    const identityFromAll = state.identities.find(i => i.identity_id === identityId);
+
+    // Determine identity type - prioritize tiktokPages (BC_AUTH_TT), then dropdown, then state
+    let identityType = 'CUSTOMIZED_USER';
+    let identityAuthorizedBcId = null;
+
+    if (identityFromPages) {
+        // This is a BC_AUTH_TT identity from TikTok Pages
+        identityType = 'BC_AUTH_TT';
+        identityAuthorizedBcId = identityFromPages.identity_authorized_bc_id || selectedOption?.dataset?.identityAuthorizedBcId;
+        console.log('Found identity in tiktokPages:', identityFromPages);
+    } else if (selectedOption?.dataset?.identityType === 'BC_AUTH_TT') {
+        // Dropdown says it's BC_AUTH_TT
+        identityType = 'BC_AUTH_TT';
+        identityAuthorizedBcId = selectedOption?.dataset?.identityAuthorizedBcId;
+        console.log('Identity type from dropdown dataset: BC_AUTH_TT');
+    } else if (identityFromAll?.identity_type === 'BC_AUTH_TT') {
+        // State says it's BC_AUTH_TT
+        identityType = 'BC_AUTH_TT';
+        identityAuthorizedBcId = identityFromAll.identity_authorized_bc_id;
+        console.log('Identity type from state.identities: BC_AUTH_TT');
+    }
+
+    // Store identity type and BC ID in state for use in createAd
+    state.globalIdentityType = identityType;
+    state.globalIdentityAuthorizedBcId = identityAuthorizedBcId;
+
+    console.log('Identity captured in reviewAds:', {
+        identityId,
+        identityType,
+        identityAuthorizedBcId,
+        fromPages: !!identityFromPages,
+        fromCustom: !!identityFromCustom,
+        dropdownDataset: selectedOption?.dataset
+    });
+
+    addLog('info', `Identity selected: ${identityId} (type: ${identityType})`);
+    if (identityType === 'BC_AUTH_TT') {
+        addLog('info', `BC_AUTH_TT identity with bc_id: ${identityAuthorizedBcId || 'NOT FOUND'}`);
+    }
+
+    const identity = identityFromPages || identityFromCustom || identityFromAll;
     const identityName = identity ? (identity.display_name || identity.identity_name) : identityId;
 
     // Populate review summaries
@@ -2352,37 +2400,21 @@ async function createAd() {
     addLog('info', '=== Creating Smart+ Ad ===');
 
     try {
-        // Get identity type and BC ID from selected option or state
-        const identitySelect = document.getElementById('global-identity');
-        const selectedOption = identitySelect?.options[identitySelect.selectedIndex];
-
-        // Find the identity in state (check both customIdentities and tiktokPages)
-        const identityFromState = state.identities.find(i => i.identity_id === state.globalIdentityId) ||
-                                  state.tiktokPages?.find(i => i.identity_id === state.globalIdentityId) ||
-                                  state.customIdentities?.find(i => i.identity_id === state.globalIdentityId);
-
-        // Get identity type - prioritize dropdown dataset, then state
-        const identityType = selectedOption?.dataset?.identityType ||
-                            identityFromState?.identity_type ||
-                            'CUSTOMIZED_USER';
-
-        // For BC_AUTH_TT, get the identity_authorized_bc_id
-        const identityAuthorizedBcId = selectedOption?.dataset?.identityAuthorizedBcId ||
-                                       identityFromState?.identity_authorized_bc_id ||
-                                       null;
+        // Use identity type and BC ID that were captured in reviewAds()
+        // This ensures we use the correct values that were set when the user selected the identity
+        const identityType = state.globalIdentityType || 'CUSTOMIZED_USER';
+        const identityAuthorizedBcId = state.globalIdentityAuthorizedBcId || null;
 
         // Debug logging
-        console.log('Identity lookup:', {
+        console.log('createAd using stored identity info:', {
             globalIdentityId: state.globalIdentityId,
-            selectedOption: selectedOption?.dataset,
-            identityFromState: identityFromState,
-            resolvedType: identityType,
-            resolvedBcId: identityAuthorizedBcId
+            identityType: identityType,
+            identityAuthorizedBcId: identityAuthorizedBcId
         });
 
         addLog('info', `Using identity type: ${identityType} for identity ${state.globalIdentityId}`);
-        if (identityType === 'BC_AUTH_TT' && identityAuthorizedBcId) {
-            addLog('info', `BC_AUTH_TT identity with bc_id: ${identityAuthorizedBcId}`);
+        if (identityType === 'BC_AUTH_TT') {
+            addLog('info', `BC_AUTH_TT identity with bc_id: ${identityAuthorizedBcId || 'NOT SET - THIS MAY CAUSE ERROR'}`);
         }
 
         const creativeList = state.creatives.map(creative => ({
@@ -2449,8 +2481,9 @@ async function updateAd() {
     addLog('info', '=== Updating Smart+ Ad ===');
 
     try {
-        const identity = state.identities.find(i => i.identity_id === state.globalIdentityId);
-        const identityType = identity?.identity_type || 'CUSTOMIZED_USER';
+        // Use stored identity type from reviewAds()
+        const identityType = state.globalIdentityType || 'CUSTOMIZED_USER';
+        const identityAuthorizedBcId = state.globalIdentityAuthorizedBcId || null;
 
         const creativeList = state.creatives.map(creative => ({
             video_id: creative.video_id,
@@ -2458,16 +2491,23 @@ async function updateAd() {
             image_id: creative.image_id || null
         }));
 
+        const adConfig = {
+            call_to_action_id: state.globalCtaPortfolioId,
+            identity_id: state.globalIdentityId,
+            identity_type: identityType
+        };
+
+        // Add identity_authorized_bc_id for BC_AUTH_TT
+        if (identityType === 'BC_AUTH_TT' && identityAuthorizedBcId) {
+            adConfig.identity_authorized_bc_id = identityAuthorizedBcId;
+        }
+
         const result = await apiRequest('update_smartplus_ad', {
             smart_plus_ad_id: state.adId,
             ad_name: state.campaignName + ' - Ad',
             ad_text_list: state.adTexts.map(text => ({ ad_text: text })),
             landing_page_url_list: state.globalLandingUrl ? [{ landing_page_url: state.globalLandingUrl }] : [],
-            ad_configuration: {
-                call_to_action_id: state.globalCtaPortfolioId,
-                identity_id: state.globalIdentityId,
-                identity_type: identityType
-            }
+            ad_configuration: adConfig
         });
 
         hideLoading();
@@ -3770,9 +3810,14 @@ async function launchDuplicateCampaigns(count) {
     addLog('info', `Starting duplicate campaign launch: 1 original + ${count - 1} copies of "${baseName}"`);
     showLoading(`Creating ${count} campaigns (1 original + ${count - 1} copies)...`);
 
-    // Get identity type
-    const identity = state.identities.find(i => i.identity_id === state.globalIdentityId);
-    const identityType = identity?.identity_type || 'CUSTOMIZED_USER';
+    // Use stored identity type from reviewAds()
+    const identityType = state.globalIdentityType || 'CUSTOMIZED_USER';
+    const identityAuthorizedBcId = state.globalIdentityAuthorizedBcId || null;
+
+    addLog('info', `Using identity type: ${identityType} for duplicates`);
+    if (identityType === 'BC_AUTH_TT') {
+        addLog('info', `BC_AUTH_TT with bc_id: ${identityAuthorizedBcId || 'NOT SET'}`);
+    }
 
     // Prepare creative list
     const creativeList = state.creatives.map(creative => ({
@@ -3846,7 +3891,7 @@ async function launchDuplicateCampaigns(count) {
             addLog('info', `Creating ad: "${adName}"`);
 
             // Create ad for this campaign (using same params as createAd function)
-            const adResult = await apiRequest('create_smartplus_ad', {
+            const adRequestData = {
                 adgroup_id: newAdGroupId,
                 ad_name: adName,
                 identity_id: state.globalIdentityId,
@@ -3855,7 +3900,14 @@ async function launchDuplicateCampaigns(count) {
                 call_to_action_id: state.globalCtaPortfolioId,
                 creatives: creativeList,
                 ad_texts: state.adTexts
-            });
+            };
+
+            // Add identity_authorized_bc_id for BC_AUTH_TT identities
+            if (identityType === 'BC_AUTH_TT' && identityAuthorizedBcId) {
+                adRequestData.identity_authorized_bc_id = identityAuthorizedBcId;
+            }
+
+            const adResult = await apiRequest('create_smartplus_ad', adRequestData);
 
             if (adResult.success && (adResult.smart_plus_ad_id || adResult.ad_id)) {
                 const adId = adResult.smart_plus_ad_id || adResult.ad_id;
@@ -4035,14 +4087,21 @@ async function executeBulkLaunch() {
     };
 
     // Prepare accounts with video mappings
-    const accountsToLaunch = bulkLaunchState.selectedAccounts.map(account => ({
-        advertiser_id: account.advertiser_id,
-        advertiser_name: account.advertiser_name,
-        pixel_id: account.pixel_id,
-        identity_id: account.identity_id,
-        identity_type: account.identity_type,
-        video_mapping: account.video_mapping || {}
-    }));
+    const accountsToLaunch = bulkLaunchState.selectedAccounts.map(account => {
+        const accountData = {
+            advertiser_id: account.advertiser_id,
+            advertiser_name: account.advertiser_name,
+            pixel_id: account.pixel_id,
+            identity_id: account.identity_id,
+            identity_type: account.identity_type,
+            video_mapping: account.video_mapping || {}
+        };
+        // Include identity_authorized_bc_id for BC_AUTH_TT identities
+        if (account.identity_type === 'BC_AUTH_TT' && account.identity_authorized_bc_id) {
+            accountData.identity_authorized_bc_id = account.identity_authorized_bc_id;
+        }
+        return accountData;
+    });
 
     addLog('info', `Bulk launch config: ${accountsToLaunch.length} accounts, ${duplicateCount} copies each`);
 
