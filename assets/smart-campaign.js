@@ -607,36 +607,60 @@ async function loadIdentities() {
         const select = document.getElementById('global-identity');
 
         if (result.success && result.data) {
-            // Get custom identities only - Smart+ campaigns ONLY support CUSTOMIZED_USER type
-            // TikTok Pages (BC_AUTH_TT) and Authorized Accounts (AUTH_CODE) are NOT supported
-            const allIdentities = result.data.identities || result.data.list || [];
+            // Get both custom identities and TikTok Pages (BC_AUTH_TT)
+            const customIdentities = result.data.identities || result.data.list || [];
+            const pages = result.data.pages || [];
 
-            // Filter to only include CUSTOMIZED_USER identities
-            const customIdentities = allIdentities.filter(identity =>
-                !identity.identity_type || identity.identity_type === 'CUSTOMIZED_USER'
-            );
-
-            state.identities = customIdentities;
+            // Combine for state (backward compatibility)
+            state.identities = [...customIdentities, ...pages];
             state.customIdentities = customIdentities;
-            state.tiktokPages = []; // Not supported for Smart+ campaigns
+            state.tiktokPages = pages;
 
             select.innerHTML = '<option value="">Select identity...</option>';
 
-            // Add Custom Identities
+            // Add Custom Identities section
             if (customIdentities.length > 0) {
+                const customGroup = document.createElement('optgroup');
+                customGroup.label = 'Custom Identities';
+
                 customIdentities.forEach(identity => {
                     const option = document.createElement('option');
                     option.value = identity.identity_id;
                     option.dataset.identityType = 'CUSTOMIZED_USER';
                     option.dataset.sourceType = 'custom_identity';
                     option.textContent = `${identity.display_name || identity.identity_name}`;
-                    select.appendChild(option);
+                    customGroup.appendChild(option);
                 });
 
-                addLog('info', `Loaded ${customIdentities.length} custom identities`);
-            } else {
-                select.innerHTML = '<option value="">No custom identities found - Create one in TikTok Ads Manager</option>';
-                addLog('warn', 'No custom identities found. Smart+ campaigns require CUSTOMIZED_USER identities.');
+                select.appendChild(customGroup);
+            }
+
+            // Add TikTok Pages section (BC_AUTH_TT)
+            if (pages.length > 0) {
+                const pagesGroup = document.createElement('optgroup');
+                pagesGroup.label = 'TikTok Pages (Authorized)';
+
+                pages.forEach(page => {
+                    const option = document.createElement('option');
+                    option.value = page.identity_id;
+                    option.dataset.identityType = 'BC_AUTH_TT';
+                    option.dataset.sourceType = 'bc_auth_tt';
+                    // Store identity_authorized_bc_id if available
+                    if (page.identity_authorized_bc_id) {
+                        option.dataset.identityAuthorizedBcId = page.identity_authorized_bc_id;
+                    }
+                    option.textContent = `${page.display_name || page.identity_name || 'TikTok Page'}`;
+                    pagesGroup.appendChild(option);
+                });
+
+                select.appendChild(pagesGroup);
+            }
+
+            const totalCount = customIdentities.length + pages.length;
+            addLog('info', `Loaded ${totalCount} identities (${customIdentities.length} custom, ${pages.length} pages)`);
+
+            if (totalCount === 0) {
+                select.innerHTML = '<option value="">No identities found - Create one in TikTok Ads Manager</option>';
             }
         } else {
             select.innerHTML = '<option value="">No identities found</option>';
@@ -2320,14 +2344,21 @@ async function createAd() {
     addLog('info', '=== Creating Smart+ Ad ===');
 
     try {
-        // Get identity type from selected option or state
+        // Get identity type and BC ID from selected option or state
         const identitySelect = document.getElementById('global-identity');
         const selectedOption = identitySelect?.options[identitySelect.selectedIndex];
         const identityType = selectedOption?.dataset?.identityType ||
                             state.identities.find(i => i.identity_id === state.globalIdentityId)?.identity_type ||
                             'CUSTOMIZED_USER';
+        // For BC_AUTH_TT, get the identity_authorized_bc_id
+        const identityAuthorizedBcId = selectedOption?.dataset?.identityAuthorizedBcId ||
+                                       state.identities.find(i => i.identity_id === state.globalIdentityId)?.identity_authorized_bc_id ||
+                                       null;
 
         addLog('info', `Using identity type: ${identityType} for identity ${state.globalIdentityId}`);
+        if (identityType === 'BC_AUTH_TT' && identityAuthorizedBcId) {
+            addLog('info', `BC_AUTH_TT identity with bc_id: ${identityAuthorizedBcId}`);
+        }
 
         const creativeList = state.creatives.map(creative => ({
             video_id: creative.video_id,
@@ -2340,16 +2371,24 @@ async function createAd() {
         addLog('info', 'Creative list details:', creativeList.map((c, i) => `Creative ${i+1}: video_id=${c.video_id}`).join(', '));
         addLog('info', `Ad text variations: ${state.adTexts.length}`, state.adTexts);
 
-        const result = await apiRequest('create_smartplus_ad', {
+        // Build request data
+        const adRequestData = {
             adgroup_id: state.adGroupId,
             ad_name: state.campaignName + ' - Ad',
             identity_id: state.globalIdentityId,
             identity_type: identityType,
             landing_page_url: state.globalLandingUrl,
-            call_to_action_id: state.globalCtaPortfolioId,  // Lead Gen requires Dynamic CTA Portfolio
+            call_to_action_id: state.globalCtaPortfolioId,
             creatives: creativeList,
-            ad_texts: state.adTexts  // Send unique ad text variations separately
-        });
+            ad_texts: state.adTexts
+        };
+
+        // Add identity_authorized_bc_id for BC_AUTH_TT identities
+        if (identityType === 'BC_AUTH_TT' && identityAuthorizedBcId) {
+            adRequestData.identity_authorized_bc_id = identityAuthorizedBcId;
+        }
+
+        const result = await apiRequest('create_smartplus_ad', adRequestData);
 
         hideLoading();
 
@@ -2854,7 +2893,7 @@ function renderAccountAssetsDropdowns(advertiserId, assets) {
                     ? `<option value="">${hasIdentityError ? '⚠ Error loading identities' : 'No identities found'}</option>`
                     : `<option value="">Select Identity...</option>
                        ${identitiesArray.map(i =>
-                           `<option value="${i.identity_id}" data-type="${i.identity_type || 'CUSTOMIZED_USER'}" ${i.identity_id === selectedIdentityId ? 'selected' : ''}>${i.display_name || i.identity_name || i.identity_id}</option>`
+                           `<option value="${i.identity_id}" data-type="${i.identity_type || 'CUSTOMIZED_USER'}" data-identity-type="${i.identity_type || 'CUSTOMIZED_USER'}" ${i.identity_authorized_bc_id ? `data-identity-authorized-bc-id="${i.identity_authorized_bc_id}"` : ''} ${i.identity_id === selectedIdentityId ? 'selected' : ''}>${i.display_name || i.identity_name || i.identity_id}${i.identity_type === 'BC_AUTH_TT' ? ' (Page)' : ''}</option>`
                        ).join('')}`
                 }
             </select>
@@ -3521,7 +3560,13 @@ function updateAccountAssetSelection(advertiserId) {
     if (identitySelect) {
         selectedAccount.identity_id = identitySelect.value;
         const selectedOption = identitySelect.options[identitySelect.selectedIndex];
-        selectedAccount.identity_type = selectedOption?.dataset?.type || 'CUSTOMIZED_USER';
+        selectedAccount.identity_type = selectedOption?.dataset?.type || selectedOption?.dataset?.identityType || 'CUSTOMIZED_USER';
+        // For BC_AUTH_TT, capture identity_authorized_bc_id
+        if (selectedOption?.dataset?.identityAuthorizedBcId) {
+            selectedAccount.identity_authorized_bc_id = selectedOption.dataset.identityAuthorizedBcId;
+        } else {
+            selectedAccount.identity_authorized_bc_id = null;
+        }
     }
 
     // Update status

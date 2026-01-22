@@ -529,35 +529,71 @@ switch ($action) {
         }
 
         logSmartPlus("Cache MISS for identities - Advertiser: $advertiserId");
-        // Smart+ campaigns ONLY support CUSTOMIZED_USER identity type
-        // TikTok Pages (BC_AUTH_TT) and Authorized Accounts (AUTH_CODE) are NOT supported
-        $allIdentities = [];
+        // Smart+ campaigns support CUSTOMIZED_USER and BC_AUTH_TT identity types
+        // BC_AUTH_TT requires identity_authorized_bc_id parameter when creating ads
+        $customIdentities = [];
+        $bcAuthIdentities = [];
 
-        // Get Custom Identities only
+        // Get all identities (no filter - returns all types)
         $result = makeApiCall('/identity/get/', [
             'advertiser_id' => $advertiserId
         ], $accessToken, 'GET');
 
         if ($result['code'] == 0 && isset($result['data']['identity_list'])) {
-            // Filter to only include CUSTOMIZED_USER identities
             foreach ($result['data']['identity_list'] as $identity) {
-                if (!isset($identity['identity_type']) || $identity['identity_type'] === 'CUSTOMIZED_USER') {
+                $identityType = $identity['identity_type'] ?? 'CUSTOMIZED_USER';
+
+                if ($identityType === 'CUSTOMIZED_USER' || !isset($identity['identity_type'])) {
                     $identity['source_type'] = 'custom_identity';
-                    $allIdentities[] = $identity;
+                    $customIdentities[] = $identity;
+                } elseif ($identityType === 'BC_AUTH_TT') {
+                    // BC_AUTH_TT - TikTok account authorized via Business Center
+                    $identity['source_type'] = 'bc_auth_tt';
+                    $bcAuthIdentities[] = $identity;
                 }
             }
-            logSmartPlus("Found " . count($allIdentities) . " custom identities (CUSTOMIZED_USER only)");
+            logSmartPlus("Found " . count($customIdentities) . " custom identities, " . count($bcAuthIdentities) . " BC_AUTH_TT identities");
         }
 
+        // Also try to get BC_AUTH_TT identities specifically (some may not show in general call)
+        $bcAuthResult = makeApiCall('/identity/get/', [
+            'advertiser_id' => $advertiserId,
+            'identity_type' => 'BC_AUTH_TT'
+        ], $accessToken, 'GET');
+
+        if ($bcAuthResult['code'] == 0 && isset($bcAuthResult['data']['identity_list'])) {
+            foreach ($bcAuthResult['data']['identity_list'] as $bcIdentity) {
+                // Check if not already in list
+                $exists = false;
+                foreach ($bcAuthIdentities as $existing) {
+                    if ($existing['identity_id'] === $bcIdentity['identity_id']) {
+                        $exists = true;
+                        break;
+                    }
+                }
+                if (!$exists) {
+                    $bcIdentity['source_type'] = 'bc_auth_tt';
+                    $bcAuthIdentities[] = $bcIdentity;
+                }
+            }
+            logSmartPlus("After BC_AUTH_TT specific call: " . count($bcAuthIdentities) . " BC_AUTH_TT identities total");
+        }
+
+        // Combine data for caching
+        $combinedData = [
+            'identities' => $customIdentities,
+            'pages' => $bcAuthIdentities  // BC_AUTH_TT identities (TikTok Pages)
+        ];
+
         // Cache identities for 10 minutes
-        $cache->set($cacheKey, ['identities' => $allIdentities, 'pages' => []], Cache::TTL_LONG);
+        $cache->set($cacheKey, $combinedData, Cache::TTL_LONG);
 
         echo json_encode([
             'success' => true,
             'data' => [
-                'list' => $allIdentities,
-                'identities' => $allIdentities,
-                'pages' => []  // Not supported for Smart+ campaigns
+                'list' => $customIdentities,  // Keep for backward compatibility
+                'identities' => $customIdentities,
+                'pages' => $bcAuthIdentities
             ]
         ]);
         break;
@@ -1004,10 +1040,17 @@ switch ($action) {
             'call_to_action_id' => $callToActionId  // Dynamic CTA Portfolio ID goes here
         ];
 
-        // Add identity for non-spark ads
+        // Add identity configuration
         if (!empty($data['identity_id'])) {
             $adConfig['identity_id'] = $data['identity_id'];
-            $adConfig['identity_type'] = $data['identity_type'] ?? 'CUSTOMIZED_USER';
+            $identityType = $data['identity_type'] ?? 'CUSTOMIZED_USER';
+            $adConfig['identity_type'] = $identityType;
+
+            // For BC_AUTH_TT (TikTok Pages), include identity_authorized_bc_id
+            if ($identityType === 'BC_AUTH_TT' && !empty($data['identity_authorized_bc_id'])) {
+                $adConfig['identity_authorized_bc_id'] = $data['identity_authorized_bc_id'];
+                logSmartPlus("Using BC_AUTH_TT identity with bc_id: " . $data['identity_authorized_bc_id']);
+            }
         }
 
         $adParams['ad_configuration'] = $adConfig;
@@ -1305,10 +1348,17 @@ switch ($action) {
             'call_to_action_id' => $callToActionId  // Dynamic CTA Portfolio ID goes here
         ];
 
-        // Add identity for non-spark ads
+        // Add identity configuration
         if (!empty($data['identity_id'])) {
             $adConfig['identity_id'] = $data['identity_id'];
-            $adConfig['identity_type'] = $data['identity_type'] ?? 'CUSTOMIZED_USER';
+            $identityType = $data['identity_type'] ?? 'CUSTOMIZED_USER';
+            $adConfig['identity_type'] = $identityType;
+
+            // For BC_AUTH_TT (TikTok Pages), include identity_authorized_bc_id
+            if ($identityType === 'BC_AUTH_TT' && !empty($data['identity_authorized_bc_id'])) {
+                $adConfig['identity_authorized_bc_id'] = $data['identity_authorized_bc_id'];
+                logSmartPlus("Using BC_AUTH_TT identity with bc_id: " . $data['identity_authorized_bc_id']);
+            }
         }
 
         $adParams['ad_configuration'] = $adConfig;
@@ -1997,6 +2047,7 @@ switch ($action) {
             $pixelId = $account['pixel_id'] ?? null;
             $identityId = $account['identity_id'] ?? null;
             $identityType = $account['identity_type'] ?? 'CUSTOMIZED_USER';
+            $identityAuthorizedBcId = $account['identity_authorized_bc_id'] ?? null;
             $videoMapping = $account['video_mapping'] ?? [];
 
             logSmartPlus("--- Processing Account: $accountName ($targetAdvertiserId) ---");
@@ -2194,6 +2245,19 @@ switch ($action) {
                     $landingPageList[] = ['landing_page_url' => $campaignConfig['landing_page_url']];
                 }
 
+                // Build ad_configuration
+                $adConfig = [
+                    'call_to_action_id' => $ctaPortfolioId,
+                    'identity_id' => $identityId,
+                    'identity_type' => $identityType
+                ];
+
+                // For BC_AUTH_TT (TikTok Pages), include identity_authorized_bc_id
+                if ($identityType === 'BC_AUTH_TT' && !empty($identityAuthorizedBcId)) {
+                    $adConfig['identity_authorized_bc_id'] = $identityAuthorizedBcId;
+                    logSmartPlus("Using BC_AUTH_TT identity with bc_id: $identityAuthorizedBcId");
+                }
+
                 $adParams = [
                     'advertiser_id' => $targetAdvertiserId,
                     'adgroup_id' => $adgroupId,
@@ -2201,11 +2265,7 @@ switch ($action) {
                     'creative_list' => $creativeList,
                     'landing_page_url_list' => $landingPageList,
                     'ad_text_list' => $adTextList,
-                    'ad_configuration' => [
-                        'call_to_action_id' => $ctaPortfolioId,
-                        'identity_id' => $identityId,
-                        'identity_type' => $identityType
-                    ]
+                    'ad_configuration' => $adConfig
                 ];
 
                 $adResult = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);
