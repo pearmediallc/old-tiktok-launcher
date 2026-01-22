@@ -544,10 +544,12 @@ switch ($action) {
                 $identityType = $identity['identity_type'] ?? 'CUSTOMIZED_USER';
 
                 if ($identityType === 'CUSTOMIZED_USER' || !isset($identity['identity_type'])) {
+                    $identity['identity_type'] = 'CUSTOMIZED_USER';  // Ensure it's set
                     $identity['source_type'] = 'custom_identity';
                     $customIdentities[] = $identity;
                 } elseif ($identityType === 'BC_AUTH_TT') {
                     // BC_AUTH_TT - TikTok account authorized via Business Center
+                    $identity['identity_type'] = 'BC_AUTH_TT';  // Ensure it's set
                     $identity['source_type'] = 'bc_auth_tt';
                     $bcAuthIdentities[] = $identity;
                 }
@@ -578,9 +580,10 @@ switch ($action) {
                     }
                 }
                 if (!$exists) {
+                    // IMPORTANT: Explicitly set identity_type to BC_AUTH_TT
+                    // TikTok may not always return this field in the response
+                    $bcIdentity['identity_type'] = 'BC_AUTH_TT';
                     $bcIdentity['source_type'] = 'bc_auth_tt';
-                    // The identity_authorized_bc_id should be returned by TikTok for BC_AUTH_TT identities
-                    // If not present, we may need to get it from Business Center API
                     $bcAuthIdentities[] = $bcIdentity;
                 }
             }

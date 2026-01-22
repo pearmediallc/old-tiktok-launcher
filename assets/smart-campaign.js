@@ -2355,13 +2355,30 @@ async function createAd() {
         // Get identity type and BC ID from selected option or state
         const identitySelect = document.getElementById('global-identity');
         const selectedOption = identitySelect?.options[identitySelect.selectedIndex];
+
+        // Find the identity in state (check both customIdentities and tiktokPages)
+        const identityFromState = state.identities.find(i => i.identity_id === state.globalIdentityId) ||
+                                  state.tiktokPages?.find(i => i.identity_id === state.globalIdentityId) ||
+                                  state.customIdentities?.find(i => i.identity_id === state.globalIdentityId);
+
+        // Get identity type - prioritize dropdown dataset, then state
         const identityType = selectedOption?.dataset?.identityType ||
-                            state.identities.find(i => i.identity_id === state.globalIdentityId)?.identity_type ||
+                            identityFromState?.identity_type ||
                             'CUSTOMIZED_USER';
+
         // For BC_AUTH_TT, get the identity_authorized_bc_id
         const identityAuthorizedBcId = selectedOption?.dataset?.identityAuthorizedBcId ||
-                                       state.identities.find(i => i.identity_id === state.globalIdentityId)?.identity_authorized_bc_id ||
+                                       identityFromState?.identity_authorized_bc_id ||
                                        null;
+
+        // Debug logging
+        console.log('Identity lookup:', {
+            globalIdentityId: state.globalIdentityId,
+            selectedOption: selectedOption?.dataset,
+            identityFromState: identityFromState,
+            resolvedType: identityType,
+            resolvedBcId: identityAuthorizedBcId
+        });
 
         addLog('info', `Using identity type: ${identityType} for identity ${state.globalIdentityId}`);
         if (identityType === 'BC_AUTH_TT' && identityAuthorizedBcId) {
