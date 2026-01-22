@@ -891,7 +891,13 @@ switch ($action) {
 
         // Build creative_list with proper format for Smart+ Ads
         // Format: creative_list = [{creative_info: {video_info: {video_id}, image_info: [{web_uri}], ad_format}}]
+        // For BC_AUTH_TT identities, identity info goes INSIDE each creative_info (not in ad_configuration)
         $creativeList = [];
+
+        // Get identity info for BC_AUTH_TT (needs to be added to each creative)
+        $identityId = $data['identity_id'] ?? null;
+        $identityType = $data['identity_type'] ?? 'CUSTOMIZED_USER';
+        $identityAuthorizedBcId = $data['identity_authorized_bc_id'] ?? null;
 
         foreach ($data['creatives'] ?? [] as $index => $creative) {
             logSmartPlus("Processing creative $index: video_id=" . ($creative['video_id'] ?? 'null'));
@@ -903,6 +909,16 @@ switch ($action) {
                     ],
                     'ad_format' => 'SINGLE_VIDEO'
                 ];
+
+                // For BC_AUTH_TT, add identity info to each creative_info
+                if ($identityType === 'BC_AUTH_TT' && !empty($identityId)) {
+                    $creativeInfo['identity_id'] = $identityId;
+                    $creativeInfo['identity_type'] = 'BC_AUTH_TT';
+                    if (!empty($identityAuthorizedBcId)) {
+                        $creativeInfo['identity_authorized_bc_id'] = $identityAuthorizedBcId;
+                    }
+                    logSmartPlus("Added BC_AUTH_TT identity to creative: identity_id=$identityId, bc_id=$identityAuthorizedBcId");
+                }
 
                 // Get cover image - use provided, or from batch result
                 $imageId = $creative['image_id'] ?? $coverMap[$videoId] ?? null;
@@ -1048,17 +1064,15 @@ switch ($action) {
             'call_to_action_id' => $callToActionId  // Dynamic CTA Portfolio ID goes here
         ];
 
-        // Add identity configuration
-        if (!empty($data['identity_id'])) {
+        // Add identity configuration to ad_configuration ONLY for CUSTOMIZED_USER
+        // For BC_AUTH_TT, identity info goes in each creative_info (already added above)
+        if (!empty($data['identity_id']) && $identityType === 'CUSTOMIZED_USER') {
             $adConfig['identity_id'] = $data['identity_id'];
-            $identityType = $data['identity_type'] ?? 'CUSTOMIZED_USER';
-            $adConfig['identity_type'] = $identityType;
-
-            // For BC_AUTH_TT (TikTok Pages), include identity_authorized_bc_id
-            if ($identityType === 'BC_AUTH_TT' && !empty($data['identity_authorized_bc_id'])) {
-                $adConfig['identity_authorized_bc_id'] = $data['identity_authorized_bc_id'];
-                logSmartPlus("Using BC_AUTH_TT identity with bc_id: " . $data['identity_authorized_bc_id']);
-            }
+            $adConfig['identity_type'] = 'CUSTOMIZED_USER';
+            logSmartPlus("Using CUSTOMIZED_USER identity in ad_configuration");
+        } elseif ($identityType === 'BC_AUTH_TT') {
+            // BC_AUTH_TT identity is already added to each creative_info
+            logSmartPlus("BC_AUTH_TT identity added to creative_info (not ad_configuration)");
         }
 
         $adParams['ad_configuration'] = $adConfig;
@@ -1277,7 +1291,13 @@ switch ($action) {
 
         // Build creative_list with proper format for Smart+ Ads
         // Format: creative_list = [{creative_info: {video_info: {video_id}, image_info: [{web_uri}], ad_format}}]
+        // For BC_AUTH_TT identities, identity info goes INSIDE each creative_info
         $creativeListFormatted = [];
+
+        // Get identity info for BC_AUTH_TT (needs to be added to each creative)
+        $identityId = $data['identity_id'] ?? null;
+        $identityType = $data['identity_type'] ?? 'CUSTOMIZED_USER';
+        $identityAuthorizedBcId = $data['identity_authorized_bc_id'] ?? null;
 
         foreach ($creativeList as $creative) {
             if (!empty($creative['video_id'])) {
@@ -1288,6 +1308,15 @@ switch ($action) {
                     ],
                     'ad_format' => 'SINGLE_VIDEO'
                 ];
+
+                // For BC_AUTH_TT, add identity info to each creative_info
+                if ($identityType === 'BC_AUTH_TT' && !empty($identityId)) {
+                    $creativeInfo['identity_id'] = $identityId;
+                    $creativeInfo['identity_type'] = 'BC_AUTH_TT';
+                    if (!empty($identityAuthorizedBcId)) {
+                        $creativeInfo['identity_authorized_bc_id'] = $identityAuthorizedBcId;
+                    }
+                }
 
                 // Get cover image - use provided, or from batch result
                 $imageId = $creative['image_id'] ?? $coverMap[$videoId] ?? null;
@@ -1356,17 +1385,14 @@ switch ($action) {
             'call_to_action_id' => $callToActionId  // Dynamic CTA Portfolio ID goes here
         ];
 
-        // Add identity configuration
-        if (!empty($data['identity_id'])) {
-            $adConfig['identity_id'] = $data['identity_id'];
-            $identityType = $data['identity_type'] ?? 'CUSTOMIZED_USER';
-            $adConfig['identity_type'] = $identityType;
-
-            // For BC_AUTH_TT (TikTok Pages), include identity_authorized_bc_id
-            if ($identityType === 'BC_AUTH_TT' && !empty($data['identity_authorized_bc_id'])) {
-                $adConfig['identity_authorized_bc_id'] = $data['identity_authorized_bc_id'];
-                logSmartPlus("Using BC_AUTH_TT identity with bc_id: " . $data['identity_authorized_bc_id']);
-            }
+        // Add identity configuration to ad_configuration ONLY for CUSTOMIZED_USER
+        // For BC_AUTH_TT, identity info goes in each creative_info (already added above)
+        if (!empty($identityId) && $identityType === 'CUSTOMIZED_USER') {
+            $adConfig['identity_id'] = $identityId;
+            $adConfig['identity_type'] = 'CUSTOMIZED_USER';
+            logSmartPlus("Using CUSTOMIZED_USER identity in ad_configuration");
+        } elseif ($identityType === 'BC_AUTH_TT') {
+            logSmartPlus("BC_AUTH_TT identity added to creative_info (not ad_configuration)");
         }
 
         $adParams['ad_configuration'] = $adConfig;
@@ -2226,6 +2252,15 @@ switch ($action) {
                         'ad_format' => 'SINGLE_VIDEO'
                     ];
 
+                    // For BC_AUTH_TT, add identity info to each creative_info
+                    if ($identityType === 'BC_AUTH_TT' && !empty($identityId)) {
+                        $creativeInfo['identity_id'] = $identityId;
+                        $creativeInfo['identity_type'] = 'BC_AUTH_TT';
+                        if (!empty($identityAuthorizedBcId)) {
+                            $creativeInfo['identity_authorized_bc_id'] = $identityAuthorizedBcId;
+                        }
+                    }
+
                     if ($coverImageId) {
                         $creativeInfo['image_info'] = [['web_uri' => $coverImageId]];
                     }
@@ -2254,16 +2289,17 @@ switch ($action) {
                 }
 
                 // Build ad_configuration
+                // For BC_AUTH_TT, identity goes in creative_info (added above), not here
                 $adConfig = [
-                    'call_to_action_id' => $ctaPortfolioId,
-                    'identity_id' => $identityId,
-                    'identity_type' => $identityType
+                    'call_to_action_id' => $ctaPortfolioId
                 ];
 
-                // For BC_AUTH_TT (TikTok Pages), include identity_authorized_bc_id
-                if ($identityType === 'BC_AUTH_TT' && !empty($identityAuthorizedBcId)) {
-                    $adConfig['identity_authorized_bc_id'] = $identityAuthorizedBcId;
-                    logSmartPlus("Using BC_AUTH_TT identity with bc_id: $identityAuthorizedBcId");
+                // Only add identity to ad_configuration for CUSTOMIZED_USER
+                if ($identityType === 'CUSTOMIZED_USER' && !empty($identityId)) {
+                    $adConfig['identity_id'] = $identityId;
+                    $adConfig['identity_type'] = 'CUSTOMIZED_USER';
+                } elseif ($identityType === 'BC_AUTH_TT') {
+                    logSmartPlus("BC_AUTH_TT identity added to creative_info (not ad_configuration)");
                 }
 
                 $adParams = [
