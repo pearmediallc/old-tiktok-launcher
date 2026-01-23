@@ -1786,6 +1786,7 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
             <div class="date-range-filter-container">
                 <div class="date-range-presets">
                     <button class="date-preset-btn active" data-preset="today" onclick="setDatePreset('today')">Today</button>
+                    <button class="date-preset-btn" data-preset="yesterday" onclick="setDatePreset('yesterday')">Yesterday</button>
                     <button class="date-preset-btn" data-preset="7days" onclick="setDatePreset('7days')">Last 7 Days</button>
                     <button class="date-preset-btn" data-preset="30days" onclick="setDatePreset('30days')">Last 30 Days</button>
                     <button class="date-preset-btn" data-preset="custom" onclick="toggleCustomDatePicker()">Custom</button>
@@ -2227,14 +2228,36 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                 <button class="modal-close" onclick="closeVideoSelectionModal()">&times;</button>
             </div>
             <div class="modal-body" style="padding: 20px;">
-                <!-- Search and Filter -->
-                <div style="display: flex; gap: 15px; margin-bottom: 20px;">
+                <!-- Search, Upload and Filter -->
+                <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
                     <input type="text" id="video-modal-search" placeholder="🔍 Search videos by name..."
                            oninput="filterVideosInModal()"
-                           style="flex: 1; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                           style="flex: 1; min-width: 200px; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                    <button onclick="document.getElementById('video-modal-upload-input').click()"
+                            style="display: flex; align-items: center; gap: 8px; padding: 12px 20px; background: #22c55e; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background 0.2s;"
+                            onmouseover="this.style.background='#16a34a'" onmouseout="this.style.background='#22c55e'">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        Upload Video
+                    </button>
+                    <input type="file" id="video-modal-upload-input" accept="video/*" style="display: none;" onchange="handleVideoModalUpload(event)">
                     <div style="display: flex; align-items: center; gap: 10px; padding: 0 15px; background: #f8fafc; border-radius: 8px;">
                         <span style="font-weight: 600; color: #475569;">Selected:</span>
                         <span id="video-modal-count" style="font-size: 18px; font-weight: 700; color: #1e9df1;">0</span>
+                    </div>
+                </div>
+
+                <!-- Upload Progress (hidden by default) -->
+                <div id="video-modal-upload-progress" style="display: none; margin-bottom: 20px; padding: 15px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <div class="spinner" style="width: 20px; height: 20px; border: 2px solid #e2e8f0; border-top-color: #1e9df1; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        <span id="video-modal-upload-status" style="font-weight: 500; color: #0369a1;">Uploading video...</span>
+                    </div>
+                    <div style="background: #e2e8f0; border-radius: 4px; height: 6px; overflow: hidden;">
+                        <div id="video-modal-upload-bar" style="background: #1e9df1; height: 100%; width: 0%; transition: width 0.3s;"></div>
                     </div>
                 </div>
 

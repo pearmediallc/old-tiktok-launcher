@@ -4727,6 +4727,12 @@ function setDatePreset(preset) {
             startDate = today;
             endDate = today;
             break;
+        case 'yesterday':
+            startDate = new Date(today);
+            startDate.setDate(today.getDate() - 1);
+            endDate = new Date(today);
+            endDate.setDate(today.getDate() - 1);
+            break;
         case '7days':
             startDate = new Date(today);
             startDate.setDate(today.getDate() - 6); // Last 7 days including today
@@ -4834,6 +4840,9 @@ function updateDateRangeDisplay() {
     switch (state.dateRangePreset) {
         case 'today':
             displayText = 'Today';
+            break;
+        case 'yesterday':
+            displayText = 'Yesterday';
             break;
         case '7days':
             displayText = 'Last 7 Days';
@@ -6520,7 +6529,9 @@ async function executeDuplicateCampaign() {
     addLog('info', `Starting duplication: ${count} copies of "${baseName}"`);
 
     for (let i = 1; i <= count; i++) {
-        const newName = `${baseName} (${i})`;
+        // If count is 1 and in edit mode, use exact name entered by user (no suffix)
+        // Otherwise, append number suffix
+        const newName = (count === 1 && mode === 'edit') ? baseName : `${baseName} (${i})`;
 
         // Update progress
         progressText.textContent = `${i} / ${count}`;
@@ -7061,6 +7072,125 @@ function closeVideoSelectionModal() {
         allVideos: [],
         onConfirm: null
     };
+
+    // Reset upload UI
+    const uploadProgress = document.getElementById('video-modal-upload-progress');
+    if (uploadProgress) uploadProgress.style.display = 'none';
+    const uploadInput = document.getElementById('video-modal-upload-input');
+    if (uploadInput) uploadInput.value = '';
+}
+
+// Handle video upload from video selection modal
+async function handleVideoModalUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('video/')) {
+        showToast('Please select a video file', 'error');
+        return;
+    }
+
+    // Check file size (max 500MB)
+    const maxSize = 500 * 1024 * 1024;
+    if (file.size > maxSize) {
+        showToast('Video file too large. Maximum size is 500MB', 'error');
+        return;
+    }
+
+    // Add timestamp to filename to prevent duplicates
+    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+    const originalName = file.name;
+    const lastDotIndex = originalName.lastIndexOf('.');
+    const nameWithoutExt = lastDotIndex > 0 ? originalName.slice(0, lastDotIndex) : originalName;
+    const extension = lastDotIndex > 0 ? originalName.slice(lastDotIndex) : '';
+    const newFileName = `${nameWithoutExt}_${timestamp}${extension}`;
+
+    // Create renamed file
+    const renamedFile = new File([file], newFileName, { type: file.type });
+
+    // Show progress
+    const progressContainer = document.getElementById('video-modal-upload-progress');
+    const progressBar = document.getElementById('video-modal-upload-bar');
+    const progressStatus = document.getElementById('video-modal-upload-status');
+
+    progressContainer.style.display = 'block';
+    progressStatus.textContent = `Uploading ${newFileName}...`;
+    progressBar.style.width = '0%';
+
+    const formData = new FormData();
+    formData.append('video', renamedFile);
+
+    try {
+        addLog('request', `Uploading video: ${newFileName}`);
+
+        // Simulate progress
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress += Math.random() * 15;
+            if (progress > 90) progress = 90;
+            progressBar.style.width = progress + '%';
+        }, 200);
+
+        const response = await fetch('api.php?action=upload_video', {
+            method: 'POST',
+            body: formData
+        });
+
+        clearInterval(progressInterval);
+        progressBar.style.width = '100%';
+
+        const responseText = await response.text();
+        let result;
+
+        try {
+            result = JSON.parse(responseText);
+        } catch (e) {
+            console.error('JSON parse error:', e);
+            throw new Error('Invalid response from server');
+        }
+
+        if (result.success && result.data?.video_id) {
+            progressStatus.textContent = 'Upload complete! Refreshing videos...';
+            addLog('success', `Video uploaded: ${result.data.video_id}`);
+            showToast('Video uploaded successfully!', 'success');
+
+            // Reload media library to include new video
+            await loadMediaLibrary();
+
+            // Re-render video grid with new video
+            const videos = state.mediaLibrary.filter(m => m.type === 'video');
+            videoModalState.allVideos = videos;
+            renderVideoModalGrid(videos);
+
+            // Update total count
+            document.getElementById('video-modal-total').textContent = videos.length;
+
+            // Hide progress after a moment
+            setTimeout(() => {
+                progressContainer.style.display = 'none';
+            }, 1500);
+        } else {
+            throw new Error(result.message || 'Upload failed');
+        }
+    } catch (error) {
+        console.error('Video upload error:', error);
+        progressStatus.textContent = 'Upload failed: ' + error.message;
+        progressBar.style.width = '0%';
+        progressContainer.style.background = '#fef2f2';
+        progressContainer.style.borderColor = '#fecaca';
+        addLog('error', `Video upload failed: ${error.message}`);
+        showToast('Upload failed: ' + error.message, 'error');
+
+        // Hide progress after a moment
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+            progressContainer.style.background = '#f0f9ff';
+            progressContainer.style.borderColor = '#bae6fd';
+        }, 3000);
+    }
+
+    // Reset file input
+    event.target.value = '';
 }
 
 // Render current videos in duplicate modal
