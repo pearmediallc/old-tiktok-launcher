@@ -424,16 +424,24 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
         .toggle-table.loading { opacity: 0.5; pointer-events: none; }
         /* Action Buttons in Table */
         .action-btn-table {
-            background: none;
+            background: #f8fafc;
             border: 1px solid #e2e8f0;
-            padding: 6px 10px;
+            padding: 8px 12px;
             border-radius: 6px;
             cursor: pointer;
             font-size: 12px;
             color: #64748b;
             transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
         }
-        .action-btn-table:hover { background: #f1f5f9; border-color: #cbd5e1; color: #1e293b; }
+        .action-btn-table:hover { background: #e0f2fe; border-color: #1e9df1; color: #1e9df1; }
+        .action-btn-table svg { width: 16px; height: 16px; }
+        .action-btn-table.duplicate-btn { background: #f0f9ff; border-color: #bae6fd; }
+        .action-btn-table.duplicate-btn:hover { background: #1e9df1; border-color: #1e9df1; color: white; }
+        .action-btn-table.duplicate-btn:hover svg { stroke: white; }
         /* Loading Row */
         .loading-row td { text-align: center; color: #94a3b8; padding: 20px; }
         .loading-row .mini-spinner {
@@ -566,6 +574,74 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
             .date-range-display {
                 margin-left: 0;
                 justify-content: center;
+            }
+            /* Metrics table mobile */
+            .metrics-table-wrapper {
+                max-height: calc(100vh - 300px);
+            }
+            .metrics-table {
+                font-size: 11px;
+            }
+            .metrics-table th,
+            .metrics-table td {
+                padding: 8px 5px;
+            }
+            .metrics-table .col-name {
+                min-width: 120px;
+            }
+            .metrics-table .col-cpc,
+            .metrics-table .col-cpr,
+            .metrics-table .col-ctr {
+                display: none;
+            }
+            /* Ad account selector mobile */
+            .ad-account-selector-container {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 10px;
+            }
+            .ad-account-select {
+                max-width: 100%;
+            }
+            /* Date picker mobile */
+            .date-range-picker {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .date-input-group {
+                width: 100%;
+            }
+            .date-input-group input[type="date"] {
+                flex: 1;
+            }
+            /* Date preset buttons */
+            .date-preset-btn {
+                padding: 8px 10px;
+                font-size: 11px;
+            }
+            /* Filter tabs mobile */
+            .campaign-filter-tabs {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .campaign-filter-tabs button {
+                flex: 1;
+                min-width: 70px;
+                font-size: 11px;
+                padding: 8px 10px;
+            }
+        }
+        @media (max-width: 380px) {
+            .metrics-table {
+                font-size: 10px;
+            }
+            .metrics-table th,
+            .metrics-table td {
+                padding: 6px 3px;
+            }
+            .metrics-table .col-impressions,
+            .metrics-table .col-clicks {
+                display: none;
             }
         }
 
@@ -811,50 +887,23 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
 
                             <!-- Start Time Only Picker (for scheduled_start_only) -->
                             <div id="schedule-start-only-container" style="display: none; margin-top: 15px; padding: 15px; background: white; border: 1px solid #e2e8f0; border-radius: 8px;">
-                                <!-- Custom Date/Time Picker with integrated Apply button -->
-                                <div class="custom-datetime-picker" style="border: 2px solid #e2e8f0; border-radius: 10px; overflow: hidden;">
-                                    <!-- Picker Header -->
-                                    <div style="background: linear-gradient(135deg, #1e9df1 0%, #0ea5e9 100%); color: white; padding: 12px 15px; font-weight: 600; font-size: 14px;">
-                                        📅 Select Start Date & Time
-                                    </div>
-
-                                    <!-- Date and Time Inputs -->
-                                    <div style="padding: 15px; background: #f8fafc;">
-                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
-                                            <div>
-                                                <label style="font-weight: 500; color: #475569; font-size: 12px; display: block; margin-bottom: 5px;">Date</label>
-                                                <input type="date" id="schedule-start-only-date" style="width: 100%; padding: 10px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 14px; background: white;">
-                                            </div>
-                                            <div>
-                                                <label style="font-weight: 500; color: #475569; font-size: 12px; display: block; margin-bottom: 5px;">Time</label>
-                                                <input type="time" id="schedule-start-only-time" style="width: 100%; padding: 10px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 14px; background: white;">
-                                            </div>
-                                        </div>
-
-                                        <!-- Timezone -->
-                                        <div style="margin-bottom: 12px;">
-                                            <label style="font-weight: 500; color: #475569; font-size: 12px; display: block; margin-bottom: 5px;">Timezone</label>
-                                            <select id="schedule-start-only-timezone" style="width: 100%; padding: 10px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 14px; background: white;">
-                                                <option value="America/Los_Angeles">Pacific Time (PT) - Los Angeles</option>
-                                                <option value="America/Denver">Mountain Time (MT) - Denver</option>
-                                                <option value="America/Chicago">Central Time (CT) - Chicago</option>
-                                                <option value="America/New_York" selected>Eastern Time (ET) - New York</option>
-                                                <option value="America/Anchorage">Alaska Time (AKT) - Anchorage</option>
-                                                <option value="Pacific/Honolulu">Hawaii Time (HT) - Honolulu</option>
-                                                <option value="UTC">UTC (Coordinated Universal Time)</option>
-                                            </select>
-                                        </div>
-
-                                        <!-- Apply Button INSIDE the picker -->
-                                        <button type="button" onclick="applySchedule('start_only')" class="btn-primary" style="padding: 12px 20px; font-size: 14px; font-weight: 600; border-radius: 6px; width: 100%; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                            <span style="font-size: 16px;">✓</span> Apply
-                                        </button>
-                                    </div>
+                                <div class="form-group" style="margin-bottom: 15px;">
+                                    <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time</label>
+                                    <input type="datetime-local" id="schedule-start-only-datetime" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                 </div>
 
-                                <!-- Applied Summary (shown after Apply is clicked) -->
-                                <div id="schedule-start-only-summary" style="display: none; margin-top: 12px; padding: 12px 14px; background: #f0fdf4; border: 2px solid #86efac; border-radius: 8px; font-size: 14px; color: #166534;">
-                                    <!-- Summary will be shown here -->
+                                <!-- Timezone Selector -->
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-weight: 500; color: #475569; font-size: 14px;">Timezone</label>
+                                    <select id="schedule-start-only-timezone" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                        <option value="America/Los_Angeles">Pacific Time (PT) - Los Angeles</option>
+                                        <option value="America/Denver">Mountain Time (MT) - Denver</option>
+                                        <option value="America/Chicago">Central Time (CT) - Chicago</option>
+                                        <option value="America/New_York" selected>Eastern Time (ET) - New York</option>
+                                        <option value="America/Anchorage">Alaska Time (AKT) - Anchorage</option>
+                                        <option value="Pacific/Honolulu">Hawaii Time (HT) - Honolulu</option>
+                                        <option value="UTC">UTC (Coordinated Universal Time)</option>
+                                    </select>
                                 </div>
 
                                 <p style="margin: 12px 0 0; color: #64748b; font-size: 12px; display: flex; align-items: center; gap: 6px;">
@@ -865,69 +914,32 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
 
                             <!-- DateTime Pickers for Start AND End (for scheduled) -->
                             <div id="schedule-datetime-container" style="display: none; margin-top: 15px; padding: 15px; background: white; border: 1px solid #e2e8f0; border-radius: 8px;">
-                                <!-- Custom Date/Time Picker with integrated Apply button -->
-                                <div class="custom-datetime-picker" style="border: 2px solid #e2e8f0; border-radius: 10px; overflow: hidden;">
-                                    <!-- Picker Header -->
-                                    <div style="background: linear-gradient(135deg, #1e9df1 0%, #0ea5e9 100%); color: white; padding: 12px 15px; font-weight: 600; font-size: 14px;">
-                                        📅 Select Start & End Date/Time
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                    <!-- Start Date/Time -->
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time</label>
+                                        <input type="datetime-local" id="schedule-start-datetime" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                     </div>
 
-                                    <!-- Date and Time Inputs -->
-                                    <div style="padding: 15px; background: #f8fafc;">
-                                        <!-- Start Date/Time Row -->
-                                        <div style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0;">
-                                            <label style="font-weight: 600; color: #1e293b; font-size: 13px; display: block; margin-bottom: 8px;">Start</label>
-                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                                                <div>
-                                                    <label style="font-weight: 500; color: #64748b; font-size: 11px; display: block; margin-bottom: 4px;">Date</label>
-                                                    <input type="date" id="schedule-start-date" style="width: 100%; padding: 8px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;">
-                                                </div>
-                                                <div>
-                                                    <label style="font-weight: 500; color: #64748b; font-size: 11px; display: block; margin-bottom: 4px;">Time</label>
-                                                    <input type="time" id="schedule-start-time" style="width: 100%; padding: 8px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;">
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- End Date/Time Row -->
-                                        <div style="margin-bottom: 12px;">
-                                            <label style="font-weight: 600; color: #1e293b; font-size: 13px; display: block; margin-bottom: 8px;">End</label>
-                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                                                <div>
-                                                    <label style="font-weight: 500; color: #64748b; font-size: 11px; display: block; margin-bottom: 4px;">Date</label>
-                                                    <input type="date" id="schedule-end-date" style="width: 100%; padding: 8px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;">
-                                                </div>
-                                                <div>
-                                                    <label style="font-weight: 500; color: #64748b; font-size: 11px; display: block; margin-bottom: 4px;">Time</label>
-                                                    <input type="time" id="schedule-end-time" style="width: 100%; padding: 8px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;">
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Timezone -->
-                                        <div style="margin-bottom: 12px;">
-                                            <label style="font-weight: 500; color: #475569; font-size: 12px; display: block; margin-bottom: 5px;">Timezone</label>
-                                            <select id="schedule-timezone" style="width: 100%; padding: 10px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 14px; background: white;">
-                                                <option value="America/Los_Angeles">Pacific Time (PT) - Los Angeles</option>
-                                                <option value="America/Denver">Mountain Time (MT) - Denver</option>
-                                                <option value="America/Chicago">Central Time (CT) - Chicago</option>
-                                                <option value="America/New_York" selected>Eastern Time (ET) - New York</option>
-                                                <option value="America/Anchorage">Alaska Time (AKT) - Anchorage</option>
-                                                <option value="Pacific/Honolulu">Hawaii Time (HT) - Honolulu</option>
-                                                <option value="UTC">UTC (Coordinated Universal Time)</option>
-                                            </select>
-                                        </div>
-
-                                        <!-- Apply Button INSIDE the picker -->
-                                        <button type="button" onclick="applySchedule('start_end')" class="btn-primary" style="padding: 12px 20px; font-size: 14px; font-weight: 600; border-radius: 6px; width: 100%; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                            <span style="font-size: 16px;">✓</span> Apply
-                                        </button>
+                                    <!-- End Date/Time -->
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label style="font-weight: 500; color: #475569; font-size: 14px;">End Date & Time</label>
+                                        <input type="datetime-local" id="schedule-end-datetime" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                     </div>
                                 </div>
 
-                                <!-- Applied Summary (shown after Apply is clicked) -->
-                                <div id="schedule-datetime-summary" style="display: none; margin-top: 12px; padding: 12px 14px; background: #f0fdf4; border: 2px solid #86efac; border-radius: 8px; font-size: 14px; color: #166534;">
-                                    <!-- Summary will be shown here -->
+                                <!-- Timezone Selector -->
+                                <div class="form-group" style="margin-top: 15px; margin-bottom: 0;">
+                                    <label style="font-weight: 500; color: #475569; font-size: 14px;">Timezone</label>
+                                    <select id="schedule-timezone" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                        <option value="America/Los_Angeles">Pacific Time (PT) - Los Angeles</option>
+                                        <option value="America/Denver">Mountain Time (MT) - Denver</option>
+                                        <option value="America/Chicago">Central Time (CT) - Chicago</option>
+                                        <option value="America/New_York" selected>Eastern Time (ET) - New York</option>
+                                        <option value="America/Anchorage">Alaska Time (AKT) - Anchorage</option>
+                                        <option value="Pacific/Honolulu">Hawaii Time (HT) - Honolulu</option>
+                                        <option value="UTC">UTC (Coordinated Universal Time)</option>
+                                    </select>
                                 </div>
 
                                 <p style="margin: 12px 0 0; color: #64748b; font-size: 12px; display: flex; align-items: center; gap: 6px;">
@@ -1857,7 +1869,7 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                 <th class="col-conversions">Conversions</th>
                                 <th class="col-cpr">Cost/Result</th>
                                 <th class="col-results">Results</th>
-                                <th class="col-actions">Actions</th>
+                                <th class="col-actions">Duplicate</th>
                             </tr>
                         </thead>
                         <tbody id="campaign-table-body">

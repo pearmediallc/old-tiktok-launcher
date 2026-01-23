@@ -1304,17 +1304,16 @@ function getScheduleData() {
 
     // Option 2: Schedule start time only (no end) - runs continuously from scheduled time
     if (scheduleType === 'scheduled_start_only') {
-        const startDateVal = document.getElementById('schedule-start-only-date')?.value;
-        const startTimeVal = document.getElementById('schedule-start-only-time')?.value;
+        const startDateTime = document.getElementById('schedule-start-only-datetime')?.value;
         const timezone = document.getElementById('schedule-start-only-timezone')?.value || 'America/New_York';
 
-        if (!startDateVal || !startTimeVal) {
+        if (!startDateTime) {
             return {
                 schedule_type: 'SCHEDULE_FROM_NOW'
             };
         }
 
-        const startDate = new Date(`${startDateVal}T${startTimeVal}`);
+        const startDate = new Date(startDateTime);
 
         return {
             schedule_type: 'SCHEDULE_FROM_NOW',  // TikTok API uses SCHEDULE_FROM_NOW with a future start time
@@ -1324,20 +1323,18 @@ function getScheduleData() {
     }
 
     // Option 3: Schedule start AND end time
-    const startDateVal = document.getElementById('schedule-start-date')?.value;
-    const startTimeVal = document.getElementById('schedule-start-time')?.value;
-    const endDateVal = document.getElementById('schedule-end-date')?.value;
-    const endTimeVal = document.getElementById('schedule-end-time')?.value;
+    const startDateTime = document.getElementById('schedule-start-datetime')?.value;
+    const endDateTime = document.getElementById('schedule-end-datetime')?.value;
     const timezone = document.getElementById('schedule-timezone')?.value || 'America/New_York';
 
-    if (!startDateVal || !startTimeVal || !endDateVal || !endTimeVal) {
+    if (!startDateTime || !endDateTime) {
         return {
             schedule_type: 'SCHEDULE_FROM_NOW'
         };
     }
 
-    const startDate = new Date(`${startDateVal}T${startTimeVal}`);
-    const endDate = new Date(`${endDateVal}T${endTimeVal}`);
+    const startDate = new Date(startDateTime);
+    const endDate = new Date(endDateTime);
 
     return {
         schedule_type: 'SCHEDULE_START_END',
@@ -1359,16 +1356,15 @@ function validateScheduleDates() {
 
     // Validate scheduled_start_only option
     if (scheduleType === 'scheduled_start_only') {
-        const startDate = document.getElementById('schedule-start-only-date')?.value;
-        const startTime = document.getElementById('schedule-start-only-time')?.value;
+        const startDateTime = document.getElementById('schedule-start-only-datetime')?.value;
 
-        if (!startDate || !startTime) {
+        if (!startDateTime) {
             return { valid: false, message: 'Please select a start date and time' };
         }
 
-        const startDateTime = new Date(`${startDate}T${startTime}`);
+        const startDate = new Date(startDateTime);
 
-        if (startDateTime < now) {
+        if (startDate < now) {
             return { valid: false, message: 'Start time must be in the future' };
         }
 
@@ -1376,21 +1372,19 @@ function validateScheduleDates() {
     }
 
     // Validate scheduled (start and end) option
-    const startDateVal = document.getElementById('schedule-start-date')?.value;
-    const startTimeVal = document.getElementById('schedule-start-time')?.value;
-    const endDateVal = document.getElementById('schedule-end-date')?.value;
-    const endTimeVal = document.getElementById('schedule-end-time')?.value;
+    const startDateTime = document.getElementById('schedule-start-datetime')?.value;
+    const endDateTime = document.getElementById('schedule-end-datetime')?.value;
 
-    if (!startDateVal || !startTimeVal) {
+    if (!startDateTime) {
         return { valid: false, message: 'Please select a start date and time' };
     }
 
-    if (!endDateVal || !endTimeVal) {
+    if (!endDateTime) {
         return { valid: false, message: 'Please select an end date and time' };
     }
 
-    const startDate = new Date(`${startDateVal}T${startTimeVal}`);
-    const endDate = new Date(`${endDateVal}T${endTimeVal}`);
+    const startDate = new Date(startDateTime);
+    const endDate = new Date(endDateTime);
 
     if (startDate < now) {
         return { valid: false, message: 'Start time must be in the future' };
@@ -1409,126 +1403,20 @@ function validateScheduleDates() {
     return { valid: true };
 }
 
-// Apply schedule and show confirmation
+// Legacy function - no longer used but kept for compatibility
 function applySchedule(type) {
-    let summaryText = '';
-    let summaryEl = null;
-
-    if (type === 'start_only') {
-        // Get separate date and time values
-        const startDate = document.getElementById('schedule-start-only-date')?.value;
-        const startTime = document.getElementById('schedule-start-only-time')?.value;
-        const timezone = document.getElementById('schedule-start-only-timezone');
-        const timezoneText = timezone?.options[timezone.selectedIndex]?.text || 'Eastern Time';
-
-        if (!startDate) {
-            showToast('Please select a start date', 'error');
-            return;
-        }
-        if (!startTime) {
-            showToast('Please select a start time', 'error');
-            return;
-        }
-
-        // Combine date and time into datetime-local format
-        const startDateTime = `${startDate}T${startTime}`;
-        const startDateObj = new Date(startDateTime);
-
-        // Validate the date is in the future
-        if (startDateObj <= new Date()) {
-            showToast('Start time must be in the future', 'error');
-            return;
-        }
-
-        summaryText = `📅 Starts: ${formatReadableDateTime(startDateObj)} (${timezoneText})`;
-        summaryEl = document.getElementById('schedule-start-only-summary');
-
-        // Store in state
-        state.appliedSchedule = {
-            type: 'scheduled_start_only',
-            startTime: startDateTime,
-            timezone: timezone?.value
-        };
-    } else if (type === 'start_end') {
-        // Get separate date and time values for start
-        const startDate = document.getElementById('schedule-start-date')?.value;
-        const startTime = document.getElementById('schedule-start-time')?.value;
-        // Get separate date and time values for end
-        const endDate = document.getElementById('schedule-end-date')?.value;
-        const endTime = document.getElementById('schedule-end-time')?.value;
-        const timezone = document.getElementById('schedule-timezone');
-        const timezoneText = timezone?.options[timezone.selectedIndex]?.text || 'Eastern Time';
-
-        if (!startDate || !startTime) {
-            showToast('Please select a start date and time', 'error');
-            return;
-        }
-        if (!endDate || !endTime) {
-            showToast('Please select an end date and time', 'error');
-            return;
-        }
-
-        // Combine date and time into datetime-local format
-        const startDateTime = `${startDate}T${startTime}`;
-        const endDateTime = `${endDate}T${endTime}`;
-        const startDateObj = new Date(startDateTime);
-        const endDateObj = new Date(endDateTime);
-
-        // Validate start is in the future
-        if (startDateObj <= new Date()) {
-            showToast('Start time must be in the future', 'error');
-            return;
-        }
-
-        // Validate end is after start
-        if (endDateObj <= startDateObj) {
-            showToast('End time must be after start time', 'error');
-            return;
-        }
-
-        summaryText = `📅 ${formatReadableDateTime(startDateObj)} → ${formatReadableDateTime(endDateObj)} (${timezoneText})`;
-        summaryEl = document.getElementById('schedule-datetime-summary');
-
-        // Store in state
-        state.appliedSchedule = {
-            type: 'scheduled',
-            startTime: startDateTime,
-            endTime: endDateTime,
-            timezone: timezone?.value
-        };
-    }
-
-    if (summaryEl && summaryText) {
-        summaryEl.innerHTML = `<strong>✓ Applied:</strong> ${summaryText}`;
-        summaryEl.style.display = 'block';
-
-        showToast('Schedule applied successfully!', 'success');
-        addLog('info', `Schedule applied: ${summaryText}`);
-    }
+    // Schedule is now applied automatically when user selects date/time
+    // No separate apply button needed
 }
 
-// Show pending state when user changes date/time after applying
+// Legacy function - no longer used
 function showSchedulePending(type) {
-    // Hide the summary when user changes values after already applying
-    if (type === 'start_only') {
-        const summaryEl = document.getElementById('schedule-start-only-summary');
-        if (summaryEl && summaryEl.style.display !== 'none') {
-            summaryEl.style.display = 'none';
-            state.appliedSchedule = null;
-        }
-    } else if (type === 'start_end') {
-        const summaryEl = document.getElementById('schedule-datetime-summary');
-        if (summaryEl && summaryEl.style.display !== 'none') {
-            summaryEl.style.display = 'none';
-            state.appliedSchedule = null;
-        }
-    }
+    // No longer needed with simple datetime picker
 }
 
-// Update schedule summary as user changes values (deprecated, use showSchedulePending)
+// Legacy function - no longer used
 function updateScheduleSummary() {
-    // This function is now replaced by showSchedulePending
-    // Kept for backwards compatibility
+    // No longer needed with simple datetime picker
 }
 
 // Format datetime for readable display
@@ -5477,9 +5365,14 @@ function renderCampaignTableRow(campaign) {
             <td class="col-cpr" style="text-align: right;">${formatCurrency(campaign.cost_per_result)}</td>
             <td class="col-results" style="text-align: right;">${formatNumber(campaign.results)}</td>
             <td class="col-actions">
-                <button class="action-btn-table"
+                <button class="action-btn-table duplicate-btn"
                         onclick="openDuplicateCampaignModal('${campaign.campaign_id}', '${escapeHtml(campaign.campaign_name).replace(/'/g, "\\'")}'); event.stopPropagation();"
-                        title="Duplicate">📋</button>
+                        title="Duplicate Campaign">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                </button>
             </td>
         </tr>
     `;
@@ -6934,39 +6827,63 @@ function openVideoSelectionModal(context, preselectedVideos = []) {
 
     // Handle context-specific initialization
     if (context === 'duplicate' && duplicateState.campaignDetails?.ad) {
-        // Preselect current videos from duplicate campaign
-        const ad = duplicateState.campaignDetails.ad;
-        const currentVideoIds = [];
-
-        if (ad.creative_list && ad.creative_list.length > 0) {
-            ad.creative_list.forEach(item => {
-                if (item.creative_info?.video_info?.video_id) {
-                    currentVideoIds.push(item.creative_info.video_info.video_id);
-                }
-            });
-        } else if (ad.video_ids) {
-            currentVideoIds.push(...ad.video_ids);
-        }
-
-        // Use duplicate's changed videos if set, otherwise use original
+        // Use duplicate's changed videos if set, otherwise get from original campaign
         if (duplicateState.changedVideos && duplicateState.changedVideos.length > 0) {
+            // User already changed videos - use those
             videoModalState.selectedVideos = duplicateState.changedVideos.map(v => ({
                 id: v.video_id || v.id,
-                video_id: v.video_id || v.id
+                video_id: v.video_id || v.id,
+                name: v.name,
+                thumbnail_url: v.thumbnail_url
             }));
         } else {
+            // Get video IDs from the original campaign ad
+            const ad = duplicateState.campaignDetails.ad;
+            const currentVideoIds = [];
+
+            if (ad.creative_list && ad.creative_list.length > 0) {
+                ad.creative_list.forEach(item => {
+                    if (item.creative_info?.video_info?.video_id) {
+                        currentVideoIds.push(item.creative_info.video_info.video_id);
+                    }
+                });
+            } else if (ad.video_ids && Array.isArray(ad.video_ids)) {
+                currentVideoIds.push(...ad.video_ids);
+            }
+
+            // Map video IDs to video objects from media library
             videoModalState.selectedVideos = currentVideoIds.map(vid => {
-                const video = videos.find(v => v.id === vid || v.video_id === vid);
-                return video || { id: vid, video_id: vid };
+                const video = videos.find(v => (v.id === vid) || (v.video_id === vid));
+                if (video) {
+                    return {
+                        id: video.id,
+                        video_id: video.video_id || video.id,
+                        name: video.name || video.file_name,
+                        thumbnail_url: video.thumbnail_url || video.cover_image_url || video.url
+                    };
+                }
+                // Video not found in library - create placeholder
+                return { id: vid, video_id: vid, name: `Video ${vid.slice(-6)}` };
             });
         }
 
         // Re-render with selections
         renderVideoModalGrid(videos);
         document.getElementById('video-modal-count').textContent = videoModalState.selectedVideos.length;
+
+        addLog('info', `Preselected ${videoModalState.selectedVideos.length} videos from campaign`);
     }
 
     addLog('info', `Video selection modal opened for context: ${context}`);
+}
+
+// Helper function to check if a video is selected
+function isVideoSelected(video) {
+    const videoId = video.id || video.video_id;
+    return videoModalState.selectedVideos.some(v => {
+        const selectedId = v.video_id || v.id;
+        return selectedId === videoId;
+    });
 }
 
 // Render video grid in modal
@@ -6985,12 +6902,8 @@ function renderVideoModalGrid(videos) {
 
     // Sort videos: selected videos first, then unselected
     const sortedVideos = [...videos].sort((a, b) => {
-        const aSelected = videoModalState.selectedVideos.some(v =>
-            v.id === a.id || v.video_id === a.video_id || v.id === a.video_id
-        );
-        const bSelected = videoModalState.selectedVideos.some(v =>
-            v.id === b.id || v.video_id === b.video_id || v.id === b.video_id
-        );
+        const aSelected = isVideoSelected(a);
+        const bSelected = isVideoSelected(b);
 
         if (aSelected && !bSelected) return -1;
         if (!aSelected && bSelected) return 1;
@@ -6998,9 +6911,7 @@ function renderVideoModalGrid(videos) {
     });
 
     grid.innerHTML = sortedVideos.map(video => {
-        const isSelected = videoModalState.selectedVideos.some(v =>
-            v.id === video.id || v.video_id === video.video_id || v.id === video.video_id
-        );
+        const isSelected = isVideoSelected(video);
         // Get thumbnail from various possible fields
         const thumbnailUrl = video.thumbnail_url || video.cover_image_url || video.url || video.preview_url || '';
 

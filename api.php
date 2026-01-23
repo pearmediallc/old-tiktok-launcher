@@ -95,16 +95,22 @@ function logToFile($message) {
 
 // Helper function to output clean JSON response
 function outputJsonResponse($data) {
-    // Capture and log any buffered output (warnings, notices, etc.)
-    $bufferedOutput = ob_get_clean();
-    if (!empty($bufferedOutput)) {
-        logToFile("WARNING: Buffered output before JSON: " . substr($bufferedOutput, 0, 500));
+    // Clean all output buffers
+    while (ob_get_level() > 0) {
+        $bufferedOutput = ob_get_clean();
+        if (!empty($bufferedOutput)) {
+            logToFile("WARNING: Buffered output cleared: " . substr($bufferedOutput, 0, 500));
+        }
     }
 
-    // Start fresh buffer
-    ob_start();
+    // Set JSON header if not already sent
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+    }
+
+    // Output JSON directly
     echo json_encode($data);
-    ob_end_flush();
+    exit; // Ensure no more output after JSON
 }
 
 // Helper function to make TikTok API calls

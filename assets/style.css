@@ -4532,3 +4532,232 @@ select:disabled {
         font-size: 24px;
     }
 }
+
+/* ============================================
+   MOBILE LAYOUT FIXES FOR CAMPAIGNS VIEW
+   ============================================ */
+
+@media (max-width: 768px) {
+    /* Main view tabs - stack on mobile */
+    .main-view-tabs {
+        flex-direction: column;
+        padding: 0;
+        gap: 0;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .main-view-tab {
+        padding: 14px 20px;
+        justify-content: center;
+        border-bottom: none;
+        border-left: 3px solid transparent;
+        margin-bottom: 0;
+    }
+
+    .main-view-tab.active {
+        border-bottom: none;
+        border-left-color: var(--primary);
+        background: var(--accent);
+    }
+
+    .main-view-tab .tab-icon {
+        font-size: 16px;
+    }
+
+    /* Ad Account Selector - stack vertically */
+    .ad-account-selector-container {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+        padding: 12px !important;
+    }
+
+    .ad-account-label {
+        text-align: center;
+    }
+
+    .ad-account-select {
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+
+    .ad-account-search-wrapper {
+        width: 100% !important;
+    }
+
+    .ad-account-search-wrapper input {
+        width: 100% !important;
+    }
+
+    .ad-account-info {
+        justify-content: center;
+        text-align: center;
+    }
+
+    /* Campaigns metrics table mobile */
+    .campaign-metrics-table-container {
+        margin: 0 -10px;
+        border-radius: 0;
+    }
+
+    .metrics-table-wrapper {
+        max-height: calc(100vh - 320px);
+    }
+
+    .metrics-table {
+        font-size: 11px;
+    }
+
+    .metrics-table th,
+    .metrics-table td {
+        padding: 8px 6px !important;
+    }
+
+    .metrics-table .col-name {
+        min-width: 120px;
+    }
+
+    .metrics-table .col-checkbox {
+        width: 30px;
+    }
+
+    .metrics-table .col-toggle {
+        width: 50px;
+    }
+
+    .metrics-table .col-status,
+    .metrics-table .col-budget,
+    .metrics-table .col-spend,
+    .metrics-table .col-cpc,
+    .metrics-table .col-cpr,
+    .metrics-table .col-impressions,
+    .metrics-table .col-clicks,
+    .metrics-table .col-conversions,
+    .metrics-table .col-results,
+    .metrics-table .col-ctr {
+        width: auto;
+    }
+
+    .metrics-table .col-actions {
+        width: 60px;
+    }
+
+    /* Toggle switch mobile size */
+    .toggle-switch {
+        transform: scale(0.85);
+    }
+
+    /* Hide some columns on very small screens */
+    .metrics-table .col-cpc,
+    .metrics-table .col-cpr,
+    .metrics-table .col-ctr {
+        display: none;
+    }
+
+    /* Action button mobile */
+    .action-btn-table {
+        padding: 6px 8px !important;
+        font-size: 11px !important;
+    }
+
+    .action-btn-table svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    /* Date range filter mobile */
+    .date-range-filter-container {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+    }
+
+    .date-range-presets {
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+    }
+
+    .date-range-preset-btn {
+        flex: 1;
+        min-width: 60px;
+        padding: 8px 10px !important;
+        font-size: 11px !important;
+    }
+
+    .date-range-display {
+        margin-left: 0 !important;
+        justify-content: center !important;
+    }
+
+    /* Pagination controls mobile */
+    .pagination-controls {
+        flex-direction: column;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .pagination-info {
+        font-size: 12px;
+    }
+
+    /* Status badge mobile */
+    .status-badge {
+        padding: 3px 6px;
+        font-size: 10px;
+    }
+
+    /* Filter tabs mobile */
+    .filter-tabs {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .filter-tab {
+        padding: 8px 12px;
+        font-size: 12px;
+        flex: 1;
+        min-width: 80px;
+        text-align: center;
+    }
+}
+
+/* Extra small screens - iPhone SE, etc. */
+@media (max-width: 380px) {
+    .main-view-tab {
+        padding: 12px 15px;
+        font-size: 13px;
+    }
+
+    .metrics-table {
+        font-size: 10px;
+    }
+
+    .metrics-table th,
+    .metrics-table td {
+        padding: 6px 4px !important;
+    }
+
+    .metrics-table .col-name {
+        min-width: 100px;
+    }
+
+    /* Hide more columns on very small screens */
+    .metrics-table .col-impressions,
+    .metrics-table .col-clicks {
+        display: none;
+    }
+
+    /* Smaller toggle */
+    .toggle-switch {
+        transform: scale(0.75);
+    }
+
+    /* Campaign name truncation */
+    .campaign-name-cell {
+        max-width: 100px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
