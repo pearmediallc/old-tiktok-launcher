@@ -157,9 +157,90 @@ if (!isset($_SESSION['authenticated']) || !$_SESSION['authenticated']) {
             text-align: center;
             padding: 40px;
         }
-        
+
         .loading-advertisers .spinner {
             margin: 0 auto 20px;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .header {
+                flex-direction: column;
+                gap: 12px;
+                padding: 15px;
+                text-align: center;
+            }
+
+            .header h1 {
+                font-size: 20px;
+            }
+
+            .btn-logout {
+                width: 100%;
+            }
+
+            .advertiser-selection {
+                padding: 15px;
+            }
+
+            .advertiser-header h2 {
+                font-size: 20px;
+            }
+
+            .advertiser-header p {
+                font-size: 14px;
+            }
+
+            .advertiser-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+                padding: 15px;
+            }
+
+            .advertiser-info {
+                width: 100%;
+            }
+
+            .advertiser-name {
+                font-size: 15px;
+            }
+
+            .advertiser-status {
+                margin-left: 0;
+                margin-top: 5px;
+            }
+
+            .advertiser-radio {
+                align-self: flex-end;
+            }
+
+            .continue-button button {
+                width: 100%;
+                padding: 14px 20px;
+            }
+
+            /* OAuth connect button mobile */
+            [href="oauth-init.php"] {
+                display: block !important;
+                padding: 16px 20px !important;
+                font-size: 16px !important;
+            }
+        }
+
+        /* Button click fixes */
+        button,
+        a[href="oauth-init.php"],
+        .btn-logout {
+            cursor: pointer !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
         }
     </style>
 </head>

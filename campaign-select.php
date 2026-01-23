@@ -199,6 +199,62 @@ if (!isset($_SESSION['selected_advertiser_id'])) {
             color: #666;
             font-size: 16px;
         }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .campaign-select-container {
+                margin: 20px auto;
+                padding: 15px;
+            }
+
+            .campaign-type-cards {
+                grid-template-columns: 1fr;
+                gap: 20px;
+                margin-top: 25px;
+            }
+
+            .campaign-card {
+                padding: 20px;
+            }
+
+            .campaign-card h3 {
+                font-size: 20px;
+            }
+
+            .campaign-icon {
+                width: 40px;
+                height: 40px;
+            }
+
+            .header-section h1 {
+                font-size: 24px;
+            }
+
+            .header-section p {
+                font-size: 14px;
+            }
+
+            .btn-continue {
+                width: 100%;
+                padding: 14px 20px;
+            }
+        }
+
+        /* Button click fixes */
+        .campaign-card,
+        .btn-continue,
+        .logout-btn {
+            cursor: pointer !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        .campaign-card:active,
+        .btn-continue:active {
+            transform: scale(0.98);
+        }
     </style>
 </head>
 <body>

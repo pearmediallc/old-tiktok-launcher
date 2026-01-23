@@ -3684,20 +3684,20 @@ h3 {
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: white;
-    border: 2px solid #e2e8f0;
-    display: flex;
+    background: #1e9df1;
+    border: 2px solid #1e9df1;
+    display: none; /* Hidden by default - only show when selected */
     align-items: center;
     justify-content: center;
     font-size: 14px;
-    color: transparent;
+    color: white;
     transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(30, 157, 241, 0.4);
 }
 
+/* Only show checkmark when selected */
 .video-modal-item.selected .video-modal-check {
-    background: #1e9df1;
-    border-color: #1e9df1;
-    color: white;
+    display: flex;
 }
 
 .video-modal-info {
@@ -3736,4 +3736,799 @@ h3 {
 
 #video-modal-grid::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
+}
+
+/* ============================================
+   BUTTON CURSOR AND CLICK FIXES
+   Ensure all clickable elements are always clickable
+   ============================================ */
+
+/* Universal button fixes - prevent text selection cursor */
+button,
+.btn-primary,
+.btn-secondary,
+.btn-success,
+.btn-logout,
+.btn-bulk-action,
+[onclick],
+[role="button"],
+.clickable {
+    cursor: pointer !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+/* Ensure buttons stay clickable after focus */
+button:focus,
+button:active,
+.btn-primary:focus,
+.btn-primary:active,
+.btn-secondary:focus,
+.btn-secondary:active {
+    cursor: pointer !important;
+    outline: none;
+}
+
+/* Prevent text cursor on any button child elements */
+button *,
+.btn-primary *,
+.btn-secondary *,
+.btn-success *,
+[onclick] * {
+    cursor: inherit !important;
+    user-select: none !important;
+    pointer-events: none;
+}
+
+/* Fix for links styled as buttons */
+a.btn-primary,
+a.btn-secondary,
+a[style*="padding"] {
+    cursor: pointer !important;
+    user-select: none !important;
+}
+
+/* Clickable cards and items */
+.campaign-card,
+.my-campaign-card,
+.advertiser-item,
+.video-modal-item,
+.media-item,
+.account-media-item,
+.ad-card,
+.step,
+.portfolio-item,
+.age-option,
+.location-chip {
+    cursor: pointer !important;
+    user-select: none !important;
+}
+
+/* Form elements should have appropriate cursors */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+input[type="url"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+textarea,
+select {
+    cursor: text;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+    cursor: pointer !important;
+}
+
+/* Disabled state */
+button:disabled,
+.btn-primary:disabled,
+.btn-secondary:disabled,
+input:disabled,
+select:disabled {
+    cursor: not-allowed !important;
+    opacity: 0.6;
+}
+
+/* ============================================
+   COMPREHENSIVE MOBILE RESPONSIVE STYLES
+   ============================================ */
+
+/* Small tablets and large phones */
+@media (max-width: 900px) {
+    .container {
+        padding: 15px;
+    }
+
+    .header {
+        padding: 20px;
+    }
+
+    .header h1 {
+        font-size: 22px;
+    }
+
+    .form-section {
+        padding: 20px;
+    }
+
+    .step-content h3 {
+        font-size: 13px;
+    }
+
+    /* Modal adjustments */
+    .modal-content {
+        max-width: 95% !important;
+        max-height: 90vh !important;
+        margin: 5vh auto;
+    }
+
+    .modal-body {
+        padding: 15px !important;
+    }
+}
+
+/* Mobile phones */
+@media (max-width: 768px) {
+    /* Base adjustments */
+    body {
+        font-size: 14px;
+    }
+
+    .container {
+        padding: 10px;
+    }
+
+    /* Header mobile */
+    .header {
+        flex-direction: column;
+        gap: 12px;
+        padding: 15px;
+        text-align: center;
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
+
+    .header h1 {
+        font-size: 20px;
+        line-height: 1.3;
+    }
+
+    .header-info {
+        flex-direction: column;
+        gap: 10px;
+        width: 100%;
+    }
+
+    #advertiser-timezone-info {
+        font-size: 12px;
+        padding: 6px 12px;
+        width: 100%;
+        text-align: center;
+    }
+
+    .btn-logout {
+        width: 100%;
+        padding: 10px 15px;
+    }
+
+    /* Progress steps mobile */
+    .progress-steps {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 5px;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .step {
+        min-width: 70px;
+        flex-shrink: 0;
+        padding: 10px 8px;
+    }
+
+    .step-number {
+        width: 28px;
+        height: 28px;
+        font-size: 12px;
+    }
+
+    .step-content h3 {
+        font-size: 11px;
+    }
+
+    .step-content p {
+        display: none;
+    }
+
+    /* Form sections mobile */
+    .form-section {
+        padding: 15px;
+        border-radius: 12px;
+        margin-bottom: 15px;
+    }
+
+    .form-section h2 {
+        font-size: 18px;
+        margin-bottom: 15px;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    .form-group label {
+        font-size: 13px;
+        margin-bottom: 6px;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        padding: 12px;
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    /* Buttons mobile */
+    .button-row {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .btn-primary,
+    .btn-secondary,
+    .btn-success {
+        width: 100%;
+        padding: 14px 20px;
+        font-size: 15px;
+        text-align: center;
+        justify-content: center;
+    }
+
+    /* Ad cards mobile */
+    .ad-card {
+        padding: 15px;
+    }
+
+    .ad-header {
+        flex-direction: column;
+        gap: 10px;
+        align-items: flex-start;
+    }
+
+    .ad-header h3 {
+        font-size: 16px;
+    }
+
+    /* Media grid mobile */
+    .media-grid {
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        gap: 8px;
+    }
+
+    .media-item {
+        border-radius: 8px;
+    }
+
+    .media-thumbnail {
+        height: 80px;
+    }
+
+    .media-name {
+        font-size: 10px;
+        padding: 4px;
+    }
+
+    /* Dayparting table mobile */
+    .dayparting-table {
+        font-size: 9px;
+    }
+
+    .dayparting-table th,
+    .dayparting-table td {
+        padding: 4px 2px;
+    }
+
+    .hour-checkbox {
+        width: 14px;
+        height: 14px;
+    }
+
+    /* Campaign cards mobile */
+    .my-campaign-card {
+        padding: 12px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .campaign-checkbox-wrapper {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+    }
+
+    .my-campaign-card {
+        position: relative;
+        padding-right: 50px;
+    }
+
+    .campaign-main-info {
+        width: 100%;
+    }
+
+    .campaign-title {
+        font-size: 14px;
+    }
+
+    .campaign-meta {
+        flex-direction: column;
+        gap: 5px;
+        font-size: 11px;
+    }
+
+    .campaign-actions {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .campaign-actions button {
+        flex: 1;
+        min-width: 100px;
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    /* Bulk actions mobile */
+    .bulk-actions-bar {
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }
+
+    .bulk-select-controls {
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .bulk-action-buttons {
+        width: 100%;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .btn-bulk-action {
+        width: 100%;
+        justify-content: center;
+        padding: 12px;
+    }
+
+    /* Modal mobile */
+    .modal-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 100vh !important;
+        height: 100vh;
+        margin: 0;
+        border-radius: 0;
+    }
+
+    .modal-header {
+        padding: 15px;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: white;
+    }
+
+    .modal-header h3 {
+        font-size: 16px;
+    }
+
+    .modal-body {
+        padding: 15px !important;
+        overflow-y: auto;
+        max-height: calc(100vh - 130px);
+    }
+
+    .modal-footer {
+        padding: 12px 15px !important;
+        position: sticky;
+        bottom: 0;
+        background: white;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    }
+
+    .modal-footer button {
+        flex: 1;
+        padding: 12px;
+    }
+
+    /* Video modal mobile */
+    #video-modal-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+    }
+
+    .video-modal-item {
+        border-radius: 8px;
+    }
+
+    .video-modal-info {
+        padding: 8px;
+    }
+
+    .video-modal-name {
+        font-size: 11px;
+    }
+
+    .video-modal-check {
+        width: 24px;
+        height: 24px;
+        top: 6px;
+        right: 6px;
+        font-size: 12px;
+    }
+
+    /* Duplicate modal mobile */
+    .duplicate-modal-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .duplicate-count-section {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .duplicate-count-section input {
+        width: 100%;
+    }
+
+    /* Toast notifications mobile */
+    .toast {
+        width: calc(100% - 20px);
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
+        font-size: 13px;
+    }
+
+    /* Account media grid mobile */
+    .account-media-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+    }
+
+    .account-media-item {
+        border-radius: 6px;
+    }
+
+    /* Schedule picker mobile */
+    .custom-datetime-picker {
+        margin: 0 -5px;
+    }
+
+    .custom-datetime-picker input,
+    .custom-datetime-picker select {
+        font-size: 16px !important; /* Prevent zoom */
+    }
+
+    /* Tab navigation mobile */
+    .tab-nav,
+    .sub-tab-nav {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: 5px;
+        padding-bottom: 5px;
+    }
+
+    .tab-btn,
+    .sub-tab-btn {
+        white-space: nowrap;
+        flex-shrink: 0;
+        padding: 10px 15px;
+        font-size: 13px;
+    }
+
+    /* Launch options mobile */
+    .launch-options-container {
+        grid-template-columns: 1fr;
+    }
+
+    .launch-option {
+        padding: 15px;
+    }
+
+    /* Summary stats mobile */
+    .bulk-summary-stats {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .stat-item {
+        padding: 12px;
+    }
+
+    .stat-value {
+        font-size: 20px;
+    }
+
+    /* Log panel mobile */
+    .log-panel {
+        font-size: 11px;
+    }
+
+    .log-entry {
+        padding: 6px 8px;
+    }
+
+    /* Form info boxes mobile */
+    .form-info {
+        padding: 12px;
+        font-size: 13px;
+    }
+
+    /* Upload area mobile */
+    .upload-area {
+        padding: 30px 15px;
+    }
+
+    .upload-area .upload-icon {
+        font-size: 36px;
+    }
+
+    /* Age selection mobile */
+    .age-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+    }
+
+    .age-option {
+        padding: 8px 4px;
+        font-size: 12px;
+    }
+
+    /* Location chips mobile */
+    .location-chips {
+        gap: 6px;
+    }
+
+    .location-chip {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+}
+
+/* Extra small phones */
+@media (max-width: 380px) {
+    .header h1 {
+        font-size: 18px;
+    }
+
+    .step {
+        min-width: 60px;
+        padding: 8px 5px;
+    }
+
+    .step-number {
+        width: 24px;
+        height: 24px;
+        font-size: 11px;
+    }
+
+    .step-content h3 {
+        font-size: 10px;
+    }
+
+    .form-section h2 {
+        font-size: 16px;
+    }
+
+    #video-modal-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    .account-media-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .bulk-summary-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .campaign-actions button {
+        min-width: 80px;
+        font-size: 11px;
+    }
+}
+
+/* Landscape phone orientation */
+@media (max-width: 900px) and (orientation: landscape) {
+    .modal-content {
+        max-height: 100vh !important;
+    }
+
+    .modal-body {
+        max-height: calc(100vh - 100px);
+    }
+
+    #video-modal-grid {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+}
+
+/* Touch device specific styles */
+@media (hover: none) and (pointer: coarse) {
+    /* Larger touch targets */
+    button,
+    .btn-primary,
+    .btn-secondary,
+    input[type="checkbox"],
+    input[type="radio"] {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* Remove hover effects on touch */
+    .btn-primary:hover,
+    .btn-secondary:hover,
+    .btn-success:hover {
+        transform: none;
+    }
+
+    /* Add active state for touch feedback */
+    .btn-primary:active,
+    .btn-secondary:active,
+    .btn-success:active {
+        transform: scale(0.98);
+        opacity: 0.9;
+    }
+
+    /* Larger spacing for touch */
+    .form-group {
+        margin-bottom: 18px;
+    }
+
+    /* Better scrolling */
+    .modal-body,
+    .log-panel,
+    #video-modal-grid {
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* ============================================
+   ADDITIONAL MOBILE FIXES FOR INLINE STYLES
+   ============================================ */
+
+@media (max-width: 768px) {
+    /* States grid - override inline 4-column grid */
+    #states-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    /* Schedule options mobile */
+    .schedule-option {
+        padding: 10px !important;
+    }
+
+    /* Custom datetime picker mobile */
+    .custom-datetime-picker {
+        margin: 0 !important;
+    }
+
+    .custom-datetime-picker > div[style*="grid-template-columns"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Video modal search row */
+    #video-selection-modal .modal-body > div:first-child {
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+
+    #video-modal-search {
+        width: 100% !important;
+    }
+
+    /* Duplicate modal grids */
+    .duplicate-modal-grid,
+    [style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Inline flex containers mobile */
+    [style*="display: flex"][style*="gap: 15px"],
+    [style*="display: flex"][style*="gap: 10px"] {
+        flex-wrap: wrap;
+    }
+
+    /* Make inline buttons full width on mobile */
+    .modal-footer button,
+    .modal-footer .btn-primary,
+    .modal-footer .btn-secondary {
+        flex: 1;
+        min-width: 120px;
+    }
+
+    /* Age grid mobile */
+    .age-grid,
+    [style*="grid-template-columns: repeat(6"] {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+
+    /* Location targeting row */
+    [style*="display: flex"][style*="flex-wrap: wrap"] {
+        gap: 8px !important;
+    }
+
+    /* Quick action buttons on targeting */
+    [style*="display: flex"][style*="gap: 10px"] button {
+        padding: 8px 12px !important;
+        font-size: 12px !important;
+    }
+
+    /* Media library header row */
+    .media-library-header,
+    [style*="justify-content: space-between"][style*="margin-bottom: 15px"] {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+    }
+
+    /* Upload modal */
+    #upload-modal .modal-content {
+        margin: 10px;
+        max-height: calc(100vh - 20px);
+    }
+
+    #upload-area {
+        padding: 20px !important;
+    }
+
+    /* Make all nav/action rows stack on mobile */
+    .form-section > div[style*="display: flex"][style*="justify-content: space-between"] {
+        flex-direction: column;
+        gap: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Even smaller screens */
+    #states-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .age-grid,
+    [style*="grid-template-columns: repeat"] {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    /* Make modal close button more visible */
+    .modal-close {
+        width: 36px;
+        height: 36px;
+        font-size: 24px;
+    }
 }

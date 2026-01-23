@@ -328,6 +328,71 @@ $csrfToken = Security::generateCSRFToken();
             font-weight: 600;
             margin-bottom: 10px;
         }
+
+        /* Mobile Responsive */
+        @media (max-width: 480px) {
+            body {
+                padding: 15px;
+                align-items: flex-start;
+                padding-top: 40px;
+            }
+
+            .login-container {
+                padding: 25px 20px;
+                border-radius: 16px;
+            }
+
+            .login-header h1 {
+                font-size: 20px;
+            }
+
+            .login-header p {
+                font-size: 13px;
+            }
+
+            input[type="text"],
+            input[type="password"] {
+                font-size: 16px; /* Prevents zoom on iOS */
+                padding: 14px 15px;
+            }
+
+            .btn-login,
+            .btn-oauth {
+                padding: 14px;
+                font-size: 16px;
+            }
+
+            .btn-oauth {
+                font-size: 16px;
+            }
+
+            .divider {
+                margin: 20px 0;
+            }
+
+            .developer-login {
+                padding: 12px;
+            }
+
+            .developer-login summary {
+                font-size: 13px;
+            }
+        }
+
+        /* Button click fix */
+        .btn-login,
+        .btn-oauth {
+            cursor: pointer !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        .btn-login:active,
+        .btn-oauth:active {
+            transform: scale(0.98);
+        }
     </style>
 </head>
 <body>

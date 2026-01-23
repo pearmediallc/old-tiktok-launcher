@@ -534,6 +534,73 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
                 width: 100%;
                 justify-content: center;
             }
+
+            .step-indicator {
+                gap: 8px;
+            }
+
+            .step-number {
+                width: 32px;
+                height: 32px;
+                font-size: 14px;
+            }
+
+            .step-divider {
+                width: 20px;
+            }
+
+            .section-title {
+                font-size: 22px;
+            }
+
+            .section-subtitle {
+                font-size: 14px;
+            }
+
+            .advertiser-card {
+                padding: 15px;
+            }
+
+            .advertiser-name {
+                font-size: 15px;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .header p {
+                font-size: 14px;
+            }
+
+            .wizard-body {
+                padding: 15px;
+            }
+
+            .step-number {
+                width: 28px;
+                height: 28px;
+                font-size: 12px;
+            }
+        }
+
+        /* Button click fixes */
+        .btn,
+        button,
+        .advertiser-card,
+        .campaign-type-card {
+            cursor: pointer !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        .btn:active,
+        button:active {
+            transform: scale(0.98);
         }
     </style>
 </head>

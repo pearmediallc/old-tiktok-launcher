@@ -3,6 +3,13 @@
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 ini_set('display_startup_errors', '0');
+ini_set('log_errors', '1');
+
+// Start output buffering immediately to catch any stray output
+ob_start();
+
+// Set JSON content type header early
+header('Content-Type: application/json; charset=utf-8');
 
 // Increase PHP limits for video uploads
 // Note: ini_set doesn't work for upload_max_filesize and post_max_size
@@ -84,6 +91,20 @@ function logToFile($message) {
     $logMessage = "[{$timestamp}] {$message}\n";
     error_log($logMessage);  // This will appear in Render logs
     file_put_contents(__DIR__ . '/api_debug.log', $logMessage, FILE_APPEND);
+}
+
+// Helper function to output clean JSON response
+function outputJsonResponse($data) {
+    // Capture and log any buffered output (warnings, notices, etc.)
+    $bufferedOutput = ob_get_clean();
+    if (!empty($bufferedOutput)) {
+        logToFile("WARNING: Buffered output before JSON: " . substr($bufferedOutput, 0, 500));
+    }
+
+    // Start fresh buffer
+    ob_start();
+    echo json_encode($data);
+    ob_end_flush();
 }
 
 // Helper function to make TikTok API calls
@@ -1897,9 +1918,6 @@ try {
             break;
 
         case 'upload_video':
-            // Start output buffering to catch any stray output
-            ob_start();
-
             try {
                 // Add memory and execution time limits for large video uploads
                 ini_set('memory_limit', '512M');
@@ -2050,29 +2068,17 @@ try {
             // Log what we're about to return
             logToFile("Returning JSON response: " . json_encode($jsonResponse, JSON_PRETTY_PRINT));
 
-            // Clear any buffered output and send clean JSON
-            $bufferedOutput = ob_get_clean();
-            if (!empty($bufferedOutput)) {
-                logToFile("WARNING: Buffered output detected before JSON response: " . $bufferedOutput);
-            }
-
-            echo json_encode($jsonResponse);
+            outputJsonResponse($jsonResponse);
 
             } catch (Exception $videoError) {
-                // Clear buffer on error too
-                $bufferedOutput = ob_get_clean();
-                if (!empty($bufferedOutput)) {
-                    logToFile("WARNING: Buffered output on error: " . $bufferedOutput);
-                }
-
                 logToFile("Video Upload Exception: " . $videoError->getMessage());
                 logToFile("Video Upload Stack Trace: " . $videoError->getTraceAsString());
 
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'Video upload failed: ' . $videoError->getMessage(),
-                    'error' => $videoError->getMessage()
-                ]);
+                outputJsonResponse([
+                'success' => false,
+                'message' => 'Video upload failed: ' . $videoError->getMessage(),
+                'error' => $videoError->getMessage()
+            ]);
             }
             break;
 
@@ -3838,7 +3844,7 @@ try {
 
         default:
             logToFile("Unknown action received: " . $action);
-            echo json_encode([
+            outputJsonResponse([
                 'success' => false,
                 'message' => 'Invalid action: ' . $action
             ]);
@@ -3847,11 +3853,10 @@ try {
 } catch (Exception $e) {
     logToFile("EXCEPTION: " . $e->getMessage());
     logToFile("Stack Trace: " . $e->getTraceAsString());
-    
+
     http_response_code(500);
-    echo json_encode([
+    outputJsonResponse([
         'success' => false,
         'message' => $e->getMessage()
     ]);
 }
-?>
