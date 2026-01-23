@@ -5,6 +5,30 @@ ini_set('display_errors', '0');
 ini_set('display_startup_errors', '0');
 ini_set('log_errors', '1');
 
+// Register shutdown function to catch fatal errors
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        // Clean any output buffers
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'success' => false,
+            'message' => 'PHP Fatal Error: ' . $error['message'],
+            'error_details' => [
+                'file' => $error['file'],
+                'line' => $error['line'],
+                'type' => $error['type']
+            ]
+        ]);
+        exit;
+    }
+});
+
 // Start output buffering immediately to catch any stray output
 ob_start();
 
@@ -1929,8 +1953,6 @@ try {
                 ini_set('memory_limit', '512M');
                 ini_set('max_execution_time', '300'); // 5 minutes
 
-                $file = new File($config);
-
                 logToFile("============ VIDEO UPLOAD REQUEST ============");
                 logToFile("Upload Video Request - FILES: " . json_encode($_FILES, JSON_PRETTY_PRINT));
                 logToFile("PHP Memory Limit: " . ini_get('memory_limit'));
@@ -1957,134 +1979,142 @@ try {
                     throw new Exception($errorMsg);
                 }
 
-            $fileName = $_FILES['video']['name'];
-            $tmpPath = $_FILES['video']['tmp_name'];
-            $fileSize = $_FILES['video']['size'];
+                $fileName = $_FILES['video']['name'];
+                $tmpPath = $_FILES['video']['tmp_name'];
+                $fileSize = $_FILES['video']['size'];
 
-            if (!file_exists($tmpPath)) {
-                throw new Exception('Uploaded file not found at: ' . $tmpPath);
-            }
+                if (!file_exists($tmpPath)) {
+                    throw new Exception('Uploaded file not found at: ' . $tmpPath);
+                }
 
-            // Get file MIME type to properly set in CURLFile
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $mimeType = finfo_file($finfo, $tmpPath);
-            finfo_close($finfo);
+                // Get file MIME type to properly set in CURLFile
+                $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                $mimeType = finfo_file($finfo, $tmpPath);
+                finfo_close($finfo);
 
-            $videoSignature = md5_file($tmpPath);
+                $videoSignature = md5_file($tmpPath);
 
-            logToFile("Video Upload - File: " . $fileName);
-            logToFile("Video Upload - Size: " . $fileSize . " bytes");
-            logToFile("Video Upload - MIME Type: " . $mimeType);
-            logToFile("Video Upload - Advertiser ID: " . $advertiser_id);
-            logToFile("Video Upload - Signature: " . $videoSignature);
+                logToFile("Video Upload - File: " . $fileName);
+                logToFile("Video Upload - Size: " . $fileSize . " bytes");
+                logToFile("Video Upload - MIME Type: " . $mimeType);
+                logToFile("Video Upload - Advertiser ID: " . $advertiser_id);
+                logToFile("Video Upload - Signature: " . $videoSignature);
+                logToFile("Video Upload - Access Token Present: " . (!empty($config['access_token']) ? 'Yes' : 'No'));
 
-            // Try SDK upload first with all required parameters
-            $params = [
-                'advertiser_id' => $advertiser_id,
-                'file_name' => $fileName,
-                'upload_type' => 'UPLOAD_BY_FILE',
-                'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
-                'video_signature' => $videoSignature,
-                'flaw_detect' => 'true',
-                'auto_fix_enabled' => 'true',
-                'auto_bind_enabled' => 'true'
-            ];
-
-            $response = $file->uploadVideo($params);
-            
-            logToFile("Video Upload SDK Response: " . json_encode($response, JSON_PRETTY_PRINT));
-            
-            // If SDK fails, try direct cURL upload
-            if (!empty($response->code) && $response->code != 0) {
-                logToFile("SDK upload failed with code: " . $response->code . ", trying direct upload...");
-                
+                // Use direct cURL for more reliable upload
                 $url = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/upload/';
-                
+
+                $postData = [
+                    'advertiser_id' => $advertiser_id,
+                    'upload_type' => 'UPLOAD_BY_FILE',
+                    'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
+                    'video_signature' => $videoSignature,
+                    'flaw_detect' => 'true',
+                    'auto_fix_enabled' => 'true',
+                    'auto_bind_enabled' => 'true'
+                ];
+
                 $ch = curl_init();
                 curl_setopt_array($ch, [
                     CURLOPT_URL => $url,
                     CURLOPT_RETURNTRANSFER => true,
                     CURLOPT_POST => true,
-                    CURLOPT_POSTFIELDS => $params,
+                    CURLOPT_POSTFIELDS => $postData,
                     CURLOPT_HTTPHEADER => [
                         'Access-Token: ' . $config['access_token']
                     ],
                     CURLOPT_TIMEOUT => 300,
-                    CURLOPT_SSL_VERIFYPEER => true
+                    CURLOPT_CONNECTTIMEOUT => 30,
+                    CURLOPT_SSL_VERIFYPEER => true,
+                    CURLOPT_SSL_VERIFYHOST => 2
                 ]);
-                
-                $directResponse = curl_exec($ch);
+
+                $curlResponse = curl_exec($ch);
                 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curlError = curl_error($ch);
+                $curlErrno = curl_errno($ch);
                 curl_close($ch);
-                
-                logToFile("Direct cURL HTTP Code: " . $httpCode);
-                logToFile("Direct cURL Response: " . $directResponse);
-                
-                $response = json_decode($directResponse);
-            }
 
-            // Consider success if we got a video_id OR if code is 0/empty
-            $success = (empty($response->code) || $response->code == 0) ||
-                      (isset($response->data->video_id) && !empty($response->data->video_id));
-
-            // Extract video data safely - convert objects to arrays
-            $videoId = null;
-            $responseData = null;
-
-            if (isset($response->data)) {
-                // Convert response data to array for safe JSON encoding
-                $responseData = json_decode(json_encode($response->data), true);
-                $videoId = $responseData['video_id'] ?? null;
-            }
-
-            // If upload successful, store the video ID for later retrieval
-            if ($success && $videoId) {
-                // Store in persistent storage
-                $storageFile = __DIR__ . '/media_storage.json';
-                $storage = [];
-                if (file_exists($storageFile)) {
-                    $storageContent = file_get_contents($storageFile);
-                    if ($storageContent) {
-                        $storage = json_decode($storageContent, true) ?? [];
-                    }
+                logToFile("cURL HTTP Code: " . $httpCode);
+                logToFile("cURL Response: " . substr($curlResponse ?? '', 0, 1000));
+                if ($curlError) {
+                    logToFile("cURL Error: " . $curlError . " (errno: " . $curlErrno . ")");
                 }
-                if (!isset($storage['images'])) $storage['images'] = [];
-                if (!isset($storage['videos'])) $storage['videos'] = [];
 
-                $storage['videos'][] = [
-                    'video_id' => $videoId,
-                    'file_name' => $fileName,
-                    'upload_time' => time(),
-                    'advertiser_id' => $advertiser_id
+                // Check for cURL errors
+                if ($curlErrno) {
+                    throw new Exception("cURL error: " . $curlError);
+                }
+
+                // Parse response
+                $response = json_decode($curlResponse);
+                if ($response === null && json_last_error() !== JSON_ERROR_NONE) {
+                    logToFile("JSON Parse Error: " . json_last_error_msg());
+                    throw new Exception("Invalid JSON response from TikTok API: " . json_last_error_msg());
+                }
+
+                // Consider success if we got a video_id OR if code is 0/empty
+                $success = (empty($response->code) || $response->code == 0) ||
+                          (isset($response->data->video_id) && !empty($response->data->video_id));
+
+                // Extract video data safely - convert objects to arrays
+                $videoId = null;
+                $responseData = null;
+
+                if (isset($response->data)) {
+                    // Convert response data to array for safe JSON encoding
+                    $responseData = json_decode(json_encode($response->data), true);
+                    $videoId = $responseData['video_id'] ?? null;
+                }
+
+                // If upload successful, store the video ID for later retrieval
+                if ($success && $videoId) {
+                    // Store in persistent storage
+                    $storageFile = __DIR__ . '/media_storage.json';
+                    $storage = [];
+                    if (file_exists($storageFile)) {
+                        $storageContent = file_get_contents($storageFile);
+                        if ($storageContent) {
+                            $storage = json_decode($storageContent, true) ?? [];
+                        }
+                    }
+                    if (!isset($storage['images'])) $storage['images'] = [];
+                    if (!isset($storage['videos'])) $storage['videos'] = [];
+
+                    $storage['videos'][] = [
+                        'video_id' => $videoId,
+                        'file_name' => $fileName,
+                        'upload_time' => time(),
+                        'advertiser_id' => $advertiser_id
+                    ];
+
+                    file_put_contents($storageFile, json_encode($storage, JSON_PRETTY_PRINT));
+
+                    logToFile("Video uploaded successfully with ID: " . $videoId);
+                }
+
+                // Build response - ensure all data is JSON-serializable
+                $jsonResponse = [
+                    'success' => $success,
+                    'data' => $responseData,
+                    'message' => isset($response->message) ? (string)$response->message : ($success ? 'Video uploaded successfully' : 'Upload failed'),
+                    'code' => isset($response->code) ? (int)$response->code : 0
                 ];
 
-                file_put_contents($storageFile, json_encode($storage, JSON_PRETTY_PRINT));
+                // Log what we're about to return
+                logToFile("Returning JSON response: " . json_encode($jsonResponse, JSON_PRETTY_PRINT));
 
-                logToFile("Video uploaded successfully with ID: " . $videoId);
-            }
-
-            // Build response - ensure all data is JSON-serializable
-            $jsonResponse = [
-                'success' => $success,
-                'data' => $responseData,
-                'message' => isset($response->message) ? (string)$response->message : 'Video uploaded successfully',
-                'code' => isset($response->code) ? (int)$response->code : 0
-            ];
-
-            // Log what we're about to return
-            logToFile("Returning JSON response: " . json_encode($jsonResponse, JSON_PRETTY_PRINT));
-
-            outputJsonResponse($jsonResponse);
+                outputJsonResponse($jsonResponse);
 
             } catch (Exception $videoError) {
                 logToFile("Video Upload Exception: " . $videoError->getMessage());
                 logToFile("Video Upload Stack Trace: " . $videoError->getTraceAsString());
 
                 outputJsonResponse([
-                'success' => false,
-                'message' => 'Video upload failed: ' . $videoError->getMessage(),
-                'error' => $videoError->getMessage()
-            ]);
+                    'success' => false,
+                    'message' => 'Video upload failed: ' . $videoError->getMessage(),
+                    'error' => $videoError->getMessage()
+                ]);
             }
             break;
 

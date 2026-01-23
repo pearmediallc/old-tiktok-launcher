@@ -6852,8 +6852,14 @@ function openVideoSelectionModal(context, preselectedVideos = []) {
             }
 
             // Map video IDs to video objects from media library
+            // Use string comparison for video IDs to handle type mismatches
             videoModalState.selectedVideos = currentVideoIds.map(vid => {
-                const video = videos.find(v => (v.id === vid) || (v.video_id === vid));
+                const vidStr = String(vid);
+                const video = videos.find(v => {
+                    const vId = String(v.id || '');
+                    const vVideoId = String(v.video_id || '');
+                    return vId === vidStr || vVideoId === vidStr;
+                });
                 if (video) {
                     return {
                         id: video.id,
@@ -6863,8 +6869,12 @@ function openVideoSelectionModal(context, preselectedVideos = []) {
                     };
                 }
                 // Video not found in library - create placeholder
-                return { id: vid, video_id: vid, name: `Video ${vid.slice(-6)}` };
+                console.log(`Video ${vid} not found in media library - creating placeholder`);
+                return { id: vid, video_id: vid, name: `Video ${String(vid).slice(-6)}` };
             });
+
+            console.log('Campaign video IDs:', currentVideoIds);
+            console.log('Selected videos after mapping:', videoModalState.selectedVideos);
         }
 
         // Re-render with selections
@@ -6879,9 +6889,9 @@ function openVideoSelectionModal(context, preselectedVideos = []) {
 
 // Helper function to check if a video is selected
 function isVideoSelected(video) {
-    const videoId = video.id || video.video_id;
+    const videoId = String(video.id || video.video_id || '');
     return videoModalState.selectedVideos.some(v => {
-        const selectedId = v.video_id || v.id;
+        const selectedId = String(v.video_id || v.id || '');
         return selectedId === videoId;
     });
 }

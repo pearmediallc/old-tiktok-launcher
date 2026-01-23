@@ -89,14 +89,23 @@ class Response {
             // get client body as object
             $clientBody = $client->getResponseBody();
 
-            // set code from client
-            $this->code = $clientBody->code;
+            // Handle null response body (e.g., empty response or JSON parse failure)
+            if ($clientBody === null) {
+                $this->code = -1;
+                $this->message = 'Empty or invalid response from API. Raw: ' . substr($client->getRawResponse() ?? '', 0, 200);
+                $this->requestId = '';
+                $this->data = null;
+                return;
+            }
 
-            // set message from client
-            $this->message = $clientBody->message;
+            // set code from client (with null check)
+            $this->code = isset($clientBody->code) ? $clientBody->code : 0;
 
-            // set request id from client
-            $this->requestId = $clientBody->request_id;
+            // set message from client (with null check)
+            $this->message = isset($clientBody->message) ? $clientBody->message : '';
+
+            // set request id from client (with null check)
+            $this->requestId = isset($clientBody->request_id) ? $clientBody->request_id : '';
 
             // set data from client
             $this->data = property_exists( $clientBody, 'data' ) ? $clientBody->data : '';
