@@ -4183,11 +4183,19 @@ select:disabled {
     }
 
     .video-modal-check {
-        width: 24px;
-        height: 24px;
-        top: 6px;
-        right: 6px;
-        font-size: 12px;
+        width: 20px;
+        height: 20px;
+        top: 5px;
+        right: 5px;
+        font-size: 10px;
+    }
+
+    /* Smaller table checkboxes on mobile */
+    .metrics-table input[type="checkbox"] {
+        width: 16px !important;
+        height: 16px !important;
+        min-width: 16px !important;
+        min-height: 16px !important;
     }
 
     /* Duplicate modal mobile */
@@ -4380,14 +4388,20 @@ select:disabled {
 
 /* Touch device specific styles */
 @media (hover: none) and (pointer: coarse) {
-    /* Larger touch targets */
+    /* Larger touch targets for buttons only */
     button,
     .btn-primary,
-    .btn-secondary,
+    .btn-secondary {
+        min-height: 40px;
+    }
+
+    /* Reasonable size for checkboxes/radios - not too large */
     input[type="checkbox"],
     input[type="radio"] {
-        min-height: 44px;
-        min-width: 44px;
+        min-height: 20px;
+        min-width: 20px;
+        width: 20px;
+        height: 20px;
     }
 
     /* Remove hover effects on touch */
@@ -4403,11 +4417,6 @@ select:disabled {
     .btn-success:active {
         transform: scale(0.98);
         opacity: 0.9;
-    }
-
-    /* Larger spacing for touch */
-    .form-group {
-        margin-bottom: 18px;
     }
 
     /* Better scrolling */
@@ -4751,6 +4760,22 @@ select:disabled {
     /* Smaller toggle */
     .toggle-switch {
         transform: scale(0.75);
+    }
+
+    /* Even smaller checkboxes on very small screens */
+    .metrics-table input[type="checkbox"] {
+        width: 14px !important;
+        height: 14px !important;
+        min-width: 14px !important;
+        min-height: 14px !important;
+    }
+
+    .video-modal-check {
+        width: 18px;
+        height: 18px;
+        top: 4px;
+        right: 4px;
+        font-size: 9px;
     }
 
     /* Campaign name truncation */

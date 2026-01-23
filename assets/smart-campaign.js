@@ -4990,7 +4990,7 @@ async function switchAdAccount(advertiserId) {
             addLog('success', `Switched to ad account: ${advertiserId}`);
             showToast('Ad account switched successfully', 'success');
 
-            // Reset campaign state and reload
+            // Reset ALL state for new account
             state.campaignsLoaded = false;
             state.campaignsList = [];
             state.filteredCampaigns = [];
@@ -4998,12 +4998,28 @@ async function switchAdAccount(advertiserId) {
             state.expandedAdgroups = {};
             state.selectedCampaigns = [];
 
+            // Clear media library - crucial for showing correct videos
+            state.mediaLibrary = [];
+
+            // Clear duplicate state to prevent showing old account's videos
+            duplicateState.campaignDetails = null;
+            duplicateState.changedVideos = null;
+
+            // Clear video modal state
+            videoModalState.selectedVideos = [];
+            videoModalState.allVideos = [];
+
+            // Reload media library for the new account first
+            await loadMediaLibrary();
+
             // Reload campaigns with new ad account
             await loadCampaigns();
 
             // Also reload pixels and identities for the new account
             loadPixels();
             loadIdentities();
+
+            addLog('info', `Media library reloaded with ${state.mediaLibrary.length} items for new account`);
         } else {
             throw new Error(result.message || 'Failed to switch ad account');
         }
@@ -7063,20 +7079,24 @@ function renderDuplicateCurrentVideos() {
 
         if (ad.creative_list && ad.creative_list.length > 0) {
             videos = ad.creative_list.map(item => {
-                const videoId = item.creative_info?.video_info?.video_id;
-                const video = state.mediaLibrary.find(v => v.id === videoId || v.video_id === videoId);
+                const videoInfo = item.creative_info?.video_info;
+                const videoId = videoInfo?.video_id;
+                // First try to get thumbnail from campaign data itself
+                const campaignThumbnail = videoInfo?.preview_url || videoInfo?.cover_image_url || videoInfo?.poster_url;
+                // Then fallback to media library
+                const video = state.mediaLibrary.find(v => String(v.id) === String(videoId) || String(v.video_id) === String(videoId));
                 return {
                     video_id: videoId,
-                    name: video?.name || video?.file_name || `Video ${videoId?.slice(-6)}`,
-                    thumbnail_url: video?.thumbnail_url || video?.cover_image_url || video?.url || video?.preview_url
+                    name: video?.name || video?.file_name || videoInfo?.file_name || `Video ${String(videoId || '').slice(-6)}`,
+                    thumbnail_url: campaignThumbnail || video?.thumbnail_url || video?.cover_image_url || video?.url || video?.preview_url
                 };
             });
         } else if (ad.video_ids) {
             videos = ad.video_ids.map(vid => {
-                const video = state.mediaLibrary.find(v => v.id === vid || v.video_id === vid);
+                const video = state.mediaLibrary.find(v => String(v.id) === String(vid) || String(v.video_id) === String(vid));
                 return {
                     video_id: vid,
-                    name: video?.name || video?.file_name || `Video ${vid?.slice(-6)}`,
+                    name: video?.name || video?.file_name || `Video ${String(vid || '').slice(-6)}`,
                     thumbnail_url: video?.thumbnail_url || video?.cover_image_url || video?.url || video?.preview_url
                 };
             });
