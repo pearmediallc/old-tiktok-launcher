@@ -1285,15 +1285,14 @@ function formatDateTimeLocal(date) {
 function getScheduleData() {
     const scheduleType = document.querySelector('input[name="schedule_type"]:checked')?.value || 'continuous';
 
-    // Format as YYYY-MM-DD HH:MM:SS
-    const formatForAPI = (date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        const seconds = String(date.getSeconds()).padStart(2, '0');
-        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    // Format datetime-local input value (YYYY-MM-DDTHH:MM) to API format (YYYY-MM-DD HH:MM:SS)
+    // IMPORTANT: Use the raw input value directly without Date object conversion
+    // This ensures the exact time user selected is sent, without any timezone conversion
+    const formatForAPI = (dateTimeLocalValue) => {
+        if (!dateTimeLocalValue) return null;
+        // Input format: "2025-01-24T09:00"
+        // Output format: "2025-01-24 09:00:00"
+        return dateTimeLocalValue.replace('T', ' ') + ':00';
     };
 
     if (scheduleType === 'continuous') {
@@ -1313,11 +1312,9 @@ function getScheduleData() {
             };
         }
 
-        const startDate = new Date(startDateTime);
-
         return {
             schedule_type: 'SCHEDULE_FROM_NOW',  // TikTok API uses SCHEDULE_FROM_NOW with a future start time
-            schedule_start_time: formatForAPI(startDate),
+            schedule_start_time: formatForAPI(startDateTime),
             schedule_timezone: timezone
         };
     }
@@ -1333,13 +1330,10 @@ function getScheduleData() {
         };
     }
 
-    const startDate = new Date(startDateTime);
-    const endDate = new Date(endDateTime);
-
     return {
         schedule_type: 'SCHEDULE_START_END',
-        schedule_start_time: formatForAPI(startDate),
-        schedule_end_time: formatForAPI(endDate),
+        schedule_start_time: formatForAPI(startDateTime),
+        schedule_end_time: formatForAPI(endDateTime),
         schedule_timezone: timezone
     };
 }
@@ -4999,7 +4993,11 @@ async function switchAdAccount(advertiserId) {
             addLog('success', `Switched to ad account: ${advertiserId}`);
             showToast('Ad account switched successfully', 'success');
 
-            // Reset ALL state for new account
+            // ========================================
+            // CLEAR ALL STATE FOR NEW ACCOUNT
+            // ========================================
+
+            // Clear campaigns state
             state.campaignsLoaded = false;
             state.campaignsList = [];
             state.filteredCampaigns = [];
@@ -5009,6 +5007,23 @@ async function switchAdAccount(advertiserId) {
 
             // Clear media library - crucial for showing correct videos
             state.mediaLibrary = [];
+            state.selectedVideos = [];
+            state.creatives = [];
+
+            // Clear identities state
+            state.identities = [];
+            state.customIdentities = [];
+            state.tiktokPages = [];
+
+            // Clear CTA portfolios state
+            state.ctaPortfolios = [];
+            state.selectedPortfolioId = null;
+            state.selectedPortfolioName = null;
+            state.globalCtaPortfolioId = null;
+
+            // Clear pixel state
+            state.pixelId = null;
+            state.optimizationEvent = null;
 
             // Clear duplicate state to prevent showing old account's videos
             duplicateState.campaignDetails = null;
@@ -5018,17 +5033,49 @@ async function switchAdAccount(advertiserId) {
             videoModalState.selectedVideos = [];
             videoModalState.allVideos = [];
 
-            // Reload media library for the new account first
-            await loadMediaLibrary();
+            // Reset creation tracking
+            state.campaignCreated = false;
+            state.adGroupCreated = false;
+            state.adCreated = false;
+            state.campaignId = null;
+            state.adGroupId = null;
+            state.adId = null;
+
+            // ========================================
+            // CLEAR UI DROPDOWNS (show loading state)
+            // ========================================
+            const pixelSelect = document.getElementById('pixel-select');
+            if (pixelSelect) pixelSelect.innerHTML = '<option value="">Loading pixels...</option>';
+
+            const identitySelect = document.getElementById('global-identity');
+            if (identitySelect) identitySelect.innerHTML = '<option value="">Loading identities...</option>';
+
+            const ctaSelect = document.getElementById('cta-portfolio-select');
+            if (ctaSelect) ctaSelect.innerHTML = '<option value="">Loading portfolios...</option>';
+
+            // Clear video grid displays
+            const videoGrid = document.getElementById('video-grid');
+            if (videoGrid) videoGrid.innerHTML = '';
+
+            const selectedVideosGrid = document.getElementById('selected-videos-grid');
+            if (selectedVideosGrid) selectedVideosGrid.innerHTML = '<div class="empty-selection">No videos selected</div>';
+
+            // ========================================
+            // RELOAD ALL DATA FOR NEW ACCOUNT
+            // ========================================
+
+            // Reload all account-specific data in parallel
+            await Promise.all([
+                loadMediaLibrary(),
+                loadPixels(),
+                loadIdentities(),
+                loadCtaPortfolios()
+            ]);
 
             // Reload campaigns with new ad account
             await loadCampaigns();
 
-            // Also reload pixels and identities for the new account
-            loadPixels();
-            loadIdentities();
-
-            addLog('info', `Media library reloaded with ${state.mediaLibrary.length} items for new account`);
+            addLog('info', `Account data reloaded: ${state.mediaLibrary.length} videos, ${state.identities.length} identities`);
         } else {
             throw new Error(result.message || 'Failed to switch ad account');
         }
@@ -5380,7 +5427,16 @@ function renderCampaignTableRow(campaign) {
             <td class="col-status">
                 <span class="status-badge-table ${statusClass}">${statusLabel}</span>
             </td>
-            <td class="col-budget" style="text-align: right;">${budget}</td>
+            <td class="col-budget" style="text-align: right;">
+                <div class="budget-cell" data-campaign-id="${campaign.campaign_id}" data-budget="${campaign.budget || 50}">
+                    <span class="budget-display">${budget}</span>
+                    <button class="edit-budget-btn" onclick="openInlineBudgetEdit('${campaign.campaign_id}', ${campaign.budget || 50}); event.stopPropagation();" title="Edit Budget">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </td>
             <td class="col-spend" style="text-align: right;">${formatCurrency(campaign.spend)}</td>
             <td class="col-cpc" style="text-align: right;">${formatCurrency(campaign.cpc)}</td>
             <td class="col-impressions" style="text-align: right;">${formatNumber(campaign.impressions)}</td>
@@ -5765,6 +5821,143 @@ function formatObjectiveType(objectiveType) {
         'PRODUCT_SALES': 'Product Sales'
     };
     return types[objectiveType] || objectiveType || 'Unknown';
+}
+
+// Open inline budget edit
+function openInlineBudgetEdit(campaignId, currentBudget) {
+    // Close any other open budget editors first
+    document.querySelectorAll('.budget-cell.editing').forEach(cell => {
+        const otherCampaignId = cell.dataset.campaignId;
+        if (otherCampaignId !== campaignId) {
+            cancelInlineBudgetEdit(otherCampaignId);
+        }
+    });
+
+    const budgetCell = document.querySelector(`.budget-cell[data-campaign-id="${campaignId}"]`);
+    if (!budgetCell) return;
+
+    budgetCell.classList.add('editing');
+
+    // Replace content with input
+    const currentDisplay = budgetCell.querySelector('.budget-display');
+    const editBtn = budgetCell.querySelector('.edit-budget-btn');
+
+    if (currentDisplay) currentDisplay.style.display = 'none';
+    if (editBtn) editBtn.style.display = 'none';
+
+    // Create inline editor
+    const editor = document.createElement('div');
+    editor.className = 'inline-budget-editor';
+    editor.innerHTML = `
+        <div class="budget-input-wrapper">
+            <span class="budget-currency">$</span>
+            <input type="number" class="budget-input" value="${currentBudget}" min="20" step="1" autofocus>
+        </div>
+        <div class="budget-actions">
+            <button class="budget-save-btn" onclick="saveInlineBudget('${campaignId}'); event.stopPropagation();" title="Save">✓</button>
+            <button class="budget-cancel-btn" onclick="cancelInlineBudgetEdit('${campaignId}'); event.stopPropagation();" title="Cancel">✕</button>
+        </div>
+    `;
+    budgetCell.appendChild(editor);
+
+    // Focus input and select all
+    const input = editor.querySelector('.budget-input');
+    input.focus();
+    input.select();
+
+    // Handle Enter and Escape keys
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveInlineBudget(campaignId);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelInlineBudgetEdit(campaignId);
+        }
+    });
+}
+
+// Cancel inline budget edit
+function cancelInlineBudgetEdit(campaignId) {
+    const budgetCell = document.querySelector(`.budget-cell[data-campaign-id="${campaignId}"]`);
+    if (!budgetCell) return;
+
+    budgetCell.classList.remove('editing');
+
+    // Remove editor
+    const editor = budgetCell.querySelector('.inline-budget-editor');
+    if (editor) editor.remove();
+
+    // Show original elements
+    const currentDisplay = budgetCell.querySelector('.budget-display');
+    const editBtn = budgetCell.querySelector('.edit-budget-btn');
+
+    if (currentDisplay) currentDisplay.style.display = '';
+    if (editBtn) editBtn.style.display = '';
+}
+
+// Save inline budget edit
+async function saveInlineBudget(campaignId) {
+    const budgetCell = document.querySelector(`.budget-cell[data-campaign-id="${campaignId}"]`);
+    if (!budgetCell) return;
+
+    const input = budgetCell.querySelector('.budget-input');
+    if (!input) return;
+
+    const newBudget = parseFloat(input.value);
+
+    // Validate budget
+    if (isNaN(newBudget) || newBudget < 20) {
+        alert('Budget must be at least $20');
+        input.focus();
+        return;
+    }
+
+    // Show loading state
+    const saveBtn = budgetCell.querySelector('.budget-save-btn');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = '...';
+    }
+
+    try {
+        const result = await apiRequest('update_campaign_budget', {
+            campaign_id: campaignId,
+            budget: newBudget
+        });
+
+        if (result.success) {
+            // Update local state
+            const campaign = state.campaignsList.find(c => c.campaign_id === campaignId);
+            if (campaign) {
+                campaign.budget = newBudget;
+            }
+
+            // Update display
+            const budgetDisplay = budgetCell.querySelector('.budget-display');
+            if (budgetDisplay) {
+                budgetDisplay.textContent = `$${newBudget.toFixed(2)}`;
+            }
+            budgetCell.dataset.budget = newBudget;
+
+            // Close editor
+            cancelInlineBudgetEdit(campaignId);
+
+            addLog('success', `Budget updated to $${newBudget.toFixed(2)}`);
+        } else {
+            throw new Error(result.message || 'Failed to update budget');
+        }
+    } catch (error) {
+        console.error('Error updating budget:', error);
+        addLog('error', `Failed to update budget: ${error.message}`);
+        alert('Failed to update budget: ' + error.message);
+
+        // Re-enable save button
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = '✓';
+        }
+    }
 }
 
 // Toggle campaign status (ON/OFF)
@@ -6292,14 +6485,14 @@ function toggleDupScheduleType() {
 function getDupScheduleData() {
     const scheduleType = document.querySelector('input[name="dup_schedule_type"]:checked')?.value || 'continuous';
 
-    const formatForAPI = (date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        const seconds = String(date.getSeconds()).padStart(2, '0');
-        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    // Format datetime-local input value (YYYY-MM-DDTHH:MM) to API format (YYYY-MM-DD HH:MM:SS)
+    // IMPORTANT: Use the raw input value directly without Date object conversion
+    // This ensures the exact time user selected is sent, without any timezone conversion
+    const formatForAPI = (dateTimeLocalValue) => {
+        if (!dateTimeLocalValue) return null;
+        // Input format: "2025-01-24T09:00"
+        // Output format: "2025-01-24 09:00:00"
+        return dateTimeLocalValue.replace('T', ' ') + ':00';
     };
 
     if (scheduleType === 'continuous') {
@@ -6316,7 +6509,7 @@ function getDupScheduleData() {
 
         return {
             schedule_type: 'SCHEDULE_FROM_NOW',
-            schedule_start_time: formatForAPI(new Date(startDateTime)),
+            schedule_start_time: formatForAPI(startDateTime),
             schedule_timezone: timezone
         };
     }
@@ -6332,8 +6525,8 @@ function getDupScheduleData() {
 
     return {
         schedule_type: 'SCHEDULE_START_END',
-        schedule_start_time: formatForAPI(new Date(startDateTime)),
-        schedule_end_time: formatForAPI(new Date(endDateTime)),
+        schedule_start_time: formatForAPI(startDateTime),
+        schedule_end_time: formatForAPI(endDateTime),
         schedule_timezone: timezone
     };
 }

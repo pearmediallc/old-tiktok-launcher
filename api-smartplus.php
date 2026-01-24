@@ -3123,6 +3123,53 @@ switch ($action) {
         break;
 
     // ==========================================
+    // UPDATE CAMPAIGN BUDGET
+    // ==========================================
+    case 'update_campaign_budget':
+        $data = $input;
+
+        logSmartPlus("=== UPDATING CAMPAIGN BUDGET ===");
+
+        if (empty($data['campaign_id'])) {
+            echo json_encode(['success' => false, 'message' => 'Campaign ID is required']);
+            exit;
+        }
+
+        if (!isset($data['budget']) || floatval($data['budget']) < 20) {
+            echo json_encode(['success' => false, 'message' => 'Budget must be at least $20']);
+            exit;
+        }
+
+        $newBudget = floatval($data['budget']);
+        logSmartPlus("Campaign ID: " . $data['campaign_id'] . ", New Budget: $" . $newBudget);
+
+        // Call TikTok API to update campaign budget
+        $result = makeApiCall('/campaign/update/', [
+            'advertiser_id' => $advertiserId,
+            'campaign_id' => $data['campaign_id'],
+            'budget' => $newBudget
+        ], $accessToken);
+
+        logSmartPlus("Update budget response: " . json_encode($result));
+
+        if ($result['code'] == 0) {
+            echo json_encode([
+                'success' => true,
+                'campaign_id' => $data['campaign_id'],
+                'new_budget' => $newBudget,
+                'message' => 'Campaign budget updated to $' . number_format($newBudget, 2)
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to update budget: ' . ($result['message'] ?? 'Unknown error'),
+                'error_code' => $result['code'] ?? null,
+                'details' => $result
+            ]);
+        }
+        break;
+
+    // ==========================================
     // GET CAMPAIGN DETAILS (Campaign + AdGroup + Ad)
     // For duplicating existing campaigns
     // ==========================================

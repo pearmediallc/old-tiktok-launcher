@@ -442,6 +442,94 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
         .action-btn-table.duplicate-btn { background: #f0f9ff; border-color: #bae6fd; }
         .action-btn-table.duplicate-btn:hover { background: #1e9df1; border-color: #1e9df1; color: white; }
         .action-btn-table.duplicate-btn:hover svg { stroke: white; }
+
+        /* Budget Cell and Edit Button */
+        .budget-cell {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 6px;
+        }
+        .edit-budget-btn {
+            background: transparent;
+            border: none;
+            padding: 4px;
+            cursor: pointer;
+            opacity: 0;
+            transition: all 0.2s;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+        }
+        .budget-cell:hover .edit-budget-btn { opacity: 1; }
+        .edit-budget-btn:hover { background: #e0f2fe; color: #1e9df1; }
+        .edit-budget-btn svg { width: 12px; height: 12px; }
+
+        /* Inline Budget Editor */
+        .inline-budget-editor {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .budget-input-wrapper {
+            display: flex;
+            align-items: center;
+            background: white;
+            border: 2px solid #1e9df1;
+            border-radius: 6px;
+            padding: 2px 8px;
+        }
+        .budget-currency {
+            color: #64748b;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .budget-input {
+            width: 70px;
+            border: none;
+            outline: none;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 4px;
+            text-align: right;
+            background: transparent;
+        }
+        .budget-input::-webkit-outer-spin-button,
+        .budget-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .budget-input[type=number] { -moz-appearance: textfield; }
+        .budget-actions {
+            display: flex;
+            gap: 2px;
+        }
+        .budget-save-btn, .budget-cancel-btn {
+            width: 24px;
+            height: 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .budget-save-btn {
+            background: #10b981;
+            color: white;
+        }
+        .budget-save-btn:hover { background: #059669; }
+        .budget-save-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+        .budget-cancel-btn {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+        .budget-cancel-btn:hover { background: #e2e8f0; color: #475569; }
+
         /* Loading Row */
         .loading-row td { text-align: center; color: #94a3b8; padding: 20px; }
         .loading-row .mini-spinner {
