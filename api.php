@@ -252,6 +252,20 @@ function processLocationTargeting($locationData) {
 // Handle API requests
 $requestData = json_decode(file_get_contents('php://input'), true);
 
+// Check if advertiser_id is passed in the request (prevents cross-tab contamination)
+// Frontend passes _advertiser_id to ensure correct context even if PHP session changed in another tab
+if (!empty($requestData['_advertiser_id'])) {
+    $requestedAdvertiserId = $requestData['_advertiser_id'];
+    // Validate that this advertiser ID is in the user's authorized list
+    $authorizedIds = $_SESSION['oauth_advertiser_ids'] ?? [];
+    if (in_array($requestedAdvertiserId, $authorizedIds)) {
+        $advertiser_id = $requestedAdvertiserId;
+        logToFile("Using request advertiser ID: $advertiser_id (overriding session)");
+    } else {
+        logToFile("WARNING: Requested advertiser ID $requestedAdvertiserId not in authorized list, using session");
+    }
+}
+
 // Get action from GET, POST, or JSON body
 $action = $_GET['action'] ?? $_POST['action'] ?? $requestData['action'] ?? '';
 

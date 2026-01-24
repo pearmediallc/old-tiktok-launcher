@@ -2375,6 +2375,10 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
         </div>
     </div>
 
+    <!-- Pass current advertiser ID to JavaScript (tab-specific, prevents cross-tab contamination) -->
+    <script>
+        window.TIKTOK_ADVERTISER_ID = '<?php echo htmlspecialchars($currentAdvertiserId); ?>';
+    </script>
     <script src="assets/smart-campaign.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>

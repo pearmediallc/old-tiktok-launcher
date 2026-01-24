@@ -455,6 +455,20 @@ function makeApiCall($endpoint, $params, $accessToken, $method = 'POST') {
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? '';
 
+// Check if advertiser_id is passed in the request (prevents cross-tab contamination)
+// Frontend passes _advertiser_id to ensure correct context even if PHP session changed in another tab
+if (!empty($input['_advertiser_id'])) {
+    $requestedAdvertiserId = $input['_advertiser_id'];
+    // Validate that this advertiser ID is in the user's authorized list
+    $authorizedIds = $_SESSION['oauth_advertiser_ids'] ?? [];
+    if (in_array($requestedAdvertiserId, $authorizedIds)) {
+        $advertiserId = $requestedAdvertiserId;
+        logSmartPlus("Using request advertiser ID: $advertiserId (overriding session)");
+    } else {
+        logSmartPlus("WARNING: Requested advertiser ID $requestedAdvertiserId not in authorized list, using session");
+    }
+}
+
 logSmartPlus("=== Action: $action ===");
 
 switch ($action) {
@@ -3124,6 +3138,7 @@ switch ($action) {
 
     // ==========================================
     // UPDATE CAMPAIGN BUDGET
+    // Handles both Smart+ and regular campaigns
     // ==========================================
     case 'update_campaign_budget':
         $data = $input;
@@ -3141,14 +3156,25 @@ switch ($action) {
         }
 
         $newBudget = floatval($data['budget']);
-        logSmartPlus("Campaign ID: " . $data['campaign_id'] . ", New Budget: $" . $newBudget);
+        $isSmartPlus = !empty($data['is_smart_plus']);
+        logSmartPlus("Campaign ID: " . $data['campaign_id'] . ", New Budget: $" . $newBudget . ", Smart+: " . ($isSmartPlus ? 'Yes' : 'No'));
 
-        // Call TikTok API to update campaign budget
-        $result = makeApiCall('/campaign/update/', [
-            'advertiser_id' => $advertiserId,
-            'campaign_id' => $data['campaign_id'],
-            'budget' => $newBudget
-        ], $accessToken);
+        // Use different endpoint for Smart+ vs regular campaigns
+        if ($isSmartPlus) {
+            // Smart+ campaigns use /smart_plus/campaign/update/
+            $result = makeApiCall('/smart_plus/campaign/update/', [
+                'advertiser_id' => $advertiserId,
+                'campaign_id' => $data['campaign_id'],
+                'budget' => $newBudget
+            ], $accessToken);
+        } else {
+            // Regular campaigns use /campaign/update/
+            $result = makeApiCall('/campaign/update/', [
+                'advertiser_id' => $advertiserId,
+                'campaign_id' => $data['campaign_id'],
+                'budget' => $newBudget
+            ], $accessToken);
+        }
 
         logSmartPlus("Update budget response: " . json_encode($result));
 

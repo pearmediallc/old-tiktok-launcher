@@ -27,6 +27,9 @@ let state = {
     globalCtaPortfolioId: null,  // Portfolio ID for Lead Gen ads
     adTexts: [],  // Array of ad text variations
 
+    // Current advertiser ID (tab-specific - prevents cross-tab contamination)
+    currentAdvertiserId: null,
+
     // Creation tracking - for UPDATE vs CREATE logic
     campaignCreated: false,
     adGroupCreated: false,
@@ -347,7 +350,14 @@ const MAIN_API = 'api.php';
 // API Request function with detailed logging
 async function apiRequest(action, data = {}, useMainApi = false) {
     const apiUrl = useMainApi ? MAIN_API : SMARTPLUS_API;
-    const requestBody = { action, ...data };
+
+    // IMPORTANT: Include current advertiser ID with every request to prevent cross-tab contamination
+    // This ensures each browser tab uses its own advertiser context, not the shared PHP session
+    const requestBody = {
+        action,
+        ...data,
+        _advertiser_id: state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || null
+    };
 
     // Log full request details
     addLog('request', `>>> ${action}`, {
@@ -466,6 +476,13 @@ function toggleLogsPanel() {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Smart+ Campaign JS loaded');
     addLog('info', 'Smart+ Campaign initialized');
+
+    // Initialize current advertiser ID from page variable (tab-specific)
+    // This prevents cross-tab contamination when multiple tabs have different ad accounts
+    state.currentAdvertiserId = window.TIKTOK_ADVERTISER_ID || null;
+    if (state.currentAdvertiserId) {
+        addLog('info', `Advertiser ID initialized: ${state.currentAdvertiserId}`);
+    }
 
     loadPixels();
     loadIdentities();
@@ -4994,6 +5011,14 @@ async function switchAdAccount(advertiserId) {
             showToast('Ad account switched successfully', 'success');
 
             // ========================================
+            // UPDATE CURRENT ADVERTISER ID (tab-specific)
+            // This ensures this tab uses the correct advertiser even if
+            // another tab changes the PHP session's advertiser
+            // ========================================
+            state.currentAdvertiserId = advertiserId;
+            window.TIKTOK_ADVERTISER_ID = advertiserId;
+
+            // ========================================
             // CLEAR ALL STATE FOR NEW ACCOUNT
             // ========================================
 
@@ -5913,6 +5938,10 @@ async function saveInlineBudget(campaignId) {
         return;
     }
 
+    // Find campaign to check if it's Smart+
+    const campaign = state.campaignsList.find(c => c.campaign_id === campaignId);
+    const isSmartPlus = campaign?.is_smart_performance_campaign || false;
+
     // Show loading state
     const saveBtn = budgetCell.querySelector('.budget-save-btn');
     if (saveBtn) {
@@ -5923,7 +5952,8 @@ async function saveInlineBudget(campaignId) {
     try {
         const result = await apiRequest('update_campaign_budget', {
             campaign_id: campaignId,
-            budget: newBudget
+            budget: newBudget,
+            is_smart_plus: isSmartPlus
         });
 
         if (result.success) {
