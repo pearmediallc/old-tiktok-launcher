@@ -1714,16 +1714,31 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>Display Name</label>
+                        <label>Display Name <span style="color: #dc2626;">*</span></label>
                         <input type="text" id="identity-display-name" placeholder="Enter display name" maxlength="40" required>
                         <div style="text-align: right; font-size: 12px; color: #666; margin-top: 5px;">
                             <span id="identity-char-count">0</span>/40
                         </div>
                     </div>
+                    <div class="form-group" style="margin-top: 16px;">
+                        <label>Profile Logo (Optional)</label>
+                        <div id="identity-logo-upload-area" style="border: 2px dashed #d1d5db; border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s;" onclick="document.getElementById('identity-logo-input').click()">
+                            <div id="identity-logo-preview" style="display: none; margin-bottom: 10px;">
+                                <img id="identity-logo-img" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid #e5e7eb;">
+                            </div>
+                            <div id="identity-logo-placeholder">
+                                <span style="font-size: 32px;">📷</span>
+                                <p style="margin: 8px 0 0; color: #6b7280; font-size: 14px;">Click to upload logo</p>
+                                <p style="margin: 4px 0 0; color: #9ca3af; font-size: 12px;">Recommended: 100x100px, PNG or JPG</p>
+                            </div>
+                            <input type="file" id="identity-logo-input" accept="image/*" style="display: none;" onchange="previewIdentityLogo(this)">
+                        </div>
+                        <button type="button" id="identity-logo-remove-btn" style="display: none; margin-top: 8px; font-size: 12px; color: #dc2626; background: none; border: none; cursor: pointer;" onclick="removeIdentityLogo()">✕ Remove logo</button>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn-secondary" onclick="closeCreateIdentityModal()">Cancel</button>
-                    <button class="btn-primary" onclick="createCustomIdentity()">Create Identity</button>
+                    <button class="btn-primary" id="create-identity-btn" onclick="createCustomIdentity()">Create Identity</button>
                 </div>
             </div>
         </div>

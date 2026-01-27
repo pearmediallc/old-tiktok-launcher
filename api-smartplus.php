@@ -474,6 +474,69 @@ logSmartPlus("=== Action: $action ===");
 switch ($action) {
 
     // ==========================================
+    // GET ADVERTISER TIMEZONE
+    // Used to convert user's EST time to advertiser's account timezone
+    // ==========================================
+    case 'get_advertiser_timezone':
+        logSmartPlus("=== GETTING ADVERTISER TIMEZONE ===");
+        logSmartPlus("Advertiser ID: $advertiserId");
+
+        $result = makeApiCall('/advertiser/info/', [
+            'advertiser_id' => $advertiserId
+        ], $accessToken, 'GET');
+
+        if ($result['code'] == 0 && isset($result['data'])) {
+            $advertiserData = $result['data'];
+            $timezone = $advertiserData['timezone'] ?? 'UTC';
+            $timezoneOffset = 0;
+
+            // Parse timezone to get offset
+            // TikTok returns timezone in various formats, try to determine offset
+            $tzMap = [
+                'UTC' => 0,
+                'America/New_York' => -5,
+                'America/Chicago' => -6,
+                'America/Denver' => -7,
+                'America/Los_Angeles' => -8,
+                'America/Bogota' => -5,
+                'America/Lima' => -5,
+                'America/Mexico_City' => -6,
+                'Europe/London' => 0,
+                'Europe/Paris' => 1,
+                'Asia/Shanghai' => 8,
+                'Asia/Tokyo' => 9,
+            ];
+
+            if (isset($tzMap[$timezone])) {
+                $timezoneOffset = $tzMap[$timezone];
+            } elseif (preg_match('/UTC([+-]\d+)/', $timezone, $matches)) {
+                $timezoneOffset = intval($matches[1]);
+            }
+
+            logSmartPlus("Advertiser timezone: $timezone (offset: $timezoneOffset)");
+
+            echo json_encode([
+                'success' => true,
+                'data' => [
+                    'timezone' => $timezone,
+                    'timezone_offset' => $timezoneOffset,
+                    'advertiser_name' => $advertiserData['name'] ?? 'Unknown'
+                ]
+            ]);
+        } else {
+            logSmartPlus("Failed to get advertiser info: " . ($result['message'] ?? 'Unknown error'));
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to get advertiser timezone',
+                'data' => [
+                    'timezone' => 'UTC',
+                    'timezone_offset' => 0
+                ]
+            ]);
+        }
+        break;
+
+    // ==========================================
     // GET PIXELS (Cached - 10 min TTL)
     // ==========================================
     case 'get_pixels':
@@ -1747,6 +1810,11 @@ switch ($action) {
         $result = makeApiCall('/identity/create/', $params, $accessToken);
 
         if ($result['code'] == 0 && isset($result['data']['identity_id'])) {
+            // Invalidate identity cache so the new identity shows up immediately
+            $cacheKey = $cache->generateKey('identities', $advertiserId);
+            $cache->delete($cacheKey);
+            logSmartPlus("Identity cache invalidated for advertiser: $advertiserId");
+
             echo json_encode([
                 'success' => true,
                 'identity_id' => $result['data']['identity_id'],
@@ -1755,7 +1823,8 @@ switch ($action) {
         } else {
             echo json_encode([
                 'success' => false,
-                'message' => $result['message'] ?? 'Failed to create identity'
+                'message' => $result['message'] ?? 'Failed to create identity',
+                'details' => $result
             ]);
         }
         break;

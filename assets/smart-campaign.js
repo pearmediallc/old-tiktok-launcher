@@ -30,6 +30,10 @@ let state = {
     // Current advertiser ID (tab-specific - prevents cross-tab contamination)
     currentAdvertiserId: null,
 
+    // Advertiser timezone info (for converting schedule times)
+    advertiserTimezone: null,        // e.g., "America/New_York" or "UTC"
+    advertiserTimezoneOffset: 0,     // e.g., -5 for EST, 0 for UTC
+
     // Creation tracking - for UPDATE vs CREATE logic
     campaignCreated: false,
     adGroupCreated: false,
@@ -488,6 +492,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadIdentities();
     loadCtaPortfolios();  // Load CTA portfolios for Lead Gen campaigns
     loadMediaLibrary();
+    loadAdvertiserTimezone();  // Get advertiser timezone for schedule time conversion
     initializeDayparting();
     initializeLocationTargeting();
     initializeAgeTargeting();  // Initialize age selection buttons
@@ -592,6 +597,36 @@ function toggleCBOBudget() {
     }
 
     addLog('info', `CBO ${cboEnabled ? 'enabled' : 'disabled'} - Budget will be set at ${cboEnabled ? 'Campaign' : 'Ad Group'} level`);
+}
+
+// Load Advertiser Timezone (for schedule time conversion)
+// TikTok interprets schedule_start_time in the advertiser's account timezone
+// User enters time in EST, so we need to convert to the advertiser's timezone
+async function loadAdvertiserTimezone() {
+    try {
+        const result = await apiRequest('get_advertiser_timezone');
+
+        if (result.success && result.data) {
+            state.advertiserTimezone = result.data.timezone || 'UTC';
+            state.advertiserTimezoneOffset = result.data.timezone_offset || 0;
+            addLog('info', `Advertiser timezone: ${state.advertiserTimezone} (UTC${state.advertiserTimezoneOffset >= 0 ? '+' : ''}${state.advertiserTimezoneOffset})`);
+
+            // Show warning if timezone is different from EST
+            if (state.advertiserTimezoneOffset !== -5) {
+                addLog('warn', `Note: Advertiser account is NOT in EST. Schedule times will be converted.`);
+            }
+        } else {
+            // Default to UTC if we can't get timezone
+            state.advertiserTimezone = 'UTC';
+            state.advertiserTimezoneOffset = 0;
+            addLog('warn', 'Could not get advertiser timezone, defaulting to UTC');
+        }
+    } catch (error) {
+        console.error('Error loading advertiser timezone:', error);
+        // Default to UTC on error
+        state.advertiserTimezone = 'UTC';
+        state.advertiserTimezoneOffset = 0;
+    }
 }
 
 // Load Pixels
@@ -1131,27 +1166,44 @@ async function handleSmartMediaUpload(event) {
             showToast(`${isVideo ? 'Video' : 'Image'} uploaded successfully!`, 'success');
             addLog('info', `File renamed from "${originalName}" to "${newFileName}" with timestamp`);
 
-            // For videos, TikTok needs time to process before preview is available
-            // Retry loading media library with delays to ensure new video appears
-            if (isVideo) {
-                addLog('info', 'Video uploaded - waiting for TikTok to process...');
-                // First immediate reload
-                await loadMediaLibrary();
+            // Create a temporary preview URL for immediate display
+            const previewUrl = URL.createObjectURL(file);
 
-                // Then retry after delays to catch the processed video
-                setTimeout(async () => {
-                    addLog('info', 'Refreshing media library (retry 1)...');
-                    await loadMediaLibrary();
-                }, 2000);
-
-                setTimeout(async () => {
-                    addLog('info', 'Refreshing media library (retry 2)...');
-                    await loadMediaLibrary();
-                }, 5000);
-            } else {
-                // For images, single reload is usually enough
-                await loadMediaLibrary();
+            // Add to media library state immediately so it shows right away
+            if (isVideo && result.data?.video_id) {
+                const newVideo = {
+                    video_id: result.data.video_id,
+                    displayable_name: newFileName,
+                    file_name: newFileName,
+                    preview_url: previewUrl,
+                    thumbnail_url: previewUrl,
+                    duration: 0,
+                    type: 'video',
+                    create_time: new Date().toISOString(),
+                    is_new: true
+                };
+                state.mediaLibrary.unshift(newVideo);
+                addLog('info', 'Video added to library immediately');
+            } else if (!isVideo && result.data?.image_id) {
+                const newImage = {
+                    image_id: result.data.image_id,
+                    displayable_name: newFileName,
+                    file_name: newFileName,
+                    preview_url: previewUrl,
+                    image_url: previewUrl,
+                    type: 'image',
+                    create_time: new Date().toISOString(),
+                    is_new: true
+                };
+                state.mediaLibrary.unshift(newImage);
+                addLog('info', 'Image added to library immediately');
             }
+
+            // Refresh from API in background to get proper metadata
+            setTimeout(async () => {
+                addLog('info', 'Refreshing media library from API...');
+                await loadMediaLibrary();
+            }, 3000);
 
             // Auto-close after 2 seconds
             setTimeout(() => {
@@ -1302,14 +1354,31 @@ function formatDateTimeLocal(date) {
 function getScheduleData() {
     const scheduleType = document.querySelector('input[name="schedule_type"]:checked')?.value || 'continuous';
 
-    // Format datetime-local input value (YYYY-MM-DDTHH:MM) to API format (YYYY-MM-DD HH:MM:SS)
-    // IMPORTANT: Use the raw input value directly without Date object conversion
-    // This ensures the exact time user selected is sent, without any timezone conversion
-    const formatForAPI = (dateTimeLocalValue) => {
+    // Convert user's EST time to UTC for TikTok API
+    // User enters time in EST (e.g., 9:00 AM EST)
+    // TikTok account is in UTC, so we need to convert: EST + 5 hours = UTC
+    // Example: 9:00 AM EST + 5 = 14:00 UTC
+    const convertESTtoUTC = (dateTimeLocalValue) => {
         if (!dateTimeLocalValue) return null;
-        // Input format: "2025-01-24T09:00"
-        // Output format: "2025-01-24 09:00:00"
-        return dateTimeLocalValue.replace('T', ' ') + ':00';
+
+        // Parse the datetime-local value (e.g., "2025-01-28T09:00")
+        const [datePart, timePart] = dateTimeLocalValue.split('T');
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hours, minutes] = timePart.split(':').map(Number);
+
+        // Create date and add 5 hours to convert EST to UTC
+        const date = new Date(year, month - 1, day, hours + 5, minutes, 0);
+
+        // Format for API: "YYYY-MM-DD HH:MM:SS"
+        const resultYear = date.getFullYear();
+        const resultMonth = String(date.getMonth() + 1).padStart(2, '0');
+        const resultDay = String(date.getDate()).padStart(2, '0');
+        const resultHours = String(date.getHours()).padStart(2, '0');
+        const resultMinutes = String(date.getMinutes()).padStart(2, '0');
+
+        const result = `${resultYear}-${resultMonth}-${resultDay} ${resultHours}:${resultMinutes}:00`;
+        console.log(`[Schedule] User entered: ${dateTimeLocalValue} (EST) -> ${result} (UTC)`);
+        return result;
     };
 
     if (scheduleType === 'continuous') {
@@ -1321,7 +1390,6 @@ function getScheduleData() {
     // Option 2: Schedule start time only (no end) - runs continuously from scheduled time
     if (scheduleType === 'scheduled_start_only') {
         const startDateTime = document.getElementById('schedule-start-only-datetime')?.value;
-        const timezone = document.getElementById('schedule-start-only-timezone')?.value || 'America/New_York';
 
         if (!startDateTime) {
             return {
@@ -1331,15 +1399,13 @@ function getScheduleData() {
 
         return {
             schedule_type: 'SCHEDULE_FROM_NOW',  // TikTok API uses SCHEDULE_FROM_NOW with a future start time
-            schedule_start_time: formatForAPI(startDateTime),
-            schedule_timezone: timezone
+            schedule_start_time: convertESTtoUTC(startDateTime)
         };
     }
 
     // Option 3: Schedule start AND end time
     const startDateTime = document.getElementById('schedule-start-datetime')?.value;
     const endDateTime = document.getElementById('schedule-end-datetime')?.value;
-    const timezone = document.getElementById('schedule-timezone')?.value || 'America/New_York';
 
     if (!startDateTime || !endDateTime) {
         return {
@@ -1349,9 +1415,8 @@ function getScheduleData() {
 
     return {
         schedule_type: 'SCHEDULE_START_END',
-        schedule_start_time: formatForAPI(startDateTime),
-        schedule_end_time: formatForAPI(endDateTime),
-        schedule_timezone: timezone
+        schedule_start_time: convertESTtoUTC(startDateTime),
+        schedule_end_time: convertESTtoUTC(endDateTime)
     };
 }
 
@@ -2669,14 +2734,61 @@ function updateStepButtonLabels() {
 // =====================
 // Identity Modal
 // =====================
+// State for identity logo upload
+let identityLogoFile = null;
+
 function openCreateIdentityModal() {
     document.getElementById('identity-display-name').value = '';
     document.getElementById('identity-char-count').textContent = '0';
+    // Reset logo upload
+    identityLogoFile = null;
+    document.getElementById('identity-logo-input').value = '';
+    document.getElementById('identity-logo-preview').style.display = 'none';
+    document.getElementById('identity-logo-placeholder').style.display = 'block';
+    document.getElementById('identity-logo-remove-btn').style.display = 'none';
     document.getElementById('create-identity-modal').style.display = 'flex';
 }
 
 function closeCreateIdentityModal() {
     document.getElementById('create-identity-modal').style.display = 'none';
+    identityLogoFile = null;
+}
+
+function previewIdentityLogo(input) {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            showToast('Please select an image file', 'error');
+            return;
+        }
+
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('Image too large. Maximum size is 5MB', 'error');
+            return;
+        }
+
+        identityLogoFile = file;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('identity-logo-img').src = e.target.result;
+            document.getElementById('identity-logo-preview').style.display = 'block';
+            document.getElementById('identity-logo-placeholder').style.display = 'none';
+            document.getElementById('identity-logo-remove-btn').style.display = 'inline-block';
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function removeIdentityLogo() {
+    identityLogoFile = null;
+    document.getElementById('identity-logo-input').value = '';
+    document.getElementById('identity-logo-preview').style.display = 'none';
+    document.getElementById('identity-logo-placeholder').style.display = 'block';
+    document.getElementById('identity-logo-remove-btn').style.display = 'none';
 }
 
 async function createCustomIdentity() {
@@ -2690,30 +2802,64 @@ async function createCustomIdentity() {
     showLoading('Creating identity...');
 
     try {
-        const result = await apiRequest('create_identity', { display_name: displayName });
+        let profileImageId = null;
+
+        // Upload logo if provided
+        if (identityLogoFile) {
+            showLoading('Uploading logo...');
+            addLog('info', 'Uploading identity logo...');
+
+            const formData = new FormData();
+            formData.append('image', identityLogoFile);
+
+            const uploadResponse = await fetch('api.php?action=upload_image', {
+                method: 'POST',
+                body: formData
+            });
+
+            const uploadResult = await uploadResponse.json();
+
+            if (uploadResult.success && uploadResult.data?.image_id) {
+                profileImageId = uploadResult.data.image_id;
+                addLog('success', `Logo uploaded: ${profileImageId}`);
+            } else {
+                addLog('warning', 'Logo upload failed, creating identity without logo');
+            }
+        }
+
+        showLoading('Creating identity...');
+
+        // Create identity with optional profile_image_id
+        const params = { display_name: displayName };
+        if (profileImageId) {
+            params.profile_image_id = profileImageId;
+        }
+
+        const result = await apiRequest('create_identity', params);
 
         if (result.success && result.identity_id) {
-            const newIdentity = {
-                identity_id: result.identity_id,
-                display_name: displayName,
-                identity_type: 'CUSTOMIZED_USER'
-            };
-            state.identities.push(newIdentity);
-
-            const select = document.getElementById('global-identity');
-            const option = document.createElement('option');
-            option.value = result.identity_id;
-            option.textContent = `${displayName} (CUSTOMIZED_USER)`;
-            option.selected = true;
-            select.appendChild(option);
-
             closeCreateIdentityModal();
             showToast('Identity created successfully!', 'success');
+            addLog('success', `Identity created: ${displayName} (ID: ${result.identity_id})`);
+
+            // Reload identities from server to ensure fresh data (cache was invalidated server-side)
+            await loadIdentities();
+
+            // Select the newly created identity
+            const select = document.getElementById('global-identity');
+            if (select) {
+                select.value = result.identity_id;
+            }
         } else {
             showToast(result.message || 'Failed to create identity', 'error');
+            addLog('error', `Identity creation failed: ${result.message}`);
+            if (result.details) {
+                console.error('Identity creation details:', result.details);
+            }
         }
     } catch (error) {
         showToast('Error creating identity: ' + error.message, 'error');
+        addLog('error', `Identity creation error: ${error.message}`);
     } finally {
         hideLoading();
     }
@@ -5979,15 +6125,70 @@ async function saveInlineBudget(campaignId) {
         }
     } catch (error) {
         console.error('Error updating budget:', error);
-        addLog('error', `Failed to update budget: ${error.message}`);
-        alert('Failed to update budget: ' + error.message);
+
+        // Check if this is an Upgraded Smart+ campaign limitation
+        if (error.message && error.message.includes('Upgraded Smart Plus')) {
+            addLog('warning', 'Upgraded Smart+ campaigns require TikTok Ads Manager for budget changes.');
+            showToast('Upgraded Smart+ budget must be changed in TikTok Ads Manager', 'error');
+
+            // Mark the campaign row to indicate it can't be edited
+            const campaign = state.campaignsList.find(c => c.campaign_id === campaignId);
+            if (campaign) {
+                campaign.is_upgraded_smart_plus = true;
+            }
+
+            // Show info modal with link
+            showUpgradedSmartPlusInfo();
+        } else {
+            addLog('error', `Failed to update budget: ${error.message}`);
+            showToast('Failed to update budget: ' + error.message, 'error');
+        }
 
         // Re-enable save button
         if (saveBtn) {
             saveBtn.disabled = false;
             saveBtn.textContent = '✓';
         }
+
+        // Close the editor
+        cancelInlineBudgetEdit(campaignId);
     }
+}
+
+// Show info modal for Upgraded Smart+ budget limitation
+function showUpgradedSmartPlusInfo() {
+    const modalHtml = `
+        <div id="upgraded-smart-info-modal" class="modal" style="display: flex;">
+            <div class="modal-content" style="max-width: 450px;">
+                <div class="modal-header">
+                    <h3>⚠️ Upgraded Smart+ Campaign</h3>
+                    <span class="modal-close" onclick="document.getElementById('upgraded-smart-info-modal').remove()">&times;</span>
+                </div>
+                <div class="modal-body" style="text-align: center; padding: 20px;">
+                    <p style="margin-bottom: 16px; color: #4b5563;">
+                        This campaign uses TikTok's <strong>Upgraded Smart+</strong> format which doesn't support budget editing through the API.
+                    </p>
+                    <p style="margin-bottom: 20px; color: #6b7280; font-size: 14px;">
+                        To change the budget, please use TikTok Ads Manager directly.
+                    </p>
+                    <a href="https://ads.tiktok.com/i18n/perf/campaign" target="_blank"
+                       style="display: inline-block; background: #1a1a1a; color: white; padding: 10px 24px; border-radius: 6px; text-decoration: none; font-weight: 500;">
+                        Open TikTok Ads Manager →
+                    </a>
+                </div>
+                <div class="modal-footer" style="justify-content: center;">
+                    <button class="btn-secondary" onclick="document.getElementById('upgraded-smart-info-modal').remove()">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal if any
+    const existing = document.getElementById('upgraded-smart-info-modal');
+    if (existing) existing.remove();
+
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
 // Toggle campaign status (ON/OFF)
@@ -6515,14 +6716,30 @@ function toggleDupScheduleType() {
 function getDupScheduleData() {
     const scheduleType = document.querySelector('input[name="dup_schedule_type"]:checked')?.value || 'continuous';
 
-    // Format datetime-local input value (YYYY-MM-DDTHH:MM) to API format (YYYY-MM-DD HH:MM:SS)
-    // IMPORTANT: Use the raw input value directly without Date object conversion
-    // This ensures the exact time user selected is sent, without any timezone conversion
-    const formatForAPI = (dateTimeLocalValue) => {
+    // Convert user's EST time to UTC for TikTok API
+    // User enters time in EST (e.g., 9:00 AM EST)
+    // TikTok account is in UTC, so we need to convert: EST + 5 hours = UTC
+    const convertESTtoUTC = (dateTimeLocalValue) => {
         if (!dateTimeLocalValue) return null;
-        // Input format: "2025-01-24T09:00"
-        // Output format: "2025-01-24 09:00:00"
-        return dateTimeLocalValue.replace('T', ' ') + ':00';
+
+        // Parse the datetime-local value (e.g., "2025-01-28T09:00")
+        const [datePart, timePart] = dateTimeLocalValue.split('T');
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hours, minutes] = timePart.split(':').map(Number);
+
+        // Create date and add 5 hours to convert EST to UTC
+        const date = new Date(year, month - 1, day, hours + 5, minutes, 0);
+
+        // Format for API: "YYYY-MM-DD HH:MM:SS"
+        const resultYear = date.getFullYear();
+        const resultMonth = String(date.getMonth() + 1).padStart(2, '0');
+        const resultDay = String(date.getDate()).padStart(2, '0');
+        const resultHours = String(date.getHours()).padStart(2, '0');
+        const resultMinutes = String(date.getMinutes()).padStart(2, '0');
+
+        const result = `${resultYear}-${resultMonth}-${resultDay} ${resultHours}:${resultMinutes}:00`;
+        console.log(`[Dup Schedule] User entered: ${dateTimeLocalValue} (EST) -> ${result} (UTC)`);
+        return result;
     };
 
     if (scheduleType === 'continuous') {
@@ -6531,7 +6748,6 @@ function getDupScheduleData() {
 
     if (scheduleType === 'scheduled_start_only') {
         const startDateTime = document.getElementById('dup-schedule-start-only-datetime')?.value;
-        const timezone = document.getElementById('dup-schedule-start-only-timezone')?.value || 'America/New_York';
 
         if (!startDateTime) {
             return { schedule_type: 'SCHEDULE_FROM_NOW' };
@@ -6539,15 +6755,13 @@ function getDupScheduleData() {
 
         return {
             schedule_type: 'SCHEDULE_FROM_NOW',
-            schedule_start_time: formatForAPI(startDateTime),
-            schedule_timezone: timezone
+            schedule_start_time: convertESTtoUTC(startDateTime)
         };
     }
 
     // scheduled (start and end)
     const startDateTime = document.getElementById('dup-schedule-start-datetime')?.value;
     const endDateTime = document.getElementById('dup-schedule-end-datetime')?.value;
-    const timezone = document.getElementById('dup-schedule-timezone')?.value || 'America/New_York';
 
     if (!startDateTime || !endDateTime) {
         return { schedule_type: 'SCHEDULE_FROM_NOW' };
@@ -6555,9 +6769,8 @@ function getDupScheduleData() {
 
     return {
         schedule_type: 'SCHEDULE_START_END',
-        schedule_start_time: formatForAPI(startDateTime),
-        schedule_end_time: formatForAPI(endDateTime),
-        schedule_timezone: timezone
+        schedule_start_time: convertESTtoUTC(startDateTime),
+        schedule_end_time: convertESTtoUTC(endDateTime)
     };
 }
 
@@ -7373,14 +7586,30 @@ async function handleVideoModalUpload(event) {
         }
 
         if (result.success && result.data?.video_id) {
-            progressStatus.textContent = 'Upload complete! Refreshing videos...';
+            progressStatus.textContent = 'Upload complete!';
             addLog('success', `Video uploaded: ${result.data.video_id}`);
             showToast('Video uploaded successfully!', 'success');
 
-            // Reload media library to include new video
-            await loadMediaLibrary();
+            // Create a temporary preview URL for the uploaded video
+            const previewUrl = URL.createObjectURL(file);
 
-            // Re-render video grid with new video
+            // Add new video to state immediately so it shows right away
+            const newVideo = {
+                video_id: result.data.video_id,
+                displayable_name: newFileName,
+                file_name: newFileName,
+                preview_url: previewUrl,
+                thumbnail_url: previewUrl,  // Use video as thumbnail temporarily
+                duration: 0,
+                type: 'video',
+                create_time: new Date().toISOString(),
+                is_new: true  // Flag to show "New" badge
+            };
+
+            // Add to beginning of media library
+            state.mediaLibrary.unshift(newVideo);
+
+            // Update video modal state and re-render immediately
             const videos = state.mediaLibrary.filter(m => m.type === 'video');
             videoModalState.allVideos = videos;
             renderVideoModalGrid(videos);
@@ -7392,6 +7621,14 @@ async function handleVideoModalUpload(event) {
             setTimeout(() => {
                 progressContainer.style.display = 'none';
             }, 1500);
+
+            // Refresh from API in background to get proper thumbnail/metadata
+            setTimeout(async () => {
+                await loadMediaLibrary();
+                const updatedVideos = state.mediaLibrary.filter(m => m.type === 'video');
+                videoModalState.allVideos = updatedVideos;
+                renderVideoModalGrid(updatedVideos);
+            }, 3000);
         } else {
             throw new Error(result.message || 'Upload failed');
         }
