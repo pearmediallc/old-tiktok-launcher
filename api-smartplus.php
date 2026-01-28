@@ -43,6 +43,9 @@ $cache = Cache::getInstance();
 // Load Security helper for data redaction
 require_once __DIR__ . '/includes/Security.php';
 
+// Load Database class for portfolio storage
+require_once __DIR__ . '/database/Database.php';
+
 // Load environment
 $envPath = __DIR__ . '/.env';
 if (file_exists($envPath)) {
@@ -1876,6 +1879,68 @@ switch ($action) {
                 'message' => 'Identity created successfully'
             ]);
         } else {
+            echo json_encode([
+                'success' => false,
+                'message' => $result['message'] ?? 'Failed to create identity',
+                'details' => $result
+            ]);
+        }
+        break;
+
+    // ==========================================
+    // BULK LAUNCH: Create Identity for Specific Account
+    // ==========================================
+    case 'create_identity_for_account':
+        $targetAdvertiserId = $input['target_advertiser_id'] ?? '';
+        $displayName = $input['display_name'] ?? '';
+        $profileImageId = $input['profile_image_id'] ?? null;
+
+        if (empty($targetAdvertiserId)) {
+            echo json_encode(['success' => false, 'message' => 'target_advertiser_id is required']);
+            exit;
+        }
+
+        if (empty($displayName)) {
+            echo json_encode(['success' => false, 'message' => 'display_name is required']);
+            exit;
+        }
+
+        // Validate advertiser is authorized
+        $allAdvertiserIds = $_SESSION['oauth_advertiser_ids'] ?? [];
+        if (!in_array($targetAdvertiserId, $allAdvertiserIds)) {
+            echo json_encode(['success' => false, 'message' => 'Unauthorized advertiser ID']);
+            exit;
+        }
+
+        logSmartPlus("=== Creating Identity for Account: $targetAdvertiserId ===");
+        logSmartPlus("Display Name: $displayName");
+
+        $params = [
+            'advertiser_id' => $targetAdvertiserId,
+            'identity_type' => 'CUSTOMIZED_USER',
+            'display_name' => $displayName
+        ];
+
+        if (!empty($profileImageId)) {
+            $params['profile_image_id'] = $profileImageId;
+        }
+
+        $result = makeApiCall('/identity/create/', $params, $accessToken);
+
+        if ($result['code'] == 0 && isset($result['data']['identity_id'])) {
+            // Invalidate identity cache for the target account
+            $cacheKey = $cache->generateKey('identities', $targetAdvertiserId);
+            $cache->delete($cacheKey);
+            logSmartPlus("Identity cache invalidated for target advertiser: $targetAdvertiserId");
+
+            echo json_encode([
+                'success' => true,
+                'identity_id' => $result['data']['identity_id'],
+                'display_name' => $displayName,
+                'message' => 'Identity created successfully'
+            ]);
+        } else {
+            logSmartPlus("Identity creation failed: " . json_encode($result));
             echo json_encode([
                 'success' => false,
                 'message' => $result['message'] ?? 'Failed to create identity',

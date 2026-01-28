@@ -3452,16 +3452,19 @@ function renderAccountAssetsDropdowns(advertiserId, assets) {
             </div>
             <div class="bulk-asset-item">
                 <label><span class="asset-icon">👤</span> Identity</label>
-                <select id="identity-${advertiserId}" onchange="updateAccountAssetSelection('${advertiserId}')">
-                    ${identitiesArray.length === 0
-                        ? `<option value="">${hasIdentityError ? 'Error loading' : 'No identities'}</option>`
-                        : `<option value="">Select Identity...</option>
-                           ${identitiesArray.map(i =>
-                               `<option value="${i.identity_id}" data-type="${i.identity_type || 'CUSTOMIZED_USER'}" data-identity-type="${i.identity_type || 'CUSTOMIZED_USER'}" ${i.identity_authorized_bc_id ? `data-identity-authorized-bc-id="${i.identity_authorized_bc_id}"` : ''} ${i.identity_id === selectedIdentityId ? 'selected' : ''}>${i.display_name || i.identity_name || i.identity_id}${i.identity_type === 'BC_AUTH_TT' ? ' (Page)' : ''}</option>`
-                           ).join('')}`
-                    }
-                </select>
-                ${identitiesArray.length > 0 ? `<span class="asset-count">${identitiesArray.length} available</span>` : ''}
+                <div class="identity-select-wrapper">
+                    <select id="identity-${advertiserId}" onchange="updateAccountAssetSelection('${advertiserId}')">
+                        ${identitiesArray.length === 0
+                            ? `<option value="">${hasIdentityError ? 'Error loading' : 'No identities'}</option>`
+                            : `<option value="">Select Identity...</option>
+                               ${identitiesArray.map(i =>
+                                   `<option value="${i.identity_id}" data-type="${i.identity_type || 'CUSTOMIZED_USER'}" data-identity-type="${i.identity_type || 'CUSTOMIZED_USER'}" ${i.identity_authorized_bc_id ? `data-identity-authorized-bc-id="${i.identity_authorized_bc_id}"` : ''} ${i.identity_id === selectedIdentityId ? 'selected' : ''}>${i.display_name || i.identity_name || i.identity_id}${i.identity_type === 'BC_AUTH_TT' ? ' (Page)' : ''}</option>`
+                               ).join('')}`
+                        }
+                    </select>
+                    <button type="button" class="btn-create-identity" onclick="openBulkIdentityCreate('${advertiserId}')" title="Create new identity">+</button>
+                </div>
+                ${identitiesArray.length > 0 ? `<span class="asset-count">${identitiesArray.length} available</span>` : '<span class="asset-count">Click + to create</span>'}
             </div>
             <div class="bulk-asset-item">
                 <label><span class="asset-icon">🔘</span> CTA Portfolio</label>
@@ -3764,10 +3767,37 @@ function renderVideoPickerGrid() {
 
     // Render grid
     if (filteredVideos.length === 0) {
+        const advertiserId = videoPickerState.advertiserId;
         grid.innerHTML = `
             <div class="picker-empty-state">
                 <div class="empty-icon">🎬</div>
                 <p>${videoPickerState.searchTerm ? 'No videos match your search' : 'No videos in this account'}</p>
+                ${!videoPickerState.searchTerm ? `
+                    <div class="picker-upload-section" style="margin-top: 20px;">
+                        <input type="file"
+                               id="bulk-video-upload-${advertiserId}"
+                               accept="video/*"
+                               multiple
+                               style="display: none;"
+                               onchange="handleBulkAccountVideoUpload(event, '${advertiserId}')">
+                        <button type="button"
+                                class="btn-upload-video"
+                                onclick="document.getElementById('bulk-video-upload-${advertiserId}').click()"
+                                style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; background: linear-gradient(135deg, #fe2c55, #25f4ee); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;">
+                            <span>📤</span> Upload Videos to This Account
+                        </button>
+                        <p style="margin-top: 10px; font-size: 12px; color: #64748b;">Select one or more videos to upload</p>
+                    </div>
+                    <div id="bulk-upload-progress-${advertiserId}" style="display: none; margin-top: 15px; width: 100%; max-width: 300px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span id="bulk-upload-status-${advertiserId}" style="font-size: 12px; color: #64748b;">Uploading...</span>
+                            <span id="bulk-upload-count-${advertiserId}" style="font-size: 12px; color: #64748b;">0/0</span>
+                        </div>
+                        <div style="background: #e2e8f0; border-radius: 4px; height: 6px; overflow: hidden;">
+                            <div id="bulk-upload-bar-${advertiserId}" style="background: linear-gradient(90deg, #fe2c55, #25f4ee); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                ` : ''}
             </div>
         `;
         return;
@@ -3829,6 +3859,117 @@ function selectVideoFromPicker(targetVideoId, targetVideoName) {
     closeVideoPickerModal();
 
     showToast(`Video mapped: ${targetVideoName}`, 'success');
+}
+
+// Handle video upload for a specific account in bulk launch
+async function handleBulkAccountVideoUpload(event, advertiserId) {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    // Validate files
+    const maxSize = 500 * 1024 * 1024; // 500MB
+    const validFiles = files.filter(file => {
+        if (!file.type.startsWith('video/')) {
+            showToast(`Skipped ${file.name}: Not a video file`, 'warning');
+            return false;
+        }
+        if (file.size > maxSize) {
+            showToast(`Skipped ${file.name}: Exceeds 500MB limit`, 'warning');
+            return false;
+        }
+        return true;
+    });
+
+    if (validFiles.length === 0) {
+        showToast('No valid video files selected', 'error');
+        event.target.value = '';
+        return;
+    }
+
+    // Show progress UI
+    const progressContainer = document.getElementById(`bulk-upload-progress-${advertiserId}`);
+    const statusEl = document.getElementById(`bulk-upload-status-${advertiserId}`);
+    const countEl = document.getElementById(`bulk-upload-count-${advertiserId}`);
+    const barEl = document.getElementById(`bulk-upload-bar-${advertiserId}`);
+
+    if (progressContainer) progressContainer.style.display = 'block';
+    if (statusEl) statusEl.textContent = 'Uploading...';
+    if (countEl) countEl.textContent = `0/${validFiles.length}`;
+    if (barEl) barEl.style.width = '0%';
+
+    addLog('info', `Starting upload of ${validFiles.length} videos to account ${advertiserId}`);
+
+    let completed = 0;
+    let failed = 0;
+    const uploadedVideos = [];
+
+    // Upload files sequentially
+    for (const file of validFiles) {
+        try {
+            const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+            const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
+            const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
+            const newFileName = `${baseName}_${timestamp}${ext}`;
+
+            const formData = new FormData();
+            formData.append('video', file, newFileName);
+            formData.append('advertiser_id', advertiserId); // Upload to specific account
+
+            if (statusEl) statusEl.textContent = `Uploading ${file.name}...`;
+
+            const response = await fetch('api.php?action=upload_video', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.success && result.data?.video_id) {
+                completed++;
+                uploadedVideos.push({
+                    video_id: result.data.video_id,
+                    file_name: newFileName,
+                    video_cover_url: URL.createObjectURL(file)
+                });
+                addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
+            } else {
+                failed++;
+                addLog('error', `Failed to upload ${file.name}: ${result.message || 'Unknown error'}`);
+            }
+        } catch (error) {
+            failed++;
+            addLog('error', `Error uploading ${file.name}: ${error.message}`);
+        }
+
+        // Update progress
+        const totalProcessed = completed + failed;
+        if (countEl) countEl.textContent = `${totalProcessed}/${validFiles.length}`;
+        if (barEl) barEl.style.width = `${(totalProcessed / validFiles.length) * 100}%`;
+    }
+
+    // Update status
+    if (statusEl) {
+        statusEl.textContent = failed === 0
+            ? `✓ Uploaded ${completed} videos`
+            : `Uploaded ${completed}, failed ${failed}`;
+    }
+
+    // Add uploaded videos to account assets
+    if (uploadedVideos.length > 0 && bulkLaunchState.accountAssets[advertiserId]) {
+        if (!bulkLaunchState.accountAssets[advertiserId].videos) {
+            bulkLaunchState.accountAssets[advertiserId].videos = [];
+        }
+        bulkLaunchState.accountAssets[advertiserId].videos.unshift(...uploadedVideos);
+
+        // Update the video picker state and re-render
+        videoPickerState.videos = bulkLaunchState.accountAssets[advertiserId].videos;
+        renderVideoPickerGrid();
+
+        showToast(`Uploaded ${uploadedVideos.length} videos. Select one to use.`, 'success');
+    }
+
+    // Clear file input
+    event.target.value = '';
 }
 
 // Toggle media library visibility
@@ -4029,6 +4170,9 @@ async function loadAccountAssets(advertiserId) {
             // Also match videos
             await matchVideosForAccount(advertiserId);
 
+            // Auto-match assets (pixel, identity, portfolio) by name
+            autoMatchAssetsByName(advertiserId, result.data);
+
             // Render dropdowns
             assetsContainer.innerHTML = renderAccountAssetsDropdowns(advertiserId, result.data);
 
@@ -4109,6 +4253,83 @@ async function matchVideosForAccount(advertiserId) {
         }
     } catch (error) {
         addLog('error', `Error matching videos for ${advertiserId}: ${error.message}`);
+    }
+}
+
+// Auto-match assets (pixel, identity, portfolio) by name from campaign config
+function autoMatchAssetsByName(advertiserId, assets) {
+    // Get campaign's pixel and identity info
+    const campaignPixel = state.pixels?.find(p => p.pixel_id === state.pixelId);
+    const campaignPixelName = campaignPixel?.pixel_name?.toLowerCase().trim();
+
+    const campaignIdentity = state.identities?.find(i => i.identity_id === state.globalIdentityId);
+    const campaignIdentityName = (campaignIdentity?.display_name || campaignIdentity?.identity_name)?.toLowerCase().trim();
+
+    const campaignPortfolio = state.ctaPortfolios?.find(p => p.portfolio_id === state.selectedPortfolioId);
+    const campaignPortfolioName = campaignPortfolio?.portfolio_name?.toLowerCase().trim();
+
+    // Get or create selected account entry
+    let selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+    if (!selectedAccount) {
+        const account = bulkLaunchState.accounts.find(a => a.advertiser_id === advertiserId);
+        if (!account) return;
+
+        selectedAccount = {
+            advertiser_id: advertiserId,
+            advertiser_name: account.advertiser_name,
+            pixel_id: null,
+            identity_id: null,
+            identity_type: 'CUSTOMIZED_USER',
+            portfolio_id: null,
+            video_mapping: {}
+        };
+        bulkLaunchState.selectedAccounts.push(selectedAccount);
+    }
+
+    let matchedAssets = [];
+
+    // Auto-match pixel by name
+    if (campaignPixelName && assets.pixels?.length > 0 && !selectedAccount.pixel_id) {
+        const matchingPixel = assets.pixels.find(p =>
+            (p.pixel_name?.toLowerCase().trim() === campaignPixelName)
+        );
+        if (matchingPixel) {
+            selectedAccount.pixel_id = matchingPixel.pixel_id;
+            matchedAssets.push(`Pixel: ${matchingPixel.pixel_name}`);
+        }
+    }
+
+    // Auto-match identity by name
+    if (campaignIdentityName && assets.identities?.length > 0 && !selectedAccount.identity_id) {
+        const matchingIdentity = assets.identities.find(i => {
+            const name = (i.display_name || i.identity_name)?.toLowerCase().trim();
+            return name === campaignIdentityName;
+        });
+        if (matchingIdentity) {
+            selectedAccount.identity_id = matchingIdentity.identity_id;
+            selectedAccount.identity_type = matchingIdentity.identity_type || 'CUSTOMIZED_USER';
+            if (matchingIdentity.identity_authorized_bc_id) {
+                selectedAccount.identity_authorized_bc_id = matchingIdentity.identity_authorized_bc_id;
+            }
+            matchedAssets.push(`Identity: ${matchingIdentity.display_name || matchingIdentity.identity_name}`);
+        }
+    }
+
+    // Auto-match portfolio by name
+    if (campaignPortfolioName && assets.portfolios?.length > 0 && !selectedAccount.portfolio_id) {
+        const matchingPortfolio = assets.portfolios.find(p =>
+            p.portfolio_name?.toLowerCase().trim() === campaignPortfolioName
+        );
+        if (matchingPortfolio) {
+            selectedAccount.portfolio_id = matchingPortfolio.portfolio_id;
+            matchedAssets.push(`Portfolio: ${matchingPortfolio.portfolio_name}`);
+        }
+    }
+
+    // Log auto-matched assets
+    if (matchedAssets.length > 0) {
+        addLog('success', `Auto-matched for ${advertiserId}: ${matchedAssets.join(', ')}`);
+        console.log(`[Bulk Launch] Auto-matched assets for ${advertiserId}:`, matchedAssets);
     }
 }
 
@@ -4441,6 +4662,206 @@ async function createBulkPortfolio(advertiserId) {
         }
     } catch (error) {
         showToast('Error creating portfolio: ' + error.message, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Open bulk identity creation modal for specific account
+function openBulkIdentityCreate(advertiserId) {
+    const accountName = bulkLaunchState.accounts.find(a => a.advertiser_id === advertiserId)?.advertiser_name || advertiserId;
+
+    // Create modal HTML
+    const modalHtml = `
+        <div id="bulk-identity-modal" class="modal" style="display: flex; z-index: 10001;">
+            <div class="modal-content" style="max-width: 450px;">
+                <div class="modal-header">
+                    <h3>Create Custom Identity</h3>
+                    <span class="modal-close" onclick="closeBulkIdentityModal()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <p style="margin-bottom: 15px; color: #666;">
+                        Creating identity for: <strong>${accountName}</strong>
+                    </p>
+                    <div class="form-group">
+                        <label>Display Name <span style="color: #ef4444;">*</span></label>
+                        <input type="text" id="bulk-identity-name" placeholder="Enter display name (e.g., Your Brand)" maxlength="50">
+                        <small style="color: #64748b; font-size: 11px;">This name will appear on your ads</small>
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label>Profile Logo <span style="color: #94a3b8;">(optional)</span></label>
+                        <div class="logo-upload-area" style="border: 2px dashed #e2e8f0; border-radius: 8px; padding: 20px; text-align: center; cursor: pointer;" onclick="document.getElementById('bulk-identity-logo-input').click()">
+                            <input type="file" id="bulk-identity-logo-input" accept="image/*" style="display: none;" onchange="previewBulkIdentityLogo(this)">
+                            <div id="bulk-identity-logo-placeholder">
+                                <span style="font-size: 32px;">📷</span>
+                                <p style="margin: 10px 0 0; color: #64748b; font-size: 13px;">Click to upload logo</p>
+                                <p style="margin: 5px 0 0; color: #94a3b8; font-size: 11px;">Recommended: 100x100px, max 5MB</p>
+                            </div>
+                            <div id="bulk-identity-logo-preview" style="display: none;">
+                                <img id="bulk-identity-logo-img" style="max-width: 100px; max-height: 100px; border-radius: 50%;">
+                            </div>
+                        </div>
+                        <button type="button" id="bulk-identity-logo-remove" style="display: none; margin-top: 10px; padding: 5px 10px; font-size: 12px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;" onclick="removeBulkIdentityLogo()">Remove Logo</button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="closeBulkIdentityModal()">Cancel</button>
+                    <button class="btn-primary" onclick="createBulkIdentity('${advertiserId}')">Create Identity</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal if any
+    const existing = document.getElementById('bulk-identity-modal');
+    if (existing) existing.remove();
+
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Reset state
+    bulkIdentityLogoFile = null;
+}
+
+// Close bulk identity modal
+function closeBulkIdentityModal() {
+    const modal = document.getElementById('bulk-identity-modal');
+    if (modal) modal.remove();
+    bulkIdentityLogoFile = null;
+}
+
+// Preview logo in bulk identity modal
+let bulkIdentityLogoFile = null;
+
+function previewBulkIdentityLogo(input) {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+
+        if (!file.type.startsWith('image/')) {
+            showToast('Please select an image file', 'error');
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('Image too large. Maximum size is 5MB', 'error');
+            return;
+        }
+
+        bulkIdentityLogoFile = file;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('bulk-identity-logo-img').src = e.target.result;
+            document.getElementById('bulk-identity-logo-preview').style.display = 'block';
+            document.getElementById('bulk-identity-logo-placeholder').style.display = 'none';
+            document.getElementById('bulk-identity-logo-remove').style.display = 'inline-block';
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function removeBulkIdentityLogo() {
+    bulkIdentityLogoFile = null;
+    document.getElementById('bulk-identity-logo-input').value = '';
+    document.getElementById('bulk-identity-logo-preview').style.display = 'none';
+    document.getElementById('bulk-identity-logo-placeholder').style.display = 'block';
+    document.getElementById('bulk-identity-logo-remove').style.display = 'none';
+}
+
+// Create identity for bulk launch account
+async function createBulkIdentity(advertiserId) {
+    const displayName = document.getElementById('bulk-identity-name').value.trim();
+    if (!displayName) {
+        showToast('Please enter a display name', 'error');
+        return;
+    }
+
+    showLoading('Creating identity...');
+
+    try {
+        let profileImageId = null;
+
+        // Upload logo if provided
+        if (bulkIdentityLogoFile) {
+            showLoading('Uploading logo...');
+            addLog('info', 'Uploading identity logo...');
+
+            const formData = new FormData();
+            formData.append('image', bulkIdentityLogoFile);
+            formData.append('advertiser_id', advertiserId);
+
+            const uploadResponse = await fetch('api.php?action=upload_image', {
+                method: 'POST',
+                body: formData
+            });
+
+            const uploadResult = await uploadResponse.json();
+
+            if (uploadResult.success && uploadResult.data?.image_id) {
+                profileImageId = uploadResult.data.image_id;
+                addLog('success', `Logo uploaded: ${profileImageId}`);
+            } else {
+                addLog('warning', 'Logo upload failed, creating identity without logo');
+            }
+        }
+
+        showLoading('Creating identity...');
+
+        const params = {
+            target_advertiser_id: advertiserId,
+            display_name: displayName
+        };
+        if (profileImageId) {
+            params.profile_image_id = profileImageId;
+        }
+
+        const result = await apiRequest('create_identity_for_account', params);
+
+        if (result.success && result.identity_id) {
+            closeBulkIdentityModal();
+            showToast('Identity created successfully!', 'success');
+            addLog('success', `Identity created for ${advertiserId}: ${displayName} (ID: ${result.identity_id})`);
+
+            // Add new identity to assets
+            const assets = bulkLaunchState.accountAssets[advertiserId];
+            if (assets) {
+                if (!assets.identities) assets.identities = [];
+                assets.identities.unshift({
+                    identity_id: result.identity_id,
+                    display_name: displayName,
+                    identity_name: displayName,
+                    identity_type: 'CUSTOMIZED_USER',
+                    source: 'just_created'
+                });
+            }
+
+            // Select the new identity
+            const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+            if (selectedAccount) {
+                selectedAccount.identity_id = result.identity_id;
+                selectedAccount.identity_type = 'CUSTOMIZED_USER';
+            }
+
+            // Re-render the account assets
+            const assetsContainer = document.getElementById(`assets-${advertiserId}`);
+            if (assetsContainer && assets) {
+                assetsContainer.innerHTML = renderAccountAssetsDropdowns(advertiserId, assets);
+            }
+
+            // Update status
+            const statusEl = document.getElementById(`status-${advertiserId}`);
+            if (statusEl) {
+                statusEl.innerHTML = getAccountStatus(advertiserId);
+            }
+
+            updateBulkModalCounts();
+        } else {
+            showToast(result.message || 'Failed to create identity', 'error');
+            addLog('error', `Identity creation failed: ${result.message}`);
+        }
+    } catch (error) {
+        showToast('Error creating identity: ' + error.message, 'error');
+        addLog('error', `Identity creation error: ${error.message}`);
     } finally {
         hideLoading();
     }

@@ -2066,6 +2066,46 @@ h3 {
     background: #1a8ad8;
 }
 
+/* Identity select wrapper with create button (same style as portfolio) */
+.identity-select-wrapper {
+    display: flex;
+    gap: 6px;
+}
+
+.identity-select-wrapper select {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: white;
+}
+
+.identity-select-wrapper select:focus {
+    border-color: var(--primary);
+    outline: none;
+}
+
+.btn-create-identity {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-create-identity:hover {
+    background: #1a8ad8;
+}
+
 /* CTA Checkbox List for Portfolio Creation */
 .cta-checkbox-list {
     display: flex;
