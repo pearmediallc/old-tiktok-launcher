@@ -997,17 +997,23 @@ async function createCtaPortfolio() {
 }
 
 // Load Media Library
-async function loadMediaLibrary() {
+async function loadMediaLibrary(forceRefresh = false) {
     try {
         const [videosResult, imagesResult] = await Promise.all([
-            apiRequest('get_videos'),
-            apiRequest('get_images')
+            apiRequest('get_videos', { force_refresh: forceRefresh }),
+            apiRequest('get_images', { force_refresh: forceRefresh })
         ]);
+
+        // Preserve newly uploaded items that may not be in API yet (marked with is_new flag)
+        const newItems = state.mediaLibrary.filter(m => m.is_new);
 
         state.mediaLibrary = [];
 
         if (videosResult.success && videosResult.data) {
             videosResult.data.forEach(video => {
+                // Skip if we already have this video as a new upload
+                if (newItems.some(n => n.id === video.video_id)) return;
+
                 state.mediaLibrary.push({
                     type: 'video',
                     id: video.video_id,
@@ -1020,6 +1026,9 @@ async function loadMediaLibrary() {
 
         if (imagesResult.success && imagesResult.data) {
             imagesResult.data.forEach(image => {
+                // Skip if we already have this image as a new upload
+                if (newItems.some(n => n.id === image.image_id)) return;
+
                 state.mediaLibrary.push({
                     type: 'image',
                     id: image.image_id,
@@ -1029,7 +1038,19 @@ async function loadMediaLibrary() {
             });
         }
 
-        addLog('info', `Loaded ${state.mediaLibrary.length} media items`);
+        // Merge in the new uploads at the beginning (they appear first)
+        state.mediaLibrary = [...newItems, ...state.mediaLibrary];
+
+        // Clear is_new flag after 30 seconds (by then API should have them)
+        if (newItems.length > 0) {
+            setTimeout(() => {
+                state.mediaLibrary.forEach(m => {
+                    if (m.is_new) delete m.is_new;
+                });
+            }, 30000);
+        }
+
+        addLog('info', `Loaded ${state.mediaLibrary.length} media items${forceRefresh ? ' (force refresh)' : ''}`);
         renderVideoSelectionGrid();
         renderImageGrid();
     } catch (error) {
@@ -1075,7 +1096,7 @@ function renderImageGrid() {
 // Refresh Media Library
 async function refreshMediaLibrary() {
     showToast('Refreshing media library...', 'info');
-    await loadMediaLibrary();
+    await loadMediaLibrary(true);  // Force refresh to bypass cache
     showToast('Media library refreshed!', 'success');
 }
 
@@ -1255,31 +1276,29 @@ async function uploadSingleMediaFile(file, index, total) {
             addLog('success', `Uploaded: ${newFileName}`);
 
             // Create preview URL and add to state
+            // Use format that matches loadMediaLibrary: id, url, name, type
             const previewUrl = URL.createObjectURL(file);
 
             if (isVideo && result.data?.video_id) {
                 state.mediaLibrary.unshift({
-                    video_id: result.data.video_id,
-                    displayable_name: newFileName,
-                    file_name: newFileName,
-                    preview_url: previewUrl,
-                    thumbnail_url: previewUrl,
-                    duration: 0,
                     type: 'video',
-                    create_time: new Date().toISOString(),
+                    id: result.data.video_id,
+                    url: previewUrl,
+                    name: newFileName,
                     is_new: true
                 });
+                // Render grid immediately
+                renderVideoSelectionGrid();
             } else if (!isVideo && result.data?.image_id) {
                 state.mediaLibrary.unshift({
-                    image_id: result.data.image_id,
-                    displayable_name: newFileName,
-                    file_name: newFileName,
-                    preview_url: previewUrl,
-                    image_url: previewUrl,
                     type: 'image',
-                    create_time: new Date().toISOString(),
+                    id: result.data.image_id,
+                    url: previewUrl,
+                    name: newFileName,
                     is_new: true
                 });
+                // Render grid immediately
+                renderImageGrid();
             }
 
             // Update overall progress
@@ -3332,6 +3351,11 @@ function renderOriginalAccountAssets() {
     const identityName = identity?.display_name || identity?.identity_name || state.globalIdentityId || 'Not selected';
     const portfolio = state.ctaPortfolios?.find(p => p.creative_portfolio_id === state.selectedPortfolioId);
     const portfolioName = portfolio?.portfolio_name || state.selectedPortfolioId || 'Not selected';
+    const currentAccount = bulkLaunchState.accounts.find(a => a.is_current);
+    const advertiserId = currentAccount?.advertiser_id || 'original';
+    const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.is_original);
+    const currentLandingUrl = selectedAccount?.landing_page_url || '';
+    const globalLandingUrl = document.getElementById('global-landing-url')?.value || '';
 
     return `
         <div class="bulk-asset-grid original-assets">
@@ -3347,6 +3371,20 @@ function renderOriginalAccountAssets() {
                 <label>CTA Portfolio</label>
                 <div class="asset-value">${portfolioName}</div>
             </div>
+        </div>
+        <div class="bulk-landing-url-section" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e2e8f0;">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; margin-bottom: 6px;">
+                <span class="asset-icon">🔗</span> Landing Page URL <span style="color: #94a3b8;">(optional override)</span>
+            </label>
+            <input type="url"
+                   id="landing-url-${advertiserId}"
+                   placeholder="${globalLandingUrl || 'Use campaign default URL...'}"
+                   value="${currentLandingUrl}"
+                   onchange="updateOriginalAccountLandingUrl()"
+                   style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; transition: border-color 0.2s;">
+            <small style="color: #94a3b8; font-size: 11px; margin-top: 4px; display: block;">
+                Leave empty to use campaign default: <span style="color: #64748b;">${globalLandingUrl || 'Not set'}</span>
+            </small>
         </div>
     `;
 }
@@ -3424,6 +3462,26 @@ function renderAccountAssetsDropdowns(advertiserId, assets) {
                 </div>
                 ${portfoliosArray.length > 0 ? `<span class="asset-count">${portfoliosArray.length} available</span>` : '<span class="asset-count">Will auto-create</span>'}
             </div>
+        </div>
+    `;
+
+    // Landing Page URL field (optional, per-account override)
+    const currentLandingUrl = selectedAccount?.landing_page_url || '';
+    const globalLandingUrl = document.getElementById('global-landing-url')?.value || '';
+    html += `
+        <div class="bulk-landing-url-section" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e2e8f0;">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; margin-bottom: 6px;">
+                <span class="asset-icon">🔗</span> Landing Page URL <span style="color: #94a3b8;">(optional override)</span>
+            </label>
+            <input type="url"
+                   id="landing-url-${advertiserId}"
+                   placeholder="${globalLandingUrl || 'Use campaign default URL...'}"
+                   value="${currentLandingUrl}"
+                   onchange="updateAccountLandingUrl('${advertiserId}')"
+                   style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; transition: border-color 0.2s;">
+            <small style="color: #94a3b8; font-size: 11px; margin-top: 4px; display: block;">
+                Leave empty to use campaign default: <span style="color: #64748b;">${globalLandingUrl || 'Not set'}</span>
+            </small>
         </div>
     `;
 
@@ -4117,6 +4175,41 @@ function updateAccountAssetSelection(advertiserId) {
     updateBulkModalCounts();
 }
 
+// Update account landing page URL (optional override)
+function updateAccountLandingUrl(advertiserId) {
+    const urlInput = document.getElementById(`landing-url-${advertiserId}`);
+    if (!urlInput) return;
+
+    const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+    if (!selectedAccount) {
+        // If account not selected yet, just store the value for when it gets selected
+        return;
+    }
+
+    const url = urlInput.value.trim();
+    selectedAccount.landing_page_url = url || null; // null means use campaign default
+
+    addLog('info', `Updated landing page URL for ${advertiserId}: ${url || '(using default)'}`);
+}
+
+// Update original account landing page URL
+function updateOriginalAccountLandingUrl() {
+    const currentAccount = bulkLaunchState.accounts.find(a => a.is_current);
+    if (!currentAccount) return;
+
+    const urlInput = document.getElementById(`landing-url-${currentAccount.advertiser_id}`) ||
+                     document.getElementById('landing-url-original');
+    if (!urlInput) return;
+
+    const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.is_original);
+    if (!selectedAccount) return;
+
+    const url = urlInput.value.trim();
+    selectedAccount.landing_page_url = url || null;
+
+    addLog('info', `Updated landing page URL for original account: ${url || '(using default)'}`);
+}
+
 // Select all accounts
 function selectAllBulkAccounts() {
     bulkLaunchState.accounts.forEach(account => {
@@ -4754,7 +4847,9 @@ async function executeBulkLaunch() {
                 identity_type: state.globalIdentityType || 'CUSTOMIZED_USER',
                 portfolio_id: state.selectedPortfolioId,
                 // For original account, videos don't need mapping (same account)
-                video_mapping: {}
+                video_mapping: {},
+                // Landing page URL override (null = use campaign default)
+                landing_page_url: account.landing_page_url || null
             };
             // Include identity_authorized_bc_id for BC_AUTH_TT identities
             if (state.globalIdentityType === 'BC_AUTH_TT' && state.globalIdentityAuthorizedBcId) {
@@ -4771,7 +4866,9 @@ async function executeBulkLaunch() {
             identity_id: account.identity_id,
             identity_type: account.identity_type,
             portfolio_id: account.portfolio_id,
-            video_mapping: account.video_mapping || {}
+            video_mapping: account.video_mapping || {},
+            // Landing page URL override (null = use campaign default)
+            landing_page_url: account.landing_page_url || null
         };
         // Include identity_authorized_bc_id for BC_AUTH_TT identities
         if (account.identity_type === 'BC_AUTH_TT' && account.identity_authorized_bc_id) {
@@ -8026,16 +8123,13 @@ async function handleVideoModalUpload(event) {
             const previewUrl = URL.createObjectURL(file);
 
             // Add new video to state immediately so it shows right away
+            // Use format that matches loadMediaLibrary: id, url, name, type
             const newVideo = {
-                video_id: result.data.video_id,
-                displayable_name: newFileName,
-                file_name: newFileName,
-                preview_url: previewUrl,
-                thumbnail_url: previewUrl,  // Use video as thumbnail temporarily
-                duration: 0,
                 type: 'video',
-                create_time: new Date().toISOString(),
-                is_new: true  // Flag to show "New" badge
+                id: result.data.video_id,
+                url: previewUrl,
+                name: newFileName,
+                is_new: true
             };
 
             // Add to beginning of media library
@@ -8050,14 +8144,17 @@ async function handleVideoModalUpload(event) {
             const totalEl = document.getElementById('video-modal-total');
             if (totalEl) totalEl.textContent = videos.length;
 
+            // Also update Step 3 video grid
+            renderVideoSelectionGrid();
+
             // Hide progress after a moment
             setTimeout(() => {
                 if (progressContainer) progressContainer.style.display = 'none';
             }, 1500);
 
-            // Refresh from API in background to get proper thumbnail/metadata
+            // Refresh from API in background with force refresh to get proper thumbnail/metadata
             setTimeout(async () => {
-                await loadMediaLibrary();
+                await loadMediaLibrary(true);  // Force refresh
                 const updatedVideos = state.mediaLibrary.filter(m => m.type === 'video');
                 videoModalState.allVideos = updatedVideos;
                 renderVideoModalGrid(updatedVideos);
@@ -8204,16 +8301,12 @@ async function uploadSingleVideoInBulk(file, index) {
             updateUploadItemStatus(itemId, 'success', '✓ Uploaded');
             addLog('success', `Uploaded: ${newFileName} (${result.data.video_id})`);
 
-            // Add to state immediately
+            // Add to state immediately using correct format: id, url, name, type
             const newVideo = {
-                video_id: result.data.video_id,
-                displayable_name: newFileName,
-                file_name: newFileName,
-                preview_url: URL.createObjectURL(file),
-                thumbnail_url: URL.createObjectURL(file),
-                duration: 0,
                 type: 'video',
-                create_time: new Date().toISOString(),
+                id: result.data.video_id,
+                url: URL.createObjectURL(file),
+                name: newFileName,
                 is_new: true
             };
             state.mediaLibrary.unshift(newVideo);
@@ -8293,7 +8386,7 @@ function finishBulkUpload() {
         addLog('error', `Bulk upload failed: all ${total} videos failed`);
     }
 
-    // Refresh video grid
+    // Refresh video grid in modal
     const videos = state.mediaLibrary.filter(m => m.type === 'video');
     videoModalState.allVideos = videos;
     renderVideoModalGrid(videos);
@@ -8301,14 +8394,17 @@ function finishBulkUpload() {
     const totalEl = document.getElementById('video-modal-total');
     if (totalEl) totalEl.textContent = videos.length;
 
+    // Also update Step 3 video grid
+    renderVideoSelectionGrid();
+
     // Hide progress after delay
     setTimeout(() => {
         const container = document.getElementById('video-modal-upload-progress');
         if (container) container.style.display = 'none';
     }, 3000);
 
-    // Background refresh to get proper thumbnails
-    setTimeout(() => loadMediaLibrary(), 2000);
+    // Background refresh with force_refresh to get proper thumbnails
+    setTimeout(() => loadMediaLibrary(true), 2000);
 }
 
 // Render current videos in duplicate modal

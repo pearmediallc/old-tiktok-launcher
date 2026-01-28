@@ -732,16 +732,23 @@ switch ($action) {
     // ==========================================
     case 'get_videos':
         $cacheKey = $cache->generateKey('videos', $advertiserId);
-        $cachedData = $cache->get($cacheKey);
+        $forceRefresh = isset($input['force_refresh']) && $input['force_refresh'];
 
-        if ($cachedData !== null) {
-            logSmartPlus("Cache HIT for videos - Advertiser: $advertiserId");
-            echo json_encode([
-                'success' => true,
-                'data' => $cachedData,
-                'cached' => true
-            ]);
-            break;
+        // Check cache unless force_refresh is true
+        if (!$forceRefresh) {
+            $cachedData = $cache->get($cacheKey);
+            if ($cachedData !== null) {
+                logSmartPlus("Cache HIT for videos - Advertiser: $advertiserId");
+                echo json_encode([
+                    'success' => true,
+                    'data' => $cachedData,
+                    'cached' => true
+                ]);
+                break;
+            }
+        } else {
+            logSmartPlus("Force refresh for videos - Advertiser: $advertiserId");
+            $cache->delete($cacheKey);  // Clear existing cache
         }
 
         logSmartPlus("Cache MISS for videos - Advertiser: $advertiserId");
@@ -771,16 +778,23 @@ switch ($action) {
     // ==========================================
     case 'get_images':
         $cacheKey = $cache->generateKey('images', $advertiserId);
-        $cachedData = $cache->get($cacheKey);
+        $forceRefresh = isset($input['force_refresh']) && $input['force_refresh'];
 
-        if ($cachedData !== null) {
-            logSmartPlus("Cache HIT for images - Advertiser: $advertiserId");
-            echo json_encode([
-                'success' => true,
-                'data' => $cachedData,
-                'cached' => true
-            ]);
-            break;
+        // Check cache unless force_refresh is true
+        if (!$forceRefresh) {
+            $cachedData = $cache->get($cacheKey);
+            if ($cachedData !== null) {
+                logSmartPlus("Cache HIT for images - Advertiser: $advertiserId");
+                echo json_encode([
+                    'success' => true,
+                    'data' => $cachedData,
+                    'cached' => true
+                ]);
+                break;
+            }
+        } else {
+            logSmartPlus("Force refresh for images - Advertiser: $advertiserId");
+            $cache->delete($cacheKey);
         }
 
         logSmartPlus("Cache MISS for images - Advertiser: $advertiserId");
@@ -2383,6 +2397,7 @@ switch ($action) {
             $identityType = $account['identity_type'] ?? 'CUSTOMIZED_USER';
             $identityAuthorizedBcId = $account['identity_authorized_bc_id'] ?? null;
             $videoMapping = $account['video_mapping'] ?? [];
+            $accountLandingPageUrl = $account['landing_page_url'] ?? null;  // Optional per-account landing URL override
 
             logSmartPlus("--- Processing Account: $accountName ($targetAdvertiserId) ---");
 
@@ -2623,10 +2638,12 @@ switch ($action) {
                     $adTextList[] = ['ad_text' => 'Check it out!'];
                 }
 
-                // Build landing page URL list
+                // Build landing page URL list (use account-specific URL if provided, otherwise campaign default)
                 $landingPageList = [];
-                if (!empty($campaignConfig['landing_page_url'])) {
-                    $landingPageList[] = ['landing_page_url' => $campaignConfig['landing_page_url']];
+                $effectiveLandingUrl = !empty($accountLandingPageUrl) ? $accountLandingPageUrl : ($campaignConfig['landing_page_url'] ?? null);
+                if (!empty($effectiveLandingUrl)) {
+                    $landingPageList[] = ['landing_page_url' => $effectiveLandingUrl];
+                    logSmartPlus("Using landing page URL: $effectiveLandingUrl" . (!empty($accountLandingPageUrl) ? " (account override)" : " (campaign default)"));
                 }
 
                 // Build ad_configuration
