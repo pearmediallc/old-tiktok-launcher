@@ -2354,23 +2354,26 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
-                        Upload Video
+                        Upload Videos
                     </button>
-                    <input type="file" id="video-modal-upload-input" accept="video/*" style="display: none;" onchange="handleVideoModalUpload(event)">
+                    <input type="file" id="video-modal-upload-input" accept="video/*" multiple style="display: none;" onchange="handleBulkVideoUpload(event)">
                     <div style="display: flex; align-items: center; gap: 10px; padding: 0 15px; background: #f8fafc; border-radius: 8px;">
                         <span style="font-weight: 600; color: #475569;">Selected:</span>
                         <span id="video-modal-count" style="font-size: 18px; font-weight: 700; color: #1e9df1;">0</span>
                     </div>
                 </div>
 
-                <!-- Upload Progress (hidden by default) -->
+                <!-- Bulk Upload Progress (hidden by default) -->
                 <div id="video-modal-upload-progress" style="display: none; margin-bottom: 20px; padding: 15px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                        <div class="spinner" style="width: 20px; height: 20px; border: 2px solid #e2e8f0; border-top-color: #1e9df1; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                        <span id="video-modal-upload-status" style="font-weight: 500; color: #0369a1;">Uploading video...</span>
+                    <div class="bulk-upload-header">
+                        <span id="bulk-upload-title">Uploading videos...</span>
+                        <span id="bulk-upload-count">0/0</span>
                     </div>
-                    <div style="background: #e2e8f0; border-radius: 4px; height: 6px; overflow: hidden;">
-                        <div id="video-modal-upload-bar" style="background: #1e9df1; height: 100%; width: 0%; transition: width 0.3s;"></div>
+                    <div class="bulk-upload-bar-container">
+                        <div id="bulk-upload-bar" class="bulk-upload-bar"></div>
+                    </div>
+                    <div id="bulk-upload-list" class="bulk-upload-list">
+                        <!-- Individual file progress items will be added here -->
                     </div>
                 </div>
 

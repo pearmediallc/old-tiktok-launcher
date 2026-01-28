@@ -2298,6 +2298,171 @@ h3 {
     color: var(--destructive);
 }
 
+/* ============================================
+   Bulk Video Upload Styles
+   ============================================ */
+
+.bulk-upload-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-weight: 600;
+    color: #0369a1;
+}
+
+.bulk-upload-bar-container {
+    background: #e2e8f0;
+    border-radius: 4px;
+    height: 8px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.bulk-upload-bar {
+    background: linear-gradient(90deg, #1e9df1, #22c55e);
+    height: 100%;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.bulk-upload-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.upload-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: #f8fafc;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.upload-item-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #374151;
+}
+
+.upload-item-size {
+    color: #64748b;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.upload-item-status {
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.upload-item-status.pending {
+    background: #f1f5f9;
+    color: #64748b;
+}
+
+.upload-item-status.uploading {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.upload-item-status.success {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.upload-item-status.failed {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+/* ============================================
+   Account Status & Payment Warning Styles
+   ============================================ */
+
+.account-status {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-top: 8px;
+}
+
+.status-active {
+    background: #10b981;
+    color: white;
+}
+
+.status-disabled {
+    background: #f59e0b;
+    color: white;
+}
+
+.status-pending {
+    background: #3b82f6;
+    color: white;
+}
+
+.status-rejected {
+    background: #ef4444;
+    color: white;
+}
+
+.rejection-reason {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #dc2626;
+}
+
+.balance-warning,
+.payment-error {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 14px;
+}
+
+.balance-warning {
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    color: #92400e;
+}
+
+.payment-error {
+    background: #fef2f2;
+    border: 1px solid #ef4444;
+    color: #dc2626;
+}
+
+.balance-warning a,
+.payment-error a {
+    margin-left: auto;
+    color: inherit;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.balance-warning a:hover,
+.payment-error a:hover {
+    text-decoration: underline;
+}
+
 /* =====================
    MEDIA LIBRARY STYLES (Bulk Launch)
    ===================== */

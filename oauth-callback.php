@@ -94,7 +94,11 @@ if (!empty($_SESSION['oauth_advertiser_ids'])) {
                 $advertiser_details[$advertiser['advertiser_id']] = [
                     'id' => $advertiser['advertiser_id'],
                     'name' => $advertiser['advertiser_name'] ?? 'Account',
-                    'status' => $advertiser['status'] ?? 'active'
+                    'status' => $advertiser['status'] ?? 'active',
+                    'rejection_reason' => $advertiser['rejection_reason'] ?? null,
+                    'company' => $advertiser['company'] ?? null,
+                    'contacter' => $advertiser['contacter'] ?? null,
+                    'description' => $advertiser['description'] ?? null
                 ];
             }
         }

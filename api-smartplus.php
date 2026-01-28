@@ -537,6 +537,47 @@ switch ($action) {
         break;
 
     // ==========================================
+    // GET ACCOUNT BALANCE / FUND STATUS
+    // ==========================================
+    case 'get_account_balance':
+        logSmartPlus("=== GET ACCOUNT BALANCE ===");
+        logSmartPlus("Advertiser ID: $advertiserId");
+
+        $result = makeApiCall('/advertiser/fund/get/', [
+            'advertiser_id' => $advertiserId
+        ], $accessToken, 'GET');
+
+        logSmartPlus("Fund API Response: " . json_encode($result));
+
+        if ($result['code'] == 0 && isset($result['data'])) {
+            $balance = floatval($result['data']['balance'] ?? 0);
+            $grantBalance = floatval($result['data']['grant_balance'] ?? 0);
+            $totalBalance = $balance + $grantBalance;
+            $currency = $result['data']['currency'] ?? 'USD';
+
+            echo json_encode([
+                'success' => true,
+                'data' => [
+                    'balance' => $balance,
+                    'grant_balance' => $grantBalance,
+                    'total_balance' => $totalBalance,
+                    'currency' => $currency
+                ]
+            ]);
+        } else {
+            // If fund API fails, might be a payment method issue
+            $errorMessage = $result['message'] ?? 'Unable to fetch account balance';
+            logSmartPlus("Fund API Error: $errorMessage");
+
+            echo json_encode([
+                'success' => false,
+                'message' => $errorMessage,
+                'payment_issue' => true
+            ]);
+        }
+        break;
+
+    // ==========================================
     // GET PIXELS (Cached - 10 min TTL)
     // ==========================================
     case 'get_pixels':

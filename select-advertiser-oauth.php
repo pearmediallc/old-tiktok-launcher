@@ -244,6 +244,57 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
             line-height: 1.6;
         }
 
+        /* Account Status Badges */
+        .account-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            margin: 8px 0;
+        }
+
+        .status-active {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-disabled {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .status-pending {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .status-rejected {
+            background: #ef4444;
+            color: white;
+        }
+
+        .rejection-reason {
+            margin: 8px 0;
+            padding: 8px 12px;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #dc2626;
+            text-align: left;
+        }
+
+        .selection-card.has-issue {
+            border: 2px solid #f59e0b;
+        }
+
+        .selection-card.has-issue[data-status="REJECTED"],
+        .selection-card.has-issue[data-status="STATUS_CONFIRM_FAIL"],
+        .selection-card.has-issue[data-status="DISAPPROVED"] {
+            border-color: #ef4444;
+        }
+
         .check-icon {
             position: absolute;
             top: 20px;
@@ -683,16 +734,64 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
                             <?php foreach ($advertiser_ids as $index => $advertiser_id):
                                 $details = $advertiser_details[$advertiser_id] ?? null;
                                 $name = $details ? $details['name'] : 'Advertiser Account ' . ($index + 1);
+
+                                // Determine account status styling
+                                $statusClass = 'status-active';
+                                $statusText = 'Active';
+                                $statusIcon = '✓';
+                                $accountStatus = strtoupper($details['status'] ?? 'active');
+
+                                switch($accountStatus) {
+                                    case 'STATUS_DISABLE':
+                                    case 'DISABLE':
+                                    case 'DISABLED':
+                                        $statusClass = 'status-disabled';
+                                        $statusText = 'Disabled';
+                                        $statusIcon = '⚠️';
+                                        break;
+                                    case 'STATUS_PENDING_CONFIRM':
+                                    case 'STATUS_PENDING_VERIFIED':
+                                    case 'PENDING':
+                                        $statusClass = 'status-pending';
+                                        $statusText = 'Pending Review';
+                                        $statusIcon = '⏳';
+                                        break;
+                                    case 'STATUS_CONFIRM_FAIL':
+                                    case 'REJECTED':
+                                    case 'DISAPPROVED':
+                                        $statusClass = 'status-rejected';
+                                        $statusText = 'Rejected';
+                                        $statusIcon = '❌';
+                                        break;
+                                    case 'STATUS_ENABLE':
+                                    case 'ENABLE':
+                                    case 'ACTIVE':
+                                    default:
+                                        $statusClass = 'status-active';
+                                        $statusText = 'Active';
+                                        $statusIcon = '✓';
+                                }
+
+                                $rejectionReason = $details['rejection_reason'] ?? null;
                             ?>
-                                <div class="selection-card"
+                                <div class="selection-card <?php echo ($statusClass !== 'status-active') ? 'has-issue' : ''; ?>"
                                      data-advertiser-id="<?php echo htmlspecialchars($advertiser_id); ?>"
                                      data-name="<?php echo htmlspecialchars(strtolower($name)); ?>"
-                                     data-search="<?php echo htmlspecialchars(strtolower($name . ' ' . $advertiser_id)); ?>">
+                                     data-search="<?php echo htmlspecialchars(strtolower($name . ' ' . $advertiser_id)); ?>"
+                                     data-status="<?php echo htmlspecialchars($accountStatus); ?>">
                                     <div onclick="selectAdvertiser('<?php echo htmlspecialchars($advertiser_id); ?>', this.parentElement)">
                                         <div class="check-icon">✓</div>
                                         <div class="card-icon">📊</div>
                                         <div class="card-title"><?php echo htmlspecialchars($name); ?></div>
                                         <div class="card-subtitle">ID: <?php echo htmlspecialchars($advertiser_id); ?></div>
+                                        <div class="account-status <?php echo $statusClass; ?>">
+                                            <?php echo $statusIcon . ' ' . $statusText; ?>
+                                        </div>
+                                        <?php if ($rejectionReason): ?>
+                                            <div class="rejection-reason">
+                                                ⚠️ <?php echo htmlspecialchars($rejectionReason); ?>
+                                            </div>
+                                        <?php endif; ?>
                                         <div class="card-description">Click to select this account for campaign creation</div>
                                     </div>
                                     <button class="card-next-button" onclick="goToStep(2); event.stopPropagation();">

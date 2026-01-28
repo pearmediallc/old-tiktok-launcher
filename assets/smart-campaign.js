@@ -493,6 +493,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadCtaPortfolios();  // Load CTA portfolios for Lead Gen campaigns
     loadMediaLibrary();
     loadAdvertiserTimezone();  // Get advertiser timezone for schedule time conversion
+    checkAccountBalance();  // Check account balance and show warnings if needed
     initializeDayparting();
     initializeLocationTargeting();
     initializeAgeTargeting();  // Initialize age selection buttons
@@ -627,6 +628,89 @@ async function loadAdvertiserTimezone() {
         state.advertiserTimezone = 'UTC';
         state.advertiserTimezoneOffset = 0;
     }
+}
+
+// ============================================
+// ACCOUNT BALANCE & PAYMENT CHECK
+// ============================================
+
+// Check account balance and show warnings if needed
+async function checkAccountBalance() {
+    try {
+        addLog('info', 'Checking account balance...');
+        const result = await apiRequest('get_account_balance');
+
+        if (result.success && result.data) {
+            const balance = parseFloat(result.data.total_balance);
+            const currency = result.data.currency || 'USD';
+            state.accountBalance = balance;
+            state.accountCurrency = currency;
+
+            addLog('info', `Account balance: ${currency} ${balance.toFixed(2)}`);
+
+            // Show warning if balance is low (less than $50)
+            if (balance < 50) {
+                showBalanceWarning(balance, currency);
+            }
+        } else if (result.payment_issue) {
+            // Payment method issue detected
+            showPaymentError('Unable to access account funds. Please check your payment method in TikTok Ads Manager.');
+            addLog('warning', 'Payment method issue detected');
+        }
+    } catch (e) {
+        console.warn('Could not check account balance:', e);
+        addLog('warning', 'Could not check account balance: ' + e.message);
+    }
+}
+
+// Show low balance warning banner
+function showBalanceWarning(balance, currency) {
+    // Remove any existing warnings first
+    removeAccountAlerts();
+
+    const warningHtml = `
+        <div id="balance-warning" class="balance-warning">
+            <span class="warning-icon">⚠️</span>
+            <span>Low account balance: ${currency} ${balance.toFixed(2)} - Campaigns may not deliver properly.</span>
+            <a href="https://ads.tiktok.com/i18n/account/payment" target="_blank">Add Funds →</a>
+        </div>
+    `;
+
+    // Insert after campaign header or at top of main content
+    const insertPoint = document.querySelector('.campaign-header') ||
+                       document.querySelector('.step-section') ||
+                       document.querySelector('main');
+    if (insertPoint) {
+        insertPoint.insertAdjacentHTML('afterend', warningHtml);
+    }
+}
+
+// Show payment error banner
+function showPaymentError(message) {
+    // Remove any existing warnings first
+    removeAccountAlerts();
+
+    const errorHtml = `
+        <div id="payment-error" class="payment-error">
+            <span class="error-icon">❌</span>
+            <span>${message}</span>
+            <a href="https://ads.tiktok.com/i18n/account/payment" target="_blank">Fix Payment →</a>
+        </div>
+    `;
+
+    // Insert after campaign header or at top of main content
+    const insertPoint = document.querySelector('.campaign-header') ||
+                       document.querySelector('.step-section') ||
+                       document.querySelector('main');
+    if (insertPoint) {
+        insertPoint.insertAdjacentHTML('afterend', errorHtml);
+    }
+}
+
+// Remove account alert banners
+function removeAccountAlerts() {
+    document.getElementById('balance-warning')?.remove();
+    document.getElementById('payment-error')?.remove();
 }
 
 // Load Pixels
@@ -7980,6 +8064,226 @@ async function handleVideoModalUpload(event) {
 
     // Reset file input
     event.target.value = '';
+}
+
+// ============================================
+// BULK VIDEO UPLOAD
+// ============================================
+
+// Bulk upload state
+let bulkUploadState = {
+    queue: [],
+    completed: 0,
+    failed: 0,
+    total: 0,
+    isUploading: false
+};
+
+// Handle bulk video upload from video selection modal
+async function handleBulkVideoUpload(event) {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    // If only one file, use the simple upload
+    if (files.length === 1) {
+        return handleVideoModalUpload(event);
+    }
+
+    // Validate all files
+    const validFiles = [];
+    const maxSize = 500 * 1024 * 1024; // 500MB
+
+    for (const file of files) {
+        if (!file.type.startsWith('video/')) {
+            showToast(`Skipped ${file.name}: Not a video file`, 'warning');
+            continue;
+        }
+        if (file.size > maxSize) {
+            showToast(`Skipped ${file.name}: Exceeds 500MB limit`, 'warning');
+            continue;
+        }
+        validFiles.push(file);
+    }
+
+    if (validFiles.length === 0) {
+        showToast('No valid video files selected', 'error');
+        event.target.value = '';
+        return;
+    }
+
+    // Initialize state
+    bulkUploadState = {
+        queue: validFiles,
+        completed: 0,
+        failed: 0,
+        total: validFiles.length,
+        isUploading: true
+    };
+
+    addLog('info', `Starting bulk upload of ${validFiles.length} videos`);
+
+    // Show progress UI
+    showBulkUploadProgress();
+
+    // Upload files (2 concurrent uploads for balance between speed and reliability)
+    const concurrency = 2;
+
+    for (let i = 0; i < validFiles.length; i += concurrency) {
+        const batch = validFiles.slice(i, i + concurrency);
+        await Promise.allSettled(
+            batch.map((file, idx) => uploadSingleVideoInBulk(file, i + idx))
+        );
+    }
+
+    // Complete
+    bulkUploadState.isUploading = false;
+    finishBulkUpload();
+
+    // Clear file input
+    event.target.value = '';
+}
+
+// Upload a single video as part of bulk upload
+async function uploadSingleVideoInBulk(file, index) {
+    const itemId = `upload-item-${index}`;
+    updateUploadItemStatus(itemId, 'uploading', 'Uploading...');
+
+    // Add timestamp to filename
+    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+    const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
+    const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
+    const newFileName = `${baseName}_${timestamp}${ext}`;
+
+    const renamedFile = new File([file], newFileName, { type: file.type });
+    const formData = new FormData();
+    formData.append('video', renamedFile);
+
+    try {
+        addLog('request', `Uploading: ${newFileName}`);
+
+        const response = await fetch('api.php?action=upload_video', {
+            method: 'POST',
+            body: formData
+        });
+
+        const responseText = await response.text();
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (e) {
+            throw new Error('Invalid server response');
+        }
+
+        if (result.success && result.data?.video_id) {
+            bulkUploadState.completed++;
+            updateUploadItemStatus(itemId, 'success', '✓ Uploaded');
+            addLog('success', `Uploaded: ${newFileName} (${result.data.video_id})`);
+
+            // Add to state immediately
+            const newVideo = {
+                video_id: result.data.video_id,
+                displayable_name: newFileName,
+                file_name: newFileName,
+                preview_url: URL.createObjectURL(file),
+                thumbnail_url: URL.createObjectURL(file),
+                duration: 0,
+                type: 'video',
+                create_time: new Date().toISOString(),
+                is_new: true
+            };
+            state.mediaLibrary.unshift(newVideo);
+
+            updateBulkUploadProgress();
+            return { success: true, video_id: result.data.video_id };
+        } else {
+            throw new Error(result.message || 'Upload failed');
+        }
+    } catch (error) {
+        bulkUploadState.failed++;
+        updateUploadItemStatus(itemId, 'failed', `✗ Failed`);
+        addLog('error', `Failed: ${file.name} - ${error.message}`);
+        updateBulkUploadProgress();
+        return { success: false, error: error.message };
+    }
+}
+
+// Show bulk upload progress UI
+function showBulkUploadProgress() {
+    const container = document.getElementById('video-modal-upload-progress');
+    const list = document.getElementById('bulk-upload-list');
+
+    if (!container || !list) return;
+
+    container.style.display = 'block';
+    document.getElementById('bulk-upload-count').textContent = `0/${bulkUploadState.total}`;
+    document.getElementById('bulk-upload-bar').style.width = '0%';
+
+    // Create item for each file
+    list.innerHTML = bulkUploadState.queue.map((file, i) => `
+        <div class="upload-item" id="upload-item-${i}">
+            <span class="upload-item-name" title="${file.name}">${file.name}</span>
+            <span class="upload-item-size">${(file.size / 1024 / 1024).toFixed(1)}MB</span>
+            <span class="upload-item-status pending">Pending</span>
+        </div>
+    `).join('');
+}
+
+// Update individual upload item status
+function updateUploadItemStatus(itemId, status, text) {
+    const item = document.getElementById(itemId);
+    if (!item) return;
+
+    const statusEl = item.querySelector('.upload-item-status');
+    if (statusEl) {
+        statusEl.className = `upload-item-status ${status}`;
+        statusEl.textContent = text;
+    }
+}
+
+// Update overall bulk upload progress
+function updateBulkUploadProgress() {
+    const completed = bulkUploadState.completed + bulkUploadState.failed;
+    const total = bulkUploadState.total;
+    const percent = Math.round((completed / total) * 100);
+
+    const countEl = document.getElementById('bulk-upload-count');
+    const barEl = document.getElementById('bulk-upload-bar');
+
+    if (countEl) countEl.textContent = `${completed}/${total}`;
+    if (barEl) barEl.style.width = `${percent}%`;
+}
+
+// Finish bulk upload and show results
+function finishBulkUpload() {
+    const { completed, failed, total } = bulkUploadState;
+
+    if (failed === 0) {
+        showToast(`Successfully uploaded ${completed} videos!`, 'success');
+        addLog('success', `Bulk upload complete: ${completed} videos uploaded`);
+    } else if (completed > 0) {
+        showToast(`Uploaded ${completed}/${total} videos (${failed} failed)`, 'warning');
+        addLog('warning', `Bulk upload complete: ${completed} success, ${failed} failed`);
+    } else {
+        showToast(`Failed to upload all ${total} videos`, 'error');
+        addLog('error', `Bulk upload failed: all ${total} videos failed`);
+    }
+
+    // Refresh video grid
+    const videos = state.mediaLibrary.filter(m => m.type === 'video');
+    videoModalState.allVideos = videos;
+    renderVideoModalGrid(videos);
+
+    const totalEl = document.getElementById('video-modal-total');
+    if (totalEl) totalEl.textContent = videos.length;
+
+    // Hide progress after delay
+    setTimeout(() => {
+        const container = document.getElementById('video-modal-upload-progress');
+        if (container) container.style.display = 'none';
+    }, 3000);
+
+    // Background refresh to get proper thumbnails
+    setTimeout(() => loadMediaLibrary(), 2000);
 }
 
 // Render current videos in duplicate modal
