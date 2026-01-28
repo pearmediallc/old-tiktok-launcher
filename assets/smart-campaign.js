@@ -1241,7 +1241,7 @@ async function uploadSingleMediaFile(file, index, total, retryCount = 0) {
     const itemId = `smart-upload-item-${index}`;
     const maxRetries = 2;
     const isVideo = file.type.startsWith('video/');
-    const uploadTimeout = isVideo ? 180000 : 60000; // 3 min for video, 1 min for image
+    const uploadTimeout = isVideo ? 120000 : 60000; // 2 min for video, 1 min for image
 
     updateSmartUploadItemStatus(itemId, 'uploading', retryCount > 0 ? `Retrying (${retryCount})...` : 'Uploading...');
 
@@ -8273,13 +8273,13 @@ async function handleBulkVideoUpload(event) {
     event.target.value = '';
 }
 
-// Upload a single video as part of bulk upload with retry logic
+// Upload a single video as part of bulk upload with retry logic and progress tracking
 async function uploadSingleVideoInBulk(file, index, retryCount = 0) {
     const itemId = `upload-item-${index}`;
     const maxRetries = 2;
-    const uploadTimeout = 180000; // 3 minutes timeout per file
+    const uploadTimeout = 120000; // 2 minutes timeout per file
 
-    updateUploadItemStatus(itemId, 'uploading', retryCount > 0 ? `Retrying (${retryCount})...` : 'Uploading...');
+    updateUploadItemStatus(itemId, 'uploading', retryCount > 0 ? `Retrying (${retryCount})...` : 'Uploading...', 0);
 
     // Add timestamp to filename (only on first attempt)
     const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
@@ -8291,79 +8291,142 @@ async function uploadSingleVideoInBulk(file, index, retryCount = 0) {
     const formData = new FormData();
     formData.append('video', file, newFileName);
 
-    try {
-        addLog('request', `Uploading: ${newFileName}${retryCount > 0 ? ` (retry ${retryCount})` : ''}`);
+    addLog('request', `Uploading: ${newFileName}${retryCount > 0 ? ` (retry ${retryCount})` : ''}`);
 
-        // Create AbortController for timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), uploadTimeout);
+    return new Promise((resolve) => {
+        const xhr = new XMLHttpRequest();
+        let timeoutId;
 
-        const response = await fetch('api.php?action=upload_video', {
-            method: 'POST',
-            body: formData,
-            signal: controller.signal
+        // Progress tracking
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                updateUploadItemStatus(itemId, 'uploading', `${percent}%`, percent);
+            }
         });
 
-        clearTimeout(timeoutId);
+        // Success handler
+        xhr.addEventListener('load', () => {
+            clearTimeout(timeoutId);
 
-        if (!response.ok) {
-            throw new Error(`HTTP error: ${response.status}`);
-        }
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    let result;
+                    try {
+                        result = JSON.parse(xhr.responseText);
+                    } catch (e) {
+                        const jsonMatch = xhr.responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
+                        if (jsonMatch) {
+                            result = JSON.parse(jsonMatch[0]);
+                        } else {
+                            throw new Error('Invalid server response');
+                        }
+                    }
 
-        const responseText = await response.text();
-        let result;
-        try {
-            result = JSON.parse(responseText);
-        } catch (e) {
-            // Try to extract JSON from response
-            const jsonMatch = responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
-            if (jsonMatch) {
-                result = JSON.parse(jsonMatch[0]);
+                    if (result.success && result.data?.video_id) {
+                        bulkUploadState.completed++;
+                        updateUploadItemStatus(itemId, 'success', '✓ Uploaded', 100);
+                        addLog('success', `Uploaded: ${newFileName} (${result.data.video_id})`);
+
+                        // Add to state immediately
+                        const newVideo = {
+                            type: 'video',
+                            id: result.data.video_id,
+                            url: URL.createObjectURL(file),
+                            name: newFileName,
+                            is_new: true
+                        };
+                        state.mediaLibrary.unshift(newVideo);
+
+                        updateBulkUploadProgress();
+                        resolve({ success: true, video_id: result.data.video_id });
+                    } else {
+                        handleUploadError(result.message || 'Upload failed');
+                    }
+                } catch (e) {
+                    handleUploadError('Invalid server response');
+                }
             } else {
-                throw new Error('Invalid server response');
+                handleUploadError(`HTTP error: ${xhr.status}`);
+            }
+        });
+
+        // Error handler
+        xhr.addEventListener('error', () => {
+            clearTimeout(timeoutId);
+            handleUploadError('Network error');
+        });
+
+        // Abort handler (timeout)
+        xhr.addEventListener('abort', () => {
+            clearTimeout(timeoutId);
+            handleUploadError('Upload timeout');
+        });
+
+        // Handle upload errors with retry logic
+        async function handleUploadError(errorMsg) {
+            addLog('error', `Failed: ${file.name} - ${errorMsg}`);
+
+            if (retryCount < maxRetries) {
+                addLog('info', `Retrying upload for ${file.name} (attempt ${retryCount + 1}/${maxRetries})`);
+                updateUploadItemStatus(itemId, 'uploading', `Retry ${retryCount + 1}...`, 0);
+
+                // Wait before retrying (exponential backoff: 2s, 4s)
+                await new Promise(r => setTimeout(r, 2000 * (retryCount + 1)));
+
+                const result = await uploadSingleVideoInBulk(file, index, retryCount + 1);
+                resolve(result);
+            } else {
+                // Max retries exceeded - store file reference for manual retry
+                bulkUploadState.failed++;
+                bulkUploadState.failedFiles = bulkUploadState.failedFiles || {};
+                bulkUploadState.failedFiles[index] = file;
+                updateUploadItemStatus(itemId, 'failed', `✗ ${errorMsg}`, 0);
+                updateBulkUploadProgress();
+                resolve({ success: false, error: errorMsg });
             }
         }
 
-        if (result.success && result.data?.video_id) {
-            bulkUploadState.completed++;
-            updateUploadItemStatus(itemId, 'success', '✓ Uploaded');
-            addLog('success', `Uploaded: ${newFileName} (${result.data.video_id})`);
+        // Set timeout
+        timeoutId = setTimeout(() => {
+            xhr.abort();
+        }, uploadTimeout);
 
-            // Add to state immediately using correct format: id, url, name, type
-            const newVideo = {
-                type: 'video',
-                id: result.data.video_id,
-                url: URL.createObjectURL(file),
-                name: newFileName,
-                is_new: true
-            };
-            state.mediaLibrary.unshift(newVideo);
+        // Send request
+        xhr.open('POST', 'api.php?action=upload_video');
+        xhr.send(formData);
+    });
+}
 
-            updateBulkUploadProgress();
-            return { success: true, video_id: result.data.video_id };
-        } else {
-            throw new Error(result.message || 'Upload failed');
-        }
-    } catch (error) {
-        const errorMsg = error.name === 'AbortError' ? 'Upload timeout' : error.message;
-        addLog('error', `Failed: ${file.name} - ${errorMsg}`);
+// Retry a failed upload manually
+async function retryFailedUpload(index) {
+    const file = bulkUploadState.failedFiles?.[index];
+    if (!file) {
+        showToast('File not found for retry', 'error');
+        return;
+    }
 
-        // Retry if we haven't exceeded max retries
-        if (retryCount < maxRetries) {
-            addLog('info', `Retrying upload for ${file.name} (attempt ${retryCount + 1}/${maxRetries})`);
-            updateUploadItemStatus(itemId, 'uploading', `Retry ${retryCount + 1}...`);
+    // Reset the failed count for this item
+    bulkUploadState.failed--;
+    delete bulkUploadState.failedFiles[index];
 
-            // Wait before retrying (exponential backoff: 2s, 4s)
-            await new Promise(resolve => setTimeout(resolve, 2000 * (retryCount + 1)));
+    // Reset UI
+    const actionsEl = document.getElementById(`upload-actions-${index}`);
+    if (actionsEl) actionsEl.style.display = 'none';
 
-            return uploadSingleVideoInBulk(file, index, retryCount + 1);
-        }
+    addLog('info', `Manual retry for: ${file.name}`);
 
-        // Max retries exceeded
-        bulkUploadState.failed++;
-        updateUploadItemStatus(itemId, 'failed', `✗ ${errorMsg}`);
-        updateBulkUploadProgress();
-        return { success: false, error: errorMsg };
+    // Retry with fresh retry count
+    const result = await uploadSingleVideoInBulk(file, index, 0);
+
+    // Update final state
+    if (result.success) {
+        showToast(`Successfully uploaded ${file.name}`, 'success');
+        // Refresh grids
+        const videos = state.mediaLibrary.filter(m => m.type === 'video');
+        videoModalState.allVideos = videos;
+        renderVideoModalGrid(videos);
+        renderVideoSelectionGrid();
     }
 }
 
@@ -8378,18 +8441,28 @@ function showBulkUploadProgress() {
     document.getElementById('bulk-upload-count').textContent = `0/${bulkUploadState.total}`;
     document.getElementById('bulk-upload-bar').style.width = '0%';
 
-    // Create item for each file
+    // Create item for each file with individual progress bar
     list.innerHTML = bulkUploadState.queue.map((file, i) => `
-        <div class="upload-item" id="upload-item-${i}">
-            <span class="upload-item-name" title="${file.name}">${file.name}</span>
-            <span class="upload-item-size">${(file.size / 1024 / 1024).toFixed(1)}MB</span>
-            <span class="upload-item-status pending">Pending</span>
+        <div class="upload-item" id="upload-item-${i}" data-file-index="${i}">
+            <div class="upload-item-info">
+                <span class="upload-item-name" title="${file.name}">${file.name}</span>
+                <span class="upload-item-size">${(file.size / 1024 / 1024).toFixed(1)}MB</span>
+                <span class="upload-item-status pending">Pending</span>
+            </div>
+            <div class="upload-item-progress-container">
+                <div class="upload-item-progress-bar" id="progress-bar-${i}" style="width: 0%"></div>
+            </div>
+            <div class="upload-item-actions" id="upload-actions-${i}" style="display: none;">
+                <button class="retry-btn" onclick="retryFailedUpload(${i})" title="Retry upload">
+                    ↻ Retry
+                </button>
+            </div>
         </div>
     `).join('');
 }
 
 // Update individual upload item status
-function updateUploadItemStatus(itemId, status, text) {
+function updateUploadItemStatus(itemId, status, text, progress = null) {
     const item = document.getElementById(itemId);
     if (!item) return;
 
@@ -8397,6 +8470,24 @@ function updateUploadItemStatus(itemId, status, text) {
     if (statusEl) {
         statusEl.className = `upload-item-status ${status}`;
         statusEl.textContent = text;
+    }
+
+    // Update progress bar if provided
+    const index = item.dataset.fileIndex;
+    const progressBar = document.getElementById(`progress-bar-${index}`);
+    if (progressBar && progress !== null) {
+        progressBar.style.width = `${progress}%`;
+        progressBar.className = `upload-item-progress-bar ${status}`;
+    }
+
+    // Show/hide retry button for failed items
+    const actionsEl = document.getElementById(`upload-actions-${index}`);
+    if (actionsEl) {
+        if (status === 'failed') {
+            actionsEl.style.display = 'flex';
+        } else {
+            actionsEl.style.display = 'none';
+        }
     }
 }
 
