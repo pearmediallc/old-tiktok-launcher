@@ -1489,22 +1489,23 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                 </div>
                 <div class="modal-body">
                     <div class="upload-area" id="upload-area" style="text-align: center; padding: 40px; border: 2px dashed #ddd; border-radius: 8px; cursor: pointer;">
-                        <input type="file" id="media-file-input" accept="image/*,video/*" style="display: none;" onchange="handleSmartMediaUpload(event)">
+                        <input type="file" id="media-file-input" accept="image/*,video/*" multiple style="display: none;" onchange="handleSmartMediaUpload(event)">
                         <div onclick="document.getElementById('media-file-input').click()">
                             <div id="upload-icon" style="font-size: 50px; margin-bottom: 10px;">📁</div>
-                            <p id="upload-text" style="font-size: 16px; color: #333;">Click to select file or drag and drop</p>
-                            <p id="upload-hint" style="font-size: 12px; color: #666;">Supported: MP4, MOV, JPG, PNG</p>
+                            <p id="upload-text" style="font-size: 16px; color: #333;">Click to select files or drag and drop</p>
+                            <p id="upload-hint" style="font-size: 12px; color: #666;">Supported: MP4, MOV, JPG, PNG (Multiple files allowed)</p>
                         </div>
                     </div>
                     <div id="upload-progress" style="display: none; margin-top: 20px;">
-                        <div style="display: flex; align-items: center; gap: 15px;">
-                            <div class="spinner" style="width: 30px; height: 30px;"></div>
-                            <div style="flex: 1;">
-                                <p id="upload-status" style="margin: 0; font-weight: 600;">Uploading...</p>
-                                <div style="background: #e0e0e0; border-radius: 10px; height: 8px; margin-top: 8px; overflow: hidden;">
-                                    <div id="upload-progress-bar" style="background: linear-gradient(135deg, #667eea, #764ba2); height: 100%; width: 0%; transition: width 0.3s;"></div>
-                                </div>
-                            </div>
+                        <div class="bulk-upload-header" style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                            <span id="upload-status" style="font-weight: 600;">Uploading...</span>
+                            <span id="upload-count">0/0</span>
+                        </div>
+                        <div style="background: #e0e0e0; border-radius: 10px; height: 8px; overflow: hidden;">
+                            <div id="upload-progress-bar" style="background: linear-gradient(135deg, #667eea, #764ba2); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                        <div id="upload-file-list" style="max-height: 200px; overflow-y: auto; margin-top: 15px;">
+                            <!-- Individual file progress items -->
                         </div>
                     </div>
                     <div id="upload-success" style="display: none; margin-top: 20px; padding: 15px; background: #e8f5e9; border-radius: 8px; border: 2px solid #4caf50;">

@@ -1118,144 +1118,147 @@ function closeUploadModal() {
 }
 
 async function handleSmartMediaUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    // Validate all files
+    const validFiles = [];
+    for (const file of files) {
+        const isVideo = file.type.startsWith('video/');
+        const isImage = file.type.startsWith('image/');
+
+        if (!isImage && !isVideo) {
+            showToast(`Skipped ${file.name}: Not a supported file type`, 'warning');
+            continue;
+        }
+
+        const maxSize = isVideo ? 500 * 1024 * 1024 : 10 * 1024 * 1024;
+        if (file.size > maxSize) {
+            showToast(`Skipped ${file.name}: Exceeds ${isVideo ? '500MB' : '10MB'} limit`, 'warning');
+            continue;
+        }
+
+        validFiles.push(file);
+    }
+
+    if (validFiles.length === 0) {
+        showToast('No valid files selected', 'error');
+        event.target.value = '';
+        return;
+    }
+
+    // Setup progress UI
+    document.getElementById('upload-area').style.display = 'none';
+    document.getElementById('upload-progress').style.display = 'block';
+    document.getElementById('upload-success').style.display = 'none';
+
+    const statusEl = document.getElementById('upload-status');
+    const countEl = document.getElementById('upload-count');
+    const progressBar = document.getElementById('upload-progress-bar');
+    const fileList = document.getElementById('upload-file-list');
+
+    if (statusEl) statusEl.textContent = `Uploading ${validFiles.length} file(s)...`;
+    if (countEl) countEl.textContent = `0/${validFiles.length}`;
+    if (progressBar) progressBar.style.width = '0%';
+
+    // Create file list items
+    if (fileList) {
+        fileList.innerHTML = validFiles.map((file, i) => `
+            <div class="upload-item" id="smart-upload-item-${i}">
+                <span class="upload-item-name" title="${file.name}">${file.name}</span>
+                <span class="upload-item-size">${(file.size / 1024 / 1024).toFixed(1)}MB</span>
+                <span class="upload-item-status pending">Pending</span>
+            </div>
+        `).join('');
+    }
+
+    let completed = 0;
+    let failed = 0;
+
+    // Upload files 2 at a time
+    for (let i = 0; i < validFiles.length; i += 2) {
+        const batch = validFiles.slice(i, i + 2);
+        await Promise.allSettled(
+            batch.map((file, idx) => uploadSingleMediaFile(file, i + idx, validFiles.length))
+        );
+    }
+
+    // Show completion
+    completed = validFiles.length - failed;
+    if (failed === 0) {
+        if (statusEl) statusEl.textContent = `Successfully uploaded ${completed} file(s)!`;
+        showToast(`Uploaded ${completed} file(s) successfully!`, 'success');
+    } else if (completed > 0) {
+        if (statusEl) statusEl.textContent = `Uploaded ${completed}/${validFiles.length} (${failed} failed)`;
+        showToast(`Uploaded ${completed}/${validFiles.length} files (${failed} failed)`, 'warning');
+    } else {
+        if (statusEl) statusEl.textContent = `Failed to upload all files`;
+        showToast('Failed to upload files', 'error');
+    }
+
+    // Refresh media library
+    setTimeout(async () => {
+        await loadMediaLibrary();
+    }, 2000);
+
+    // Auto-close after 3 seconds
+    setTimeout(() => {
+        closeUploadModal();
+    }, 3000);
+
+    event.target.value = '';
+}
+
+// Helper function to upload a single media file
+async function uploadSingleMediaFile(file, index, total) {
+    const itemId = `smart-upload-item-${index}`;
+    updateSmartUploadItemStatus(itemId, 'uploading', 'Uploading...');
 
     const isVideo = file.type.startsWith('video/');
-    const isImage = file.type.startsWith('image/');
 
-    if (!isImage && !isVideo) {
-        showToast('Please upload an image or video file', 'error');
-        return;
-    }
-
-    // Check file size
-    const maxSize = isVideo ? 500 * 1024 * 1024 : 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-        showToast(`File too large. Maximum size is ${isVideo ? '500MB' : '10MB'}`, 'error');
-        return;
-    }
-
-    // Add timestamp to filename to prevent duplicates
-    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14); // YYYYMMDDHHMMSS
+    // Add timestamp to filename
+    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
     const originalName = file.name;
     const lastDotIndex = originalName.lastIndexOf('.');
     const nameWithoutExt = lastDotIndex > 0 ? originalName.slice(0, lastDotIndex) : originalName;
     const extension = lastDotIndex > 0 ? originalName.slice(lastDotIndex) : '';
     const newFileName = `${nameWithoutExt}_${timestamp}${extension}`;
 
-    // Create a new File object with the timestamped name
     const renamedFile = new File([file], newFileName, { type: file.type });
-
-    // Show progress with new filename
-    document.getElementById('upload-area').style.display = 'none';
-    document.getElementById('upload-progress').style.display = 'block';
-    document.getElementById('upload-success').style.display = 'none';
-    document.getElementById('upload-status').textContent = `Uploading ${newFileName}...`;
-
     const formData = new FormData();
     formData.append(isVideo ? 'video' : 'image', renamedFile);
 
     try {
-        addLog('request', `Uploading ${isVideo ? 'video' : 'image'}: ${newFileName} (original: ${originalName})`);
-
-        // Simulate progress
-        let progress = 0;
-        const progressBar = document.getElementById('upload-progress-bar');
-        const progressInterval = setInterval(() => {
-            progress += Math.random() * 15;
-            if (progress > 90) progress = 90;
-            progressBar.style.width = progress + '%';
-        }, 200);
+        addLog('request', `Uploading ${isVideo ? 'video' : 'image'}: ${newFileName}`);
 
         const response = await fetch(`api.php?action=${isVideo ? 'upload_video' : 'upload_image'}`, {
             method: 'POST',
             body: formData
         });
 
-        clearInterval(progressInterval);
-        progressBar.style.width = '100%';
-
-        // Get raw response text first to handle potential JSON errors
         const responseText = await response.text();
         let result;
-
-        // Handle empty response
-        if (!responseText || responseText.trim() === '') {
-            throw new Error('Empty response from server');
-        }
-
         try {
-            // Try to parse as JSON directly
             result = JSON.parse(responseText);
-        } catch (jsonError) {
-            // If JSON parsing fails, try to extract JSON from mixed output
-            console.error('JSON parse error:', jsonError);
-            console.log('Raw response (first 500 chars):', responseText.substring(0, 500));
-
-            // Try multiple patterns to find JSON in the response
-            // Pattern 1: Find JSON object with "success" key
-            let jsonMatch = responseText.match(/\{[^{}]*"success"\s*:\s*(true|false)[^{}]*\}/);
-
-            // Pattern 2: Try to find any complete JSON object starting with success
-            if (!jsonMatch) {
-                jsonMatch = responseText.match(/\{"success"[\s\S]*?\}(?=\s*$|\s*<)/);
-            }
-
-            // Pattern 3: Find the last JSON object in the response
-            if (!jsonMatch) {
-                const lastBrace = responseText.lastIndexOf('}');
-                if (lastBrace > -1) {
-                    // Find the matching opening brace
-                    let openCount = 0;
-                    for (let i = lastBrace; i >= 0; i--) {
-                        if (responseText[i] === '}') openCount++;
-                        if (responseText[i] === '{') openCount--;
-                        if (openCount === 0) {
-                            const potentialJson = responseText.substring(i, lastBrace + 1);
-                            try {
-                                result = JSON.parse(potentialJson);
-                                addLog('warning', 'Extracted JSON from server response with extra content');
-                                break;
-                            } catch (e) {
-                                // Continue trying
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (jsonMatch && !result) {
-                try {
-                    result = JSON.parse(jsonMatch[0]);
-                    addLog('warning', 'Server returned extra output before JSON, but extracted result');
-                } catch (e) {
-                    throw new Error('Could not parse JSON from server response');
-                }
-            }
-
-            if (!result) {
-                throw new Error('Invalid JSON response from server: ' + responseText.substring(0, 200));
+        } catch (e) {
+            // Try to extract JSON from response
+            const jsonMatch = responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
+            if (jsonMatch) {
+                result = JSON.parse(jsonMatch[0]);
+            } else {
+                throw new Error('Invalid server response');
             }
         }
-
-        addLog(result.success ? 'response' : 'error', `Upload ${result.success ? 'successful' : 'failed'}`, result);
 
         if (result.success) {
-            // Show success
-            document.getElementById('upload-progress').style.display = 'none';
-            document.getElementById('upload-success').style.display = 'block';
-            document.getElementById('upload-success-name').textContent = `${newFileName} uploaded successfully!`;
+            updateSmartUploadItemStatus(itemId, 'success', '✓ Uploaded');
+            addLog('success', `Uploaded: ${newFileName}`);
 
-            showToast(`${isVideo ? 'Video' : 'Image'} uploaded successfully!`, 'success');
-            addLog('info', `File renamed from "${originalName}" to "${newFileName}" with timestamp`);
-
-            // Create a temporary preview URL for immediate display
+            // Create preview URL and add to state
             const previewUrl = URL.createObjectURL(file);
 
-            // Add to media library state immediately so it shows right away
             if (isVideo && result.data?.video_id) {
-                const newVideo = {
+                state.mediaLibrary.unshift({
                     video_id: result.data.video_id,
                     displayable_name: newFileName,
                     file_name: newFileName,
@@ -1265,11 +1268,9 @@ async function handleSmartMediaUpload(event) {
                     type: 'video',
                     create_time: new Date().toISOString(),
                     is_new: true
-                };
-                state.mediaLibrary.unshift(newVideo);
-                addLog('info', 'Video added to library immediately');
+                });
             } else if (!isVideo && result.data?.image_id) {
-                const newImage = {
+                state.mediaLibrary.unshift({
                     image_id: result.data.image_id,
                     displayable_name: newFileName,
                     file_name: newFileName,
@@ -1278,34 +1279,37 @@ async function handleSmartMediaUpload(event) {
                     type: 'image',
                     create_time: new Date().toISOString(),
                     is_new: true
-                };
-                state.mediaLibrary.unshift(newImage);
-                addLog('info', 'Image added to library immediately');
+                });
             }
 
-            // Refresh from API in background to get proper metadata
-            setTimeout(async () => {
-                addLog('info', 'Refreshing media library from API...');
-                await loadMediaLibrary();
-            }, 3000);
+            // Update overall progress
+            const countEl = document.getElementById('upload-count');
+            const progressBar = document.getElementById('upload-progress-bar');
+            const currentCount = parseInt((countEl?.textContent || '0/1').split('/')[0]) + 1;
+            if (countEl) countEl.textContent = `${currentCount}/${total}`;
+            if (progressBar) progressBar.style.width = `${(currentCount / total) * 100}%`;
 
-            // Auto-close after 2 seconds
-            setTimeout(() => {
-                closeUploadModal();
-            }, 2000);
+            return { success: true };
         } else {
-            document.getElementById('upload-area').style.display = 'block';
-            document.getElementById('upload-progress').style.display = 'none';
-            showToast(result.message || 'Upload failed', 'error');
+            throw new Error(result.message || 'Upload failed');
         }
     } catch (error) {
-        document.getElementById('upload-area').style.display = 'block';
-        document.getElementById('upload-progress').style.display = 'none';
-        addLog('error', 'Upload failed', { error: error.message });
-        showToast('Error uploading file: ' + error.message, 'error');
+        updateSmartUploadItemStatus(itemId, 'failed', '✗ Failed');
+        addLog('error', `Failed: ${file.name} - ${error.message}`);
+        return { success: false, error: error.message };
     }
+}
 
-    event.target.value = '';
+// Helper to update individual upload item status in Step 3 modal
+function updateSmartUploadItemStatus(itemId, status, text) {
+    const item = document.getElementById(itemId);
+    if (!item) return;
+
+    const statusEl = item.querySelector('.upload-item-status');
+    if (statusEl) {
+        statusEl.className = `upload-item-status ${status}`;
+        statusEl.textContent = text;
+    }
 }
 
 // =====================
@@ -7929,7 +7933,7 @@ function closeVideoSelectionModal() {
     if (uploadInput) uploadInput.value = '';
 }
 
-// Handle video upload from video selection modal
+// Handle single video upload from video selection modal
 async function handleVideoModalUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -7957,14 +7961,26 @@ async function handleVideoModalUpload(event) {
     // Create renamed file
     const renamedFile = new File([file], newFileName, { type: file.type });
 
-    // Show progress
+    // Show progress using bulk upload UI (works for single file too)
     const progressContainer = document.getElementById('video-modal-upload-progress');
-    const progressBar = document.getElementById('video-modal-upload-bar');
-    const progressStatus = document.getElementById('video-modal-upload-status');
+    const progressBar = document.getElementById('bulk-upload-bar');
+    const progressTitle = document.getElementById('bulk-upload-title');
+    const progressCount = document.getElementById('bulk-upload-count');
+    const progressList = document.getElementById('bulk-upload-list');
 
-    progressContainer.style.display = 'block';
-    progressStatus.textContent = `Uploading ${newFileName}...`;
-    progressBar.style.width = '0%';
+    if (progressContainer) {
+        progressContainer.style.display = 'block';
+        if (progressTitle) progressTitle.textContent = `Uploading ${newFileName}...`;
+        if (progressCount) progressCount.textContent = '0/1';
+        if (progressBar) progressBar.style.width = '0%';
+        if (progressList) progressList.innerHTML = `
+            <div class="upload-item" id="upload-item-0">
+                <span class="upload-item-name">${file.name}</span>
+                <span class="upload-item-size">${(file.size / 1024 / 1024).toFixed(1)}MB</span>
+                <span class="upload-item-status uploading">Uploading...</span>
+            </div>
+        `;
+    }
 
     const formData = new FormData();
     formData.append('video', renamedFile);
@@ -7977,7 +7993,7 @@ async function handleVideoModalUpload(event) {
         const progressInterval = setInterval(() => {
             progress += Math.random() * 15;
             if (progress > 90) progress = 90;
-            progressBar.style.width = progress + '%';
+            if (progressBar) progressBar.style.width = progress + '%';
         }, 200);
 
         const response = await fetch('api.php?action=upload_video', {
@@ -7986,7 +8002,8 @@ async function handleVideoModalUpload(event) {
         });
 
         clearInterval(progressInterval);
-        progressBar.style.width = '100%';
+        if (progressBar) progressBar.style.width = '100%';
+        if (progressCount) progressCount.textContent = '1/1';
 
         const responseText = await response.text();
         let result;
@@ -7999,7 +8016,9 @@ async function handleVideoModalUpload(event) {
         }
 
         if (result.success && result.data?.video_id) {
-            progressStatus.textContent = 'Upload complete!';
+            // Update progress UI
+            if (progressTitle) progressTitle.textContent = 'Upload complete!';
+            updateUploadItemStatus('upload-item-0', 'success', '✓ Uploaded');
             addLog('success', `Video uploaded: ${result.data.video_id}`);
             showToast('Video uploaded successfully!', 'success');
 
@@ -8028,11 +8047,12 @@ async function handleVideoModalUpload(event) {
             renderVideoModalGrid(videos);
 
             // Update total count
-            document.getElementById('video-modal-total').textContent = videos.length;
+            const totalEl = document.getElementById('video-modal-total');
+            if (totalEl) totalEl.textContent = videos.length;
 
             // Hide progress after a moment
             setTimeout(() => {
-                progressContainer.style.display = 'none';
+                if (progressContainer) progressContainer.style.display = 'none';
             }, 1500);
 
             // Refresh from API in background to get proper thumbnail/metadata
@@ -8047,18 +8067,23 @@ async function handleVideoModalUpload(event) {
         }
     } catch (error) {
         console.error('Video upload error:', error);
-        progressStatus.textContent = 'Upload failed: ' + error.message;
-        progressBar.style.width = '0%';
-        progressContainer.style.background = '#fef2f2';
-        progressContainer.style.borderColor = '#fecaca';
+        if (progressTitle) progressTitle.textContent = 'Upload failed!';
+        updateUploadItemStatus('upload-item-0', 'failed', '✗ Failed');
+        if (progressBar) progressBar.style.width = '0%';
+        if (progressContainer) {
+            progressContainer.style.background = '#fef2f2';
+            progressContainer.style.borderColor = '#fecaca';
+        }
         addLog('error', `Video upload failed: ${error.message}`);
         showToast('Upload failed: ' + error.message, 'error');
 
         // Hide progress after a moment
         setTimeout(() => {
-            progressContainer.style.display = 'none';
-            progressContainer.style.background = '#f0f9ff';
-            progressContainer.style.borderColor = '#bae6fd';
+            if (progressContainer) {
+                progressContainer.style.display = 'none';
+                progressContainer.style.background = '#f0f9ff';
+                progressContainer.style.borderColor = '#bae6fd';
+            }
         }, 3000);
     }
 
