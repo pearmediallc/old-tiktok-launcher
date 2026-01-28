@@ -1461,30 +1461,18 @@ function formatDateTimeLocal(date) {
 function getScheduleData() {
     const scheduleType = document.querySelector('input[name="schedule_type"]:checked')?.value || 'continuous';
 
-    // Convert user's EST time to UTC for TikTok API
-    // User enters time in EST (e.g., 9:00 AM EST)
-    // TikTok account is in UTC, so we need to convert: EST + 5 hours = UTC
-    // Example: 9:00 AM EST + 5 = 14:00 UTC
-    const convertESTtoUTC = (dateTimeLocalValue) => {
+    // Format datetime for TikTok API
+    // TikTok interprets schedule times in the advertiser's account timezone (EST)
+    // So we just format the time as-is, no timezone conversion needed
+    const formatScheduleTime = (dateTimeLocalValue) => {
         if (!dateTimeLocalValue) return null;
 
-        // Parse the datetime-local value (e.g., "2025-01-28T09:00")
+        // Parse the datetime-local value (e.g., "2025-01-28T14:00")
         const [datePart, timePart] = dateTimeLocalValue.split('T');
-        const [year, month, day] = datePart.split('-').map(Number);
-        const [hours, minutes] = timePart.split(':').map(Number);
 
-        // Create date and add 5 hours to convert EST to UTC
-        const date = new Date(year, month - 1, day, hours + 5, minutes, 0);
-
-        // Format for API: "YYYY-MM-DD HH:MM:SS"
-        const resultYear = date.getFullYear();
-        const resultMonth = String(date.getMonth() + 1).padStart(2, '0');
-        const resultDay = String(date.getDate()).padStart(2, '0');
-        const resultHours = String(date.getHours()).padStart(2, '0');
-        const resultMinutes = String(date.getMinutes()).padStart(2, '0');
-
-        const result = `${resultYear}-${resultMonth}-${resultDay} ${resultHours}:${resultMinutes}:00`;
-        console.log(`[Schedule] User entered: ${dateTimeLocalValue} (EST) -> ${result} (UTC)`);
+        // Format for API: "YYYY-MM-DD HH:MM:SS" - pass through as-is
+        const result = `${datePart} ${timePart}:00`;
+        console.log(`[Schedule] Formatted for API: ${dateTimeLocalValue} -> ${result}`);
         return result;
     };
 
@@ -1506,7 +1494,7 @@ function getScheduleData() {
 
         return {
             schedule_type: 'SCHEDULE_FROM_NOW',  // TikTok API uses SCHEDULE_FROM_NOW with a future start time
-            schedule_start_time: convertESTtoUTC(startDateTime)
+            schedule_start_time: formatScheduleTime(startDateTime)
         };
     }
 
@@ -1522,8 +1510,8 @@ function getScheduleData() {
 
     return {
         schedule_type: 'SCHEDULE_START_END',
-        schedule_start_time: convertESTtoUTC(startDateTime),
-        schedule_end_time: convertESTtoUTC(endDateTime)
+        schedule_start_time: formatScheduleTime(startDateTime),
+        schedule_end_time: formatScheduleTime(endDateTime)
     };
 }
 
@@ -7230,29 +7218,18 @@ function toggleDupScheduleType() {
 function getDupScheduleData() {
     const scheduleType = document.querySelector('input[name="dup_schedule_type"]:checked')?.value || 'continuous';
 
-    // Convert user's EST time to UTC for TikTok API
-    // User enters time in EST (e.g., 9:00 AM EST)
-    // TikTok account is in UTC, so we need to convert: EST + 5 hours = UTC
-    const convertESTtoUTC = (dateTimeLocalValue) => {
+    // Format datetime for TikTok API
+    // TikTok interprets schedule times in the advertiser's account timezone (EST)
+    // So we just format the time as-is, no timezone conversion needed
+    const formatScheduleTime = (dateTimeLocalValue) => {
         if (!dateTimeLocalValue) return null;
 
-        // Parse the datetime-local value (e.g., "2025-01-28T09:00")
+        // Parse the datetime-local value (e.g., "2025-01-28T14:00")
         const [datePart, timePart] = dateTimeLocalValue.split('T');
-        const [year, month, day] = datePart.split('-').map(Number);
-        const [hours, minutes] = timePart.split(':').map(Number);
 
-        // Create date and add 5 hours to convert EST to UTC
-        const date = new Date(year, month - 1, day, hours + 5, minutes, 0);
-
-        // Format for API: "YYYY-MM-DD HH:MM:SS"
-        const resultYear = date.getFullYear();
-        const resultMonth = String(date.getMonth() + 1).padStart(2, '0');
-        const resultDay = String(date.getDate()).padStart(2, '0');
-        const resultHours = String(date.getHours()).padStart(2, '0');
-        const resultMinutes = String(date.getMinutes()).padStart(2, '0');
-
-        const result = `${resultYear}-${resultMonth}-${resultDay} ${resultHours}:${resultMinutes}:00`;
-        console.log(`[Dup Schedule] User entered: ${dateTimeLocalValue} (EST) -> ${result} (UTC)`);
+        // Format for API: "YYYY-MM-DD HH:MM:SS" - pass through as-is
+        const result = `${datePart} ${timePart}:00`;
+        console.log(`[Dup Schedule] Formatted for API: ${dateTimeLocalValue} -> ${result}`);
         return result;
     };
 
@@ -7269,7 +7246,7 @@ function getDupScheduleData() {
 
         return {
             schedule_type: 'SCHEDULE_FROM_NOW',
-            schedule_start_time: convertESTtoUTC(startDateTime)
+            schedule_start_time: formatScheduleTime(startDateTime)
         };
     }
 
@@ -7283,8 +7260,8 @@ function getDupScheduleData() {
 
     return {
         schedule_type: 'SCHEDULE_START_END',
-        schedule_start_time: convertESTtoUTC(startDateTime),
-        schedule_end_time: convertESTtoUTC(endDateTime)
+        schedule_start_time: formatScheduleTime(startDateTime),
+        schedule_end_time: formatScheduleTime(endDateTime)
     };
 }
 
