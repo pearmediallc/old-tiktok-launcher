@@ -2001,12 +2001,72 @@ switch ($action) {
             $assets['images'] = [];
         }
 
+        // Get Portfolios (CTA portfolios for bulk launch)
+        $assets['portfolios'] = [];
+        try {
+            // First check database for tool-created portfolios
+            $dbPortfolios = [];
+            try {
+                $db = Database::getInstance();
+                $dbPortfolios = $db->fetchAll(
+                    "SELECT creative_portfolio_id, portfolio_name FROM tool_portfolios WHERE advertiser_id = :advertiser_id ORDER BY created_at DESC",
+                    ['advertiser_id' => $targetAdvertiserId]
+                );
+                logSmartPlus("Found " . count($dbPortfolios) . " portfolios in database for $targetAdvertiserId");
+            } catch (Exception $e) {
+                logSmartPlus("Warning: Could not query tool_portfolios: " . $e->getMessage());
+            }
+
+            // Then get from TikTok API
+            $portfolioResult = makeApiCall('/creative/portfolio/list/', [
+                'advertiser_id' => $targetAdvertiserId,
+                'page' => 1,
+                'page_size' => 100
+            ], $accessToken, 'GET');
+
+            if ($portfolioResult['code'] == 0 && !empty($portfolioResult['data']['portfolios'])) {
+                foreach ($portfolioResult['data']['portfolios'] as $portfolio) {
+                    // Only include CTA portfolios
+                    if (isset($portfolio['creative_portfolio_type']) && $portfolio['creative_portfolio_type'] === 'CTA') {
+                        $assets['portfolios'][] = [
+                            'portfolio_id' => $portfolio['creative_portfolio_id'],
+                            'portfolio_name' => $portfolio['portfolio_name'] ?? 'CTA Portfolio',
+                            'source' => 'tiktok_api'
+                        ];
+                    }
+                }
+                logSmartPlus("Found " . count($assets['portfolios']) . " CTA portfolios from TikTok API");
+            }
+
+            // Add database portfolios that aren't already in the list
+            foreach ($dbPortfolios as $dbPortfolio) {
+                $exists = false;
+                foreach ($assets['portfolios'] as $p) {
+                    if ($p['portfolio_id'] === $dbPortfolio['creative_portfolio_id']) {
+                        $exists = true;
+                        break;
+                    }
+                }
+                if (!$exists) {
+                    $assets['portfolios'][] = [
+                        'portfolio_id' => $dbPortfolio['creative_portfolio_id'],
+                        'portfolio_name' => $dbPortfolio['portfolio_name'] ?? 'Tool Portfolio',
+                        'source' => 'database'
+                    ];
+                }
+            }
+        } catch (Exception $e) {
+            logSmartPlus("Warning: Could not load portfolios: " . $e->getMessage());
+            $assets['errors']['portfolios'] = $e->getMessage();
+        }
+
         // Log summary
         logSmartPlus("Assets summary for $targetAdvertiserId: " .
             count($assets['pixels']) . " pixels, " .
             count($assets['identities']) . " identities, " .
             count($assets['videos']) . " videos, " .
-            count($assets['images']) . " images");
+            count($assets['images']) . " images, " .
+            count($assets['portfolios']) . " portfolios");
 
         // Remove empty errors array if no errors
         if (empty($assets['errors'])) {
@@ -2022,6 +2082,94 @@ switch ($action) {
             echo json_encode([
                 'success' => false,
                 'message' => 'Server error while loading assets: ' . $e->getMessage()
+            ]);
+        }
+        break;
+
+    // ==========================================
+    // BULK LAUNCH: Create Portfolio for Specific Account
+    // ==========================================
+    case 'create_portfolio_for_account':
+        $targetAdvertiserId = $input['target_advertiser_id'] ?? '';
+        $portfolioName = $input['portfolio_name'] ?? 'Frequently Used CTAs';
+        $portfolioContent = $input['portfolio_content'] ?? [];
+
+        if (empty($targetAdvertiserId)) {
+            echo json_encode(['success' => false, 'message' => 'target_advertiser_id is required']);
+            exit;
+        }
+
+        // Validate advertiser is authorized
+        $allAdvertiserIds = $_SESSION['oauth_advertiser_ids'] ?? [];
+        if (!in_array($targetAdvertiserId, $allAdvertiserIds)) {
+            echo json_encode(['success' => false, 'message' => 'Unauthorized advertiser ID']);
+            exit;
+        }
+
+        logSmartPlus("=== Creating Portfolio for Account: $targetAdvertiserId ===");
+        logSmartPlus("Portfolio Name: $portfolioName");
+
+        // Default CTAs if none provided
+        if (empty($portfolioContent)) {
+            $portfolioContent = [
+                ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]],
+                ['asset_content' => 'GET_QUOTE', 'asset_ids' => ["0"]],
+                ['asset_content' => 'SIGN_UP', 'asset_ids' => ["0"]],
+                ['asset_content' => 'CONTACT_US', 'asset_ids' => ["0"]],
+                ['asset_content' => 'APPLY_NOW', 'asset_ids' => ["0"]]
+            ];
+        }
+
+        try {
+            $createParams = [
+                'advertiser_id' => $targetAdvertiserId,
+                'creative_portfolio_type' => 'CTA',
+                'portfolio_name' => $portfolioName,
+                'portfolio_content' => $portfolioContent
+            ];
+
+            logSmartPlus("Creating portfolio with params: " . json_encode($createParams));
+
+            $result = makeApiCall('/creative/portfolio/create/', $createParams, $accessToken);
+
+            if ($result['code'] == 0 && isset($result['data']['creative_portfolio_id'])) {
+                $portfolioId = $result['data']['creative_portfolio_id'];
+
+                // Save to database
+                try {
+                    $db = Database::getInstance();
+                    $db->upsert('tool_portfolios', [
+                        'advertiser_id' => $targetAdvertiserId,
+                        'creative_portfolio_id' => $portfolioId,
+                        'portfolio_name' => $portfolioName,
+                        'portfolio_type' => 'CTA',
+                        'portfolio_content' => json_encode($portfolioContent),
+                        'created_by_tool' => true
+                    ], ['advertiser_id', 'creative_portfolio_id']);
+                    logSmartPlus("Portfolio saved to database: $portfolioId");
+                } catch (Exception $e) {
+                    logSmartPlus("Warning: Could not save portfolio to DB: " . $e->getMessage());
+                }
+
+                echo json_encode([
+                    'success' => true,
+                    'portfolio_id' => $portfolioId,
+                    'portfolio_name' => $portfolioName,
+                    'message' => 'Portfolio created successfully'
+                ]);
+            } else {
+                logSmartPlus("Portfolio creation failed: " . json_encode($result));
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Failed to create portfolio: ' . ($result['message'] ?? 'Unknown error'),
+                    'details' => $result
+                ]);
+            }
+        } catch (Exception $e) {
+            logSmartPlus("Exception creating portfolio: " . $e->getMessage());
+            echo json_encode([
+                'success' => false,
+                'message' => 'Error creating portfolio: ' . $e->getMessage()
             ]);
         }
         break;
@@ -2205,53 +2353,92 @@ switch ($action) {
             $GLOBALS['imageLibraryCache'] = null;
             $GLOBALS['videoInfoCache'] = [];
 
-            // CTA Portfolio - get or create once per account
+            // CTA Portfolio - use selected portfolio or get/create one
             $ctaPortfolioId = null;
+            $selectedPortfolioId = $account['portfolio_id'] ?? null;
+
             try {
                 require_once __DIR__ . '/database/Database.php';
                 $db = Database::getInstance();
 
-                $existingPortfolio = $db->fetchOne(
-                    "SELECT creative_portfolio_id FROM tool_portfolios
-                     WHERE advertiser_id = :advertiser_id
-                     AND portfolio_name = 'Frequently Used CTAs'
-                     AND portfolio_type = 'CTA'",
-                    ['advertiser_id' => $targetAdvertiserId]
-                );
-
-                if ($existingPortfolio) {
-                    $ctaPortfolioId = $existingPortfolio['creative_portfolio_id'];
+                // If user selected a specific portfolio, use it
+                if (!empty($selectedPortfolioId) && $selectedPortfolioId !== 'auto_create') {
+                    $ctaPortfolioId = $selectedPortfolioId;
+                    logSmartPlus("Using user-selected portfolio: $ctaPortfolioId");
                 } else {
-                    // Create new portfolio
-                    $frequentlyUsedCTAs = [
-                        ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]],
-                        ['asset_content' => 'GET_QUOTE', 'asset_ids' => ["0"]],
-                        ['asset_content' => 'SIGN_UP', 'asset_ids' => ["0"]],
-                        ['asset_content' => 'CONTACT_US', 'asset_ids' => ["0"]],
-                        ['asset_content' => 'APPLY_NOW', 'asset_ids' => ["0"]]
-                    ];
+                    // Auto-create: First check for existing portfolio in database
+                    $existingPortfolio = $db->fetchOne(
+                        "SELECT creative_portfolio_id FROM tool_portfolios
+                         WHERE advertiser_id = :advertiser_id
+                         AND portfolio_type = 'CTA'
+                         ORDER BY created_at DESC LIMIT 1",
+                        ['advertiser_id' => $targetAdvertiserId]
+                    );
 
-                    $portfolioResult = makeApiCall('/creative/portfolio/create/', [
-                        'advertiser_id' => $targetAdvertiserId,
-                        'creative_portfolio_type' => 'CTA',
-                        'portfolio_content' => $frequentlyUsedCTAs
-                    ], $accessToken);
+                    if ($existingPortfolio) {
+                        $ctaPortfolioId = $existingPortfolio['creative_portfolio_id'];
+                        logSmartPlus("Using existing portfolio from DB: $ctaPortfolioId");
+                    } else {
+                        // Create new portfolio
+                        logSmartPlus("Creating new CTA portfolio for account: $targetAdvertiserId");
+                        $frequentlyUsedCTAs = [
+                            ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]],
+                            ['asset_content' => 'GET_QUOTE', 'asset_ids' => ["0"]],
+                            ['asset_content' => 'SIGN_UP', 'asset_ids' => ["0"]],
+                            ['asset_content' => 'CONTACT_US', 'asset_ids' => ["0"]],
+                            ['asset_content' => 'APPLY_NOW', 'asset_ids' => ["0"]]
+                        ];
 
-                    if ($portfolioResult['code'] == 0 && isset($portfolioResult['data']['creative_portfolio_id'])) {
-                        $ctaPortfolioId = $portfolioResult['data']['creative_portfolio_id'];
-
-                        $db->insert('tool_portfolios', [
+                        $portfolioResult = makeApiCall('/creative/portfolio/create/', [
                             'advertiser_id' => $targetAdvertiserId,
-                            'creative_portfolio_id' => $ctaPortfolioId,
-                            'portfolio_name' => 'Frequently Used CTAs',
-                            'portfolio_type' => 'CTA',
-                            'portfolio_content' => json_encode($frequentlyUsedCTAs),
-                            'created_by_tool' => 1
-                        ]);
+                            'creative_portfolio_type' => 'CTA',
+                            'portfolio_name' => 'Auto-Generated CTAs',
+                            'portfolio_content' => $frequentlyUsedCTAs
+                        ], $accessToken);
+
+                        if ($portfolioResult['code'] == 0 && isset($portfolioResult['data']['creative_portfolio_id'])) {
+                            $ctaPortfolioId = $portfolioResult['data']['creative_portfolio_id'];
+                            logSmartPlus("Portfolio created: $ctaPortfolioId");
+
+                            $db->insert('tool_portfolios', [
+                                'advertiser_id' => $targetAdvertiserId,
+                                'creative_portfolio_id' => $ctaPortfolioId,
+                                'portfolio_name' => 'Auto-Generated CTAs',
+                                'portfolio_type' => 'CTA',
+                                'portfolio_content' => json_encode($frequentlyUsedCTAs),
+                                'created_by_tool' => 1
+                            ]);
+                        } else {
+                            logSmartPlus("Warning: Portfolio creation failed: " . json_encode($portfolioResult));
+                        }
                     }
                 }
             } catch (Exception $e) {
                 logSmartPlus("Warning: Could not get/create CTA portfolio: " . $e->getMessage());
+            }
+
+            // If we still don't have a portfolio, try to get one from TikTok API
+            if (empty($ctaPortfolioId)) {
+                logSmartPlus("Attempting to find existing portfolio from TikTok API...");
+                try {
+                    $portfolioListResult = makeApiCall('/creative/portfolio/list/', [
+                        'advertiser_id' => $targetAdvertiserId,
+                        'page' => 1,
+                        'page_size' => 10
+                    ], $accessToken, 'GET');
+
+                    if ($portfolioListResult['code'] == 0 && !empty($portfolioListResult['data']['portfolios'])) {
+                        foreach ($portfolioListResult['data']['portfolios'] as $portfolio) {
+                            if (isset($portfolio['creative_portfolio_type']) && $portfolio['creative_portfolio_type'] === 'CTA') {
+                                $ctaPortfolioId = $portfolio['creative_portfolio_id'];
+                                logSmartPlus("Found existing CTA portfolio from API: $ctaPortfolioId");
+                                break;
+                            }
+                        }
+                    }
+                } catch (Exception $e) {
+                    logSmartPlus("Warning: Could not fetch portfolios from API: " . $e->getMessage());
+                }
             }
 
             // Loop for creating duplicate campaigns

@@ -3178,20 +3178,23 @@ function renderAccountAssetsDropdowns(advertiserId, assets) {
     const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
     const selectedPixelId = selectedAccount?.pixel_id || '';
     const selectedIdentityId = selectedAccount?.identity_id || '';
+    const selectedPortfolioId = selectedAccount?.portfolio_id || '';
     const errors = assets.errors || {};
 
     // Check if we have pixels or if there was an error
     const pixelsArray = assets.pixels || [];
     const identitiesArray = assets.identities || [];
+    const portfoliosArray = assets.portfolios || [];
     const hasPixelError = errors.pixels;
     const hasIdentityError = errors.identities;
+    const hasPortfolioError = errors.portfolios;
 
     let html = '';
 
     // Show any API errors at the top
     if (Object.keys(errors).length > 0) {
         html += `<div class="asset-errors" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 10px; margin-bottom: 10px; font-size: 12px;">
-            <strong style="color: #ef4444;">⚠ API Issues:</strong>
+            <strong style="color: #ef4444;">API Issues:</strong>
             <ul style="margin: 5px 0 0 0; padding-left: 20px; color: #ef4444;">
                 ${Object.entries(errors).map(([key, msg]) => `<li>${key}: ${msg}</li>`).join('')}
             </ul>
@@ -3199,29 +3202,50 @@ function renderAccountAssetsDropdowns(advertiserId, assets) {
     }
 
     html += `
-        <div class="asset-row">
-            <label>Pixel:</label>
-            <select id="pixel-${advertiserId}" onchange="updateAccountAssetSelection('${advertiserId}')">
-                ${pixelsArray.length === 0
-                    ? `<option value="">${hasPixelError ? '⚠ Error loading pixels' : 'No pixels found'}</option>`
-                    : `<option value="">Select Pixel...</option>
-                       ${pixelsArray.map(p =>
-                           `<option value="${p.pixel_id}" ${p.pixel_id === selectedPixelId ? 'selected' : ''}>${p.pixel_name || p.pixel_id}</option>`
-                       ).join('')}`
-                }
-            </select>
-        </div>
-        <div class="asset-row">
-            <label>Identity:</label>
-            <select id="identity-${advertiserId}" onchange="updateAccountAssetSelection('${advertiserId}')">
-                ${identitiesArray.length === 0
-                    ? `<option value="">${hasIdentityError ? '⚠ Error loading identities' : 'No identities found'}</option>`
-                    : `<option value="">Select Identity...</option>
-                       ${identitiesArray.map(i =>
-                           `<option value="${i.identity_id}" data-type="${i.identity_type || 'CUSTOMIZED_USER'}" data-identity-type="${i.identity_type || 'CUSTOMIZED_USER'}" ${i.identity_authorized_bc_id ? `data-identity-authorized-bc-id="${i.identity_authorized_bc_id}"` : ''} ${i.identity_id === selectedIdentityId ? 'selected' : ''}>${i.display_name || i.identity_name || i.identity_id}${i.identity_type === 'BC_AUTH_TT' ? ' (Page)' : ''}</option>`
-                       ).join('')}`
-                }
-            </select>
+        <div class="bulk-asset-grid">
+            <div class="bulk-asset-item">
+                <label><span class="asset-icon">📊</span> Pixel</label>
+                <select id="pixel-${advertiserId}" onchange="updateAccountAssetSelection('${advertiserId}')">
+                    ${pixelsArray.length === 0
+                        ? `<option value="">${hasPixelError ? 'Error loading' : 'No pixels'}</option>`
+                        : `<option value="">Select Pixel...</option>
+                           ${pixelsArray.map(p =>
+                               `<option value="${p.pixel_id}" ${p.pixel_id === selectedPixelId ? 'selected' : ''}>${p.pixel_name || p.pixel_id}</option>`
+                           ).join('')}`
+                    }
+                </select>
+                ${pixelsArray.length > 0 ? `<span class="asset-count">${pixelsArray.length} available</span>` : ''}
+            </div>
+            <div class="bulk-asset-item">
+                <label><span class="asset-icon">👤</span> Identity</label>
+                <select id="identity-${advertiserId}" onchange="updateAccountAssetSelection('${advertiserId}')">
+                    ${identitiesArray.length === 0
+                        ? `<option value="">${hasIdentityError ? 'Error loading' : 'No identities'}</option>`
+                        : `<option value="">Select Identity...</option>
+                           ${identitiesArray.map(i =>
+                               `<option value="${i.identity_id}" data-type="${i.identity_type || 'CUSTOMIZED_USER'}" data-identity-type="${i.identity_type || 'CUSTOMIZED_USER'}" ${i.identity_authorized_bc_id ? `data-identity-authorized-bc-id="${i.identity_authorized_bc_id}"` : ''} ${i.identity_id === selectedIdentityId ? 'selected' : ''}>${i.display_name || i.identity_name || i.identity_id}${i.identity_type === 'BC_AUTH_TT' ? ' (Page)' : ''}</option>`
+                           ).join('')}`
+                    }
+                </select>
+                ${identitiesArray.length > 0 ? `<span class="asset-count">${identitiesArray.length} available</span>` : ''}
+            </div>
+            <div class="bulk-asset-item">
+                <label><span class="asset-icon">🔘</span> CTA Portfolio</label>
+                <div class="portfolio-select-wrapper">
+                    <select id="portfolio-${advertiserId}" onchange="updateAccountAssetSelection('${advertiserId}')">
+                        ${portfoliosArray.length === 0
+                            ? `<option value="">${hasPortfolioError ? 'Error loading' : 'No portfolios'}</option>`
+                            : `<option value="">Select Portfolio...</option>
+                               <option value="auto_create" ${selectedPortfolioId === 'auto_create' ? 'selected' : ''}>✨ Auto-create new</option>
+                               ${portfoliosArray.map(p =>
+                                   `<option value="${p.portfolio_id}" ${p.portfolio_id === selectedPortfolioId ? 'selected' : ''}>${p.portfolio_name}</option>`
+                               ).join('')}`
+                        }
+                    </select>
+                    <button type="button" class="btn-create-portfolio" onclick="openBulkPortfolioCreate('${advertiserId}')" title="Create new portfolio">+</button>
+                </div>
+                ${portfoliosArray.length > 0 ? `<span class="asset-count">${portfoliosArray.length} available</span>` : '<span class="asset-count">Will auto-create</span>'}
+            </div>
         </div>
     `;
 
@@ -3690,15 +3714,17 @@ function getAccountStatus(advertiserId) {
 
     const hasPixel = !!account.pixel_id;
     const hasIdentity = !!account.identity_id;
+    const hasPortfolio = !!account.portfolio_id; // Can be a portfolio ID or "auto_create"
     const videoMatch = bulkLaunchState.accountAssets[advertiserId]?.videoMatch;
     const hasVideos = videoMatch && videoMatch.match_rate === 100;
 
-    if (hasPixel && hasIdentity && hasVideos) {
+    if (hasPixel && hasIdentity && hasPortfolio && hasVideos) {
         return '<span class="status-ready">✓ Ready to launch</span>';
     } else {
         const missing = [];
         if (!hasPixel) missing.push('pixel');
         if (!hasIdentity) missing.push('identity');
+        if (!hasPortfolio) missing.push('CTA portfolio');
         if (!hasVideos) missing.push('videos');
         return `<span class="status-incomplete">Missing: ${missing.join(', ')}</span>`;
     }
@@ -3874,6 +3900,7 @@ function toggleBulkAccountSelection(advertiserId) {
 function updateAccountAssetSelection(advertiserId) {
     const pixelSelect = document.getElementById(`pixel-${advertiserId}`);
     const identitySelect = document.getElementById(`identity-${advertiserId}`);
+    const portfolioSelect = document.getElementById(`portfolio-${advertiserId}`);
 
     const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
     if (!selectedAccount) return;
@@ -3892,6 +3919,10 @@ function updateAccountAssetSelection(advertiserId) {
         } else {
             selectedAccount.identity_authorized_bc_id = null;
         }
+    }
+
+    if (portfolioSelect) {
+        selectedAccount.portfolio_id = portfolioSelect.value;
     }
 
     // Update status
@@ -3933,7 +3964,7 @@ function updateBulkModalCounts() {
     const readyCount = bulkLaunchState.selectedAccounts.filter(a => {
         const assets = bulkLaunchState.accountAssets[a.advertiser_id];
         const videoMatch = assets?.videoMatch;
-        return a.pixel_id && a.identity_id && videoMatch && videoMatch.match_rate === 100;
+        return a.pixel_id && a.identity_id && a.portfolio_id && videoMatch && videoMatch.match_rate === 100;
     }).length;
 
     const budget = parseFloat(state.budget || state.adGroupBudget || 0);
@@ -3949,6 +3980,139 @@ function updateBulkModalCounts() {
     const confirmBtn = document.getElementById('confirm-bulk-config-btn');
     if (confirmBtn) {
         confirmBtn.disabled = selectedCount === 0;
+    }
+}
+
+// Open portfolio creation modal for bulk launch
+function openBulkPortfolioCreate(advertiserId) {
+    const accountName = bulkLaunchState.accounts.find(a => a.advertiser_id === advertiserId)?.advertiser_name || advertiserId;
+
+    // Create modal HTML
+    const modalHtml = `
+        <div id="bulk-portfolio-modal" class="modal" style="display: flex; z-index: 10001;">
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>Create CTA Portfolio</h3>
+                    <span class="modal-close" onclick="closeBulkPortfolioModal()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <p style="margin-bottom: 15px; color: #666;">
+                        Creating portfolio for: <strong>${accountName}</strong>
+                    </p>
+                    <div class="form-group">
+                        <label>Portfolio Name</label>
+                        <input type="text" id="bulk-portfolio-name" value="Frequently Used CTAs" placeholder="Enter portfolio name">
+                    </div>
+                    <div class="form-group">
+                        <label>Select CTAs to Include</label>
+                        <div class="cta-checkbox-list" style="max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px;">
+                            <label class="cta-checkbox"><input type="checkbox" value="LEARN_MORE" checked> Learn More</label>
+                            <label class="cta-checkbox"><input type="checkbox" value="GET_QUOTE" checked> Get Quote</label>
+                            <label class="cta-checkbox"><input type="checkbox" value="SIGN_UP" checked> Sign Up</label>
+                            <label class="cta-checkbox"><input type="checkbox" value="CONTACT_US" checked> Contact Us</label>
+                            <label class="cta-checkbox"><input type="checkbox" value="APPLY_NOW" checked> Apply Now</label>
+                            <label class="cta-checkbox"><input type="checkbox" value="SHOP_NOW"> Shop Now</label>
+                            <label class="cta-checkbox"><input type="checkbox" value="DOWNLOAD"> Download</label>
+                            <label class="cta-checkbox"><input type="checkbox" value="BOOK_NOW"> Book Now</label>
+                            <label class="cta-checkbox"><input type="checkbox" value="SUBSCRIBE"> Subscribe</label>
+                            <label class="cta-checkbox"><input type="checkbox" value="ORDER_NOW"> Order Now</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="closeBulkPortfolioModal()">Cancel</button>
+                    <button class="btn-primary" onclick="createBulkPortfolio('${advertiserId}')">Create Portfolio</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal if any
+    const existing = document.getElementById('bulk-portfolio-modal');
+    if (existing) existing.remove();
+
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+// Close bulk portfolio modal
+function closeBulkPortfolioModal() {
+    const modal = document.getElementById('bulk-portfolio-modal');
+    if (modal) modal.remove();
+}
+
+// Create portfolio for bulk launch account
+async function createBulkPortfolio(advertiserId) {
+    const portfolioName = document.getElementById('bulk-portfolio-name').value.trim();
+    if (!portfolioName) {
+        showToast('Please enter a portfolio name', 'error');
+        return;
+    }
+
+    // Get selected CTAs
+    const selectedCTAs = [];
+    document.querySelectorAll('#bulk-portfolio-modal .cta-checkbox input:checked').forEach(checkbox => {
+        selectedCTAs.push({
+            asset_content: checkbox.value,
+            asset_ids: ["0"]
+        });
+    });
+
+    if (selectedCTAs.length === 0) {
+        showToast('Please select at least one CTA', 'error');
+        return;
+    }
+
+    showLoading('Creating portfolio...');
+
+    try {
+        const result = await apiRequest('create_portfolio_for_account', {
+            target_advertiser_id: advertiserId,
+            portfolio_name: portfolioName,
+            portfolio_content: selectedCTAs
+        });
+
+        if (result.success && result.portfolio_id) {
+            closeBulkPortfolioModal();
+            showToast('Portfolio created successfully!', 'success');
+
+            // Add new portfolio to assets
+            const assets = bulkLaunchState.accountAssets[advertiserId];
+            if (assets) {
+                if (!assets.portfolios) assets.portfolios = [];
+                assets.portfolios.unshift({
+                    portfolio_id: result.portfolio_id,
+                    portfolio_name: portfolioName,
+                    source: 'just_created'
+                });
+            }
+
+            // Select the new portfolio
+            const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+            if (selectedAccount) {
+                selectedAccount.portfolio_id = result.portfolio_id;
+            }
+
+            // Re-render the account assets
+            const assetsContainer = document.getElementById(`assets-${advertiserId}`);
+            if (assetsContainer && assets) {
+                assetsContainer.innerHTML = renderAccountAssetsDropdowns(advertiserId, assets);
+            }
+
+            // Update status
+            const statusEl = document.getElementById(`status-${advertiserId}`);
+            if (statusEl) {
+                statusEl.innerHTML = getAccountStatus(advertiserId);
+            }
+
+            updateBulkModalCounts();
+        } else {
+            showToast(result.message || 'Failed to create portfolio', 'error');
+        }
+    } catch (error) {
+        showToast('Error creating portfolio: ' + error.message, 'error');
+    } finally {
+        hideLoading();
     }
 }
 
@@ -3974,12 +4138,21 @@ function confirmBulkConfiguration() {
     const notReady = bulkLaunchState.selectedAccounts.filter(a => {
         const assets = bulkLaunchState.accountAssets[a.advertiser_id];
         const videoMatch = assets?.videoMatch;
-        return !a.pixel_id || !a.identity_id || !videoMatch || videoMatch.match_rate < 100;
+        return !a.pixel_id || !a.identity_id || !a.portfolio_id || !videoMatch || videoMatch.match_rate < 100;
     });
 
     if (notReady.length > 0) {
-        const names = notReady.map(a => a.advertiser_name).join(', ');
-        showToast(`Some accounts are not ready: ${names}. Please configure pixel, identity, and ensure videos are matched.`, 'warning');
+        const names = notReady.map(a => {
+            const missing = [];
+            if (!a.pixel_id) missing.push('pixel');
+            if (!a.identity_id) missing.push('identity');
+            if (!a.portfolio_id) missing.push('portfolio');
+            const assets = bulkLaunchState.accountAssets[a.advertiser_id];
+            const videoMatch = assets?.videoMatch;
+            if (!videoMatch || videoMatch.match_rate < 100) missing.push('videos');
+            return `${a.advertiser_name} (missing: ${missing.join(', ')})`;
+        }).join('\n');
+        showToast(`Some accounts are not ready:\n${names}`, 'warning');
         return;
     }
 

@@ -1972,6 +1972,155 @@ h3 {
     color: var(--primary);
 }
 
+/* Improved Bulk Asset Grid */
+.bulk-asset-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+@media (max-width: 768px) {
+    .bulk-asset-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.bulk-asset-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.bulk-asset-item label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--foreground);
+}
+
+.bulk-asset-item .asset-icon {
+    font-size: 14px;
+}
+
+.bulk-asset-item select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: white;
+    transition: border-color 0.2s;
+}
+
+.bulk-asset-item select:focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(30, 157, 241, 0.1);
+}
+
+.bulk-asset-item .asset-count {
+    font-size: 11px;
+    color: var(--muted-foreground);
+}
+
+/* Portfolio select wrapper with create button */
+.portfolio-select-wrapper {
+    display: flex;
+    gap: 6px;
+}
+
+.portfolio-select-wrapper select {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: white;
+}
+
+.portfolio-select-wrapper select:focus {
+    border-color: var(--primary);
+    outline: none;
+}
+
+.btn-create-portfolio {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-create-portfolio:hover {
+    background: #1a8ad8;
+}
+
+/* CTA Checkbox List for Portfolio Creation */
+.cta-checkbox-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cta-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.cta-checkbox:hover {
+    background: var(--input);
+}
+
+.cta-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary);
+}
+
+/* Bulk Account Card Improvements */
+.bulk-account-card {
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    background: white;
+    overflow: hidden;
+    transition: all 0.2s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.bulk-account-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.bulk-account-card.selected {
+    border-color: var(--primary);
+    background: linear-gradient(to bottom, rgba(30, 157, 241, 0.03), white);
+}
+
+.bulk-account-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: linear-gradient(to right, var(--input), transparent);
+}
+
 /* Bulk Progress Modal */
 .bulk-progress-modal-content {
     max-width: 600px;
