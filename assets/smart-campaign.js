@@ -3922,7 +3922,16 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
                 body: formData
             });
 
-            const result = await response.json();
+            const responseText = await response.text();
+            let result;
+            try {
+                result = JSON.parse(responseText);
+            } catch (e) {
+                console.error('Failed to parse upload response:', responseText);
+                throw new Error('Invalid server response');
+            }
+
+            console.log(`[Bulk Upload] Response for ${file.name}:`, result);
 
             if (result.success && result.data?.video_id) {
                 completed++;
@@ -3934,10 +3943,13 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
                 addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
             } else {
                 failed++;
-                addLog('error', `Failed to upload ${file.name}: ${result.message || 'Unknown error'}`);
+                const errorMsg = result.message || result.error || 'Unknown error';
+                console.error(`[Bulk Upload] Failed:`, result);
+                addLog('error', `Failed to upload ${file.name}: ${errorMsg}`);
             }
         } catch (error) {
             failed++;
+            console.error(`[Bulk Upload] Exception:`, error);
             addLog('error', `Error uploading ${file.name}: ${error.message}`);
         }
 

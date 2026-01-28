@@ -254,8 +254,14 @@ $requestData = json_decode(file_get_contents('php://input'), true);
 
 // Check if advertiser_id is passed in the request (prevents cross-tab contamination)
 // Frontend passes _advertiser_id to ensure correct context even if PHP session changed in another tab
-if (!empty($requestData['_advertiser_id'])) {
-    $requestedAdvertiserId = $requestData['_advertiser_id'];
+// For FormData uploads (like video/image), check $_POST as well
+$requestedAdvertiserId = $requestData['_advertiser_id']
+    ?? $requestData['advertiser_id']
+    ?? $_POST['_advertiser_id']
+    ?? $_POST['advertiser_id']
+    ?? null;
+
+if (!empty($requestedAdvertiserId)) {
     // Validate that this advertiser ID is in the user's authorized list
     $authorizedIds = $_SESSION['oauth_advertiser_ids'] ?? [];
     if (in_array($requestedAdvertiserId, $authorizedIds)) {
