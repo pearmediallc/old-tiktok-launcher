@@ -3958,6 +3958,39 @@ function deselectAllBulkAccounts() {
     });
 }
 
+// Filter bulk accounts by search query
+function filterBulkAccounts(query) {
+    const searchQuery = query.toLowerCase().trim();
+    const container = document.getElementById('bulk-accounts-container');
+    const accountCards = container.querySelectorAll('.bulk-account-card');
+    let visibleCount = 0;
+    let totalCount = 0;
+
+    accountCards.forEach(card => {
+        const accountName = card.querySelector('.bulk-account-name')?.textContent?.toLowerCase() || '';
+        const accountId = card.querySelector('.bulk-account-id')?.textContent?.toLowerCase() || '';
+
+        totalCount++;
+
+        if (searchQuery === '' || accountName.includes(searchQuery) || accountId.includes(searchQuery)) {
+            card.style.display = '';
+            visibleCount++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+
+    // Update search results count
+    const resultsCountEl = document.getElementById('bulk-search-results-count');
+    if (resultsCountEl) {
+        if (searchQuery === '') {
+            resultsCountEl.textContent = '';
+        } else {
+            resultsCountEl.textContent = `Showing ${visibleCount} of ${totalCount} accounts`;
+        }
+    }
+}
+
 // Update counts in the modal
 function updateBulkModalCounts() {
     const selectedCount = bulkLaunchState.selectedAccounts.length;

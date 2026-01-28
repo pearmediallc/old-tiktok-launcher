@@ -2007,6 +2007,7 @@ switch ($action) {
             // First check database for tool-created portfolios
             $dbPortfolios = [];
             try {
+                require_once __DIR__ . '/database/Database.php';
                 $db = Database::getInstance();
                 $dbPortfolios = $db->fetchAll(
                     "SELECT creative_portfolio_id, portfolio_name FROM tool_portfolios WHERE advertiser_id = :advertiser_id ORDER BY created_at DESC",

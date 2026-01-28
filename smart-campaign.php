@@ -1624,6 +1624,16 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                             <span class="accounts-selected-text"><span id="modal-selected-count">0</span> selected</span>
                         </div>
 
+                        <!-- Search Bar for Accounts -->
+                        <div class="bulk-account-search" style="margin: 12px 0;">
+                            <input type="text"
+                                   id="bulk-account-search-input"
+                                   placeholder="Search accounts by name or ID..."
+                                   oninput="filterBulkAccounts(this.value)"
+                                   style="width: 100%; padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                            <span id="bulk-search-results-count" style="display: block; margin-top: 6px; font-size: 12px; color: #6b7280;"></span>
+                        </div>
+
                         <div id="bulk-accounts-container" class="bulk-accounts-container">
                             <!-- Account cards will be populated by JavaScript -->
                             <div class="loading-accounts">
