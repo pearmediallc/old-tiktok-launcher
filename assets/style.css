@@ -2113,6 +2113,82 @@ h3 {
     background: linear-gradient(to bottom, rgba(30, 157, 241, 0.03), white);
 }
 
+/* Original account (always included in bulk launch) */
+.bulk-account-card.original-account {
+    border-color: #10b981;
+    background: linear-gradient(to bottom, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.02));
+    position: relative;
+}
+
+.bulk-account-card.original-account::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.bulk-account-card.original-account .bulk-account-checkbox input[type="checkbox"]:disabled + .checkmark {
+    background: #10b981;
+    border-color: #10b981;
+    cursor: not-allowed;
+}
+
+.bulk-account-card.original-account .bulk-account-checkbox input[type="checkbox"]:disabled + .checkmark::after {
+    display: block;
+}
+
+.original-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    padding: 3px 8px;
+    border-radius: 12px;
+    margin-left: 8px;
+}
+
+.original-badge-small {
+    font-size: 10px;
+    color: #10b981;
+    font-weight: 500;
+}
+
+.original-assets {
+    background: rgba(16, 185, 129, 0.03);
+    padding: 12px;
+    border-radius: 8px;
+}
+
+.original-assets .asset-item {
+    background: white;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.original-assets .asset-item label {
+    font-size: 10px;
+    text-transform: uppercase;
+    color: #6b7280;
+    margin-bottom: 4px;
+    display: block;
+}
+
+.original-assets .asset-value {
+    font-size: 13px;
+    color: #1f2937;
+    font-weight: 500;
+}
+
+.bulk-account-item.original {
+    background: rgba(16, 185, 129, 0.05);
+    border-left: 3px solid #10b981;
+}
+
 .bulk-account-header {
     display: flex;
     align-items: center;

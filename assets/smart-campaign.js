@@ -3130,8 +3130,72 @@ async function renderBulkAccountsInModal() {
 
     container.innerHTML = '';
 
+    // Find the current account (original account where campaign was created)
+    const currentAccount = bulkLaunchState.accounts.find(a => a.is_current);
+
+    // Render current account first (at the top) - always selected
+    if (currentAccount) {
+        // Auto-add current account to selectedAccounts if not already there
+        const isCurrentSelected = bulkLaunchState.selectedAccounts.some(a => a.advertiser_id === currentAccount.advertiser_id);
+        if (!isCurrentSelected) {
+            // Pre-populate with assets from main campaign
+            bulkLaunchState.selectedAccounts.push({
+                advertiser_id: currentAccount.advertiser_id,
+                advertiser_name: currentAccount.advertiser_name,
+                pixel_id: state.pixelId || '',
+                identity_id: state.globalIdentityId || '',
+                identity_type: state.globalIdentityType || 'CUSTOMIZED_USER',
+                identity_authorized_bc_id: state.globalIdentityAuthorizedBcId || '',
+                portfolio_id: state.selectedPortfolioId || '',
+                video_mapping: {},
+                is_original: true
+            });
+        }
+
+        // Create assets object for current account from main campaign state
+        const currentAssets = {
+            pixels: state.pixels || [],
+            identities: state.identities || [],
+            portfolios: state.ctaPortfolios || [],
+            videoMatch: { match_rate: 100 }, // Original account always has 100% match
+            errors: {}
+        };
+        bulkLaunchState.accountAssets[currentAccount.advertiser_id] = currentAssets;
+
+        const card = document.createElement('div');
+        card.className = 'bulk-account-card selected original-account';
+        card.id = `bulk-account-${currentAccount.advertiser_id}`;
+
+        card.innerHTML = `
+            <div class="bulk-account-header">
+                <label class="bulk-account-checkbox">
+                    <input type="checkbox"
+                           id="bulk-check-${currentAccount.advertiser_id}"
+                           checked
+                           disabled
+                           title="Original account is always included">
+                    <span class="checkmark"></span>
+                </label>
+                <div class="bulk-account-info">
+                    <span class="bulk-account-name">${currentAccount.advertiser_name}</span>
+                    <span class="bulk-account-id">${currentAccount.advertiser_id}</span>
+                    <span class="original-badge">📍 Original Account</span>
+                </div>
+            </div>
+            <div class="bulk-account-assets" id="assets-${currentAccount.advertiser_id}">
+                ${renderOriginalAccountAssets()}
+            </div>
+            <div class="bulk-account-status" id="status-${currentAccount.advertiser_id}">
+                <span class="status-ready">✓ Ready (campaign configured here)</span>
+            </div>
+        `;
+
+        container.appendChild(card);
+    }
+
+    // Render other accounts
     for (const account of bulkLaunchState.accounts) {
-        // Skip current account (it's already used for the primary campaign)
+        // Skip current account (already rendered above)
         if (account.is_current) continue;
 
         const isSelected = bulkLaunchState.selectedAccounts.some(a => a.advertiser_id === account.advertiser_id);
@@ -3171,6 +3235,32 @@ async function renderBulkAccountsInModal() {
     }
 
     updateBulkModalCounts();
+}
+
+// Render original account's assets (read-only display)
+function renderOriginalAccountAssets() {
+    const pixelName = state.pixels?.find(p => p.pixel_id === state.pixelId)?.pixel_name || state.pixelId || 'Not selected';
+    const identity = state.identities?.find(i => i.identity_id === state.globalIdentityId);
+    const identityName = identity?.display_name || identity?.identity_name || state.globalIdentityId || 'Not selected';
+    const portfolio = state.ctaPortfolios?.find(p => p.creative_portfolio_id === state.selectedPortfolioId);
+    const portfolioName = portfolio?.portfolio_name || state.selectedPortfolioId || 'Not selected';
+
+    return `
+        <div class="bulk-asset-grid original-assets">
+            <div class="asset-item">
+                <label>Pixel</label>
+                <div class="asset-value">${pixelName}</div>
+            </div>
+            <div class="asset-item">
+                <label>Identity</label>
+                <div class="asset-value">${identityName}</div>
+            </div>
+            <div class="asset-item">
+                <label>CTA Portfolio</label>
+                <div class="asset-value">${portfolioName}</div>
+            </div>
+        </div>
+    `;
 }
 
 // Render asset dropdowns for an account
@@ -3712,6 +3802,11 @@ function getAccountStatus(advertiserId) {
     const account = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
     if (!account) return '';
 
+    // Original account is always ready (campaign was configured there)
+    if (account.is_original) {
+        return '<span class="status-ready">✓ Ready (campaign configured here)</span>';
+    }
+
     const hasPixel = !!account.pixel_id;
     const hasIdentity = !!account.identity_id;
     const hasPortfolio = !!account.portfolio_id; // Can be a portfolio ID or "auto_create"
@@ -3995,6 +4090,9 @@ function filterBulkAccounts(query) {
 function updateBulkModalCounts() {
     const selectedCount = bulkLaunchState.selectedAccounts.length;
     const readyCount = bulkLaunchState.selectedAccounts.filter(a => {
+        // Original account is always ready
+        if (a.is_original) return true;
+
         const assets = bulkLaunchState.accountAssets[a.advertiser_id];
         const videoMatch = assets?.videoMatch;
         return a.pixel_id && a.identity_id && a.portfolio_id && videoMatch && videoMatch.match_rate === 100;
@@ -4003,13 +4101,13 @@ function updateBulkModalCounts() {
     const budget = parseFloat(state.budget || state.adGroupBudget || 0);
     const totalBudget = budget * selectedCount;
 
-    // Modal counts
+    // Modal counts (include all accounts including original)
     document.getElementById('modal-selected-count').textContent = selectedCount;
-    document.getElementById('modal-total-accounts').textContent = bulkLaunchState.accounts.filter(a => !a.is_current).length;
+    document.getElementById('modal-total-accounts').textContent = bulkLaunchState.accounts.length;
     document.getElementById('modal-ready-accounts').textContent = readyCount;
     document.getElementById('modal-total-budget').textContent = `$${totalBudget.toFixed(2)}`;
 
-    // Enable/disable confirm button
+    // Enable/disable confirm button (at least 1 account should be selected - original is always selected)
     const confirmBtn = document.getElementById('confirm-bulk-config-btn');
     if (confirmBtn) {
         confirmBtn.disabled = selectedCount === 0;
@@ -4167,8 +4265,11 @@ function confirmBulkConfiguration() {
         return;
     }
 
-    // Check if all selected accounts are ready
+    // Check if all selected accounts are ready (skip original account, it's always ready)
     const notReady = bulkLaunchState.selectedAccounts.filter(a => {
+        // Original account is always ready (campaign was configured there)
+        if (a.is_original) return false;
+
         const assets = bulkLaunchState.accountAssets[a.advertiser_id];
         const videoMatch = assets?.videoMatch;
         return !a.pixel_id || !a.identity_id || !a.portfolio_id || !videoMatch || videoMatch.match_rate < 100;
@@ -4220,10 +4321,10 @@ function updateBulkLaunchSummary() {
     document.getElementById('bulk-total-budget').textContent = `$${(budget * bulkLaunchState.selectedAccounts.length).toFixed(2)}`;
     document.getElementById('bulk-ready-count').textContent = bulkLaunchState.selectedAccounts.length;
 
-    // Render accounts list
+    // Render accounts list (show original account first with badge)
     accountsList.innerHTML = bulkLaunchState.selectedAccounts.map(a => `
-        <div class="bulk-account-item">
-            <span class="account-name">${a.advertiser_name}</span>
+        <div class="bulk-account-item ${a.is_original ? 'original' : ''}">
+            <span class="account-name">${a.advertiser_name}${a.is_original ? ' <span class="original-badge-small">📍 Original</span>' : ''}</span>
             <span class="account-status ready">✓ Ready</span>
         </div>
     `).join('');
@@ -4554,12 +4655,34 @@ async function executeBulkLaunch() {
 
     // Prepare accounts with video mappings
     const accountsToLaunch = bulkLaunchState.selectedAccounts.map(account => {
+        // For original account, use the main campaign state values
+        if (account.is_original) {
+            const accountData = {
+                advertiser_id: account.advertiser_id,
+                advertiser_name: account.advertiser_name,
+                is_original: true,
+                pixel_id: state.pixelId,
+                identity_id: state.globalIdentityId,
+                identity_type: state.globalIdentityType || 'CUSTOMIZED_USER',
+                portfolio_id: state.selectedPortfolioId,
+                // For original account, videos don't need mapping (same account)
+                video_mapping: {}
+            };
+            // Include identity_authorized_bc_id for BC_AUTH_TT identities
+            if (state.globalIdentityType === 'BC_AUTH_TT' && state.globalIdentityAuthorizedBcId) {
+                accountData.identity_authorized_bc_id = state.globalIdentityAuthorizedBcId;
+            }
+            return accountData;
+        }
+
+        // For other accounts
         const accountData = {
             advertiser_id: account.advertiser_id,
             advertiser_name: account.advertiser_name,
             pixel_id: account.pixel_id,
             identity_id: account.identity_id,
             identity_type: account.identity_type,
+            portfolio_id: account.portfolio_id,
             video_mapping: account.video_mapping || {}
         };
         // Include identity_authorized_bc_id for BC_AUTH_TT identities
