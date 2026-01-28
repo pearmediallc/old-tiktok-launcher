@@ -377,7 +377,19 @@ async function apiRequest(action, data = {}, useMainApi = false) {
             body: JSON.stringify(requestBody)
         });
 
-        const result = await response.json();
+        // Check HTTP status before parsing JSON
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${response.statusText}. ${errorText.substring(0, 200)}`);
+        }
+
+        // Parse JSON with error handling
+        let result;
+        try {
+            result = await response.json();
+        } catch (parseError) {
+            throw new Error('Invalid JSON response from server');
+        }
 
         if (result.success) {
             addLog('response', `<<< ${action} SUCCESS`, {

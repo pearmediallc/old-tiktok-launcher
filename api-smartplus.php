@@ -446,16 +446,41 @@ function makeApiCall($endpoint, $params, $accessToken, $method = 'POST') {
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+    // Check for curl errors
+    if ($response === false) {
+        $curlError = curl_error($ch);
+        curl_close($ch);
+        logSmartPlus("CURL Error: " . $curlError);
+        return [
+            'code' => -1,
+            'message' => 'Network error: ' . $curlError,
+            'data' => null
+        ];
+    }
+
     curl_close($ch);
 
     $result = json_decode($response, true);
+
+    // Check for JSON decode errors
+    if ($result === null && json_last_error() !== JSON_ERROR_NONE) {
+        logSmartPlus("JSON decode error: " . json_last_error_msg());
+        logSmartPlus("Raw response: " . substr($response, 0, 500));
+        return [
+            'code' => -1,
+            'message' => 'Invalid JSON response from TikTok API',
+            'data' => null
+        ];
+    }
+
     logSmartPlus("Response ($httpCode): " . json_encode($result));
 
-    return $result;
+    return $result ?? ['code' => -1, 'message' => 'Empty response', 'data' => null];
 }
 
 // Handle request
-$input = json_decode(file_get_contents('php://input'), true);
+$input = json_decode(file_get_contents('php://input'), true) ?? [];
 $action = $input['action'] ?? '';
 
 // Check if advertiser_id is passed in the request (prevents cross-tab contamination)

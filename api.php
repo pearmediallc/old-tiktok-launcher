@@ -250,7 +250,7 @@ function processLocationTargeting($locationData) {
 }
 
 // Handle API requests
-$requestData = json_decode(file_get_contents('php://input'), true);
+$requestData = json_decode(file_get_contents('php://input'), true) ?? [];
 
 // Check if advertiser_id is passed in the request (prevents cross-tab contamination)
 // Frontend passes _advertiser_id to ensure correct context even if PHP session changed in another tab
@@ -283,7 +283,8 @@ logToFile("Action: " . $action);
 logToFile("Advertiser ID: " . $advertiser_id);
 // Redact sensitive data before logging
 $safeRequestData = Security::redactSensitiveData($requestData);
-$safeHeaders = Security::redactSensitiveData(getallheaders());
+$headers = function_exists('getallheaders') ? getallheaders() : [];
+$safeHeaders = Security::redactSensitiveData($headers);
 logToFile("Request Data: " . json_encode($safeRequestData, JSON_PRETTY_PRINT));
 logToFile("HTTP Headers: " . json_encode($safeHeaders, JSON_PRETTY_PRINT));
 logToFile("==============================");
