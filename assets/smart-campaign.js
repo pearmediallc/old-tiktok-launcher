@@ -1196,16 +1196,22 @@ async function handleSmartMediaUpload(event) {
     let completed = 0;
     let failed = 0;
 
-    // Upload files 2 at a time
-    for (let i = 0; i < validFiles.length; i += 2) {
-        const batch = validFiles.slice(i, i + 2);
-        await Promise.allSettled(
-            batch.map((file, idx) => uploadSingleMediaFile(file, i + idx, validFiles.length))
-        );
+    // Upload files SEQUENTIALLY for reliability (TikTok API can be sensitive to concurrent uploads)
+    for (let i = 0; i < validFiles.length; i++) {
+        const result = await uploadSingleMediaFile(validFiles[i], i, validFiles.length);
+        if (result?.success) {
+            completed++;
+        } else {
+            failed++;
+        }
+
+        // Add delay between uploads to avoid rate limiting
+        if (i < validFiles.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
     }
 
     // Show completion
-    completed = validFiles.length - failed;
     if (failed === 0) {
         if (statusEl) statusEl.textContent = `Successfully uploaded ${completed} file(s)!`;
         showToast(`Uploaded ${completed} file(s) successfully!`, 'success');
@@ -1230,12 +1236,14 @@ async function handleSmartMediaUpload(event) {
     event.target.value = '';
 }
 
-// Helper function to upload a single media file
-async function uploadSingleMediaFile(file, index, total) {
+// Helper function to upload a single media file with timeout and retry
+async function uploadSingleMediaFile(file, index, total, retryCount = 0) {
     const itemId = `smart-upload-item-${index}`;
-    updateSmartUploadItemStatus(itemId, 'uploading', 'Uploading...');
-
+    const maxRetries = 2;
     const isVideo = file.type.startsWith('video/');
+    const uploadTimeout = isVideo ? 180000 : 60000; // 3 min for video, 1 min for image
+
+    updateSmartUploadItemStatus(itemId, 'uploading', retryCount > 0 ? `Retrying (${retryCount})...` : 'Uploading...');
 
     // Add timestamp to filename
     const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
@@ -1243,19 +1251,30 @@ async function uploadSingleMediaFile(file, index, total) {
     const lastDotIndex = originalName.lastIndexOf('.');
     const nameWithoutExt = lastDotIndex > 0 ? originalName.slice(0, lastDotIndex) : originalName;
     const extension = lastDotIndex > 0 ? originalName.slice(lastDotIndex) : '';
-    const newFileName = `${nameWithoutExt}_${timestamp}${extension}`;
+    const newFileName = retryCount === 0 ? `${nameWithoutExt}_${timestamp}${extension}` : `${nameWithoutExt}_${timestamp}_r${retryCount}${extension}`;
 
-    const renamedFile = new File([file], newFileName, { type: file.type });
+    // Use FormData with original file, just set the filename (avoids memory-intensive File copy)
     const formData = new FormData();
-    formData.append(isVideo ? 'video' : 'image', renamedFile);
+    formData.append(isVideo ? 'video' : 'image', file, newFileName);
 
     try {
-        addLog('request', `Uploading ${isVideo ? 'video' : 'image'}: ${newFileName}`);
+        addLog('request', `Uploading ${isVideo ? 'video' : 'image'}: ${newFileName}${retryCount > 0 ? ` (retry ${retryCount})` : ''}`);
+
+        // Create AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), uploadTimeout);
 
         const response = await fetch(`api.php?action=${isVideo ? 'upload_video' : 'upload_image'}`, {
             method: 'POST',
-            body: formData
+            body: formData,
+            signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            throw new Error(`HTTP error: ${response.status}`);
+        }
 
         const responseText = await response.text();
         let result;
@@ -1276,7 +1295,6 @@ async function uploadSingleMediaFile(file, index, total) {
             addLog('success', `Uploaded: ${newFileName}`);
 
             // Create preview URL and add to state
-            // Use format that matches loadMediaLibrary: id, url, name, type
             const previewUrl = URL.createObjectURL(file);
 
             if (isVideo && result.data?.video_id) {
@@ -1287,7 +1305,6 @@ async function uploadSingleMediaFile(file, index, total) {
                     name: newFileName,
                     is_new: true
                 });
-                // Render grid immediately
                 renderVideoSelectionGrid();
             } else if (!isVideo && result.data?.image_id) {
                 state.mediaLibrary.unshift({
@@ -1297,7 +1314,6 @@ async function uploadSingleMediaFile(file, index, total) {
                     name: newFileName,
                     is_new: true
                 });
-                // Render grid immediately
                 renderImageGrid();
             }
 
@@ -1313,9 +1329,23 @@ async function uploadSingleMediaFile(file, index, total) {
             throw new Error(result.message || 'Upload failed');
         }
     } catch (error) {
-        updateSmartUploadItemStatus(itemId, 'failed', '✗ Failed');
-        addLog('error', `Failed: ${file.name} - ${error.message}`);
-        return { success: false, error: error.message };
+        const errorMsg = error.name === 'AbortError' ? 'Upload timeout' : error.message;
+        addLog('error', `Failed: ${file.name} - ${errorMsg}`);
+
+        // Retry if we haven't exceeded max retries
+        if (retryCount < maxRetries) {
+            addLog('info', `Retrying upload for ${file.name} (attempt ${retryCount + 1}/${maxRetries})`);
+            updateSmartUploadItemStatus(itemId, 'uploading', `Retry ${retryCount + 1}...`);
+
+            // Wait before retrying (exponential backoff: 2s, 4s)
+            await new Promise(resolve => setTimeout(resolve, 2000 * (retryCount + 1)));
+
+            return uploadSingleMediaFile(file, index, total, retryCount + 1);
+        }
+
+        // Max retries exceeded
+        updateSmartUploadItemStatus(itemId, 'failed', `✗ ${errorMsg}`);
+        return { success: false, error: errorMsg };
     }
 }
 
@@ -8219,19 +8249,20 @@ async function handleBulkVideoUpload(event) {
         isUploading: true
     };
 
-    addLog('info', `Starting bulk upload of ${validFiles.length} videos`);
+    addLog('info', `Starting bulk upload of ${validFiles.length} videos (sequential for reliability)`);
 
     // Show progress UI
     showBulkUploadProgress();
 
-    // Upload files (2 concurrent uploads for balance between speed and reliability)
-    const concurrency = 2;
+    // Upload files SEQUENTIALLY (one at a time) for maximum reliability
+    // TikTok API can be sensitive to concurrent uploads
+    for (let i = 0; i < validFiles.length; i++) {
+        await uploadSingleVideoInBulk(validFiles[i], i);
 
-    for (let i = 0; i < validFiles.length; i += concurrency) {
-        const batch = validFiles.slice(i, i + concurrency);
-        await Promise.allSettled(
-            batch.map((file, idx) => uploadSingleVideoInBulk(file, i + idx))
-        );
+        // Add a small delay between uploads to avoid rate limiting (500ms)
+        if (i < validFiles.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
     }
 
     // Complete
@@ -8242,35 +8273,55 @@ async function handleBulkVideoUpload(event) {
     event.target.value = '';
 }
 
-// Upload a single video as part of bulk upload
-async function uploadSingleVideoInBulk(file, index) {
+// Upload a single video as part of bulk upload with retry logic
+async function uploadSingleVideoInBulk(file, index, retryCount = 0) {
     const itemId = `upload-item-${index}`;
-    updateUploadItemStatus(itemId, 'uploading', 'Uploading...');
+    const maxRetries = 2;
+    const uploadTimeout = 180000; // 3 minutes timeout per file
 
-    // Add timestamp to filename
+    updateUploadItemStatus(itemId, 'uploading', retryCount > 0 ? `Retrying (${retryCount})...` : 'Uploading...');
+
+    // Add timestamp to filename (only on first attempt)
     const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
     const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
     const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
-    const newFileName = `${baseName}_${timestamp}${ext}`;
+    const newFileName = retryCount === 0 ? `${baseName}_${timestamp}${ext}` : `${baseName}_${timestamp}_r${retryCount}${ext}`;
 
-    const renamedFile = new File([file], newFileName, { type: file.type });
+    // Use FormData with original file, just set the filename
     const formData = new FormData();
-    formData.append('video', renamedFile);
+    formData.append('video', file, newFileName);
 
     try {
-        addLog('request', `Uploading: ${newFileName}`);
+        addLog('request', `Uploading: ${newFileName}${retryCount > 0 ? ` (retry ${retryCount})` : ''}`);
+
+        // Create AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), uploadTimeout);
 
         const response = await fetch('api.php?action=upload_video', {
             method: 'POST',
-            body: formData
+            body: formData,
+            signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            throw new Error(`HTTP error: ${response.status}`);
+        }
 
         const responseText = await response.text();
         let result;
         try {
             result = JSON.parse(responseText);
         } catch (e) {
-            throw new Error('Invalid server response');
+            // Try to extract JSON from response
+            const jsonMatch = responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
+            if (jsonMatch) {
+                result = JSON.parse(jsonMatch[0]);
+            } else {
+                throw new Error('Invalid server response');
+            }
         }
 
         if (result.success && result.data?.video_id) {
@@ -8294,11 +8345,25 @@ async function uploadSingleVideoInBulk(file, index) {
             throw new Error(result.message || 'Upload failed');
         }
     } catch (error) {
+        const errorMsg = error.name === 'AbortError' ? 'Upload timeout' : error.message;
+        addLog('error', `Failed: ${file.name} - ${errorMsg}`);
+
+        // Retry if we haven't exceeded max retries
+        if (retryCount < maxRetries) {
+            addLog('info', `Retrying upload for ${file.name} (attempt ${retryCount + 1}/${maxRetries})`);
+            updateUploadItemStatus(itemId, 'uploading', `Retry ${retryCount + 1}...`);
+
+            // Wait before retrying (exponential backoff: 2s, 4s)
+            await new Promise(resolve => setTimeout(resolve, 2000 * (retryCount + 1)));
+
+            return uploadSingleVideoInBulk(file, index, retryCount + 1);
+        }
+
+        // Max retries exceeded
         bulkUploadState.failed++;
-        updateUploadItemStatus(itemId, 'failed', `✗ Failed`);
-        addLog('error', `Failed: ${file.name} - ${error.message}`);
+        updateUploadItemStatus(itemId, 'failed', `✗ ${errorMsg}`);
         updateBulkUploadProgress();
-        return { success: false, error: error.message };
+        return { success: false, error: errorMsg };
     }
 }
 
