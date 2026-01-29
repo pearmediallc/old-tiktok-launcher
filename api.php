@@ -2864,143 +2864,140 @@ try {
             break;
 
         case 'get_videos':
-            $file = new File($config);
+            logToFile("============ GET VIDEOS REQUEST ============");
             logToFile("Get Videos - Advertiser ID: " . $advertiser_id);
-            
+
             $videos = [];
-            
-            // Read from persistent storage
             $storageFile = __DIR__ . '/media_storage.json';
-            $storage = json_decode(file_get_contents($storageFile), true) ?? ['images' => [], 'videos' => []];
-            
-            // Filter videos for current advertiser
-            $advertiserVideos = array_filter($storage['videos'] ?? [], function($vid) use ($advertiser_id) {
-                return $vid['advertiser_id'] === $advertiser_id;
-            });
-            
-            if (!empty($advertiserVideos)) {
-                // Get video details from TikTok for each stored ID
-                $video_ids = array_column($advertiserVideos, 'video_id');
-                
-                if (!empty($video_ids)) {
-                    try {
-                        $params = [
-                            'advertiser_id' => $advertiser_id,
-                            'video_ids' => $video_ids
+
+            // FIRST: Try to fetch directly from TikTok API (most reliable source of truth)
+            // This ensures newly uploaded videos always appear immediately
+            try {
+                $url = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/search/';
+                $params = http_build_query([
+                    'advertiser_id' => $advertiser_id,
+                    'page' => 1,
+                    'page_size' => 100
+                ]);
+
+                $ch = curl_init($url . '?' . $params);
+                curl_setopt_array($ch, [
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT => 30,
+                    CURLOPT_HTTPHEADER => [
+                        'Access-Token: ' . $config['access_token']
+                    ]
+                ]);
+
+                $response = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curlError = curl_error($ch);
+                curl_close($ch);
+
+                logToFile("TikTok Video Search HTTP Code: " . $httpCode);
+
+                if ($curlError) {
+                    logToFile("CURL Error: " . $curlError);
+                    throw new Exception("Network error: " . $curlError);
+                }
+
+                $result = json_decode($response, true);
+
+                if ($httpCode == 200 && isset($result['data']['list']) && is_array($result['data']['list'])) {
+                    logToFile("Found " . count($result['data']['list']) . " videos from TikTok API");
+
+                    // Also sync to local storage for caching
+                    $storage = [];
+                    if (file_exists($storageFile)) {
+                        $storage = json_decode(file_get_contents($storageFile), true) ?? [];
+                    }
+                    if (!isset($storage['videos'])) $storage['videos'] = [];
+                    if (!isset($storage['images'])) $storage['images'] = [];
+
+                    foreach ($result['data']['list'] as $video) {
+                        // Extract thumbnail URL
+                        $thumbnailUrl = $video['video_cover_url'] ??
+                                       $video['poster_url'] ??
+                                       $video['cover_image_url'] ??
+                                       $video['preview_url'] ?? '';
+
+                        $videos[] = [
+                            'video_id' => $video['video_id'],
+                            'url' => $video['video_url'] ?? $video['preview_url'] ?? '',
+                            'preview_url' => $thumbnailUrl,
+                            'poster_url' => $thumbnailUrl,
+                            'thumbnail_url' => $thumbnailUrl,
+                            'video_cover_url' => $video['video_cover_url'] ?? '',
+                            'file_name' => $video['video_name'] ?? $video['file_name'] ?? $video['displayable_name'] ?? 'Video',
+                            'duration' => $video['duration'] ?? null,
+                            'width' => $video['width'] ?? null,
+                            'height' => $video['height'] ?? null,
+                            'size' => $video['size'] ?? null,
+                            'type' => 'video',
+                            'has_thumbnail' => !empty($thumbnailUrl)
                         ];
-                        
-                        // Try using the SDK first
-                        $response = $file->getVideoInfo($params);
-                        logToFile("Get Video Info SDK Response: " . json_encode($response, JSON_PRETTY_PRINT));
-                        
-                        // If SDK fails, try direct API call
-                        if (!empty($response->code) && $response->code != 0) {
-                            logToFile("SDK failed, trying direct API call...");
-                            
-                            $url = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/info/';
-                            $queryParams = [
-                                'advertiser_id' => $advertiser_id,
-                                'video_ids' => json_encode($video_ids)
-                            ];
-                            
-                            $ch = curl_init($url . '?' . http_build_query($queryParams));
-                            curl_setopt_array($ch, [
-                                CURLOPT_RETURNTRANSFER => true,
-                                CURLOPT_HTTPHEADER => [
-                                    'Access-Token: ' . $accessToken
-                                ]
-                            ]);
-                            
-                            $result = curl_exec($ch);
-                            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                            curl_close($ch);
-                            
-                            logToFile("Direct API HTTP Code: " . $httpCode);
-                            logToFile("Direct API Response: " . $result);
-                            
-                            if ($httpCode == 200) {
-                                $response = json_decode($result);
+
+                        // Sync to local storage if not exists
+                        $exists = false;
+                        foreach ($storage['videos'] as $stored) {
+                            if ($stored['video_id'] === $video['video_id'] && ($stored['advertiser_id'] ?? '') === $advertiser_id) {
+                                $exists = true;
+                                break;
                             }
                         }
-                        
-                        // Check if we got valid response or permission errors
-                        if (!empty($response->code) && $response->code == 40001) {
-                            // Permission error - just use stored data
-                            logToFile("Permission error for videos, using stored data");
-                            foreach ($advertiserVideos as $vid) {
-                                // Try to generate a thumbnail URL if we have the video ID
-                                // Some TikTok videos might have predictable thumbnail URLs
-                                $fallbackThumbnail = '';
-                                
-                                $videos[] = [
-                                    'video_id' => $vid['video_id'],
-                                    'file_name' => $vid['file_name'] ?? 'Video',
-                                    'duration' => $vid['duration'] ?? null,
-                                    'size' => $vid['size'] ?? null,
-                                    'type' => 'video',
-                                    'preview_url' => $fallbackThumbnail,
-                                    'thumbnail_url' => $fallbackThumbnail,
-                                    'has_thumbnail' => false
-                                ];
-                            }
-                        } elseif (empty($response->code) && isset($response->data->list)) {
-                            foreach ($response->data->list as $video) {
-                                // Find original filename from storage
-                                $originalData = null;
-                                foreach ($advertiserVideos as $stored) {
-                                    if ($stored['video_id'] == $video->video_id) {
-                                        $originalData = $stored;
-                                        break;
-                                    }
-                                }
-                                
-                                // Extract all possible thumbnail URLs - video_cover_url is what TikTok returns
-                                $thumbnailUrl = $video->video_cover_url ?? 
-                                               $video->poster_url ?? 
-                                               $video->cover_image_url ?? 
-                                               $video->cover_url ?? 
-                                               $video->thumbnail_url ?? 
-                                               $video->preview_url ?? '';
-                                
-                                $videos[] = [
-                                    'video_id' => $video->video_id,
-                                    'url' => $video->video_url ?? $video->preview_url ?? '',
-                                    'preview_url' => $thumbnailUrl,
-                                    'poster_url' => $thumbnailUrl,
-                                    'thumbnail_url' => $thumbnailUrl,
-                                    'video_cover_url' => $video->video_cover_url ?? '',
-                                    'file_name' => $originalData['file_name'] ?? $video->file_name ?? $video->video_name ?? 'Video',
-                                    'duration' => $video->duration ?? $originalData['duration'] ?? null,
-                                    'width' => $video->width ?? null,
-                                    'height' => $video->height ?? null,
-                                    'type' => 'video',
-                                    'has_thumbnail' => !empty($thumbnailUrl)
-                                ];
-                            }
-                        } else {
-                            // If TikTok API fails, use stored data
-                            foreach ($advertiserVideos as $vid) {
-                                $videos[] = [
-                                    'video_id' => $vid['video_id'],
-                                    'file_name' => $vid['file_name'] ?? 'Video',
-                                    'type' => 'video'
-                                ];
-                            }
-                        }
-                    } catch (Exception $e) {
-                        logToFile("Error fetching video info: " . $e->getMessage());
-                        // Fall back to stored data
-                        foreach ($advertiserVideos as $vid) {
-                            $videos[] = [
-                                'video_id' => $vid['video_id'],
-                                'file_name' => $vid['file_name'] ?? 'Video',
-                                'type' => 'video'
+                        if (!$exists) {
+                            $storage['videos'][] = [
+                                'video_id' => $video['video_id'],
+                                'file_name' => $video['video_name'] ?? $video['file_name'] ?? 'Video',
+                                'duration' => $video['duration'] ?? null,
+                                'size' => $video['size'] ?? null,
+                                'upload_time' => time(),
+                                'advertiser_id' => $advertiser_id
                             ];
                         }
                     }
+
+                    // Save updated storage
+                    file_put_contents($storageFile, json_encode($storage, JSON_PRETTY_PRINT));
+
+                } else {
+                    // API returned error or no data
+                    $errorMsg = $result['message'] ?? 'Unknown error';
+                    logToFile("TikTok API error: " . $errorMsg . " (code: " . ($result['code'] ?? 'none') . ")");
+                    throw new Exception("TikTok API error: " . $errorMsg);
+                }
+
+            } catch (Exception $e) {
+                // FALLBACK: Use local storage if TikTok API fails
+                logToFile("TikTok API failed, falling back to local storage: " . $e->getMessage());
+
+                if (file_exists($storageFile)) {
+                    $storage = json_decode(file_get_contents($storageFile), true) ?? ['images' => [], 'videos' => []];
+
+                    $advertiserVideos = array_filter($storage['videos'] ?? [], function($vid) use ($advertiser_id) {
+                        return ($vid['advertiser_id'] ?? '') === $advertiser_id;
+                    });
+
+                    logToFile("Found " . count($advertiserVideos) . " videos in local storage for advertiser " . $advertiser_id);
+
+                    foreach ($advertiserVideos as $vid) {
+                        $videos[] = [
+                            'video_id' => $vid['video_id'],
+                            'file_name' => $vid['file_name'] ?? 'Video',
+                            'duration' => $vid['duration'] ?? null,
+                            'size' => $vid['size'] ?? null,
+                            'type' => 'video',
+                            'preview_url' => '',
+                            'thumbnail_url' => '',
+                            'has_thumbnail' => false
+                        ];
+                    }
                 }
             }
-            
+
+            logToFile("Returning " . count($videos) . " videos");
+            logToFile("============ END GET VIDEOS REQUEST ============");
+
             echo json_encode([
                 'success' => true,
                 'data' => ['list' => $videos],
