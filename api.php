@@ -2149,10 +2149,6 @@ try {
                     throw new Exception("Invalid JSON response from TikTok API: " . json_last_error_msg());
                 }
 
-                // Consider success if we got a video_id OR if code is 0/empty
-                $success = (empty($response->code) || $response->code == 0) ||
-                          (isset($response->data->video_id) && !empty($response->data->video_id));
-
                 // Extract video data safely - convert objects to arrays
                 $videoId = null;
                 $responseData = null;
@@ -2162,6 +2158,19 @@ try {
                     $responseData = json_decode(json_encode($response->data), true);
                     $videoId = $responseData['video_id'] ?? null;
                 }
+
+                // For video upload, success REQUIRES a video_id to be returned
+                // TikTok may return code 0 but no video_id if the upload wasn't actually processed
+                $apiCodeSuccess = (empty($response->code) || $response->code == 0);
+                $hasVideoId = !empty($videoId);
+
+                // True success requires BOTH: API code success AND video_id returned
+                $success = $apiCodeSuccess && $hasVideoId;
+
+                logToFile("Upload result - API Code Success: " . ($apiCodeSuccess ? 'true' : 'false') .
+                          ", Has Video ID: " . ($hasVideoId ? 'true' : 'false') .
+                          ", Video ID: " . ($videoId ?? 'null') .
+                          ", Response Code: " . ($response->code ?? 'none'));
 
                 // If upload successful, store the video ID for later retrieval
                 if ($success && $videoId) {
@@ -2192,21 +2201,33 @@ try {
                 // Build response - ensure all data is JSON-serializable
                 // Include error code in message for better debugging
                 $errorMessage = 'Upload failed';
-                if (isset($response->message) && $response->message) {
-                    $errorMessage = (string)$response->message;
-                }
-                if (!$success && isset($response->code) && $response->code != 0) {
-                    $errorMessage = "TikTok Error [{$response->code}]: {$errorMessage}";
-                    // Common TikTok error codes
-                    $errorCodes = [
-                        40001 => 'Access token invalid or expired',
-                        40002 => 'Advertiser not authorized',
-                        40100 => 'Permission denied for this advertiser',
-                        50001 => 'Video upload failed',
-                        50002 => 'Video format not supported',
-                    ];
-                    if (isset($errorCodes[$response->code])) {
-                        $errorMessage .= " - " . $errorCodes[$response->code];
+
+                if (!$success) {
+                    // Determine the specific error
+                    if ($apiCodeSuccess && !$hasVideoId) {
+                        // API said OK but no video_id - likely authorization or processing issue
+                        $errorMessage = 'Upload accepted but no video ID returned. This usually means the access token does not have permission for this advertiser account. Please re-authorize the account.';
+                        logToFile("WARNING: API returned success but no video_id. Check advertiser authorization.");
+                    } elseif (isset($response->code) && $response->code != 0) {
+                        // TikTok returned an error code
+                        $tiktokMsg = isset($response->message) ? (string)$response->message : 'Unknown error';
+                        $errorMessage = "TikTok Error [{$response->code}]: {$tiktokMsg}";
+
+                        // Common TikTok error codes with better descriptions
+                        $errorCodes = [
+                            40001 => 'Access token invalid or expired - please re-login',
+                            40002 => 'Advertiser not authorized - this account was not included in OAuth authorization',
+                            40100 => 'Permission denied for this advertiser - check account permissions',
+                            40105 => 'Access token does not match advertiser - re-authorize this specific account',
+                            50001 => 'Video upload failed - try a different video format',
+                            50002 => 'Video format not supported - use MP4, MOV, or WebM',
+                            50003 => 'Video too short or too long for ads',
+                        ];
+                        if (isset($errorCodes[$response->code])) {
+                            $errorMessage .= " - " . $errorCodes[$response->code];
+                        }
+                    } elseif (isset($response->message) && $response->message) {
+                        $errorMessage = (string)$response->message;
                     }
                 }
 
