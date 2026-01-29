@@ -2047,6 +2047,34 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                     <span class="picker-video-count" id="picker-video-count">0 videos</span>
                 </div>
 
+                <!-- Upload Section - Always visible -->
+                <div class="picker-upload-section" id="picker-upload-section" style="margin-bottom: 15px; padding: 12px; background: linear-gradient(135deg, rgba(254, 44, 85, 0.05), rgba(37, 244, 238, 0.05)); border-radius: 10px; border: 1px dashed rgba(254, 44, 85, 0.3);">
+                    <input type="file"
+                           id="video-picker-upload-input"
+                           accept="video/*"
+                           multiple
+                           style="display: none;"
+                           onchange="handlePickerVideoUpload(event)">
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                        <span style="font-size: 13px; color: #64748b;">Don't see your video? Upload directly:</span>
+                        <button type="button"
+                                id="picker-upload-btn"
+                                onclick="document.getElementById('video-picker-upload-input').click()"
+                                style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #fe2c55, #25f4ee); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                            <span>📤</span> Upload Video
+                        </button>
+                    </div>
+                    <div id="picker-upload-progress" style="display: none; margin-top: 10px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span id="picker-upload-status" style="font-size: 12px; color: #64748b;">Uploading...</span>
+                            <span id="picker-upload-count" style="font-size: 12px; color: #64748b;">0/0</span>
+                        </div>
+                        <div style="background: #e2e8f0; border-radius: 4px; height: 6px; overflow: hidden;">
+                            <div id="picker-upload-bar" style="background: linear-gradient(90deg, #fe2c55, #25f4ee); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Video Grid -->
                 <div class="picker-video-grid" id="picker-video-grid">
                     <!-- Videos will be rendered here -->

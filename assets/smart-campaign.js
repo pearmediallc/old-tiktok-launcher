@@ -3547,18 +3547,32 @@ function renderAccountAssetsDropdowns(advertiserId, assets) {
         </div>
     `;
 
-    // Video matching status
+    // Video matching status with upload button
     const videoMatch = bulkLaunchState.accountAssets[advertiserId]?.videoMatch;
-    if (videoMatch) {
-        const matchRate = videoMatch.match_rate || 0;
+    const videoCount = assets.videos?.length || 0;
+    if (videoMatch || state.selectedVideos.length > 0) {
+        const matchRate = videoMatch?.match_rate || 0;
         const statusClass = matchRate === 100 ? 'success' : matchRate > 0 ? 'warning' : 'error';
         html += `
             <div class="asset-row video-match-status ${statusClass}">
                 <span class="match-icon">${matchRate === 100 ? '✓' : matchRate > 0 ? '⚠' : '✗'}</span>
-                <span>Videos: ${videoMatch.matched?.length || 0}/${state.selectedVideos.length} matched (${matchRate}%)</span>
-                <button type="button" class="btn-toggle-library" onclick="toggleMediaLibrary('${advertiserId}')">
-                    📁 View Library
-                </button>
+                <span>Videos: ${videoMatch?.matched?.length || 0}/${state.selectedVideos.length} matched (${matchRate}%)</span>
+                <div class="video-actions" style="display: flex; gap: 8px; margin-left: auto;">
+                    <input type="file"
+                           id="account-video-upload-${advertiserId}"
+                           accept="video/*"
+                           multiple
+                           style="display: none;"
+                           onchange="handleBulkAccountVideoUpload(event, '${advertiserId}')">
+                    <button type="button" class="btn-upload-account-video"
+                            onclick="document.getElementById('account-video-upload-${advertiserId}').click()"
+                            style="padding: 4px 10px; background: linear-gradient(135deg, #fe2c55, #25f4ee); color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                        📤 Upload
+                    </button>
+                    <button type="button" class="btn-toggle-library" onclick="toggleMediaLibrary('${advertiserId}')">
+                        📁 Library (${videoCount})
+                    </button>
+                </div>
             </div>
         `;
     }
@@ -3976,17 +3990,27 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
 
             if (result.success && result.data?.video_id) {
                 completed++;
+                // Create blob URL for immediate preview
+                const previewUrl = URL.createObjectURL(file);
                 uploadedVideos.push({
                     video_id: result.data.video_id,
                     file_name: newFileName,
-                    video_cover_url: URL.createObjectURL(file)
+                    video_cover_url: previewUrl,
+                    preview_url: previewUrl,
+                    type: 'video',
+                    is_new: true
                 });
                 addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
+                console.log(`[Bulk Upload] Success - video_id: ${result.data.video_id}`);
             } else {
                 failed++;
                 const errorMsg = result.message || result.error || 'Unknown error';
-                console.error(`[Bulk Upload] Failed:`, result);
+                console.error(`[Bulk Upload] Failed for ${file.name}:`, result);
                 addLog('error', `Failed to upload ${file.name}: ${errorMsg}`);
+                // Show individual error toast for debugging
+                if (validFiles.length === 1) {
+                    showToast(`Upload failed: ${errorMsg}`, 'error');
+                }
             }
         } catch (error) {
             failed++;
@@ -4008,17 +4032,193 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
     }
 
     // Add uploaded videos to account assets
-    if (uploadedVideos.length > 0 && bulkLaunchState.accountAssets[advertiserId]) {
+    if (uploadedVideos.length > 0) {
+        // Initialize accountAssets for this advertiser if it doesn't exist
+        if (!bulkLaunchState.accountAssets[advertiserId]) {
+            bulkLaunchState.accountAssets[advertiserId] = {
+                videos: [],
+                images: [],
+                pixels: [],
+                identities: [],
+                portfolios: [],
+                videoMatch: { match_rate: 0 }
+            };
+        }
         if (!bulkLaunchState.accountAssets[advertiserId].videos) {
             bulkLaunchState.accountAssets[advertiserId].videos = [];
         }
+
+        // Add uploaded videos to the beginning
         bulkLaunchState.accountAssets[advertiserId].videos.unshift(...uploadedVideos);
 
-        // Update the video picker state and re-render
-        videoPickerState.videos = bulkLaunchState.accountAssets[advertiserId].videos;
+        console.log(`[Bulk Upload] Added ${uploadedVideos.length} videos to account ${advertiserId}. Total videos:`, bulkLaunchState.accountAssets[advertiserId].videos.length);
+
+        // Update the video picker state if it's open for this account
+        if (videoPickerState.advertiserId === advertiserId) {
+            videoPickerState.videos = [...bulkLaunchState.accountAssets[advertiserId].videos];
+            renderVideoPickerGrid();
+        }
+
+        showToast(`Uploaded ${uploadedVideos.length} videos successfully! Select one to use.`, 'success');
+    } else if (failed > 0) {
+        showToast(`Failed to upload ${failed} video(s). Please try again.`, 'error');
+    }
+
+    // Clear file input
+    event.target.value = '';
+}
+
+// Handle video upload from within the video picker modal
+async function handlePickerVideoUpload(event) {
+    const advertiserId = videoPickerState.advertiserId;
+    if (!advertiserId) {
+        showToast('Error: No account selected', 'error');
+        event.target.value = '';
+        return;
+    }
+
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    // Validate files
+    const maxSize = 500 * 1024 * 1024; // 500MB
+    const validFiles = files.filter(file => {
+        if (!file.type.startsWith('video/')) {
+            showToast(`Skipped ${file.name}: Not a video file`, 'warning');
+            return false;
+        }
+        if (file.size > maxSize) {
+            showToast(`Skipped ${file.name}: Exceeds 500MB limit`, 'warning');
+            return false;
+        }
+        return true;
+    });
+
+    if (validFiles.length === 0) {
+        showToast('No valid video files selected', 'error');
+        event.target.value = '';
+        return;
+    }
+
+    // Show progress UI
+    const progressContainer = document.getElementById('picker-upload-progress');
+    const statusEl = document.getElementById('picker-upload-status');
+    const countEl = document.getElementById('picker-upload-count');
+    const barEl = document.getElementById('picker-upload-bar');
+    const uploadBtn = document.getElementById('picker-upload-btn');
+
+    if (progressContainer) progressContainer.style.display = 'block';
+    if (uploadBtn) uploadBtn.disabled = true;
+    if (statusEl) statusEl.textContent = 'Uploading...';
+    if (countEl) countEl.textContent = `0/${validFiles.length}`;
+    if (barEl) barEl.style.width = '0%';
+
+    addLog('info', `Starting upload of ${validFiles.length} videos to account ${advertiserId} from picker`);
+
+    let completed = 0;
+    let failed = 0;
+    const uploadedVideos = [];
+
+    // Upload files sequentially
+    for (const file of validFiles) {
+        try {
+            const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+            const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
+            const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
+            const newFileName = `${baseName}_${timestamp}${ext}`;
+
+            const formData = new FormData();
+            formData.append('video', file, newFileName);
+            formData.append('advertiser_id', advertiserId);
+
+            if (statusEl) statusEl.textContent = `Uploading ${file.name}...`;
+
+            const response = await fetch('api.php?action=upload_video', {
+                method: 'POST',
+                body: formData
+            });
+
+            const responseText = await response.text();
+            let result;
+            try {
+                result = JSON.parse(responseText);
+            } catch (e) {
+                console.error('Failed to parse upload response:', responseText);
+                throw new Error('Invalid server response');
+            }
+
+            console.log(`[Picker Upload] Response for ${file.name}:`, result);
+
+            if (result.success && result.data?.video_id) {
+                completed++;
+                const previewUrl = URL.createObjectURL(file);
+                uploadedVideos.push({
+                    video_id: result.data.video_id,
+                    file_name: newFileName,
+                    video_cover_url: previewUrl,
+                    preview_url: previewUrl,
+                    type: 'video',
+                    is_new: true
+                });
+                addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
+            } else {
+                failed++;
+                const errorMsg = result.message || result.error || 'Unknown error';
+                console.error(`[Picker Upload] Failed:`, result);
+                addLog('error', `Failed to upload ${file.name}: ${errorMsg}`);
+            }
+        } catch (error) {
+            failed++;
+            console.error(`[Picker Upload] Exception:`, error);
+            addLog('error', `Error uploading ${file.name}: ${error.message}`);
+        }
+
+        // Update progress
+        const totalProcessed = completed + failed;
+        if (countEl) countEl.textContent = `${totalProcessed}/${validFiles.length}`;
+        if (barEl) barEl.style.width = `${(totalProcessed / validFiles.length) * 100}%`;
+    }
+
+    // Update status
+    if (statusEl) {
+        statusEl.textContent = failed === 0
+            ? `✓ Uploaded ${completed} videos`
+            : `Uploaded ${completed}, failed ${failed}`;
+    }
+    if (uploadBtn) uploadBtn.disabled = false;
+
+    // Add uploaded videos to account assets and re-render
+    if (uploadedVideos.length > 0) {
+        // Initialize accountAssets if needed
+        if (!bulkLaunchState.accountAssets[advertiserId]) {
+            bulkLaunchState.accountAssets[advertiserId] = {
+                videos: [],
+                images: [],
+                pixels: [],
+                identities: [],
+                portfolios: [],
+                videoMatch: { match_rate: 0 }
+            };
+        }
+        if (!bulkLaunchState.accountAssets[advertiserId].videos) {
+            bulkLaunchState.accountAssets[advertiserId].videos = [];
+        }
+
+        // Add uploaded videos to the beginning
+        bulkLaunchState.accountAssets[advertiserId].videos.unshift(...uploadedVideos);
+
+        // Update picker state and re-render immediately
+        videoPickerState.videos = [...bulkLaunchState.accountAssets[advertiserId].videos];
         renderVideoPickerGrid();
 
-        showToast(`Uploaded ${uploadedVideos.length} videos. Select one to use.`, 'success');
+        showToast(`Uploaded ${uploadedVideos.length} videos! Select one to use.`, 'success');
+
+        // Hide progress after a moment
+        setTimeout(() => {
+            if (progressContainer) progressContainer.style.display = 'none';
+        }, 2000);
+    } else if (failed > 0) {
+        showToast(`Failed to upload ${failed} video(s). Please try again.`, 'error');
     }
 
     // Clear file input

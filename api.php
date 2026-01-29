@@ -2035,7 +2035,15 @@ try {
                 ini_set('memory_limit', '512M');
                 ini_set('max_execution_time', '300'); // 5 minutes
 
+                // Allow override of advertiser_id via POST for bulk uploads to specific accounts
+                $upload_advertiser_id = $advertiser_id; // Default from session
+                if (!empty($_POST['advertiser_id'])) {
+                    $upload_advertiser_id = $_POST['advertiser_id'];
+                    logToFile("Using advertiser_id from POST data: " . $upload_advertiser_id);
+                }
+
                 logToFile("============ VIDEO UPLOAD REQUEST ============");
+                logToFile("Upload Video Request - Advertiser: " . $upload_advertiser_id);
                 logToFile("Upload Video Request - FILES: " . json_encode($_FILES, JSON_PRETTY_PRINT));
                 logToFile("PHP Memory Limit: " . ini_get('memory_limit'));
                 logToFile("PHP Max Execution Time: " . ini_get('max_execution_time'));
@@ -2084,7 +2092,7 @@ try {
                 logToFile("Video Upload - File: " . $fileName);
                 logToFile("Video Upload - Size: " . $fileSize . " bytes");
                 logToFile("Video Upload - MIME Type: " . $mimeType);
-                logToFile("Video Upload - Advertiser ID: " . $advertiser_id);
+                logToFile("Video Upload - Advertiser ID: " . $upload_advertiser_id);
                 logToFile("Video Upload - Signature: " . $videoSignature);
                 logToFile("Video Upload - Access Token Present: " . (!empty($config['access_token']) ? 'Yes' : 'No'));
 
@@ -2092,7 +2100,7 @@ try {
                 $url = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/upload/';
 
                 $postData = [
-                    'advertiser_id' => $advertiser_id,
+                    'advertiser_id' => $upload_advertiser_id,
                     'upload_type' => 'UPLOAD_BY_FILE',
                     'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
                     'video_signature' => $videoSignature,
@@ -2172,7 +2180,7 @@ try {
                         'video_id' => $videoId,
                         'file_name' => $fileName,
                         'upload_time' => time(),
-                        'advertiser_id' => $advertiser_id
+                        'advertiser_id' => $upload_advertiser_id
                     ];
 
                     file_put_contents($storageFile, json_encode($storage, JSON_PRETTY_PRINT));
