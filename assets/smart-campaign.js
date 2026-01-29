@@ -622,12 +622,17 @@ async function loadAdvertiserTimezone() {
         if (result.success && result.data) {
             state.advertiserTimezone = result.data.timezone || 'UTC';
             state.advertiserTimezoneOffset = result.data.timezone_offset || 0;
-            addLog('info', `Advertiser timezone: ${state.advertiserTimezone} (UTC${state.advertiserTimezoneOffset >= 0 ? '+' : ''}${state.advertiserTimezoneOffset})`);
+            const offsetStr = state.advertiserTimezoneOffset >= 0 ? `+${state.advertiserTimezoneOffset}` : `${state.advertiserTimezoneOffset}`;
+            addLog('info', `Account timezone: ${state.advertiserTimezone} (UTC${offsetStr})`);
 
-            // Show warning if timezone is different from EST
-            if (state.advertiserTimezoneOffset !== -5) {
-                addLog('warn', `Note: Advertiser account is NOT in EST. Schedule times will be converted.`);
+            // Update timezone display in Step 2 if element exists
+            const tzDisplay = document.getElementById('account-timezone-display');
+            if (tzDisplay) {
+                tzDisplay.innerHTML = `<span style="font-size: 12px; color: #64748b;">Account Timezone: <strong>${state.advertiserTimezone}</strong> (UTC${offsetStr})</span>`;
             }
+
+            // Dayparting times are interpreted in this timezone by TikTok
+            addLog('info', `Dayparting schedule will be interpreted in ${state.advertiserTimezone} timezone by TikTok`);
         } else {
             // Default to UTC if we can't get timezone
             state.advertiserTimezone = 'UTC';
@@ -1807,20 +1812,31 @@ function initializeDayparting() {
 
     tbody.innerHTML = '';
 
+    // Hour labels for tooltips (12-hour format)
+    const hourLabels = [
+        '12:00 AM', '1:00 AM', '2:00 AM', '3:00 AM', '4:00 AM', '5:00 AM',
+        '6:00 AM', '7:00 AM', '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM',
+        '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM',
+        '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM', '10:00 PM', '11:00 PM'
+    ];
+
     days.forEach((day, dayIndex) => {
         const tr = document.createElement('tr');
         const dayCell = document.createElement('td');
         dayCell.innerHTML = `<strong>${day}</strong>`;
         tr.appendChild(dayCell);
 
-        for (let hour = 0; hour <= 24; hour++) {
+        // Create exactly 24 checkboxes (hours 0-23)
+        for (let hour = 0; hour < 24; hour++) {
             const td = document.createElement('td');
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.className = 'hour-checkbox';
             checkbox.dataset.day = dayIndex;
             checkbox.dataset.hour = hour;
-            checkbox.title = `${day} ${hour}:00`;
+            // Show range: e.g., "Monday 9:00 AM - 10:00 AM"
+            const nextHour = (hour + 1) % 24;
+            checkbox.title = `${day} ${hourLabels[hour]} - ${hourLabels[nextHour]}`;
             checkbox.checked = false;
             td.appendChild(checkbox);
             tr.appendChild(td);
@@ -1836,6 +1852,8 @@ function toggleDayparting() {
 }
 
 // Dayparting preset function with clear time descriptions
+// Note: Each hour checkbox represents a 1-hour slot (e.g., hour 9 = 9:00 AM - 10:00 AM)
+// To end at 5:00 PM, select hours up to 16 (the 4:00-5:00 PM slot is the last one)
 function setDaypartingPreset(preset) {
     const checkboxes = document.querySelectorAll('.hour-checkbox');
 
@@ -1854,22 +1872,32 @@ function setDaypartingPreset(preset) {
 
             case 'business':
                 // Business Hours: 8AM-5PM (hours 8-16), Monday-Friday (days 1-5)
-                cb.checked = (day >= 1 && day <= 5 && hour >= 8 && hour < 17);
+                // Hour 8 = 8:00-9:00 AM, Hour 16 = 4:00-5:00 PM (ends at 5 PM)
+                cb.checked = (day >= 1 && day <= 5 && hour >= 8 && hour <= 16);
+                break;
+
+            case 'office':
+                // Office Hours: 9AM-5PM (hours 9-16), Monday-Friday (days 1-5)
+                // Hour 9 = 9:00-10:00 AM, Hour 16 = 4:00-5:00 PM (ends at 5 PM)
+                cb.checked = (day >= 1 && day <= 5 && hour >= 9 && hour <= 16);
                 break;
 
             case 'prime':
                 // Prime Time: 6PM-11PM (hours 18-22), all days
-                cb.checked = (hour >= 18 && hour < 23);
+                // Hour 18 = 6:00-7:00 PM, Hour 22 = 10:00-11:00 PM (ends at 11 PM)
+                cb.checked = (hour >= 18 && hour <= 22);
                 break;
 
             case 'evening':
                 // Evening: 5PM-12AM (hours 17-23), all days
+                // Hour 17 = 5:00-6:00 PM, Hour 23 = 11:00 PM-12:00 AM (ends at midnight)
                 cb.checked = (hour >= 17 && hour <= 23);
                 break;
 
             case 'daytime':
                 // Daytime: 6AM-6PM (hours 6-17), all days
-                cb.checked = (hour >= 6 && hour < 18);
+                // Hour 6 = 6:00-7:00 AM, Hour 17 = 5:00-6:00 PM (ends at 6 PM)
+                cb.checked = (hour >= 6 && hour <= 17);
                 break;
 
             case 'none':
@@ -1882,6 +1910,7 @@ function setDaypartingPreset(preset) {
     const presetNames = {
         'all': '24/7 (All Hours)',
         'business': 'Business Hours (8AM-5PM, Mon-Fri)',
+        'office': 'Office Hours (9AM-5PM, Mon-Fri)',
         'prime': 'Prime Time (6PM-11PM)',
         'evening': 'Evening (5PM-12AM)',
         'daytime': 'Daytime (6AM-6PM)',

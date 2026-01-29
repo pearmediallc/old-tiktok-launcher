@@ -1150,9 +1150,12 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                     </div>
 
                     <div id="dayparting-section" style="display: none;">
+                        <div id="account-timezone-display" style="margin-bottom: 10px; padding: 8px 12px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0;"></div>
+                        <p style="margin-bottom: 10px; font-size: 13px; color: #64748b;">Note: Each column represents a 1-hour slot. For example, "9A" covers 9:00 AM - 10:00 AM. Times are interpreted in your account's timezone.</p>
                         <div style="margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 10px;">
                             <button type="button" class="btn-secondary" onclick="setDaypartingPreset('all')" title="All hours, all days">24/7 (All Hours)</button>
                             <button type="button" class="btn-secondary" onclick="setDaypartingPreset('business')" title="8AM-5PM, Monday-Friday">Business (8AM-5PM)</button>
+                            <button type="button" class="btn-secondary" onclick="setDaypartingPreset('office')" title="9AM-5PM, Monday-Friday">Office (9AM-5PM)</button>
                             <button type="button" class="btn-secondary" onclick="setDaypartingPreset('prime')" title="6PM-11PM, all days">Prime Time (6PM-11PM)</button>
                             <button type="button" class="btn-secondary" onclick="setDaypartingPreset('evening')" title="5PM-12AM, all days">Evening (5PM-12AM)</button>
                             <button type="button" class="btn-secondary" onclick="setDaypartingPreset('daytime')" title="6AM-6PM, all days">Daytime (6AM-6PM)</button>
