@@ -14,16 +14,15 @@ register_shutdown_function(function() {
             ob_end_clean();
         }
 
+        // Log full error details for debugging (server-side only)
+        error_log("PHP Fatal Error in api.php: [{$error['type']}] {$error['message']} in {$error['file']} on line {$error['line']}");
+
         http_response_code(500);
         header('Content-Type: application/json; charset=utf-8');
+        // Don't expose internal error details to client (security)
         echo json_encode([
             'success' => false,
-            'message' => 'PHP Fatal Error: ' . $error['message'],
-            'error_details' => [
-                'file' => $error['file'],
-                'line' => $error['line'],
-                'type' => $error['type']
-            ]
+            'message' => 'An internal server error occurred. Please try again later.'
         ]);
         exit;
     }
@@ -291,6 +290,61 @@ logToFile("==============================");
 
 header('Content-Type: application/json');
 
+// Security: Whitelist of allowed API actions
+$allowedActions = [
+    'set_oauth_advertiser',
+    'test_auth',
+    'publish_smart_plus_campaign',
+    'create_smart_campaign',
+    'create_smart_adgroup',
+    'create_smart_ad',
+    'get_advertisers',
+    'set_advertiser',
+    'create_campaign',
+    'create_adgroup',
+    'get_dynamic_ctas',
+    'create_cta_portfolio',
+    'get_cta_portfolios',
+    'get_portfolio_details',
+    'get_or_create_frequently_used_cta_portfolio',
+    'create_ad',
+    'upload_thumbnail_as_cover',
+    'upload_image',
+    'upload_video',
+    'upload_video_direct',
+    'get_identities',
+    'get_tiktok_posts',
+    'get_video_by_auth_code',
+    'get_pixels',
+    'get_images',
+    'get_videos',
+    'get_campaigns',
+    'get_adgroups',
+    'get_ads',
+    'publish_ads',
+    'duplicate_ad',
+    'duplicate_adgroup',
+    'sync_images_from_tiktok',
+    'sync_tiktok_library',
+    'add_existing_media',
+    'logout',
+    'get_selected_advertiser',
+    'create_identity',
+    'generate_video_thumbnail',
+    'get_advertiser_info',
+    'get_timezones',
+    'auto_crop_and_upload'
+];
+
+// Reject unknown actions
+if (!empty($action) && !in_array($action, $allowedActions)) {
+    logToFile("SECURITY: Blocked unknown action: " . $action);
+    outputJsonResponse([
+        'success' => false,
+        'message' => 'Invalid action'
+    ]);
+}
+
 try {
     switch ($action) {
         case 'set_oauth_advertiser':
@@ -330,11 +384,11 @@ try {
             break;
 
         case 'test_auth':
+            // Only return authentication status - no sensitive session data
             echo json_encode([
                 'success' => true,
                 'authenticated' => isset($_SESSION['authenticated']) && $_SESSION['authenticated'],
-                'session_id' => session_id(),
-                'advertiser_id' => $advertiser_id ?? 'NOT_SET',
+                'has_advertiser' => !empty($advertiser_id),
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
             break;
@@ -1920,6 +1974,13 @@ try {
                 throw new Exception('Uploaded file not found at: ' . $tmpPath);
             }
 
+            // Security: Validate image file (type, size, extension)
+            $validation = Security::validateImageUpload($tmpPath, $fileName);
+            if (!$validation['valid']) {
+                logToFile("Image validation failed: " . $validation['error']);
+                throw new Exception('Invalid image file: ' . $validation['error']);
+            }
+
             $imageSignature = md5_file($tmpPath);
 
             logToFile("Image Upload - File: " . $fileName);
@@ -1929,7 +1990,7 @@ try {
             $params = [
                 'advertiser_id' => $advertiser_id,
                 'file_name' => $fileName,
-                'image_file' => new CURLFile($tmpPath, $_FILES['image']['type'], $fileName),
+                'image_file' => new CURLFile($tmpPath, $validation['mime'], $fileName),
                 'image_signature' => $imageSignature
             ];
 
@@ -2008,10 +2069,15 @@ try {
                     throw new Exception('Uploaded file not found at: ' . $tmpPath);
                 }
 
-                // Get file MIME type to properly set in CURLFile
-                $finfo = finfo_open(FILEINFO_MIME_TYPE);
-                $mimeType = finfo_file($finfo, $tmpPath);
-                finfo_close($finfo);
+                // Security: Validate video file (type, size, extension)
+                $validation = Security::validateVideoUpload($tmpPath, $fileName);
+                if (!$validation['valid']) {
+                    logToFile("Video validation failed: " . $validation['error']);
+                    throw new Exception('Invalid video file: ' . $validation['error']);
+                }
+
+                // Use validated MIME type
+                $mimeType = $validation['mime'];
 
                 $videoSignature = md5_file($tmpPath);
 

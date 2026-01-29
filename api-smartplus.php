@@ -24,11 +24,13 @@ set_error_handler(function($severity, $message, $file, $line) {
 
 // Custom exception handler to return JSON on uncaught exceptions
 set_exception_handler(function($exception) {
-    error_log("Uncaught Exception in api-smartplus.php: " . $exception->getMessage());
+    // Log full error details server-side
+    error_log("Uncaught Exception in api-smartplus.php: " . $exception->getMessage() . " in " . $exception->getFile() . " on line " . $exception->getLine());
     http_response_code(500);
+    // Don't expose internal error details to client (security)
     echo json_encode([
         'success' => false,
-        'message' => 'Server error: ' . $exception->getMessage()
+        'message' => 'An internal server error occurred. Please try again later.'
     ]);
     exit;
 });

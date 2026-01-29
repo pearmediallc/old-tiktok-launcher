@@ -279,4 +279,109 @@ class Security {
             return ceil($seconds / 3600) . ' hours';
         }
     }
+
+    /**
+     * Validate uploaded video file
+     * @param string $tmpPath Path to uploaded temp file
+     * @param string $originalName Original filename
+     * @param int $maxSize Maximum file size in bytes (default 500MB)
+     * @return array ['valid' => bool, 'error' => string|null, 'mime' => string|null]
+     */
+    public static function validateVideoUpload($tmpPath, $originalName, $maxSize = 524288000) {
+        $allowedMimeTypes = [
+            'video/mp4',
+            'video/quicktime',    // .mov
+            'video/x-msvideo',    // .avi
+            'video/x-ms-wmv',     // .wmv
+            'video/webm',
+            'video/3gpp',
+            'video/x-matroska',   // .mkv
+            'video/mpeg'
+        ];
+
+        $allowedExtensions = ['mp4', 'mov', 'avi', 'wmv', 'webm', '3gp', 'mkv', 'mpeg', 'mpg'];
+
+        // Check file exists
+        if (!file_exists($tmpPath)) {
+            return ['valid' => false, 'error' => 'File not found', 'mime' => null];
+        }
+
+        // Check file size
+        $fileSize = filesize($tmpPath);
+        if ($fileSize > $maxSize) {
+            return ['valid' => false, 'error' => 'File exceeds maximum size of ' . ($maxSize / 1024 / 1024) . 'MB', 'mime' => null];
+        }
+
+        // Get real MIME type from file content (not from extension)
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $tmpPath);
+        finfo_close($finfo);
+
+        // Validate MIME type
+        if (!in_array($mimeType, $allowedMimeTypes)) {
+            return ['valid' => false, 'error' => 'Invalid video format. Allowed: MP4, MOV, AVI, WMV, WebM', 'mime' => $mimeType];
+        }
+
+        // Validate extension
+        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        if (!in_array($extension, $allowedExtensions)) {
+            return ['valid' => false, 'error' => 'Invalid file extension', 'mime' => $mimeType];
+        }
+
+        return ['valid' => true, 'error' => null, 'mime' => $mimeType];
+    }
+
+    /**
+     * Validate uploaded image file
+     * @param string $tmpPath Path to uploaded temp file
+     * @param string $originalName Original filename
+     * @param int $maxSize Maximum file size in bytes (default 10MB)
+     * @return array ['valid' => bool, 'error' => string|null, 'mime' => string|null]
+     */
+    public static function validateImageUpload($tmpPath, $originalName, $maxSize = 10485760) {
+        $allowedMimeTypes = [
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+            'image/bmp'
+        ];
+
+        $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+
+        // Check file exists
+        if (!file_exists($tmpPath)) {
+            return ['valid' => false, 'error' => 'File not found', 'mime' => null];
+        }
+
+        // Check file size
+        $fileSize = filesize($tmpPath);
+        if ($fileSize > $maxSize) {
+            return ['valid' => false, 'error' => 'File exceeds maximum size of ' . ($maxSize / 1024 / 1024) . 'MB', 'mime' => null];
+        }
+
+        // Get real MIME type from file content (not from extension)
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $tmpPath);
+        finfo_close($finfo);
+
+        // Validate MIME type
+        if (!in_array($mimeType, $allowedMimeTypes)) {
+            return ['valid' => false, 'error' => 'Invalid image format. Allowed: JPG, PNG, GIF, WebP', 'mime' => $mimeType];
+        }
+
+        // Validate extension
+        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        if (!in_array($extension, $allowedExtensions)) {
+            return ['valid' => false, 'error' => 'Invalid file extension', 'mime' => $mimeType];
+        }
+
+        // Additional check: verify it's actually an image using getimagesize
+        $imageInfo = @getimagesize($tmpPath);
+        if ($imageInfo === false) {
+            return ['valid' => false, 'error' => 'File is not a valid image', 'mime' => $mimeType];
+        }
+
+        return ['valid' => true, 'error' => null, 'mime' => $mimeType];
+    }
 }

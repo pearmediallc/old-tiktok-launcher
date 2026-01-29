@@ -5,8 +5,49 @@ php_value memory_limit 512M
 php_value max_execution_time 300
 php_value max_input_time 300
 
-# Security settings
+# ========================================
+# Security Settings
+# ========================================
+
+# Block access to .env files
 <Files "*.env">
     Order allow,deny
     Deny from all
 </Files>
+
+# Block access to test/debug files in production
+<FilesMatch "^test_.*\.php$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Block access to log files
+<FilesMatch "\.log$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Block access to sensitive directories
+<FilesMatch "^(media_storage\.json|api_debug\.log)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Protect database directory
+RewriteEngine On
+RewriteRule ^database/ - [F,L]
+RewriteRule ^logs/ - [F,L]
+RewriteRule ^cache/ - [F,L]
+RewriteRule ^sdk/ - [F,L]
+
+# Security headers
+<IfModule mod_headers.c>
+    # Prevent clickjacking
+    Header always set X-Frame-Options "SAMEORIGIN"
+    # Prevent XSS attacks
+    Header always set X-XSS-Protection "1; mode=block"
+    # Prevent MIME type sniffing
+    Header always set X-Content-Type-Options "nosniff"
+    # Referrer policy
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

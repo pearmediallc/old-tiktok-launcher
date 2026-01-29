@@ -1,4 +1,8 @@
 <?php
+// Load Security helper first (configures secure session settings)
+require_once __DIR__ . '/includes/Security.php';
+Security::init();
+
 session_start();
 
 // Load environment variables
@@ -50,6 +54,9 @@ if ($httpCode !== 200 || !isset($tokenData['data']['access_token'])) {
     $error_message = isset($tokenData['message']) ? $tokenData['message'] : 'Failed to obtain access token';
     die('Token exchange failed: ' . htmlspecialchars($error_message));
 }
+
+// Regenerate session ID to prevent session fixation attacks after successful OAuth
+Security::regenerateSession();
 
 // Store tokens in session (will be transferred to browser localStorage via JavaScript)
 $access_token = $tokenData['data']['access_token'];
