@@ -2019,6 +2019,51 @@ switch ($action) {
         break;
 
     // ==========================================
+    // MY CAMPAIGNS: Get All Advertisers for Bulk Duplicate
+    // ==========================================
+    case 'get_all_advertisers':
+        logSmartPlus("=== Getting All Advertisers for Bulk Duplicate ===");
+
+        // Get all advertiser IDs from session (these are all accounts user has OAuth access to)
+        $allAdvertiserIds = $_SESSION['oauth_advertiser_ids'] ?? [];
+        $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
+        $advertiserDetails = $_SESSION['oauth_advertiser_details'] ?? [];
+
+        if (empty($allAdvertiserIds)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'No advertiser accounts found in session. Please re-authenticate.'
+            ]);
+            exit;
+        }
+
+        $advertiserList = [];
+        foreach ($allAdvertiserIds as $advId) {
+            $details = $advertiserDetails[$advId] ?? null;
+            $advertiserList[] = [
+                'advertiser_id' => $advId,
+                'advertiser_name' => $details['name'] ?? 'Account ' . substr($advId, -6),
+                'is_current' => ($advId === $currentAdvertiserId),
+                'status' => $details['status'] ?? 'active',
+                'company' => $details['company'] ?? null,
+                'contacter' => $details['contacter'] ?? null
+            ];
+        }
+
+        logSmartPlus("Found " . count($advertiserList) . " advertisers for bulk duplicate");
+
+        // Return in format expected by loadDuplicateBulkAccounts(): result.data.list
+        echo json_encode([
+            'success' => true,
+            'data' => [
+                'list' => $advertiserList,
+                'current_advertiser_id' => $currentAdvertiserId,
+                'total' => count($advertiserList)
+            ]
+        ]);
+        break;
+
+    // ==========================================
     // BULK LAUNCH: Get Account Assets (Pixels, Identities, Videos)
     // ==========================================
     case 'get_account_assets':

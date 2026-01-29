@@ -311,6 +311,7 @@ $allowedActions = [
     'upload_thumbnail_as_cover',
     'upload_image',
     'upload_video',
+    'upload_video_to_advertiser',
     'upload_video_direct',
     'get_identities',
     'get_tiktok_posts',
@@ -2255,7 +2256,182 @@ try {
             }
             break;
 
-       
+        case 'upload_video_to_advertiser':
+            // Upload video to a SPECIFIC advertiser account (for bulk launch)
+            // This validates the target advertiser is in the authorized list
+            try {
+                ini_set('memory_limit', '512M');
+                ini_set('max_execution_time', '300');
+
+                logToFile("============ UPLOAD VIDEO TO SPECIFIC ADVERTISER ============");
+
+                // Get target advertiser ID from POST
+                $targetAdvertiserId = $_POST['target_advertiser_id'] ?? '';
+                if (empty($targetAdvertiserId)) {
+                    throw new Exception('Target advertiser ID is required');
+                }
+
+                // Validate target advertiser is in the authorized list
+                $authorizedAdvertisers = $_SESSION['oauth_advertiser_ids'] ?? [];
+                if (!in_array($targetAdvertiserId, $authorizedAdvertisers)) {
+                    logToFile("ERROR: Advertiser $targetAdvertiserId is not in authorized list: " . json_encode($authorizedAdvertisers));
+                    throw new Exception('You do not have permission to upload to this advertiser account. Please re-authorize with this account included.');
+                }
+
+                logToFile("Target Advertiser ID: " . $targetAdvertiserId);
+                logToFile("Authorized Advertisers: " . json_encode($authorizedAdvertisers));
+
+                if (!isset($_FILES['video'])) {
+                    throw new Exception('No video file provided');
+                }
+
+                if ($_FILES['video']['error'] !== UPLOAD_ERR_OK) {
+                    $uploadErrors = [
+                        UPLOAD_ERR_INI_SIZE => 'File exceeds upload_max_filesize',
+                        UPLOAD_ERR_FORM_SIZE => 'File exceeds MAX_FILE_SIZE',
+                        UPLOAD_ERR_PARTIAL => 'File was only partially uploaded',
+                        UPLOAD_ERR_NO_FILE => 'No file was uploaded',
+                        UPLOAD_ERR_NO_TMP_DIR => 'Missing temporary folder',
+                        UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk',
+                        UPLOAD_ERR_EXTENSION => 'PHP extension stopped upload'
+                    ];
+                    $errorMsg = $uploadErrors[$_FILES['video']['error']] ?? 'Unknown error';
+                    throw new Exception($errorMsg);
+                }
+
+                $fileName = $_FILES['video']['name'];
+                $tmpPath = $_FILES['video']['tmp_name'];
+                $fileSize = $_FILES['video']['size'];
+
+                // Validate video file
+                $validation = Security::validateVideoUpload($tmpPath, $fileName);
+                if (!$validation['valid']) {
+                    throw new Exception('Invalid video file: ' . $validation['error']);
+                }
+
+                $mimeType = $validation['mime'];
+                $videoSignature = md5_file($tmpPath);
+
+                logToFile("Video Upload to $targetAdvertiserId - File: $fileName, Size: $fileSize bytes");
+
+                // Upload to TikTok
+                $url = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/upload/';
+
+                $postData = [
+                    'advertiser_id' => $targetAdvertiserId,
+                    'upload_type' => 'UPLOAD_BY_FILE',
+                    'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
+                    'video_signature' => $videoSignature,
+                    'flaw_detect' => 'true',
+                    'auto_fix_enabled' => 'true',
+                    'auto_bind_enabled' => 'true'
+                ];
+
+                $ch = curl_init();
+                curl_setopt_array($ch, [
+                    CURLOPT_URL => $url,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_POST => true,
+                    CURLOPT_POSTFIELDS => $postData,
+                    CURLOPT_HTTPHEADER => [
+                        'Access-Token: ' . $config['access_token']
+                    ],
+                    CURLOPT_TIMEOUT => 300,
+                    CURLOPT_CONNECTTIMEOUT => 30,
+                    CURLOPT_SSL_VERIFYPEER => true,
+                    CURLOPT_SSL_VERIFYHOST => 2
+                ]);
+
+                $curlResponse = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curlError = curl_error($ch);
+                curl_close($ch);
+
+                logToFile("cURL HTTP Code: " . $httpCode);
+                logToFile("cURL Response: " . substr($curlResponse ?? '', 0, 1000));
+
+                if ($curlError) {
+                    throw new Exception("cURL error: " . $curlError);
+                }
+
+                $response = json_decode($curlResponse);
+                if ($response === null) {
+                    throw new Exception("Invalid JSON response from TikTok API");
+                }
+
+                // Extract video_id
+                $videoId = null;
+                $responseData = null;
+                if (isset($response->data)) {
+                    $responseData = json_decode(json_encode($response->data), true);
+                    $videoId = $responseData['video_id'] ?? null;
+                }
+
+                // Check for success - REQUIRE video_id
+                $apiCodeSuccess = (empty($response->code) || $response->code == 0);
+                $hasVideoId = !empty($videoId);
+                $success = $apiCodeSuccess && $hasVideoId;
+
+                logToFile("Upload to $targetAdvertiserId - API Success: " . ($apiCodeSuccess ? 'yes' : 'no') .
+                          ", Video ID: " . ($videoId ?? 'null') .
+                          ", TikTok Code: " . ($response->code ?? 'none'));
+
+                // Build error message if failed
+                $errorMessage = 'Upload failed';
+                if (!$success) {
+                    if ($apiCodeSuccess && !$hasVideoId) {
+                        $errorMessage = 'TikTok accepted the upload but did not return a video ID. This may be a permission issue with this specific account.';
+                    } elseif (isset($response->code) && $response->code != 0) {
+                        $tiktokMsg = $response->message ?? 'Unknown error';
+                        $errorMessage = "TikTok Error [{$response->code}]: {$tiktokMsg}";
+
+                        // Add helpful descriptions for common errors
+                        $errorDescriptions = [
+                            40001 => 'Access token invalid or expired',
+                            40002 => 'Advertiser not authorized',
+                            40100 => 'Permission denied for this advertiser',
+                            40105 => 'Token does not match advertiser'
+                        ];
+                        if (isset($errorDescriptions[$response->code])) {
+                            $errorMessage .= " - " . $errorDescriptions[$response->code];
+                        }
+                    }
+                }
+
+                // Store video if successful
+                if ($success) {
+                    $storageFile = __DIR__ . '/media_storage.json';
+                    $storage = file_exists($storageFile) ? json_decode(file_get_contents($storageFile), true) ?? [] : [];
+                    if (!isset($storage['videos'])) $storage['videos'] = [];
+
+                    $storage['videos'][] = [
+                        'video_id' => $videoId,
+                        'file_name' => $fileName,
+                        'upload_time' => time(),
+                        'advertiser_id' => $targetAdvertiserId
+                    ];
+                    file_put_contents($storageFile, json_encode($storage, JSON_PRETTY_PRINT));
+
+                    logToFile("Video uploaded successfully to $targetAdvertiserId with ID: $videoId");
+                }
+
+                outputJsonResponse([
+                    'success' => $success,
+                    'data' => $responseData,
+                    'message' => $success ? 'Video uploaded successfully' : $errorMessage,
+                    'code' => isset($response->code) ? (int)$response->code : 0,
+                    'target_advertiser_id' => $targetAdvertiserId
+                ]);
+
+            } catch (Exception $e) {
+                logToFile("Upload to advertiser exception: " . $e->getMessage());
+                outputJsonResponse([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                    'error' => $e->getMessage()
+                ]);
+            }
+            break;
 
         case 'upload_video_direct':
             // Direct cURL implementation - fallback if SDK fails
