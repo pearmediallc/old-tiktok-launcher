@@ -4004,7 +4004,11 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
                 console.log(`[Bulk Upload] Success - video_id: ${result.data.video_id}`);
             } else {
                 failed++;
-                const errorMsg = result.message || result.error || 'Unknown error';
+                // Better error message with code
+                let errorMsg = result.message || result.error || 'Unknown error';
+                if (result.code && result.code !== 0) {
+                    errorMsg = `[Code ${result.code}] ${errorMsg}`;
+                }
                 console.error(`[Bulk Upload] Failed for ${file.name}:`, result);
                 addLog('error', `Failed to upload ${file.name}: ${errorMsg}`);
                 // Show individual error toast for debugging
@@ -4163,9 +4167,17 @@ async function handlePickerVideoUpload(event) {
                 addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
             } else {
                 failed++;
-                const errorMsg = result.message || result.error || 'Unknown error';
+                // Better error message with code
+                let errorMsg = result.message || result.error || 'Unknown error';
+                if (result.code && result.code !== 0) {
+                    errorMsg = `[Code ${result.code}] ${errorMsg}`;
+                }
                 console.error(`[Picker Upload] Failed:`, result);
                 addLog('error', `Failed to upload ${file.name}: ${errorMsg}`);
+                // Show toast for single file upload
+                if (validFiles.length === 1) {
+                    showToast(`Upload failed: ${errorMsg}`, 'error');
+                }
             }
         } catch (error) {
             failed++;
@@ -7646,7 +7658,11 @@ let duplicateState = {
     campaignName: null,
     campaignDetails: null, // { campaign, adgroup, ad }
     isLoading: false,
-    isProcessing: false
+    isProcessing: false,
+    // Bulk launch state
+    bulkAccounts: [],
+    bulkAccountAssets: {},
+    bulkSelectedAccounts: []
 };
 
 // Open duplicate campaign modal
@@ -7781,29 +7797,46 @@ function populateDuplicateEditFields(result) {
     initDuplicateVideosDisplay();
 }
 
-// Toggle between duplicate modes (same vs edit)
+// Toggle between duplicate modes (same vs edit vs bulk)
 function toggleDuplicateMode(mode) {
     duplicateState.mode = mode;
 
     // Update UI selection
     const sameOption = document.getElementById('mode-option-same');
     const editOption = document.getElementById('mode-option-edit');
+    const bulkOption = document.getElementById('mode-option-bulk');
     const countSection = document.getElementById('duplicate-count-section');
     const editSection = document.getElementById('duplicate-edit-section');
     const includesSection = document.getElementById('duplicate-includes-section');
+    const bulkSection = document.getElementById('duplicate-bulk-section');
+    const detailsSection = document.getElementById('duplicate-details-section');
+
+    // Reset all selections
+    sameOption?.classList.remove('selected');
+    editOption?.classList.remove('selected');
+    bulkOption?.classList.remove('selected');
+
+    // Hide all sections
+    if (countSection) countSection.style.display = 'none';
+    if (editSection) editSection.style.display = 'none';
+    if (includesSection) includesSection.style.display = 'none';
+    if (bulkSection) bulkSection.style.display = 'none';
 
     if (mode === 'same') {
-        sameOption.classList.add('selected');
-        editOption.classList.remove('selected');
-        countSection.style.display = 'block';
-        editSection.style.display = 'none';
-        includesSection.style.display = 'block';
-    } else {
-        sameOption.classList.remove('selected');
-        editOption.classList.add('selected');
-        countSection.style.display = 'none';
-        editSection.style.display = 'block';
-        includesSection.style.display = 'none';
+        sameOption?.classList.add('selected');
+        if (countSection) countSection.style.display = 'block';
+        if (includesSection) includesSection.style.display = 'block';
+        if (detailsSection) detailsSection.style.display = 'block';
+    } else if (mode === 'edit') {
+        editOption?.classList.add('selected');
+        if (editSection) editSection.style.display = 'block';
+        if (detailsSection) detailsSection.style.display = 'block';
+    } else if (mode === 'bulk') {
+        bulkOption?.classList.add('selected');
+        if (bulkSection) bulkSection.style.display = 'block';
+        if (detailsSection) detailsSection.style.display = 'none'; // Hide details in bulk mode
+        // Load accounts for bulk mode
+        loadDuplicateBulkAccounts();
     }
 
     updateDuplicatePreviewList();
@@ -7820,7 +7853,10 @@ function closeDuplicateCampaignModal() {
         campaignName: null,
         campaignDetails: null,
         isLoading: false,
-        isProcessing: false
+        isProcessing: false,
+        bulkAccounts: [],
+        bulkAccountAssets: {},
+        bulkSelectedAccounts: []
     };
 
     // Reset loading state for next open
@@ -7861,6 +7897,563 @@ function resetDupScheduleOptions() {
 
     // Clear changed videos
     duplicateState.changedVideos = null;
+}
+
+// ============================================
+// DUPLICATE BULK LAUNCH FUNCTIONS
+// ============================================
+
+// Load accounts for bulk duplicate
+async function loadDuplicateBulkAccounts() {
+    const container = document.getElementById('dup-bulk-accounts-container');
+    container.innerHTML = `
+        <div class="loading-state" style="text-align: center; padding: 20px;">
+            <div class="spinner"></div>
+            <p style="margin-top: 10px; color: #64748b;">Loading accounts...</p>
+        </div>
+    `;
+
+    try {
+        const result = await apiRequest('get_all_advertisers');
+        if (result.success && result.data?.list) {
+            duplicateState.bulkAccounts = result.data.list;
+            duplicateState.bulkSelectedAccounts = [];
+            duplicateState.bulkAccountAssets = {};
+            renderDuplicateBulkAccounts();
+        } else {
+            throw new Error(result.message || 'Failed to load accounts');
+        }
+    } catch (error) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #ef4444;">
+                <p>❌ ${error.message}</p>
+                <button onclick="loadDuplicateBulkAccounts()" style="margin-top: 10px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                    Retry
+                </button>
+            </div>
+        `;
+    }
+}
+
+// Render bulk accounts list
+function renderDuplicateBulkAccounts() {
+    const container = document.getElementById('dup-bulk-accounts-container');
+    const currentAdvertiserId = document.getElementById('advertiser-id')?.textContent || '';
+
+    let html = '';
+    duplicateState.bulkAccounts.forEach(account => {
+        const isCurrent = account.advertiser_id === currentAdvertiserId;
+        const isSelected = duplicateState.bulkSelectedAccounts.some(a => a.advertiser_id === account.advertiser_id);
+        const assets = duplicateState.bulkAccountAssets[account.advertiser_id];
+
+        html += `
+            <div class="dup-bulk-account-card ${isSelected ? 'selected' : ''} ${isCurrent ? 'current' : ''}"
+                 id="dup-bulk-account-${account.advertiser_id}">
+                <div class="dup-bulk-account-header">
+                    <label class="dup-bulk-checkbox">
+                        <input type="checkbox"
+                               ${isCurrent ? 'disabled title="This is the source account"' : ''}
+                               ${isSelected ? 'checked' : ''}
+                               onchange="toggleDupBulkAccount('${account.advertiser_id}')">
+                        <span class="checkmark"></span>
+                    </label>
+                    <div class="dup-bulk-account-info">
+                        <span class="dup-bulk-account-name">${account.advertiser_name}</span>
+                        <span class="dup-bulk-account-id">${account.advertiser_id}</span>
+                        ${isCurrent ? '<span class="source-badge">📍 Source</span>' : ''}
+                    </div>
+                    ${!isCurrent && !assets && isSelected ? `
+                        <button type="button" class="btn-load-assets-small" onclick="loadDupBulkAccountAssets('${account.advertiser_id}')">
+                            Load Assets
+                        </button>
+                    ` : ''}
+                </div>
+                ${isSelected && !isCurrent ? `
+                    <div class="dup-bulk-account-config" id="dup-bulk-config-${account.advertiser_id}">
+                        ${assets ? renderDupBulkAccountConfig(account.advertiser_id, assets) : `
+                            <div style="padding: 15px; text-align: center; color: #64748b;">
+                                <div class="spinner-small"></div>
+                                <p style="margin-top: 8px; font-size: 12px;">Loading assets...</p>
+                            </div>
+                        `}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    });
+
+    container.innerHTML = html || '<p style="text-align: center; color: #64748b; padding: 20px;">No accounts found</p>';
+
+    // Add styles if not already present
+    if (!document.getElementById('dup-bulk-styles')) {
+        const styles = document.createElement('style');
+        styles.id = 'dup-bulk-styles';
+        styles.textContent = `
+            .dup-bulk-account-card {
+                border: 2px solid #e2e8f0;
+                border-radius: 10px;
+                margin-bottom: 12px;
+                transition: all 0.2s;
+            }
+            .dup-bulk-account-card.selected {
+                border-color: #3b82f6;
+                background: #f0f9ff;
+            }
+            .dup-bulk-account-card.current {
+                opacity: 0.6;
+                background: #f8fafc;
+            }
+            .dup-bulk-account-header {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 12px 15px;
+            }
+            .dup-bulk-checkbox input[type="checkbox"] {
+                width: 18px;
+                height: 18px;
+                cursor: pointer;
+            }
+            .dup-bulk-account-info {
+                flex: 1;
+            }
+            .dup-bulk-account-name {
+                font-weight: 600;
+                color: #1e293b;
+                display: block;
+            }
+            .dup-bulk-account-id {
+                font-size: 12px;
+                color: #64748b;
+            }
+            .source-badge {
+                font-size: 11px;
+                background: #fef3c7;
+                color: #92400e;
+                padding: 2px 8px;
+                border-radius: 4px;
+                margin-left: 8px;
+            }
+            .btn-load-assets-small {
+                padding: 6px 12px;
+                background: #f1f5f9;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                font-size: 12px;
+                cursor: pointer;
+            }
+            .dup-bulk-account-config {
+                border-top: 1px solid #e2e8f0;
+                padding: 15px;
+                background: white;
+                border-radius: 0 0 8px 8px;
+            }
+            .dup-bulk-config-grid {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+            .dup-bulk-config-item {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+            .dup-bulk-config-item label {
+                font-size: 12px;
+                font-weight: 600;
+                color: #475569;
+            }
+            .dup-bulk-config-item input,
+            .dup-bulk-config-item select {
+                padding: 8px 10px;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                font-size: 13px;
+            }
+            .dup-bulk-config-item.full-width {
+                grid-column: 1 / -1;
+            }
+        `;
+        document.head.appendChild(styles);
+    }
+
+    updateDupBulkSummary();
+}
+
+// Toggle account selection for bulk duplicate
+async function toggleDupBulkAccount(advertiserId) {
+    const card = document.getElementById(`dup-bulk-account-${advertiserId}`);
+    const checkbox = card.querySelector('input[type="checkbox"]');
+    const isSelected = checkbox.checked;
+
+    if (isSelected) {
+        // Add to selected
+        card.classList.add('selected');
+        const account = duplicateState.bulkAccounts.find(a => a.advertiser_id === advertiserId);
+        if (account && !duplicateState.bulkSelectedAccounts.some(a => a.advertiser_id === advertiserId)) {
+            duplicateState.bulkSelectedAccounts.push({
+                advertiser_id: advertiserId,
+                advertiser_name: account.advertiser_name,
+                campaign_name: (duplicateState.campaignDetails?.campaign?.campaign_name || '') + ' - Copy',
+                budget: duplicateState.campaignDetails?.campaign?.budget || 50,
+                landing_page_url: '',
+                pixel_id: null,
+                identity_id: null,
+                video_id: null
+            });
+        }
+        // Load assets if not loaded
+        if (!duplicateState.bulkAccountAssets[advertiserId]) {
+            await loadDupBulkAccountAssets(advertiserId);
+        }
+    } else {
+        // Remove from selected
+        card.classList.remove('selected');
+        duplicateState.bulkSelectedAccounts = duplicateState.bulkSelectedAccounts.filter(a => a.advertiser_id !== advertiserId);
+    }
+
+    renderDuplicateBulkAccounts();
+}
+
+// Load assets for a bulk account
+async function loadDupBulkAccountAssets(advertiserId) {
+    try {
+        const result = await apiRequest('get_account_assets', { target_advertiser_id: advertiserId });
+        if (result.success && result.data) {
+            duplicateState.bulkAccountAssets[advertiserId] = result.data;
+            renderDuplicateBulkAccounts();
+        }
+    } catch (error) {
+        console.error('Error loading assets:', error);
+    }
+}
+
+// Render config section for a bulk account
+function renderDupBulkAccountConfig(advertiserId, assets) {
+    const selectedAccount = duplicateState.bulkSelectedAccounts.find(a => a.advertiser_id === advertiserId);
+    const originalCampaign = duplicateState.campaignDetails?.campaign;
+    const originalAd = duplicateState.campaignDetails?.ad;
+
+    // Get original landing page
+    let originalLandingUrl = originalAd?.landing_page_url || '';
+    if (!originalLandingUrl && originalAd?.landing_page_url_list?.length > 0) {
+        originalLandingUrl = typeof originalAd.landing_page_url_list[0] === 'object'
+            ? originalAd.landing_page_url_list[0].landing_page_url || ''
+            : originalAd.landing_page_url_list[0] || '';
+    }
+
+    // Get original video
+    const originalVideoId = originalAd?.video_id || originalAd?.video_info?.video_id || '';
+
+    const pixels = assets.pixels || [];
+    const identities = assets.identities || [];
+    const videos = assets.videos || [];
+
+    return `
+        <div class="dup-bulk-config-grid">
+            <!-- Campaign Name -->
+            <div class="dup-bulk-config-item full-width">
+                <label>Campaign Name</label>
+                <input type="text" id="dup-bulk-name-${advertiserId}"
+                       value="${selectedAccount?.campaign_name || (originalCampaign?.campaign_name || '') + ' - Copy'}"
+                       onchange="updateDupBulkAccountConfig('${advertiserId}', 'campaign_name', this.value)"
+                       placeholder="Campaign name">
+            </div>
+
+            <!-- Budget -->
+            <div class="dup-bulk-config-item">
+                <label>Daily Budget ($)</label>
+                <input type="number" id="dup-bulk-budget-${advertiserId}"
+                       value="${selectedAccount?.budget || originalCampaign?.budget || 50}"
+                       min="20"
+                       onchange="updateDupBulkAccountConfig('${advertiserId}', 'budget', this.value)"
+                       placeholder="50">
+            </div>
+
+            <!-- Pixel -->
+            <div class="dup-bulk-config-item">
+                <label>Pixel</label>
+                <select id="dup-bulk-pixel-${advertiserId}"
+                        onchange="updateDupBulkAccountConfig('${advertiserId}', 'pixel_id', this.value)">
+                    <option value="">Select Pixel...</option>
+                    ${pixels.map(p => `<option value="${p.pixel_id}" ${selectedAccount?.pixel_id === p.pixel_id ? 'selected' : ''}>${p.pixel_name}</option>`).join('')}
+                </select>
+            </div>
+
+            <!-- Identity -->
+            <div class="dup-bulk-config-item">
+                <label>Identity</label>
+                <select id="dup-bulk-identity-${advertiserId}"
+                        onchange="updateDupBulkAccountConfig('${advertiserId}', 'identity_id', this.value)">
+                    <option value="">Select Identity...</option>
+                    ${identities.map(i => `<option value="${i.identity_id}" ${selectedAccount?.identity_id === i.identity_id ? 'selected' : ''}>${i.display_name || i.identity_name}</option>`).join('')}
+                </select>
+            </div>
+
+            <!-- Video -->
+            <div class="dup-bulk-config-item">
+                <label>Video</label>
+                <select id="dup-bulk-video-${advertiserId}"
+                        onchange="updateDupBulkAccountConfig('${advertiserId}', 'video_id', this.value)">
+                    <option value="">Select Video...</option>
+                    ${videos.map(v => `<option value="${v.video_id}" ${selectedAccount?.video_id === v.video_id ? 'selected' : ''}>${v.file_name || v.video_id}</option>`).join('')}
+                </select>
+                <button type="button" onclick="openDupBulkVideoUpload('${advertiserId}')"
+                        style="margin-top: 4px; padding: 4px 8px; font-size: 11px; background: linear-gradient(135deg, #fe2c55, #25f4ee); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    📤 Upload
+                </button>
+            </div>
+
+            <!-- Landing Page URL -->
+            <div class="dup-bulk-config-item full-width">
+                <label>Landing Page URL</label>
+                <input type="url" id="dup-bulk-url-${advertiserId}"
+                       value="${selectedAccount?.landing_page_url || originalLandingUrl}"
+                       onchange="updateDupBulkAccountConfig('${advertiserId}', 'landing_page_url', this.value)"
+                       placeholder="${originalLandingUrl || 'https://example.com'}">
+            </div>
+        </div>
+    `;
+}
+
+// Update bulk account config
+function updateDupBulkAccountConfig(advertiserId, field, value) {
+    const account = duplicateState.bulkSelectedAccounts.find(a => a.advertiser_id === advertiserId);
+    if (account) {
+        account[field] = value;
+    }
+    updateDupBulkSummary();
+}
+
+// Update bulk summary
+function updateDupBulkSummary() {
+    const summary = document.getElementById('dup-bulk-summary');
+    const countEl = document.getElementById('dup-bulk-selected-count');
+    const totalEl = document.getElementById('dup-bulk-total-campaigns');
+
+    const count = duplicateState.bulkSelectedAccounts.length;
+    if (count > 0) {
+        summary.style.display = 'block';
+        countEl.textContent = count;
+        totalEl.textContent = count;
+    } else {
+        summary.style.display = 'none';
+    }
+
+    // Update create button state
+    const createBtn = document.getElementById('duplicate-create-btn');
+    if (createBtn && duplicateState.mode === 'bulk') {
+        createBtn.disabled = count === 0;
+    }
+}
+
+// Open video upload for bulk duplicate account
+function openDupBulkVideoUpload(advertiserId) {
+    // Create a file input dynamically
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'video/*';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        showToast('Uploading video...', 'info');
+
+        const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+        const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
+        const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
+        const newFileName = `${baseName}_${timestamp}${ext}`;
+
+        const formData = new FormData();
+        formData.append('video', file, newFileName);
+        formData.append('advertiser_id', advertiserId);
+
+        try {
+            const response = await fetch('api.php?action=upload_video', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (result.success && result.data?.video_id) {
+                showToast('Video uploaded successfully!', 'success');
+
+                // Add to account assets
+                if (!duplicateState.bulkAccountAssets[advertiserId]) {
+                    duplicateState.bulkAccountAssets[advertiserId] = { videos: [] };
+                }
+                if (!duplicateState.bulkAccountAssets[advertiserId].videos) {
+                    duplicateState.bulkAccountAssets[advertiserId].videos = [];
+                }
+                duplicateState.bulkAccountAssets[advertiserId].videos.unshift({
+                    video_id: result.data.video_id,
+                    file_name: newFileName
+                });
+
+                // Update the account config
+                updateDupBulkAccountConfig(advertiserId, 'video_id', result.data.video_id);
+
+                // Re-render
+                renderDuplicateBulkAccounts();
+            } else {
+                throw new Error(result.message || 'Upload failed');
+            }
+        } catch (error) {
+            showToast('Upload failed: ' + error.message, 'error');
+        }
+    };
+    input.click();
+}
+
+// Execute bulk duplicate to multiple accounts
+async function executeBulkDuplicateCampaign() {
+    const selectedAccounts = duplicateState.bulkSelectedAccounts;
+
+    if (selectedAccounts.length === 0) {
+        showToast('Please select at least one account', 'error');
+        return;
+    }
+
+    // Validate each selected account
+    for (const account of selectedAccounts) {
+        if (!account.campaign_name || account.campaign_name.trim() === '') {
+            showToast(`Please enter a campaign name for ${account.advertiser_name}`, 'error');
+            return;
+        }
+        if (!account.budget || account.budget < 20) {
+            showToast(`Budget must be at least $20 for ${account.advertiser_name}`, 'error');
+            return;
+        }
+        if (!account.pixel_id) {
+            showToast(`Please select a pixel for ${account.advertiser_name}`, 'error');
+            return;
+        }
+        if (!account.identity_id) {
+            showToast(`Please select an identity for ${account.advertiser_name}`, 'error');
+            return;
+        }
+        if (!account.video_id) {
+            showToast(`Please select a video for ${account.advertiser_name}`, 'error');
+            return;
+        }
+    }
+
+    duplicateState.isProcessing = true;
+
+    // Hide sections and show progress
+    document.getElementById('duplicate-mode-section').style.display = 'none';
+    document.getElementById('duplicate-bulk-section').style.display = 'none';
+    document.getElementById('duplicate-progress-section').style.display = 'block';
+
+    // Update footer
+    const footer = document.getElementById('duplicate-modal-footer');
+    footer.innerHTML = `<button class="btn-secondary" disabled>Please wait...</button>`;
+
+    const progressBar = document.getElementById('duplicate-progress-bar');
+    const progressText = document.getElementById('duplicate-progress-text');
+    const progressLog = document.getElementById('duplicate-progress-log');
+
+    progressLog.innerHTML = '';
+    progressText.textContent = `0 / ${selectedAccounts.length}`;
+    progressBar.style.width = '0%';
+
+    const { campaign, adgroup, ad } = duplicateState.campaignDetails;
+    let successCount = 0;
+    let failCount = 0;
+
+    // Process each selected account
+    for (let i = 0; i < selectedAccounts.length; i++) {
+        const account = selectedAccounts[i];
+        const progress = ((i + 1) / selectedAccounts.length) * 100;
+        progressBar.style.width = `${progress}%`;
+        progressText.textContent = `${i + 1} / ${selectedAccounts.length}`;
+
+        progressLog.innerHTML += `<div class="progress-item pending">🔄 Creating campaign for ${account.advertiser_name}...</div>`;
+        progressLog.scrollTop = progressLog.scrollHeight;
+
+        try {
+            // Get landing page URL
+            let landingUrl = account.landing_page_url;
+            if (!landingUrl) {
+                landingUrl = ad?.landing_page_url || '';
+                if (!landingUrl && ad?.landing_page_url_list?.length > 0) {
+                    landingUrl = typeof ad.landing_page_url_list[0] === 'object'
+                        ? ad.landing_page_url_list[0].landing_page_url || ''
+                        : ad.landing_page_url_list[0] || '';
+                }
+            }
+
+            // Prepare duplicate request
+            const duplicateData = {
+                target_advertiser_id: account.advertiser_id,
+                source_campaign_id: campaign.campaign_id,
+                campaign_name: account.campaign_name,
+                budget: account.budget,
+                pixel_id: account.pixel_id,
+                identity_id: account.identity_id,
+                video_id: account.video_id,
+                landing_page_url: landingUrl,
+                // Include original campaign data
+                objective: campaign.objective || adgroup?.objective || 'TRAFFIC',
+                optimization_goal: adgroup?.optimization_goal || campaign.optimization_goal || 'CLICK',
+                bid_type: adgroup?.bid_type || 'BID_TYPE_NO_BID',
+                billing_event: adgroup?.billing_event || 'CPC',
+                budget_mode: 'BUDGET_MODE_DAY',
+                // Ad data
+                ad_name: ad?.ad_name || account.campaign_name + ' - Ad',
+                ad_texts: ad?.ad_texts || ad?.ad_text_list || ['Learn More'],
+                call_to_action: ad?.call_to_action || 'LEARN_MORE'
+            };
+
+            addLog('request', `Bulk duplicate to ${account.advertiser_id}`, duplicateData);
+
+            const result = await apiRequest('bulk_duplicate_campaign', duplicateData);
+
+            if (result.success) {
+                successCount++;
+                progressLog.lastChild.className = 'progress-item success';
+                progressLog.lastChild.innerHTML = `✅ ${account.advertiser_name}: Campaign created successfully`;
+                addLog('success', `Campaign created in ${account.advertiser_name}`);
+            } else {
+                throw new Error(result.message || 'Failed to create campaign');
+            }
+        } catch (error) {
+            failCount++;
+            progressLog.lastChild.className = 'progress-item error';
+            progressLog.lastChild.innerHTML = `❌ ${account.advertiser_name}: ${error.message}`;
+            addLog('error', `Failed for ${account.advertiser_name}: ${error.message}`);
+        }
+
+        progressLog.scrollTop = progressLog.scrollHeight;
+
+        // Small delay between operations
+        if (i < selectedAccounts.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+
+    // Show completion
+    duplicateState.isProcessing = false;
+    document.getElementById('duplicate-progress-section').style.display = 'none';
+    document.getElementById('duplicate-success-section').style.display = 'block';
+
+    const successSection = document.getElementById('duplicate-success-section');
+    successSection.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <div style="font-size: 48px; margin-bottom: 15px;">${failCount === 0 ? '🎉' : '⚠️'}</div>
+            <h4 style="margin-bottom: 10px;">${failCount === 0 ? 'Bulk Launch Complete!' : 'Bulk Launch Completed with Errors'}</h4>
+            <p style="color: #64748b;">
+                Successfully created <strong style="color: #22c55e;">${successCount}</strong> campaigns
+                ${failCount > 0 ? ` • <strong style="color: #ef4444;">${failCount}</strong> failed` : ''}
+            </p>
+        </div>
+    `;
+
+    // Update footer
+    footer.innerHTML = `
+        <button class="btn-secondary" onclick="closeDuplicateCampaignModal()">Close</button>
+        <button class="btn-primary" onclick="refreshCampaignsList()">🔄 Refresh Campaigns</button>
+    `;
 }
 
 // Render current videos when duplicate modal opens
@@ -8069,6 +8662,12 @@ async function executeDuplicateCampaign() {
     }
 
     const mode = duplicateState.mode || 'same';
+
+    // Handle bulk mode separately
+    if (mode === 'bulk') {
+        return executeBulkDuplicateCampaign();
+    }
+
     const countInput = mode === 'edit' ? 'duplicate-edit-copy-count' : 'duplicate-copy-count';
     const count = parseInt(document.getElementById(countInput).value) || 1;
 

@@ -324,6 +324,7 @@ $allowedActions = [
     'publish_ads',
     'duplicate_ad',
     'duplicate_adgroup',
+    'bulk_duplicate_campaign',
     'sync_images_from_tiktok',
     'sync_tiktok_library',
     'add_existing_media',
@@ -2189,10 +2190,30 @@ try {
                 }
 
                 // Build response - ensure all data is JSON-serializable
+                // Include error code in message for better debugging
+                $errorMessage = 'Upload failed';
+                if (isset($response->message) && $response->message) {
+                    $errorMessage = (string)$response->message;
+                }
+                if (!$success && isset($response->code) && $response->code != 0) {
+                    $errorMessage = "TikTok Error [{$response->code}]: {$errorMessage}";
+                    // Common TikTok error codes
+                    $errorCodes = [
+                        40001 => 'Access token invalid or expired',
+                        40002 => 'Advertiser not authorized',
+                        40100 => 'Permission denied for this advertiser',
+                        50001 => 'Video upload failed',
+                        50002 => 'Video format not supported',
+                    ];
+                    if (isset($errorCodes[$response->code])) {
+                        $errorMessage .= " - " . $errorCodes[$response->code];
+                    }
+                }
+
                 $jsonResponse = [
                     'success' => $success,
                     'data' => $responseData,
-                    'message' => isset($response->message) ? (string)$response->message : ($success ? 'Video uploaded successfully' : 'Upload failed'),
+                    'message' => $success ? 'Video uploaded successfully' : $errorMessage,
                     'code' => isset($response->code) ? (int)$response->code : 0
                 ];
 
@@ -3157,6 +3178,138 @@ try {
                 'success' => empty($response->code),
                 'data' => $response->data ?? null,
                 'message' => $response->message ?? 'Ad group duplicated successfully'
+            ]);
+            break;
+
+        case 'bulk_duplicate_campaign':
+            // Duplicate campaign to a different ad account
+            logToFile("============ BULK DUPLICATE CAMPAIGN ============");
+            $data = $requestData;
+
+            $targetAdvertiserId = $data['target_advertiser_id'] ?? '';
+            if (empty($targetAdvertiserId)) {
+                throw new Exception('Target advertiser ID is required');
+            }
+
+            logToFile("Target Advertiser: " . $targetAdvertiserId);
+            logToFile("Request Data: " . json_encode($data, JSON_PRETTY_PRINT));
+
+            // Create campaign in target account
+            $campaignParams = [
+                'advertiser_id' => $targetAdvertiserId,
+                'campaign_name' => $data['campaign_name'] ?? 'Duplicated Campaign',
+                'objective_type' => strtoupper($data['objective'] ?? 'TRAFFIC'),
+                'budget_mode' => 'BUDGET_MODE_DAY',
+                'budget' => floatval($data['budget'] ?? 50),
+                'operation_status' => 'ENABLE'
+            ];
+
+            logToFile("Creating campaign: " . json_encode($campaignParams));
+
+            $campaignResult = makeApiCall(
+                'https://business-api.tiktok.com/open_api/v1.3/campaign/create/',
+                $campaignParams,
+                $config['access_token'],
+                'POST'
+            );
+
+            if (empty($campaignResult) || (!empty($campaignResult['code']) && $campaignResult['code'] != 0)) {
+                $errorMsg = $campaignResult['message'] ?? 'Failed to create campaign';
+                logToFile("Campaign creation failed: " . $errorMsg);
+                throw new Exception("Campaign creation failed: " . $errorMsg);
+            }
+
+            $newCampaignId = $campaignResult['data']['campaign_id'] ?? null;
+            if (!$newCampaignId) {
+                throw new Exception('No campaign ID returned');
+            }
+
+            logToFile("Campaign created: " . $newCampaignId);
+
+            // Create ad group in target account
+            $adgroupParams = [
+                'advertiser_id' => $targetAdvertiserId,
+                'campaign_id' => $newCampaignId,
+                'adgroup_name' => ($data['campaign_name'] ?? 'Campaign') . ' - Ad Group',
+                'promotion_type' => strtoupper($data['objective'] ?? 'TRAFFIC') === 'LEAD_GENERATION' ? 'LEAD_GENERATION' : 'WEBSITE',
+                'promotion_target_type' => 'EXTERNAL_WEBSITE',
+                'placement_type' => 'PLACEMENT_TYPE_AUTOMATIC',
+                'location_ids' => ['6252001'], // Default USA
+                'optimization_goal' => strtoupper($data['optimization_goal'] ?? 'CLICK'),
+                'bid_type' => $data['bid_type'] ?? 'BID_TYPE_NO_BID',
+                'billing_event' => $data['billing_event'] ?? 'CPC',
+                'budget_mode' => 'BUDGET_MODE_INFINITE',
+                'schedule_type' => 'SCHEDULE_START_END',
+                'schedule_start_time' => date('Y-m-d H:i:s'),
+                'schedule_end_time' => date('Y-m-d H:i:s', strtotime('+30 days')),
+                'pixel_id' => $data['pixel_id'],
+                'identity_type' => 'CUSTOMIZED_USER',
+                'identity_id' => $data['identity_id']
+            ];
+
+            logToFile("Creating ad group: " . json_encode($adgroupParams));
+
+            $adgroupResult = makeApiCall(
+                'https://business-api.tiktok.com/open_api/v1.3/adgroup/create/',
+                $adgroupParams,
+                $config['access_token'],
+                'POST'
+            );
+
+            if (empty($adgroupResult) || (!empty($adgroupResult['code']) && $adgroupResult['code'] != 0)) {
+                $errorMsg = $adgroupResult['message'] ?? 'Failed to create ad group';
+                logToFile("Ad group creation failed: " . $errorMsg);
+                throw new Exception("Ad group creation failed: " . $errorMsg);
+            }
+
+            $newAdgroupId = $adgroupResult['data']['adgroup_id'] ?? null;
+            if (!$newAdgroupId) {
+                throw new Exception('No ad group ID returned');
+            }
+
+            logToFile("Ad group created: " . $newAdgroupId);
+
+            // Create ad in target account
+            $landingPageUrl = $data['landing_page_url'] ?? '';
+            $adParams = [
+                'advertiser_id' => $targetAdvertiserId,
+                'adgroup_id' => $newAdgroupId,
+                'ad_name' => $data['ad_name'] ?? ($data['campaign_name'] ?? 'Ad') . ' - Ad',
+                'ad_format' => 'SINGLE_VIDEO',
+                'ad_text' => is_array($data['ad_texts']) ? ($data['ad_texts'][0] ?? 'Learn More') : ($data['ad_texts'] ?? 'Learn More'),
+                'video_id' => $data['video_id'],
+                'call_to_action' => $data['call_to_action'] ?? 'LEARN_MORE',
+                'identity_type' => 'CUSTOMIZED_USER',
+                'identity_id' => $data['identity_id'],
+                'landing_page_url' => $landingPageUrl
+            ];
+
+            logToFile("Creating ad: " . json_encode($adParams));
+
+            $adResult = makeApiCall(
+                'https://business-api.tiktok.com/open_api/v1.3/ad/create/',
+                $adParams,
+                $config['access_token'],
+                'POST'
+            );
+
+            if (empty($adResult) || (!empty($adResult['code']) && $adResult['code'] != 0)) {
+                $errorMsg = $adResult['message'] ?? 'Failed to create ad';
+                logToFile("Ad creation failed: " . $errorMsg);
+                // Don't throw - campaign and adgroup were created
+            }
+
+            $newAdId = $adResult['data']['ad_id'] ?? null;
+            logToFile("Ad created: " . ($newAdId ?? 'N/A'));
+
+            outputJsonResponse([
+                'success' => true,
+                'data' => [
+                    'campaign_id' => $newCampaignId,
+                    'adgroup_id' => $newAdgroupId,
+                    'ad_id' => $newAdId
+                ],
+                'message' => 'Campaign duplicated successfully'
             ]);
             break;
 

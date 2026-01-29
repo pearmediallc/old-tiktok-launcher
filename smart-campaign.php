@@ -2136,6 +2136,44 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                 </div>
                             </div>
                         </label>
+                        <label class="duplicate-mode-option" id="mode-option-bulk">
+                            <input type="radio" name="duplicate_mode" value="bulk" onchange="toggleDuplicateMode('bulk')">
+                            <div class="mode-option-content">
+                                <span class="mode-icon">🚀</span>
+                                <div class="mode-details">
+                                    <span class="mode-title">Bulk Launch to Other Accounts</span>
+                                    <span class="mode-desc">Duplicate to multiple ad accounts with asset mapping</span>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Bulk Launch Section (for "bulk" mode) -->
+                <div id="duplicate-bulk-section" style="display: none;">
+                    <h4 style="margin: 20px 0 15px;">Select Target Accounts</h4>
+                    <p style="color: #64748b; font-size: 13px; margin-bottom: 15px;">
+                        Select the ad accounts where you want to duplicate this campaign. Configure each account's settings below.
+                    </p>
+
+                    <!-- Account List -->
+                    <div id="dup-bulk-accounts-container" style="max-height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 10px; padding: 15px;">
+                        <div class="loading-state" style="text-align: center; padding: 20px;">
+                            <div class="spinner"></div>
+                            <p style="margin-top: 10px; color: #64748b;">Loading accounts...</p>
+                        </div>
+                    </div>
+
+                    <!-- Bulk Settings Summary -->
+                    <div id="dup-bulk-summary" style="margin-top: 15px; padding: 12px; background: #f0f9ff; border-radius: 8px; display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 600; color: #0284c7;">
+                                <span id="dup-bulk-selected-count">0</span> accounts selected
+                            </span>
+                            <span style="font-size: 13px; color: #64748b;">
+                                Total campaigns to create: <strong id="dup-bulk-total-campaigns">0</strong>
+                            </span>
+                        </div>
                     </div>
                 </div>
 
