@@ -2207,16 +2207,13 @@ try {
                 // Use direct cURL for more reliable upload
                 $url = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/upload/';
 
-                // NOTE: flaw_detect and auto_fix_enabled can cause TikTok to process
-                // videos asynchronously, returning code 0 but no video_id immediately.
-                // Setting these to false ensures synchronous response with video_id.
                 $postData = [
                     'advertiser_id' => $upload_advertiser_id,
                     'upload_type' => 'UPLOAD_BY_FILE',
                     'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
                     'video_signature' => $videoSignature,
-                    'flaw_detect' => 'false',
-                    'auto_fix_enabled' => 'false',
+                    'flaw_detect' => 'true',
+                    'auto_fix_enabled' => 'true',
                     'auto_bind_enabled' => 'true'
                 ];
 
@@ -2459,15 +2456,13 @@ try {
                 // Upload to TikTok
                 $url = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/upload/';
 
-                // NOTE: flaw_detect and auto_fix_enabled can cause async processing
-                // Setting to false ensures synchronous response with video_id
                 $postData = [
                     'advertiser_id' => $targetAdvertiserId,
                     'upload_type' => 'UPLOAD_BY_FILE',
                     'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
                     'video_signature' => $videoSignature,
-                    'flaw_detect' => 'false',
-                    'auto_fix_enabled' => 'false',
+                    'flaw_detect' => 'true',
+                    'auto_fix_enabled' => 'true',
                     'auto_bind_enabled' => 'true'
                 ];
 
@@ -2644,15 +2639,14 @@ try {
 
             $url = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/upload/';
             
-            // Disable flaw_detect and auto_fix for synchronous response with video_id
             $postFields = [
                 'advertiser_id' => $advertiser_id,
                 'file_name' => $fileName,
                 'upload_type' => 'UPLOAD_BY_FILE',
                 'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
                 'video_signature' => $videoSignature,
-                'flaw_detect' => 'false',
-                'auto_fix_enabled' => 'false',
+                'flaw_detect' => 'true',
+                'auto_fix_enabled' => 'true',
                 'auto_bind_enabled' => 'true'
             ];
 
