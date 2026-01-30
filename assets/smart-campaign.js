@@ -8470,9 +8470,9 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
                             style="padding: 6px 12px; font-size: 12px; background: linear-gradient(135deg, #fe2c55, #25f4ee); color: white; border: none; border-radius: 4px; cursor: pointer;">
                         Upload Videos
                     </button>
-                    <button type="button" onclick="refreshDupBulkVideos('${advertiserId}')"
-                            style="padding: 6px 12px; font-size: 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                        Refresh
+                    <button type="button" id="refresh-btn-${advertiserId}" onclick="refreshDupBulkVideos('${advertiserId}')"
+                            style="padding: 6px 12px; font-size: 12px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                        <span class="refresh-icon" style="display: inline-block;">&#x21bb;</span> Refresh from TikTok
                     </button>
                     <button type="button" onclick="toggleDupBulkVideoList('${advertiserId}')"
                             style="padding: 6px 12px; font-size: 12px; background: #64748b; color: white; border: none; border-radius: 4px; cursor: pointer;">
@@ -8484,7 +8484,7 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
                     ${videos.map(v => {
                         const isSelected = selectedVideoIds.includes(v.video_id);
                         const displayName = (v.file_name || v.video_id || '').substring(0, 30) + ((v.file_name || v.video_id || '').length > 30 ? '...' : '');
-                        const thumbnailUrl = v.preview_url || v.thumbnail_url || v.poster_url || '';
+                        const thumbnailUrl = v.video_cover_url || v.cover_image_url || v.preview_url || v.thumbnail_url || v.poster_url || '';
                         return `
                             <label class="dup-bulk-video-item ${isSelected ? 'selected' : ''}" style="display: flex; align-items: center; gap: 10px; padding: 8px; cursor: pointer; border-radius: 6px; margin-bottom: 6px; background: ${isSelected ? '#e0f2fe' : '#f8fafc'}; border: 2px solid ${isSelected ? '#3b82f6' : 'transparent'}; transition: all 0.2s;">
                                 <input type="checkbox"
@@ -8513,7 +8513,7 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
                         <div style="display: flex; flex-wrap: wrap; gap: 6px;">
                             ${selectedVideoIds.map(vid => {
                                 const v = videos.find(x => x.video_id === vid);
-                                const thumbUrl = v ? (v.preview_url || v.thumbnail_url || v.poster_url || '') : '';
+                                const thumbUrl = v ? (v.video_cover_url || v.cover_image_url || v.preview_url || v.thumbnail_url || v.poster_url || '') : '';
                                 const name = v ? (v.file_name || vid).substring(0, 15) : vid.substring(0, 10);
                                 return `
                                     <div style="display: flex; align-items: center; gap: 4px; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
@@ -8782,21 +8782,49 @@ function openDupBulkVideoUpload(advertiserId) {
 
 // Refresh videos for a specific advertiser from TikTok API
 async function refreshDupBulkVideos(advertiserId) {
-    showToast('Refreshing videos...', 'info');
+    const btn = document.getElementById(`refresh-btn-${advertiserId}`);
+    const icon = btn?.querySelector('.refresh-icon');
+
+    // Show loading state
+    if (btn) {
+        btn.disabled = true;
+        btn.style.opacity = '0.7';
+    }
+    if (icon) {
+        icon.style.animation = 'spin 1s linear infinite';
+    }
+
+    showToast('Fetching videos from TikTok...', 'info');
+
     try {
+        // This calls api-smartplus.php which fetches directly from TikTok's /file/video/ad/search/ endpoint
         const result = await apiRequest('get_account_assets', { target_advertiser_id: advertiserId });
+
         if (result.success && result.data) {
             if (!duplicateState.bulkAccountAssets[advertiserId]) {
                 duplicateState.bulkAccountAssets[advertiserId] = {};
             }
+            // Store the raw videos from TikTok API (includes video_cover_url for thumbnails)
             duplicateState.bulkAccountAssets[advertiserId].videos = result.data.videos || [];
+            duplicateState.bulkAccountAssets[advertiserId].pixels = result.data.pixels || duplicateState.bulkAccountAssets[advertiserId].pixels || [];
+            duplicateState.bulkAccountAssets[advertiserId].identities = result.data.identities || duplicateState.bulkAccountAssets[advertiserId].identities || [];
+
             renderDuplicateBulkAccounts();
-            showToast(`Found ${result.data.videos?.length || 0} videos`, 'success');
+            showToast(`Found ${result.data.videos?.length || 0} videos from TikTok`, 'success');
         } else {
-            throw new Error(result.message || 'Failed to refresh');
+            throw new Error(result.message || 'Failed to fetch videos from TikTok');
         }
     } catch (error) {
         showToast('Refresh failed: ' + error.message, 'error');
+    } finally {
+        // Reset button state
+        if (btn) {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+        }
+        if (icon) {
+            icon.style.animation = '';
+        }
     }
 }
 
