@@ -2424,6 +2424,11 @@ h3 {
     color: #dc2626;
 }
 
+.upload-item-status.processing {
+    background: #fef3c7;
+    color: #d97706;
+}
+
 /* Updated upload item layout for progress bar */
 .upload-item {
     display: flex;

@@ -6703,6 +6703,7 @@ let mediaLibraryState = {
     uploadQueue: [],
     uploadCompleted: 0,
     uploadFailed: 0,
+    uploadProcessing: 0,  // Videos accepted but still processing
     uploadTotal: 0
 };
 
@@ -6863,6 +6864,7 @@ async function handleMediaLibraryUpload(event) {
     mediaLibraryState.uploadQueue = validFiles;
     mediaLibraryState.uploadCompleted = 0;
     mediaLibraryState.uploadFailed = 0;
+    mediaLibraryState.uploadProcessing = 0;
     mediaLibraryState.uploadTotal = validFiles.length;
 
     // Show progress UI
@@ -6928,6 +6930,7 @@ async function uploadMediaVideo(file, index) {
         console.log('Upload response:', result);
 
         if (result.success && result.data?.video_id) {
+            // Video uploaded and video_id returned immediately
             mediaLibraryState.uploadCompleted++;
             updateMediaUploadStatus(itemId, 'success', '✓ Uploaded', '#dcfce7', '#16a34a');
             addLog('success', `Video uploaded: ${result.data.video_id}`);
@@ -6943,8 +6946,15 @@ async function uploadMediaVideo(file, index) {
 
             updateMediaUploadProgress();
             return { success: true, video_id: result.data.video_id };
+        } else if (result.success || (result.message && result.message.includes('processing'))) {
+            // Video accepted but still processing - this is NOT an error
+            mediaLibraryState.uploadProcessing++;
+            updateMediaUploadStatus(itemId, 'processing', '⏳ Processing', '#fef3c7', '#d97706');
+            addLog('info', `Video accepted, processing: ${newFileName}`);
+            updateMediaUploadProgress();
+            return { success: true, processing: true };
         } else {
-            throw new Error(result.message || 'Upload failed - no video ID returned');
+            throw new Error(result.message || 'Upload failed');
         }
     } catch (error) {
         mediaLibraryState.uploadFailed++;
@@ -6970,7 +6980,7 @@ function updateMediaUploadStatus(itemId, status, text, bgColor, textColor) {
 
 // Update overall upload progress
 function updateMediaUploadProgress() {
-    const completed = mediaLibraryState.uploadCompleted + mediaLibraryState.uploadFailed;
+    const completed = mediaLibraryState.uploadCompleted + mediaLibraryState.uploadFailed + mediaLibraryState.uploadProcessing;
     const total = mediaLibraryState.uploadTotal;
     const percent = Math.round((completed / total) * 100);
 
@@ -6983,13 +6993,24 @@ function updateMediaUploadProgress() {
 
 // Finish bulk upload
 function finishMediaUpload() {
-    const { uploadCompleted, uploadFailed, uploadTotal } = mediaLibraryState;
+    const { uploadCompleted, uploadFailed, uploadProcessing, uploadTotal } = mediaLibraryState;
 
-    if (uploadFailed === 0) {
+    if (uploadFailed === 0 && uploadProcessing === 0) {
+        // All succeeded immediately
         showToast(`Successfully uploaded ${uploadCompleted} video${uploadCompleted > 1 ? 's' : ''}!`, 'success');
-    } else if (uploadCompleted > 0) {
-        showToast(`Uploaded ${uploadCompleted}/${uploadTotal} videos (${uploadFailed} failed)`, 'warning');
+    } else if (uploadFailed === 0 && uploadProcessing > 0) {
+        // Some or all are processing - this is OK, not an error
+        if (uploadCompleted > 0) {
+            showToast(`${uploadCompleted} uploaded, ${uploadProcessing} processing. Videos will appear in 1-2 minutes.`, 'success');
+        } else {
+            showToast(`${uploadProcessing} video${uploadProcessing > 1 ? 's' : ''} accepted! Will appear in 1-2 minutes.`, 'success');
+        }
+    } else if (uploadCompleted > 0 || uploadProcessing > 0) {
+        // Mixed results
+        const successCount = uploadCompleted + uploadProcessing;
+        showToast(`${successCount} accepted, ${uploadFailed} failed. Processing videos appear in 1-2 min.`, 'warning');
     } else {
+        // All failed
         showToast(`Failed to upload all ${uploadTotal} videos`, 'error');
     }
 
@@ -10721,7 +10742,7 @@ async function handleVideoModalUpload(event) {
         }
 
         if (result.success && result.data?.video_id) {
-            // Update progress UI
+            // Video uploaded and video_id returned immediately
             if (progressTitle) progressTitle.textContent = 'Upload complete!';
             updateUploadItemStatus('upload-item-0', 'success', '✓ Uploaded');
             addLog('success', `Video uploaded: ${result.data.video_id}`);
@@ -10767,6 +10788,35 @@ async function handleVideoModalUpload(event) {
                 videoModalState.allVideos = updatedVideos;
                 renderVideoModalGrid(updatedVideos);
             }, 3000);
+        } else if (result.success || (result.message && result.message.includes('processing'))) {
+            // Video accepted but still processing - this is OK, not an error!
+            if (progressTitle) progressTitle.textContent = 'Video accepted - processing...';
+            updateUploadItemStatus('upload-item-0', 'processing', '⏳ Processing');
+            if (progressContainer) {
+                progressContainer.style.background = '#fef3c7';
+                progressContainer.style.borderColor = '#fcd34d';
+            }
+            addLog('info', `Video accepted, processing: ${newFileName}`);
+            showToast('Video accepted! It will appear in your library in 1-2 minutes.', 'success');
+
+            // Hide progress after a moment
+            setTimeout(() => {
+                if (progressContainer) {
+                    progressContainer.style.display = 'none';
+                    progressContainer.style.background = '#f0f9ff';
+                    progressContainer.style.borderColor = '#bae6fd';
+                }
+            }, 3000);
+
+            // Auto-refresh library after delay to catch the processed video
+            setTimeout(async () => {
+                await loadMediaLibrary(true);
+                const updatedVideos = state.mediaLibrary.filter(m => m.type === 'video');
+                videoModalState.allVideos = updatedVideos;
+                renderVideoModalGrid(updatedVideos);
+                const totalEl = document.getElementById('video-modal-total');
+                if (totalEl) totalEl.textContent = updatedVideos.length;
+            }, 60000); // Check after 1 minute
         } else {
             throw new Error(result.message || 'Upload failed');
         }
