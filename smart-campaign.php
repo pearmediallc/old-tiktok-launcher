@@ -976,25 +976,15 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                             <!-- Start Time Only Picker (for scheduled_start_only) -->
                             <div id="schedule-start-only-container" style="display: none; margin-top: 15px; padding: 15px; background: white; border: 1px solid #e2e8f0; border-radius: 8px;">
                                 <div class="form-group" style="margin-bottom: 15px;">
-                                    <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time</label>
+                                    <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time <span style="font-weight: 400; color: #3b82f6;">(EST)</span></label>
                                     <input type="datetime-local" id="schedule-start-only-datetime" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                    <div style="margin-top: 6px; padding: 8px 12px; background: #eff6ff; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 16px;">🕐</span>
+                                        <span style="font-size: 12px; color: #1e40af; font-weight: 500;">Eastern Time (EST/EDT) - Times appear exactly as entered in TikTok Ads Manager</span>
+                                    </div>
                                 </div>
 
-                                <!-- Timezone Selector -->
-                                <div class="form-group" style="margin-bottom: 0;">
-                                    <label style="font-weight: 500; color: #475569; font-size: 14px;">Timezone</label>
-                                    <select id="schedule-start-only-timezone" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
-                                        <option value="America/Los_Angeles">Pacific Time (PT) - Los Angeles</option>
-                                        <option value="America/Denver">Mountain Time (MT) - Denver</option>
-                                        <option value="America/Chicago">Central Time (CT) - Chicago</option>
-                                        <option value="America/New_York" selected>Eastern Time (ET) - New York</option>
-                                        <option value="America/Anchorage">Alaska Time (AKT) - Anchorage</option>
-                                        <option value="Pacific/Honolulu">Hawaii Time (HT) - Honolulu</option>
-                                        <option value="UTC">UTC (Coordinated Universal Time)</option>
-                                    </select>
-                                </div>
-
-                                <p style="margin: 12px 0 0; color: #64748b; font-size: 12px; display: flex; align-items: center; gap: 6px;">
+                                <p style="margin: 0; color: #64748b; font-size: 12px; display: flex; align-items: center; gap: 6px;">
                                     <span style="font-size: 14px;">ℹ️</span>
                                     Ad group will start at this time and run until you manually turn it off
                                 </p>
@@ -1002,32 +992,22 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
 
                             <!-- DateTime Pickers for Start AND End (for scheduled) -->
                             <div id="schedule-datetime-container" style="display: none; margin-top: 15px; padding: 15px; background: white; border: 1px solid #e2e8f0; border-radius: 8px;">
+                                <div style="margin-bottom: 12px; padding: 8px 12px; background: #eff6ff; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 16px;">🕐</span>
+                                    <span style="font-size: 12px; color: #1e40af; font-weight: 500;">Eastern Time (EST/EDT) - Times appear exactly as entered in TikTok Ads Manager</span>
+                                </div>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                                     <!-- Start Date/Time -->
                                     <div class="form-group" style="margin-bottom: 0;">
-                                        <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time</label>
+                                        <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time <span style="font-weight: 400; color: #3b82f6;">(EST)</span></label>
                                         <input type="datetime-local" id="schedule-start-datetime" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                     </div>
 
                                     <!-- End Date/Time -->
                                     <div class="form-group" style="margin-bottom: 0;">
-                                        <label style="font-weight: 500; color: #475569; font-size: 14px;">End Date & Time</label>
+                                        <label style="font-weight: 500; color: #475569; font-size: 14px;">End Date & Time <span style="font-weight: 400; color: #3b82f6;">(EST)</span></label>
                                         <input type="datetime-local" id="schedule-end-datetime" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                     </div>
-                                </div>
-
-                                <!-- Timezone Selector -->
-                                <div class="form-group" style="margin-top: 15px; margin-bottom: 0;">
-                                    <label style="font-weight: 500; color: #475569; font-size: 14px;">Timezone</label>
-                                    <select id="schedule-timezone" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
-                                        <option value="America/Los_Angeles">Pacific Time (PT) - Los Angeles</option>
-                                        <option value="America/Denver">Mountain Time (MT) - Denver</option>
-                                        <option value="America/Chicago">Central Time (CT) - Chicago</option>
-                                        <option value="America/New_York" selected>Eastern Time (ET) - New York</option>
-                                        <option value="America/Anchorage">Alaska Time (AKT) - Anchorage</option>
-                                        <option value="Pacific/Honolulu">Hawaii Time (HT) - Honolulu</option>
-                                        <option value="UTC">UTC (Coordinated Universal Time)</option>
-                                    </select>
                                 </div>
 
                                 <p style="margin: 12px 0 0; color: #64748b; font-size: 12px; display: flex; align-items: center; gap: 6px;">
@@ -1555,7 +1535,7 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                             <div id="bulk-duplicate-settings" style="display: none; margin-top: 15px; padding: 15px; background: #f8f9ff; border-radius: 8px; border: 1px solid #667eea;">
                                 <div class="form-group" style="margin-bottom: 10px;">
                                     <label>Total campaigns per account:</label>
-                                    <input type="number" id="bulk-duplicate-count" min="1" max="10" value="2" style="width: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                    <input type="number" id="bulk-duplicate-count" min="1" max="10" value="1" style="width: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
                                 </div>
                                 <p style="margin: 0; font-size: 12px; color: #666;">
                                     Campaign names will be auto-numbered: "Campaign Name (1)", "Campaign Name (2)", etc.
@@ -2156,6 +2136,16 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                         Select the ad accounts where you want to duplicate this campaign. Configure each account's settings below.
                     </p>
 
+                    <!-- Search Bar for Accounts -->
+                    <div class="dup-bulk-account-search" style="margin-bottom: 12px;">
+                        <input type="text"
+                               id="dup-bulk-account-search-input"
+                               placeholder="Search accounts by name or ID..."
+                               oninput="filterDupBulkAccounts(this.value)"
+                               style="width: 100%; padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                        <span id="dup-bulk-search-results-count" style="display: block; margin-top: 6px; font-size: 12px; color: #6b7280;"></span>
+                    </div>
+
                     <!-- Account List -->
                     <div id="dup-bulk-accounts-container" style="max-height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 10px; padding: 15px;">
                         <div class="loading-state" style="text-align: center; padding: 20px;">
@@ -2278,40 +2268,30 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                 <!-- Start Only DateTime Picker -->
                                 <div id="dup-schedule-start-only-container" style="display: none; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 6px;">
                                     <div class="form-group" style="margin-bottom: 10px;">
-                                        <label style="font-weight: 500; color: #475569; font-size: 13px;">Start Date & Time</label>
+                                        <label style="font-weight: 500; color: #475569; font-size: 13px;">Start Date & Time <span style="font-weight: 400; color: #3b82f6;">(EST)</span></label>
                                         <input type="datetime-local" id="dup-schedule-start-only-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
                                     </div>
-                                    <div class="form-group" style="margin-bottom: 0;">
-                                        <label style="font-weight: 500; color: #475569; font-size: 13px;">Timezone</label>
-                                        <select id="dup-schedule-start-only-timezone" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
-                                            <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                                            <option value="America/Denver">Mountain Time (MT)</option>
-                                            <option value="America/Chicago">Central Time (CT)</option>
-                                            <option value="America/New_York" selected>Eastern Time (ET)</option>
-                                        </select>
+                                    <div style="padding: 6px 10px; background: #eff6ff; border-radius: 4px; display: flex; align-items: center; gap: 6px;">
+                                        <span style="font-size: 14px;">🕐</span>
+                                        <span style="font-size: 11px; color: #1e40af; font-weight: 500;">EST - Time appears exactly as entered in Ads Manager</span>
                                     </div>
                                 </div>
 
                                 <!-- Start AND End DateTime Pickers -->
                                 <div id="dup-schedule-datetime-container" style="display: none; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 6px;">
+                                    <div style="margin-bottom: 10px; padding: 6px 10px; background: #eff6ff; border-radius: 4px; display: flex; align-items: center; gap: 6px;">
+                                        <span style="font-size: 14px;">🕐</span>
+                                        <span style="font-size: 11px; color: #1e40af; font-weight: 500;">EST - Times appear exactly as entered in Ads Manager</span>
+                                    </div>
                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                                         <div class="form-group" style="margin-bottom: 0;">
-                                            <label style="font-weight: 500; color: #475569; font-size: 13px;">Start Date & Time</label>
+                                            <label style="font-weight: 500; color: #475569; font-size: 13px;">Start <span style="font-weight: 400; color: #3b82f6;">(EST)</span></label>
                                             <input type="datetime-local" id="dup-schedule-start-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
                                         </div>
                                         <div class="form-group" style="margin-bottom: 0;">
-                                            <label style="font-weight: 500; color: #475569; font-size: 13px;">End Date & Time</label>
+                                            <label style="font-weight: 500; color: #475569; font-size: 13px;">End <span style="font-weight: 400; color: #3b82f6;">(EST)</span></label>
                                             <input type="datetime-local" id="dup-schedule-end-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
                                         </div>
-                                    </div>
-                                    <div class="form-group" style="margin-top: 10px; margin-bottom: 0;">
-                                        <label style="font-weight: 500; color: #475569; font-size: 13px;">Timezone</label>
-                                        <select id="dup-schedule-timezone" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
-                                            <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                                            <option value="America/Denver">Mountain Time (MT)</option>
-                                            <option value="America/Chicago">Central Time (CT)</option>
-                                            <option value="America/New_York" selected>Eastern Time (ET)</option>
-                                        </select>
                                     </div>
                                 </div>
                             </div>

@@ -90,6 +90,17 @@ function generateRequestId() {
     return (string)(time() . rand(1000, 9999));
 }
 
+// Get current datetime in EST timezone (America/New_York)
+// All TikTok campaigns are set in EST timezone for consistency
+function getESTDateTime($modifier = null) {
+    $est = new DateTimeZone('America/New_York');
+    $dt = new DateTime('now', $est);
+    if ($modifier) {
+        $dt->modify($modifier);
+    }
+    return $dt->format('Y-m-d H:i:s');
+}
+
 // Get fresh image URL by searching the image library
 // This returns a fresh signed URL that won't be expired
 function getFreshImageUrl($imageId, $advertiserId, $accessToken) {
@@ -932,9 +943,10 @@ switch ($action) {
             logSmartPlus("Using SCHEDULE_FROM_NOW with scheduled start: $scheduleStart");
         } else {
             // Default: Run continuously from now (start immediately)
+            // Use EST timezone for consistency - all campaigns use EST
             $scheduleType = 'SCHEDULE_FROM_NOW';
-            $scheduleStart = date('Y-m-d H:i:s', strtotime('+1 hour'));
-            logSmartPlus("Using SCHEDULE_FROM_NOW starting immediately at: $scheduleStart");
+            $scheduleStart = getESTDateTime('+1 hour');
+            logSmartPlus("Using SCHEDULE_FROM_NOW starting immediately at: $scheduleStart (EST)");
         }
 
         $adgroupParams = [
@@ -1366,7 +1378,8 @@ switch ($action) {
         // NOTE: Identity is NOT set at ad group level for Smart+
         // Identity is set at AD level
         logSmartPlus("Step 2: Creating Ad Group...");
-        $scheduleStart = date('Y-m-d H:i:s', strtotime('+1 hour'));
+        // Use EST timezone for consistency - all campaigns use EST
+        $scheduleStart = getESTDateTime('+1 hour');
 
         $adgroupParams = [
             'advertiser_id' => $advertiserId,
@@ -2515,7 +2528,22 @@ switch ($action) {
         );
 
         logSmartPlus("Bulk Job ID: $jobId");
-        logSmartPlus("Processing " . count($accounts) . " accounts with $duplicateCount campaign copies each");
+        logSmartPlus("Received " . count($accounts) . " accounts with $duplicateCount campaign copies each");
+
+        // IMPORTANT: Deduplicate accounts by advertiser_id to prevent duplicate campaigns
+        $uniqueAccounts = [];
+        $seenIds = [];
+        foreach ($accounts as $account) {
+            $advId = $account['advertiser_id'];
+            if (!in_array($advId, $seenIds)) {
+                $seenIds[] = $advId;
+                $uniqueAccounts[] = $account;
+            } else {
+                logSmartPlus("WARNING: Duplicate account detected and skipped: $advId");
+            }
+        }
+        $accounts = $uniqueAccounts;
+        logSmartPlus("Processing " . count($accounts) . " unique accounts after deduplication");
 
         $results = [
             'job_id' => $jobId,
@@ -2669,7 +2697,8 @@ switch ($action) {
                 logSmartPlus("Campaign created (DISABLED): $campaignId");
 
                 // 2. CREATE AD GROUP
-                $scheduleStart = date('Y-m-d H:i:s', strtotime('+1 hour'));
+                // Use EST timezone for consistency - all campaigns use EST
+                $scheduleStart = getESTDateTime('+1 hour');
 
                 $adgroupParams = [
                     'advertiser_id' => $targetAdvertiserId,

@@ -116,6 +116,17 @@ function logToFile($message) {
     file_put_contents(__DIR__ . '/api_debug.log', $logMessage, FILE_APPEND);
 }
 
+// Get current datetime in EST timezone (America/New_York)
+// All TikTok campaigns are set in EST timezone for consistency
+function getESTDateTime($modifier = null) {
+    $est = new DateTimeZone('America/New_York');
+    $dt = new DateTime('now', $est);
+    if ($modifier) {
+        $dt->modify($modifier);
+    }
+    return $dt->format('Y-m-d H:i:s');
+}
+
 // Helper function to output clean JSON response
 function outputJsonResponse($data) {
     // Clean all output buffers
@@ -428,9 +439,9 @@ try {
                 ? $_SESSION['oauth_access_token']
                 : ($_ENV['TIKTOK_ACCESS_TOKEN'] ?? '');
 
-            // Schedule times
-            $scheduleStartTime = $data['schedule_start_time'] ?? date('Y-m-d H:i:s', strtotime('+1 hour'));
-            $scheduleEndTime = $data['schedule_end_time'] ?? date('Y-m-d H:i:s', strtotime('+1 year'));
+            // Schedule times - use EST timezone for consistency
+            $scheduleStartTime = $data['schedule_start_time'] ?? getESTDateTime('+1 hour');
+            $scheduleEndTime = $data['schedule_end_time'] ?? getESTDateTime('+1 year');
 
             try {
                 // Build media_info_list for Spark Ads (TikTok posts)
@@ -561,8 +572,8 @@ try {
                 'budget_mode' => 'BUDGET_MODE_INFINITE', // Default - budget set at ad group level
                 'budget_optimize_on' => false,
                 'schedule_type' => 'SCHEDULE_START_END',
-                'schedule_start_time' => date('Y-m-d H:i:s'),
-                'schedule_end_time' => date('Y-m-d H:i:s', strtotime('+1 year')),
+                'schedule_start_time' => getESTDateTime(),
+                'schedule_end_time' => getESTDateTime('+1 year'),
                 'optimization_goal' => 'LEAD_GENERATION',
                 'bid_type' => 'BID_TYPE_NO_BID',
                 'billing_event' => 'OCPM',
@@ -3437,8 +3448,8 @@ try {
                 'billing_event' => $data['billing_event'] ?? 'CPC',
                 'budget_mode' => 'BUDGET_MODE_INFINITE',
                 'schedule_type' => 'SCHEDULE_START_END',
-                'schedule_start_time' => date('Y-m-d H:i:s'),
-                'schedule_end_time' => date('Y-m-d H:i:s', strtotime('+30 days')),
+                'schedule_start_time' => getESTDateTime(),
+                'schedule_end_time' => getESTDateTime('+30 days'),
                 'pixel_id' => $data['pixel_id'],
                 'identity_type' => 'CUSTOMIZED_USER',
                 'identity_id' => $data['identity_id']
@@ -3466,47 +3477,72 @@ try {
 
             logToFile("Ad group created: " . $newAdgroupId);
 
-            // Create ad in target account
-            $landingPageUrl = $data['landing_page_url'] ?? '';
-            $adParams = [
-                'advertiser_id' => $targetAdvertiserId,
-                'adgroup_id' => $newAdgroupId,
-                'ad_name' => $data['ad_name'] ?? ($data['campaign_name'] ?? 'Ad') . ' - Ad',
-                'ad_format' => 'SINGLE_VIDEO',
-                'ad_text' => is_array($data['ad_texts']) ? ($data['ad_texts'][0] ?? 'Learn More') : ($data['ad_texts'] ?? 'Learn More'),
-                'video_id' => $data['video_id'],
-                'call_to_action' => $data['call_to_action'] ?? 'LEARN_MORE',
-                'identity_type' => 'CUSTOMIZED_USER',
-                'identity_id' => $data['identity_id'],
-                'landing_page_url' => $landingPageUrl
-            ];
-
-            logToFile("Creating ad: " . json_encode($adParams));
-
-            $adResult = makeApiCall(
-                'https://business-api.tiktok.com/open_api/v1.3/ad/create/',
-                $adParams,
-                $config['access_token'],
-                'POST'
-            );
-
-            if (empty($adResult) || (!empty($adResult['code']) && $adResult['code'] != 0)) {
-                $errorMsg = $adResult['message'] ?? 'Failed to create ad';
-                logToFile("Ad creation failed: " . $errorMsg);
-                // Don't throw - campaign and adgroup were created
+            // Support multiple videos - create an ad for each video
+            $videoIds = [];
+            if (!empty($data['video_ids']) && is_array($data['video_ids'])) {
+                $videoIds = $data['video_ids'];
+            } elseif (!empty($data['video_id'])) {
+                $videoIds = [$data['video_id']];
             }
 
-            $newAdId = $adResult['data']['ad_id'] ?? null;
-            logToFile("Ad created: " . ($newAdId ?? 'N/A'));
+            if (empty($videoIds)) {
+                throw new Exception('At least one video is required');
+            }
+
+            $landingPageUrl = $data['landing_page_url'] ?? '';
+            $createdAdIds = [];
+
+            // Create an ad for each video
+            foreach ($videoIds as $index => $videoId) {
+                $adName = $data['ad_name'] ?? ($data['campaign_name'] ?? 'Ad') . ' - Ad';
+                // Add number suffix if multiple videos
+                if (count($videoIds) > 1) {
+                    $adName .= ' ' . ($index + 1);
+                }
+
+                $adParams = [
+                    'advertiser_id' => $targetAdvertiserId,
+                    'adgroup_id' => $newAdgroupId,
+                    'ad_name' => $adName,
+                    'ad_format' => 'SINGLE_VIDEO',
+                    'ad_text' => is_array($data['ad_texts']) ? ($data['ad_texts'][0] ?? 'Learn More') : ($data['ad_texts'] ?? 'Learn More'),
+                    'video_id' => $videoId,
+                    'call_to_action' => $data['call_to_action'] ?? 'LEARN_MORE',
+                    'identity_type' => 'CUSTOMIZED_USER',
+                    'identity_id' => $data['identity_id'],
+                    'landing_page_url' => $landingPageUrl
+                ];
+
+                logToFile("Creating ad " . ($index + 1) . "/" . count($videoIds) . ": " . json_encode($adParams));
+
+                $adResult = makeApiCall(
+                    'https://business-api.tiktok.com/open_api/v1.3/ad/create/',
+                    $adParams,
+                    $config['access_token'],
+                    'POST'
+                );
+
+                if (!empty($adResult) && (empty($adResult['code']) || $adResult['code'] == 0)) {
+                    $newAdId = $adResult['data']['ad_id'] ?? null;
+                    if ($newAdId) {
+                        $createdAdIds[] = $newAdId;
+                    }
+                    logToFile("Ad created: " . ($newAdId ?? 'N/A'));
+                } else {
+                    $errorMsg = $adResult['message'] ?? 'Failed to create ad';
+                    logToFile("Ad creation failed for video $videoId: " . $errorMsg);
+                }
+            }
 
             outputJsonResponse([
                 'success' => true,
                 'data' => [
                     'campaign_id' => $newCampaignId,
                     'adgroup_id' => $newAdgroupId,
-                    'ad_id' => $newAdId
+                    'ad_ids' => $createdAdIds,
+                    'ad_id' => $createdAdIds[0] ?? null // Backward compatibility
                 ],
-                'message' => 'Campaign duplicated successfully'
+                'message' => 'Campaign duplicated successfully with ' . count($createdAdIds) . ' ad(s)'
             ]);
             break;
 

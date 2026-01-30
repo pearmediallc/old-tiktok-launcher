@@ -1509,17 +1509,18 @@ function getScheduleData() {
     const scheduleType = document.querySelector('input[name="schedule_type"]:checked')?.value || 'continuous';
 
     // Format datetime for TikTok API
-    // TikTok interprets schedule times in the advertiser's account timezone (EST)
-    // So we just format the time as-is, no timezone conversion needed
+    // User enters time in EST (as labeled in UI)
+    // TikTok interprets schedule times in advertiser's account timezone (EST)
+    // So times pass through directly - what user enters is what appears in Ad Manager
     const formatScheduleTime = (dateTimeLocalValue) => {
         if (!dateTimeLocalValue) return null;
 
         // Parse the datetime-local value (e.g., "2025-01-28T14:00")
         const [datePart, timePart] = dateTimeLocalValue.split('T');
 
-        // Format for API: "YYYY-MM-DD HH:MM:SS" - pass through as-is
+        // Format for API: "YYYY-MM-DD HH:MM:SS" - pass through as EST
         const result = `${datePart} ${timePart}:00`;
-        console.log(`[Schedule] Formatted for API: ${dateTimeLocalValue} -> ${result}`);
+        console.log(`[Schedule] Formatted for API (EST): ${dateTimeLocalValue} -> ${result}`);
         return result;
     };
 
@@ -3302,7 +3303,9 @@ async function renderBulkAccountsInModal() {
     // Render current account first (at the top) - always selected
     if (currentAccount) {
         // Auto-add current account to selectedAccounts if not already there
-        const isCurrentSelected = bulkLaunchState.selectedAccounts.some(a => a.advertiser_id === currentAccount.advertiser_id);
+        // Use String() to ensure consistent type comparison
+        const currentAdvId = String(currentAccount.advertiser_id);
+        const isCurrentSelected = bulkLaunchState.selectedAccounts.some(a => String(a.advertiser_id) === currentAdvId);
         if (!isCurrentSelected) {
             // Pre-populate with assets from main campaign
             bulkLaunchState.selectedAccounts.push({
@@ -3316,6 +3319,9 @@ async function renderBulkAccountsInModal() {
                 video_mapping: {},
                 is_original: true
             });
+            console.log('[Bulk Launch] Added original account to selectedAccounts:', currentAdvId);
+        } else {
+            console.log('[Bulk Launch] Original account already in selectedAccounts:', currentAdvId);
         }
 
         // Create assets object for current account from main campaign state
@@ -5579,6 +5585,51 @@ async function executeBulkLaunch() {
         return;
     }
 
+    // IMPORTANT: Deduplicate accounts by advertiser_id to prevent duplicate campaigns
+    const uniqueAccountsMap = new Map();
+    bulkLaunchState.selectedAccounts.forEach(account => {
+        // Use Map to ensure only one entry per advertiser_id (last one wins)
+        uniqueAccountsMap.set(account.advertiser_id, account);
+    });
+    const uniqueAccounts = Array.from(uniqueAccountsMap.values());
+
+    if (uniqueAccounts.length !== bulkLaunchState.selectedAccounts.length) {
+        console.warn(`[Bulk Launch] Removed ${bulkLaunchState.selectedAccounts.length - uniqueAccounts.length} duplicate account(s)`);
+        addLog('warning', `Removed duplicate account entries`);
+        bulkLaunchState.selectedAccounts = uniqueAccounts;
+    }
+
+    // IMPORTANT: If original account already has a campaign created (from single account flow),
+    // skip it in bulk launch to prevent duplicate campaigns
+    let originalAccountSkipped = false;
+    const originalAccountId = bulkLaunchState.accounts.find(a => a.is_current)?.advertiser_id;
+
+    if (state.campaignId && originalAccountId) {
+        // Original account already has a campaign - remove it from bulk launch
+        const originalInList = bulkLaunchState.selectedAccounts.find(a =>
+            String(a.advertiser_id) === String(originalAccountId) && a.is_original
+        );
+
+        if (originalInList) {
+            bulkLaunchState.selectedAccounts = bulkLaunchState.selectedAccounts.filter(a =>
+                String(a.advertiser_id) !== String(originalAccountId)
+            );
+            originalAccountSkipped = true;
+            console.log(`[Bulk Launch] Original account ${originalAccountId} already has campaign ${state.campaignId} - skipping to prevent duplicate`);
+            addLog('info', `Original account already has campaign - will only launch to other accounts`);
+        }
+    }
+
+    // Check if we have any accounts left after filtering
+    if (bulkLaunchState.selectedAccounts.length === 0) {
+        if (originalAccountSkipped) {
+            showToast('Original account already has a campaign. Select other accounts for bulk launch.', 'info');
+        } else {
+            showToast('No accounts configured for bulk launch', 'error');
+        }
+        return;
+    }
+
     // Show progress modal
     const progressModal = document.getElementById('bulk-progress-modal');
     const progressList = document.getElementById('bulk-progress-list');
@@ -5891,7 +5942,7 @@ function toggleBulkDuplicates() {
 
     // Update bulk launch state
     bulkLaunchState.duplicatesEnabled = enabled;
-    bulkLaunchState.duplicateCount = enabled ? (parseInt(document.getElementById('bulk-duplicate-count')?.value) || 2) : 1;
+    bulkLaunchState.duplicateCount = enabled ? (parseInt(document.getElementById('bulk-duplicate-count')?.value) || 1) : 1;
 
     updateBulkModalCounts();
     addLog('info', `Bulk duplicates ${enabled ? 'enabled' : 'disabled'}, count: ${bulkLaunchState.duplicateCount}`);
@@ -7994,6 +8045,39 @@ function resetDupScheduleOptions() {
 // DUPLICATE BULK LAUNCH FUNCTIONS
 // ============================================
 
+// Filter duplicate bulk accounts by search query
+function filterDupBulkAccounts(query) {
+    const searchQuery = query.toLowerCase().trim();
+    const container = document.getElementById('dup-bulk-accounts-container');
+    const accountCards = container.querySelectorAll('.dup-bulk-account-card');
+    let visibleCount = 0;
+    let totalCount = 0;
+
+    accountCards.forEach(card => {
+        const accountName = card.querySelector('.dup-bulk-account-name')?.textContent?.toLowerCase() || '';
+        const accountId = card.querySelector('.dup-bulk-account-id')?.textContent?.toLowerCase() || '';
+
+        totalCount++;
+
+        if (searchQuery === '' || accountName.includes(searchQuery) || accountId.includes(searchQuery)) {
+            card.style.display = '';
+            visibleCount++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+
+    // Update search results count
+    const resultsCountEl = document.getElementById('dup-bulk-search-results-count');
+    if (resultsCountEl) {
+        if (searchQuery === '') {
+            resultsCountEl.textContent = '';
+        } else {
+            resultsCountEl.textContent = `Showing ${visibleCount} of ${totalCount} accounts`;
+        }
+    }
+}
+
 // Load accounts for bulk duplicate
 async function loadDuplicateBulkAccounts() {
     const container = document.getElementById('dup-bulk-accounts-container');
@@ -8074,6 +8158,12 @@ function renderDuplicateBulkAccounts() {
     });
 
     container.innerHTML = html || '<p style="text-align: center; color: #64748b; padding: 20px;">No accounts found</p>';
+
+    // Re-apply search filter if there's a search query
+    const searchInput = document.getElementById('dup-bulk-account-search-input');
+    if (searchInput && searchInput.value.trim()) {
+        filterDupBulkAccounts(searchInput.value);
+    }
 
     // Add styles if not already present
     if (!document.getElementById('dup-bulk-styles')) {
@@ -8190,7 +8280,8 @@ async function toggleDupBulkAccount(advertiserId) {
                 landing_page_url: '',
                 pixel_id: null,
                 identity_id: null,
-                video_id: null
+                video_id: null,
+                video_ids: [] // Support multiple video selection
             });
         }
         // Load assets if not loaded
@@ -8233,12 +8324,13 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
             : originalAd.landing_page_url_list[0] || '';
     }
 
-    // Get original video
-    const originalVideoId = originalAd?.video_id || originalAd?.video_info?.video_id || '';
-
     const pixels = assets.pixels || [];
     const identities = assets.identities || [];
     const videos = assets.videos || [];
+
+    // Support multiple video selection - use video_ids array
+    const selectedVideoIds = selectedAccount?.video_ids || [];
+    const selectedVideoCount = selectedVideoIds.length;
 
     return `
         <div class="dup-bulk-config-grid">
@@ -8281,18 +8373,49 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
                 </select>
             </div>
 
-            <!-- Video -->
-            <div class="dup-bulk-config-item">
-                <label>Video</label>
-                <select id="dup-bulk-video-${advertiserId}"
-                        onchange="updateDupBulkAccountConfig('${advertiserId}', 'video_id', this.value)">
-                    <option value="">Select Video...</option>
-                    ${videos.map(v => `<option value="${v.video_id}" ${selectedAccount?.video_id === v.video_id ? 'selected' : ''}>${v.file_name || v.video_id}</option>`).join('')}
-                </select>
-                <button type="button" onclick="openDupBulkVideoUpload('${advertiserId}')"
-                        style="margin-top: 4px; padding: 4px 8px; font-size: 11px; background: linear-gradient(135deg, #fe2c55, #25f4ee); color: white; border: none; border-radius: 4px; cursor: pointer;">
-                    📤 Upload
-                </button>
+            <!-- Videos (Multi-select) -->
+            <div class="dup-bulk-config-item full-width">
+                <label>Videos <span style="font-weight: normal; color: #64748b;">(${selectedVideoCount} selected)</span></label>
+                <div class="dup-bulk-video-actions" style="display: flex; gap: 8px; margin-bottom: 8px;">
+                    <button type="button" onclick="openDupBulkVideoUpload('${advertiserId}')"
+                            style="padding: 6px 12px; font-size: 12px; background: linear-gradient(135deg, #fe2c55, #25f4ee); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Upload Videos
+                    </button>
+                    <button type="button" onclick="refreshDupBulkVideos('${advertiserId}')"
+                            style="padding: 6px 12px; font-size: 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Refresh
+                    </button>
+                    <button type="button" onclick="toggleDupBulkVideoList('${advertiserId}')"
+                            style="padding: 6px 12px; font-size: 12px; background: #64748b; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        ${selectedVideoCount > 0 ? 'Edit Selection' : 'Select Videos'}
+                    </button>
+                </div>
+                <div id="dup-bulk-video-list-${advertiserId}" class="dup-bulk-video-list" style="display: none; max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px;">
+                    ${videos.length === 0 ? '<p style="color: #64748b; text-align: center; margin: 8px 0;">No videos available. Upload or refresh.</p>' : ''}
+                    ${videos.map(v => {
+                        const isSelected = selectedVideoIds.includes(v.video_id);
+                        const displayName = (v.file_name || v.video_id || '').substring(0, 40) + ((v.file_name || v.video_id || '').length > 40 ? '...' : '');
+                        return `
+                            <label class="dup-bulk-video-item ${isSelected ? 'selected' : ''}" style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; cursor: pointer; border-radius: 4px; margin-bottom: 4px; background: ${isSelected ? '#e0f2fe' : '#f8fafc'};">
+                                <input type="checkbox"
+                                       value="${v.video_id}"
+                                       ${isSelected ? 'checked' : ''}
+                                       onchange="toggleDupBulkVideoSelection('${advertiserId}', '${v.video_id}')"
+                                       style="width: 16px; height: 16px;">
+                                <span style="font-size: 12px; flex: 1;">${displayName}</span>
+                                ${v.is_new ? '<span style="background: #22c55e; color: white; font-size: 10px; padding: 1px 4px; border-radius: 3px;">NEW</span>' : ''}
+                            </label>
+                        `;
+                    }).join('')}
+                </div>
+                ${selectedVideoCount > 0 ? `
+                    <div style="margin-top: 6px; font-size: 11px; color: #64748b;">
+                        Selected: ${selectedVideoIds.map(vid => {
+                            const v = videos.find(x => x.video_id === vid);
+                            return v ? (v.file_name || vid).substring(0, 20) : vid.substring(0, 10);
+                        }).join(', ')}
+                    </div>
+                ` : ''}
             </div>
 
             <!-- Landing Page URL -->
@@ -8305,6 +8428,38 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
             </div>
         </div>
     `;
+}
+
+// Toggle video list visibility
+function toggleDupBulkVideoList(advertiserId) {
+    const list = document.getElementById(`dup-bulk-video-list-${advertiserId}`);
+    if (list) {
+        list.style.display = list.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+// Toggle video selection in duplicate bulk
+function toggleDupBulkVideoSelection(advertiserId, videoId) {
+    const account = duplicateState.bulkSelectedAccounts.find(a => a.advertiser_id === advertiserId);
+    if (!account) return;
+
+    // Initialize video_ids array if not exists
+    if (!account.video_ids) {
+        account.video_ids = [];
+    }
+
+    const index = account.video_ids.indexOf(videoId);
+    if (index > -1) {
+        // Remove if already selected
+        account.video_ids.splice(index, 1);
+    } else {
+        // Add if not selected
+        account.video_ids.push(videoId);
+    }
+
+    // Re-render to update UI
+    renderDuplicateBulkAccounts();
+    updateDupBulkSummary();
 }
 
 // Update bulk account config
@@ -8338,62 +8493,124 @@ function updateDupBulkSummary() {
     }
 }
 
-// Open video upload for bulk duplicate account
+// Open video upload for bulk duplicate account (supports multiple videos)
 function openDupBulkVideoUpload(advertiserId) {
-    // Create a file input dynamically
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'video/*';
+    input.multiple = true; // Allow multiple video selection
     input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
 
-        showToast('Uploading video...', 'info');
-
-        const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
-        const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
-        const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
-        const newFileName = `${baseName}_${timestamp}${ext}`;
-
-        const formData = new FormData();
-        formData.append('video', file, newFileName);
-        formData.append('advertiser_id', advertiserId);
-
-        try {
-            const response = await fetch('api.php?action=upload_video', {
-                method: 'POST',
-                body: formData
-            });
-            const result = await response.json();
-
-            if (result.success && result.data?.video_id) {
-                showToast('Video uploaded successfully!', 'success');
-
-                // Add to account assets
-                if (!duplicateState.bulkAccountAssets[advertiserId]) {
-                    duplicateState.bulkAccountAssets[advertiserId] = { videos: [] };
-                }
-                if (!duplicateState.bulkAccountAssets[advertiserId].videos) {
-                    duplicateState.bulkAccountAssets[advertiserId].videos = [];
-                }
-                duplicateState.bulkAccountAssets[advertiserId].videos.unshift({
-                    video_id: result.data.video_id,
-                    file_name: newFileName
-                });
-
-                // Update the account config
-                updateDupBulkAccountConfig(advertiserId, 'video_id', result.data.video_id);
-
-                // Re-render
-                renderDuplicateBulkAccounts();
-            } else {
-                throw new Error(result.message || 'Upload failed');
+        const maxSize = 500 * 1024 * 1024; // 500MB
+        const validFiles = files.filter(file => {
+            if (!file.type.startsWith('video/')) {
+                showToast(`Skipped ${file.name}: Not a video file`, 'warning');
+                return false;
             }
-        } catch (error) {
-            showToast('Upload failed: ' + error.message, 'error');
+            if (file.size > maxSize) {
+                showToast(`Skipped ${file.name}: Exceeds 500MB limit`, 'warning');
+                return false;
+            }
+            return true;
+        });
+
+        if (validFiles.length === 0) {
+            showToast('No valid video files selected', 'error');
+            return;
+        }
+
+        showToast(`Uploading ${validFiles.length} video(s)...`, 'info');
+
+        let completed = 0;
+        let failed = 0;
+        const uploadedVideos = [];
+
+        for (const file of validFiles) {
+            try {
+                const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+                const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
+                const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
+                const newFileName = `${baseName}_${timestamp}${ext}`;
+
+                const formData = new FormData();
+                formData.append('video', file, newFileName);
+                formData.append('target_advertiser_id', advertiserId); // Use correct endpoint parameter
+
+                // Use the validated endpoint that checks advertiser authorization
+                const response = await fetch('api.php?action=upload_video_to_advertiser', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.success && result.data?.video_id) {
+                    completed++;
+                    uploadedVideos.push({
+                        video_id: result.data.video_id,
+                        file_name: newFileName,
+                        preview_url: URL.createObjectURL(file),
+                        is_new: true
+                    });
+                } else {
+                    failed++;
+                    console.error(`Upload failed for ${file.name}:`, result);
+                }
+            } catch (error) {
+                failed++;
+                console.error(`Upload error for ${file.name}:`, error);
+            }
+        }
+
+        // Update local state with uploaded videos
+        if (uploadedVideos.length > 0) {
+            if (!duplicateState.bulkAccountAssets[advertiserId]) {
+                duplicateState.bulkAccountAssets[advertiserId] = { videos: [], pixels: [], identities: [] };
+            }
+            if (!duplicateState.bulkAccountAssets[advertiserId].videos) {
+                duplicateState.bulkAccountAssets[advertiserId].videos = [];
+            }
+            duplicateState.bulkAccountAssets[advertiserId].videos.unshift(...uploadedVideos);
+
+            // Auto-select first uploaded video if none selected
+            const account = duplicateState.bulkSelectedAccounts.find(a => a.advertiser_id === advertiserId);
+            if (account && (!account.video_ids || account.video_ids.length === 0)) {
+                account.video_ids = uploadedVideos.map(v => v.video_id);
+            }
+
+            renderDuplicateBulkAccounts();
+        }
+
+        if (failed === 0) {
+            showToast(`Successfully uploaded ${completed} video(s)!`, 'success');
+        } else if (completed > 0) {
+            showToast(`Uploaded ${completed}/${validFiles.length} videos (${failed} failed)`, 'warning');
+        } else {
+            showToast(`Failed to upload all ${validFiles.length} videos`, 'error');
         }
     };
     input.click();
+}
+
+// Refresh videos for a specific advertiser from TikTok API
+async function refreshDupBulkVideos(advertiserId) {
+    showToast('Refreshing videos...', 'info');
+    try {
+        const result = await apiRequest('get_account_assets', { target_advertiser_id: advertiserId });
+        if (result.success && result.data) {
+            if (!duplicateState.bulkAccountAssets[advertiserId]) {
+                duplicateState.bulkAccountAssets[advertiserId] = {};
+            }
+            duplicateState.bulkAccountAssets[advertiserId].videos = result.data.videos || [];
+            renderDuplicateBulkAccounts();
+            showToast(`Found ${result.data.videos?.length || 0} videos`, 'success');
+        } else {
+            throw new Error(result.message || 'Failed to refresh');
+        }
+    } catch (error) {
+        showToast('Refresh failed: ' + error.message, 'error');
+    }
 }
 
 // Execute bulk duplicate to multiple accounts
@@ -8423,8 +8640,10 @@ async function executeBulkDuplicateCampaign() {
             showToast(`Please select an identity for ${account.advertiser_name}`, 'error');
             return;
         }
-        if (!account.video_id) {
-            showToast(`Please select a video for ${account.advertiser_name}`, 'error');
+        // Support both old video_id and new video_ids array
+        const hasVideos = (account.video_ids && account.video_ids.length > 0) || account.video_id;
+        if (!hasVideos) {
+            showToast(`Please select at least one video for ${account.advertiser_name}`, 'error');
             return;
         }
     }
@@ -8474,6 +8693,11 @@ async function executeBulkDuplicateCampaign() {
                 }
             }
 
+            // Support both video_ids array and legacy video_id
+            const videoIds = account.video_ids && account.video_ids.length > 0
+                ? account.video_ids
+                : (account.video_id ? [account.video_id] : []);
+
             // Prepare duplicate request
             const duplicateData = {
                 target_advertiser_id: account.advertiser_id,
@@ -8482,7 +8706,8 @@ async function executeBulkDuplicateCampaign() {
                 budget: account.budget,
                 pixel_id: account.pixel_id,
                 identity_id: account.identity_id,
-                video_id: account.video_id,
+                video_ids: videoIds, // Send array of video IDs
+                video_id: videoIds[0] || '', // Primary video for backward compatibility
                 landing_page_url: landingUrl,
                 // Include original campaign data
                 objective: campaign.objective || adgroup?.objective || 'TRAFFIC',
@@ -8607,17 +8832,18 @@ function getDupScheduleData() {
     const scheduleType = document.querySelector('input[name="dup_schedule_type"]:checked')?.value || 'continuous';
 
     // Format datetime for TikTok API
-    // TikTok interprets schedule times in the advertiser's account timezone (EST)
-    // So we just format the time as-is, no timezone conversion needed
+    // User enters time in EST (as labeled in UI)
+    // TikTok interprets schedule times in advertiser's account timezone (EST)
+    // So times pass through directly - what user enters is what appears in Ad Manager
     const formatScheduleTime = (dateTimeLocalValue) => {
         if (!dateTimeLocalValue) return null;
 
         // Parse the datetime-local value (e.g., "2025-01-28T14:00")
         const [datePart, timePart] = dateTimeLocalValue.split('T');
 
-        // Format for API: "YYYY-MM-DD HH:MM:SS" - pass through as-is
+        // Format for API: "YYYY-MM-DD HH:MM:SS" - pass through as EST
         const result = `${datePart} ${timePart}:00`;
-        console.log(`[Dup Schedule] Formatted for API: ${dateTimeLocalValue} -> ${result}`);
+        console.log(`[Dup Schedule] Formatted for API (EST): ${dateTimeLocalValue} -> ${result}`);
         return result;
     };
 
