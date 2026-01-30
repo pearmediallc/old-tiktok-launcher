@@ -3513,6 +3513,11 @@ try {
                     'landing_page_url' => $landingPageUrl
                 ];
 
+                // Add portfolio if provided
+                if (!empty($data['portfolio_id'])) {
+                    $adParams['creative_portfolio_id'] = $data['portfolio_id'];
+                }
+
                 logToFile("Creating ad " . ($index + 1) . "/" . count($videoIds) . ": " . json_encode($adParams));
 
                 $adResult = makeApiCall(

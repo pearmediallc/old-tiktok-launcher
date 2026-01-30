@@ -8416,6 +8416,7 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
     const pixels = assets.pixels || [];
     const identities = assets.identities || [];
     const videos = assets.videos || [];
+    const portfolios = assets.portfolios || [];
 
     // Support multiple video selection - use video_ids array
     const selectedVideoIds = selectedAccount?.video_ids || [];
@@ -8455,10 +8456,25 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
             <!-- Identity -->
             <div class="dup-bulk-config-item">
                 <label>Identity</label>
-                <select id="dup-bulk-identity-${advertiserId}"
-                        onchange="updateDupBulkAccountConfig('${advertiserId}', 'identity_id', this.value)">
-                    <option value="">Select Identity...</option>
-                    ${identities.map(i => `<option value="${i.identity_id}" ${selectedAccount?.identity_id === i.identity_id ? 'selected' : ''}>${i.display_name || i.identity_name}</option>`).join('')}
+                <div style="display: flex; gap: 6px;">
+                    <select id="dup-bulk-identity-${advertiserId}" style="flex: 1;"
+                            onchange="updateDupBulkAccountConfig('${advertiserId}', 'identity_id', this.value)">
+                        <option value="">Select Identity...</option>
+                        ${identities.map(i => `<option value="${i.identity_id}" ${selectedAccount?.identity_id === i.identity_id ? 'selected' : ''}>${i.display_name || i.identity_name}</option>`).join('')}
+                    </select>
+                    <button type="button" onclick="openDupBulkIdentityCreate('${advertiserId}')"
+                            style="padding: 6px 10px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"
+                            title="Create new identity">+ New</button>
+                </div>
+            </div>
+
+            <!-- CTA Portfolio (optional) -->
+            <div class="dup-bulk-config-item">
+                <label>CTA Portfolio <span style="color: #94a3b8; font-size: 10px;">(optional)</span></label>
+                <select id="dup-bulk-portfolio-${advertiserId}"
+                        onchange="updateDupBulkAccountConfig('${advertiserId}', 'portfolio_id', this.value)">
+                    <option value="">None (use default CTA)</option>
+                    ${portfolios.map(p => `<option value="${p.portfolio_id}" ${selectedAccount?.portfolio_id === p.portfolio_id ? 'selected' : ''}>${p.portfolio_name}</option>`).join('')}
                 </select>
             </div>
 
@@ -8539,6 +8555,17 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
                        value="${selectedAccount?.landing_page_url || originalLandingUrl}"
                        onchange="updateDupBulkAccountConfig('${advertiserId}', 'landing_page_url', this.value)"
                        placeholder="${originalLandingUrl || 'https://example.com'}">
+            </div>
+
+            <!-- Ad Text -->
+            <div class="dup-bulk-config-item full-width">
+                <label>Ad Text</label>
+                <textarea id="dup-bulk-adtext-${advertiserId}"
+                          onchange="updateDupBulkAccountConfig('${advertiserId}', 'ad_text', this.value)"
+                          placeholder="Enter ad text..."
+                          rows="2"
+                          style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; resize: vertical;">${selectedAccount?.ad_text || (originalAd?.ad_texts?.[0]?.ad_text || originalAd?.ad_texts?.[0] || originalAd?.ad_text || 'Learn More')}</textarea>
+                <small style="color: #64748b; font-size: 11px;">This text appears with your ad</small>
             </div>
         </div>
     `;
@@ -8630,7 +8657,7 @@ function updateDupBulkSelectedVideosDisplay(advertiserId, selectedVideoIds) {
             <div style="display: flex; flex-wrap: wrap; gap: 6px;">
                 ${selectedVideoIds.map(vid => {
                     const v = videos.find(x => x.video_id === vid);
-                    const thumbUrl = v ? (v.preview_url || v.thumbnail_url || v.poster_url || '') : '';
+                    const thumbUrl = v ? (v.video_cover_url || v.cover_image_url || v.preview_url || v.thumbnail_url || v.poster_url || '') : '';
                     const name = v ? (v.file_name || vid).substring(0, 15) : vid.substring(0, 10);
                     return `
                         <div style="display: flex; align-items: center; gap: 4px; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
@@ -8828,6 +8855,179 @@ async function refreshDupBulkVideos(advertiserId) {
     }
 }
 
+// Create Identity for Duplicate Bulk Launch
+let dupBulkIdentityLogoFile = null;
+
+function openDupBulkIdentityCreate(advertiserId) {
+    const account = duplicateState.bulkAccounts?.find(a => a.advertiser_id === advertiserId);
+    const accountName = account?.advertiser_name || advertiserId;
+
+    const modalHtml = `
+        <div id="dup-bulk-identity-modal" class="modal" style="display: flex; z-index: 10002;">
+            <div class="modal-content" style="max-width: 450px;">
+                <div class="modal-header">
+                    <h3>Create Custom Identity</h3>
+                    <span class="modal-close" onclick="closeDupBulkIdentityModal()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <p style="margin-bottom: 15px; color: #666;">
+                        Creating identity for: <strong>${accountName}</strong>
+                    </p>
+                    <div class="form-group">
+                        <label>Display Name <span style="color: #ef4444;">*</span></label>
+                        <input type="text" id="dup-bulk-identity-name" placeholder="Enter display name (e.g., Your Brand)" maxlength="50">
+                        <small style="color: #64748b; font-size: 11px;">This name will appear on your ads</small>
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label>Profile Logo <span style="color: #94a3b8;">(optional)</span></label>
+                        <div class="logo-upload-area" style="border: 2px dashed #e2e8f0; border-radius: 8px; padding: 20px; text-align: center; cursor: pointer;" onclick="document.getElementById('dup-bulk-identity-logo-input').click()">
+                            <input type="file" id="dup-bulk-identity-logo-input" accept="image/*" style="display: none;" onchange="previewDupBulkIdentityLogo(this)">
+                            <div id="dup-bulk-identity-logo-placeholder">
+                                <span style="font-size: 32px;">📷</span>
+                                <p style="margin: 10px 0 0; color: #64748b; font-size: 13px;">Click to upload logo</p>
+                                <p style="margin: 5px 0 0; color: #94a3b8; font-size: 11px;">Recommended: 100x100px, max 5MB</p>
+                            </div>
+                            <div id="dup-bulk-identity-logo-preview" style="display: none;">
+                                <img id="dup-bulk-identity-logo-img" style="max-width: 100px; max-height: 100px; border-radius: 50%;">
+                            </div>
+                        </div>
+                        <button type="button" id="dup-bulk-identity-logo-remove" style="display: none; margin-top: 10px; padding: 5px 10px; font-size: 12px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;" onclick="removeDupBulkIdentityLogo()">Remove Logo</button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="closeDupBulkIdentityModal()">Cancel</button>
+                    <button class="btn-primary" onclick="createDupBulkIdentity('${advertiserId}')">Create Identity</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal if any
+    const existing = document.getElementById('dup-bulk-identity-modal');
+    if (existing) existing.remove();
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    dupBulkIdentityLogoFile = null;
+}
+
+function closeDupBulkIdentityModal() {
+    const modal = document.getElementById('dup-bulk-identity-modal');
+    if (modal) modal.remove();
+    dupBulkIdentityLogoFile = null;
+}
+
+function previewDupBulkIdentityLogo(input) {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+
+        if (!file.type.startsWith('image/')) {
+            showToast('Please select an image file', 'error');
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('Image too large. Maximum size is 5MB', 'error');
+            return;
+        }
+
+        dupBulkIdentityLogoFile = file;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('dup-bulk-identity-logo-img').src = e.target.result;
+            document.getElementById('dup-bulk-identity-logo-preview').style.display = 'block';
+            document.getElementById('dup-bulk-identity-logo-placeholder').style.display = 'none';
+            document.getElementById('dup-bulk-identity-logo-remove').style.display = 'inline-block';
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function removeDupBulkIdentityLogo() {
+    dupBulkIdentityLogoFile = null;
+    document.getElementById('dup-bulk-identity-logo-input').value = '';
+    document.getElementById('dup-bulk-identity-logo-preview').style.display = 'none';
+    document.getElementById('dup-bulk-identity-logo-placeholder').style.display = 'block';
+    document.getElementById('dup-bulk-identity-logo-remove').style.display = 'none';
+}
+
+async function createDupBulkIdentity(advertiserId) {
+    const displayName = document.getElementById('dup-bulk-identity-name').value.trim();
+    if (!displayName) {
+        showToast('Please enter a display name', 'error');
+        return;
+    }
+
+    showToast('Creating identity...', 'info');
+
+    try {
+        let profileImageId = null;
+
+        // Upload logo if provided
+        if (dupBulkIdentityLogoFile) {
+            showToast('Uploading logo...', 'info');
+
+            const formData = new FormData();
+            formData.append('image', dupBulkIdentityLogoFile);
+            formData.append('advertiser_id', advertiserId);
+
+            const uploadResponse = await fetch('api.php?action=upload_image', {
+                method: 'POST',
+                body: formData
+            });
+
+            const uploadResult = await uploadResponse.json();
+
+            if (uploadResult.success && uploadResult.data?.image_id) {
+                profileImageId = uploadResult.data.image_id;
+            }
+        }
+
+        const params = {
+            target_advertiser_id: advertiserId,
+            display_name: displayName
+        };
+        if (profileImageId) {
+            params.profile_image_id = profileImageId;
+        }
+
+        const result = await apiRequest('create_identity_for_account', params);
+
+        if (result.success && result.identity_id) {
+            closeDupBulkIdentityModal();
+            showToast('Identity created successfully!', 'success');
+
+            // Add new identity to assets
+            if (!duplicateState.bulkAccountAssets[advertiserId]) {
+                duplicateState.bulkAccountAssets[advertiserId] = { identities: [], pixels: [], videos: [] };
+            }
+            if (!duplicateState.bulkAccountAssets[advertiserId].identities) {
+                duplicateState.bulkAccountAssets[advertiserId].identities = [];
+            }
+
+            duplicateState.bulkAccountAssets[advertiserId].identities.unshift({
+                identity_id: result.identity_id,
+                display_name: displayName,
+                identity_name: displayName,
+                identity_type: 'CUSTOMIZED_USER'
+            });
+
+            // Auto-select the new identity
+            const selectedAccount = duplicateState.bulkSelectedAccounts.find(a => a.advertiser_id === advertiserId);
+            if (selectedAccount) {
+                selectedAccount.identity_id = result.identity_id;
+            }
+
+            // Re-render to show new identity
+            renderDuplicateBulkAccounts();
+        } else {
+            showToast(result.message || 'Failed to create identity', 'error');
+        }
+    } catch (error) {
+        showToast('Error creating identity: ' + error.message, 'error');
+    }
+}
+
 // Execute bulk duplicate to multiple accounts
 async function executeBulkDuplicateCampaign() {
     const selectedAccounts = duplicateState.bulkSelectedAccounts;
@@ -8921,6 +9121,7 @@ async function executeBulkDuplicateCampaign() {
                 budget: account.budget,
                 pixel_id: account.pixel_id,
                 identity_id: account.identity_id,
+                portfolio_id: account.portfolio_id || '', // CTA Portfolio (optional)
                 video_ids: videoIds, // Send array of video IDs
                 video_id: videoIds[0] || '', // Primary video for backward compatibility
                 landing_page_url: landingUrl,
@@ -8932,13 +9133,13 @@ async function executeBulkDuplicateCampaign() {
                 budget_mode: 'BUDGET_MODE_DAY',
                 // Ad data
                 ad_name: ad?.ad_name || account.campaign_name + ' - Ad',
-                ad_texts: ad?.ad_texts || ad?.ad_text_list || ['Learn More'],
+                ad_texts: account.ad_text ? [account.ad_text] : (ad?.ad_texts || ad?.ad_text_list || ['Learn More']),
                 call_to_action: ad?.call_to_action || 'LEARN_MORE'
             };
 
             addLog('request', `Bulk duplicate to ${account.advertiser_id}`, duplicateData);
 
-            const result = await apiRequest('bulk_duplicate_campaign', duplicateData);
+            const result = await apiRequest('bulk_duplicate_campaign', duplicateData, true); // Use main api.php
 
             if (result.success) {
                 successCount++;
