@@ -1253,14 +1253,13 @@ async function handleSmartMediaUpload(event) {
     event.target.value = '';
 }
 
-// Helper function to upload a single media file with timeout and retry
-async function uploadSingleMediaFile(file, index, total, retryCount = 0) {
+// Helper function to upload a single media file - NO AUTO-RETRY to prevent duplicates
+async function uploadSingleMediaFile(file, index, total) {
     const itemId = `smart-upload-item-${index}`;
-    const maxRetries = 2;
     const isVideo = file.type.startsWith('video/');
-    const uploadTimeout = isVideo ? 120000 : 60000; // 2 min for video, 1 min for image
+    const uploadTimeout = isVideo ? 300000 : 120000; // 5 min for video, 2 min for image
 
-    updateSmartUploadItemStatus(itemId, 'uploading', retryCount > 0 ? `Retrying (${retryCount})...` : 'Uploading...');
+    updateSmartUploadItemStatus(itemId, 'uploading', 'Uploading...');
 
     // Add timestamp to filename
     const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
@@ -1268,14 +1267,14 @@ async function uploadSingleMediaFile(file, index, total, retryCount = 0) {
     const lastDotIndex = originalName.lastIndexOf('.');
     const nameWithoutExt = lastDotIndex > 0 ? originalName.slice(0, lastDotIndex) : originalName;
     const extension = lastDotIndex > 0 ? originalName.slice(lastDotIndex) : '';
-    const newFileName = retryCount === 0 ? `${nameWithoutExt}_${timestamp}${extension}` : `${nameWithoutExt}_${timestamp}_r${retryCount}${extension}`;
+    const newFileName = `${nameWithoutExt}_${timestamp}${extension}`;
 
-    // Use FormData with original file, just set the filename (avoids memory-intensive File copy)
+    // Use FormData with original file, just set the filename
     const formData = new FormData();
     formData.append(isVideo ? 'video' : 'image', file, newFileName);
 
     try {
-        addLog('request', `Uploading ${isVideo ? 'video' : 'image'}: ${newFileName}${retryCount > 0 ? ` (retry ${retryCount})` : ''}`);
+        addLog('request', `Uploading ${isVideo ? 'video' : 'image'}: ${newFileName}`);
 
         // Create AbortController for timeout
         const controller = new AbortController();
@@ -1343,25 +1342,16 @@ async function uploadSingleMediaFile(file, index, total, retryCount = 0) {
 
             return { success: true };
         } else {
-            throw new Error(result.message || 'Upload failed');
+            throw new Error(result.message || 'Upload may have succeeded - check library');
         }
     } catch (error) {
-        const errorMsg = error.name === 'AbortError' ? 'Upload timeout' : error.message;
+        const errorMsg = error.name === 'AbortError'
+            ? 'Timeout - video may have uploaded, check library'
+            : error.message;
         addLog('error', `Failed: ${file.name} - ${errorMsg}`);
 
-        // Retry if we haven't exceeded max retries
-        if (retryCount < maxRetries) {
-            addLog('info', `Retrying upload for ${file.name} (attempt ${retryCount + 1}/${maxRetries})`);
-            updateSmartUploadItemStatus(itemId, 'uploading', `Retry ${retryCount + 1}...`);
-
-            // Wait before retrying (exponential backoff: 2s, 4s)
-            await new Promise(resolve => setTimeout(resolve, 2000 * (retryCount + 1)));
-
-            return uploadSingleMediaFile(file, index, total, retryCount + 1);
-        }
-
-        // Max retries exceeded
-        updateSmartUploadItemStatus(itemId, 'failed', `✗ ${errorMsg}`);
+        // NO AUTO-RETRY to prevent duplicates - just fail and let user manually retry
+        updateSmartUploadItemStatus(itemId, 'failed', `✗ Failed`);
         return { success: false, error: errorMsg };
     }
 }
@@ -3963,113 +3953,82 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
     let completed = 0;
     let failed = 0;
     const uploadedVideos = [];
-    const maxRetries = 2;
 
-    // Upload files sequentially with retry logic
+    // Upload files sequentially - NO AUTO-RETRY to prevent duplicates
     for (const file of validFiles) {
-        let retryCount = 0;
-        let uploadSuccess = false;
+        try {
+            const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+            const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
+            const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
+            const newFileName = `${baseName}_${timestamp}${ext}`;
 
-        while (retryCount <= maxRetries && !uploadSuccess) {
+            const formData = new FormData();
+            formData.append('video', file, newFileName);
+            formData.append('target_advertiser_id', advertiserId);
+
+            if (statusEl) {
+                statusEl.textContent = `Uploading ${file.name}...`;
+            }
+
+            // Use dedicated endpoint for cross-account uploads with 5 min timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
+
+            const response = await fetch('api.php?action=upload_video_to_advertiser', {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            const responseText = await response.text();
+            let result;
             try {
-                const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
-                const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
-                const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
-                const retryStr = retryCount > 0 ? `_r${retryCount}` : '';
-                const newFileName = `${baseName}_${timestamp}${retryStr}${ext}`;
-
-                const formData = new FormData();
-                formData.append('video', file, newFileName);
-                formData.append('target_advertiser_id', advertiserId); // Use dedicated endpoint
-
-                if (statusEl) {
-                    statusEl.textContent = retryCount > 0
-                        ? `Retrying ${file.name} (${retryCount}/${maxRetries})...`
-                        : `Uploading ${file.name}...`;
-                }
-
-                // Use dedicated endpoint for cross-account uploads with timeout
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
-
-                const response = await fetch('api.php?action=upload_video_to_advertiser', {
-                    method: 'POST',
-                    body: formData,
-                    signal: controller.signal
-                });
-
-                clearTimeout(timeoutId);
-
-                const responseText = await response.text();
-                let result;
-                try {
-                    result = JSON.parse(responseText);
-                } catch (e) {
-                    // Try to extract JSON from response
-                    const jsonMatch = responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
-                    if (jsonMatch) {
-                        result = JSON.parse(jsonMatch[0]);
-                    } else {
-                        console.error('Failed to parse upload response:', responseText);
-                        throw new Error('Invalid server response');
-                    }
-                }
-
-                console.log(`[Bulk Upload] Response for ${file.name} (attempt ${retryCount + 1}):`, result);
-
-                if (result.success && result.data?.video_id) {
-                    completed++;
-                    uploadSuccess = true;
-                    // Create blob URL for immediate preview
-                    const previewUrl = URL.createObjectURL(file);
-                    uploadedVideos.push({
-                        video_id: result.data.video_id,
-                        file_name: newFileName,
-                        video_cover_url: previewUrl,
-                        preview_url: previewUrl,
-                        type: 'video',
-                        is_new: true
-                    });
-                    addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
-                    console.log(`[Bulk Upload] Success - video_id: ${result.data.video_id}`);
+                result = JSON.parse(responseText);
+            } catch (e) {
+                const jsonMatch = responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
+                if (jsonMatch) {
+                    result = JSON.parse(jsonMatch[0]);
                 } else {
-                    // Build detailed error message
-                    let errorMsg = result.message || result.error || 'Unknown error';
-                    if (result.code && result.code !== 0) {
-                        errorMsg = `[Code ${result.code}] ${errorMsg}`;
-                    }
-
-                    // If this was the last retry, mark as failed
-                    if (retryCount >= maxRetries) {
-                        failed++;
-                        console.error(`[Bulk Upload] Failed for ${file.name} after ${maxRetries + 1} attempts:`, result);
-                        addLog('error', `Failed to upload ${file.name}: ${errorMsg}`);
-                        if (validFiles.length === 1) {
-                            showToast(`Upload failed: ${errorMsg}`, 'error');
-                        }
-                    } else {
-                        // Retry
-                        retryCount++;
-                        addLog('info', `Retrying upload for ${file.name} (attempt ${retryCount + 1})`);
-                        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
-                        continue;
-                    }
-                }
-            } catch (error) {
-                const errorMsg = error.name === 'AbortError' ? 'Upload timeout' : error.message;
-
-                if (retryCount >= maxRetries) {
-                    failed++;
-                    console.error(`[Bulk Upload] Exception for ${file.name}:`, error);
-                    addLog('error', `Error uploading ${file.name}: ${errorMsg}`);
-                } else {
-                    retryCount++;
-                    addLog('info', `Retrying upload for ${file.name} after error (attempt ${retryCount + 1})`);
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    continue;
+                    console.error('Failed to parse upload response:', responseText);
+                    throw new Error('Invalid server response');
                 }
             }
-            break; // Exit retry loop on success or final failure
+
+            console.log(`[Bulk Upload] Response for ${file.name}:`, result);
+
+            if (result.success && result.data?.video_id) {
+                completed++;
+                const previewUrl = URL.createObjectURL(file);
+                uploadedVideos.push({
+                    video_id: result.data.video_id,
+                    file_name: newFileName,
+                    video_cover_url: previewUrl,
+                    preview_url: previewUrl,
+                    type: 'video',
+                    is_new: true
+                });
+                addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
+                console.log(`[Bulk Upload] Success - video_id: ${result.data.video_id}`);
+            } else {
+                // Upload failed - NO retry to prevent duplicates
+                failed++;
+                let errorMsg = result.message || result.error || 'Upload failed - check library';
+                console.error(`[Bulk Upload] Failed for ${file.name}:`, result);
+                addLog('error', `Failed to upload ${file.name}: ${errorMsg}`);
+                if (validFiles.length === 1) {
+                    showToast(`Upload failed: ${errorMsg}`, 'error');
+                }
+            }
+        } catch (error) {
+            // NO retry to prevent duplicates
+            failed++;
+            const errorMsg = error.name === 'AbortError'
+                ? 'Timeout - video may have uploaded, check library'
+                : error.message;
+            console.error(`[Bulk Upload] Exception for ${file.name}:`, error);
+            addLog('error', `Error uploading ${file.name}: ${errorMsg}`);
         }
 
         // Update progress
@@ -4267,103 +4226,79 @@ async function handlePickerVideoUpload(event) {
     let failed = 0;
     const uploadedVideos = [];
 
-    // Upload files sequentially with retry
+    // Upload files sequentially - NO AUTO-RETRY to prevent duplicates
     for (const file of validFiles) {
-        let retryCount = 0;
-        const maxRetries = 2;
-        let uploadSuccess = false;
+        try {
+            const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+            const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
+            const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
+            const newFileName = `${baseName}_${timestamp}${ext}`;
 
-        while (retryCount <= maxRetries && !uploadSuccess) {
+            const formData = new FormData();
+            formData.append('video', file, newFileName);
+            formData.append('target_advertiser_id', advertiserId);
+
+            if (statusEl) {
+                statusEl.textContent = `Uploading ${file.name}...`;
+            }
+
+            // Use dedicated endpoint with 5 min timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 300000);
+
+            const response = await fetch('api.php?action=upload_video_to_advertiser', {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            const responseText = await response.text();
+            let result;
             try {
-                const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
-                const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
-                const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
-                const retryStr = retryCount > 0 ? `_r${retryCount}` : '';
-                const newFileName = `${baseName}_${timestamp}${retryStr}${ext}`;
-
-                const formData = new FormData();
-                formData.append('video', file, newFileName);
-                formData.append('target_advertiser_id', advertiserId); // Use dedicated endpoint
-
-                if (statusEl) {
-                    statusEl.textContent = retryCount > 0
-                        ? `Retrying ${file.name}...`
-                        : `Uploading ${file.name}...`;
-                }
-
-                // Use dedicated endpoint with timeout
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 120000);
-
-                const response = await fetch('api.php?action=upload_video_to_advertiser', {
-                    method: 'POST',
-                    body: formData,
-                    signal: controller.signal
-                });
-
-                clearTimeout(timeoutId);
-
-                const responseText = await response.text();
-                let result;
-                try {
-                    result = JSON.parse(responseText);
-                } catch (e) {
-                    const jsonMatch = responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
-                    if (jsonMatch) {
-                        result = JSON.parse(jsonMatch[0]);
-                    } else {
-                        throw new Error('Invalid server response');
-                    }
-                }
-
-                console.log(`[Picker Upload] Response for ${file.name} (attempt ${retryCount + 1}):`, result);
-
-                if (result.success && result.data?.video_id) {
-                    completed++;
-                    uploadSuccess = true;
-                    const previewUrl = URL.createObjectURL(file);
-                    uploadedVideos.push({
-                        video_id: result.data.video_id,
-                        file_name: newFileName,
-                        video_cover_url: previewUrl,
-                        preview_url: previewUrl,
-                        type: 'video',
-                        is_new: true
-                    });
-                    addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
+                result = JSON.parse(responseText);
+            } catch (e) {
+                const jsonMatch = responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
+                if (jsonMatch) {
+                    result = JSON.parse(jsonMatch[0]);
                 } else {
-                    if (retryCount >= maxRetries) {
-                        failed++;
-                        let errorMsg = result.message || result.error || 'Unknown error';
-                        if (result.code && result.code !== 0) {
-                            errorMsg = `[Code ${result.code}] ${errorMsg}`;
-                        }
-                        console.error(`[Picker Upload] Failed:`, result);
-                        addLog('error', `Failed to upload ${file.name}: ${errorMsg}`);
-                        if (validFiles.length === 1) {
-                            showToast(`Upload failed: ${errorMsg}`, 'error');
-                        }
-                    } else {
-                        retryCount++;
-                        addLog('info', `Retrying upload for ${file.name} (attempt ${retryCount + 1})`);
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                        continue;
-                    }
-                }
-            } catch (error) {
-                const errorMsg = error.name === 'AbortError' ? 'Upload timeout' : error.message;
-                if (retryCount >= maxRetries) {
-                    failed++;
-                    console.error(`[Picker Upload] Exception:`, error);
-                    addLog('error', `Error uploading ${file.name}: ${errorMsg}`);
-                } else {
-                    retryCount++;
-                    addLog('info', `Retrying upload for ${file.name} after error`);
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    continue;
+                    throw new Error('Invalid server response');
                 }
             }
-            break; // Exit retry loop on success or final failure
+
+            console.log(`[Picker Upload] Response for ${file.name}:`, result);
+
+            if (result.success && result.data?.video_id) {
+                completed++;
+                const previewUrl = URL.createObjectURL(file);
+                uploadedVideos.push({
+                    video_id: result.data.video_id,
+                    file_name: newFileName,
+                    video_cover_url: previewUrl,
+                    preview_url: previewUrl,
+                    type: 'video',
+                    is_new: true
+                });
+                addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
+            } else {
+                // Failed - NO retry to prevent duplicates
+                failed++;
+                let errorMsg = result.message || result.error || 'Upload failed - check library';
+                console.error(`[Picker Upload] Failed:`, result);
+                addLog('error', `Failed to upload ${file.name}: ${errorMsg}`);
+                if (validFiles.length === 1) {
+                    showToast(`Upload failed: ${errorMsg}`, 'error');
+                }
+            }
+        } catch (error) {
+            // NO retry to prevent duplicates
+            failed++;
+            const errorMsg = error.name === 'AbortError'
+                ? 'Timeout - video may have uploaded, check library'
+                : error.message;
+            console.error(`[Picker Upload] Exception:`, error);
+            addLog('error', `Error uploading ${file.name}: ${errorMsg}`);
         }
 
         // Update progress
@@ -10598,35 +10533,39 @@ async function handleBulkVideoUpload(event) {
     event.target.value = '';
 }
 
-// Upload a single video as part of bulk upload with retry logic and progress tracking
-async function uploadSingleVideoInBulk(file, index, retryCount = 0) {
+// Upload a single video as part of bulk upload - NO AUTO-RETRY to prevent duplicates
+async function uploadSingleVideoInBulk(file, index) {
     const itemId = `upload-item-${index}`;
-    const maxRetries = 2;
-    const uploadTimeout = 120000; // 2 minutes timeout per file
+    const uploadTimeout = 300000; // 5 minutes timeout for large videos
 
-    updateUploadItemStatus(itemId, 'uploading', retryCount > 0 ? `Retrying (${retryCount})...` : 'Uploading...', 0);
+    updateUploadItemStatus(itemId, 'uploading', 'Uploading...', 0);
 
-    // Add timestamp to filename (only on first attempt)
+    // Add timestamp to filename
     const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
     const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
     const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
-    const newFileName = retryCount === 0 ? `${baseName}_${timestamp}${ext}` : `${baseName}_${timestamp}_r${retryCount}${ext}`;
+    const newFileName = `${baseName}_${timestamp}${ext}`;
 
     // Use FormData with original file, just set the filename
     const formData = new FormData();
     formData.append('video', file, newFileName);
 
-    addLog('request', `Uploading: ${newFileName}${retryCount > 0 ? ` (retry ${retryCount})` : ''}`);
+    addLog('request', `Uploading: ${newFileName}`);
 
     return new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
         let timeoutId;
+        let uploadComplete = false; // Track if upload bytes sent successfully
 
         // Progress tracking
         xhr.upload.addEventListener('progress', (e) => {
             if (e.lengthComputable) {
                 const percent = Math.round((e.loaded / e.total) * 100);
                 updateUploadItemStatus(itemId, 'uploading', `${percent}%`, percent);
+                if (percent === 100) {
+                    uploadComplete = true;
+                    updateUploadItemStatus(itemId, 'uploading', 'Processing...', 100);
+                }
             }
         });
 
@@ -10666,53 +10605,52 @@ async function uploadSingleVideoInBulk(file, index, retryCount = 0) {
                         updateBulkUploadProgress();
                         resolve({ success: true, video_id: result.data.video_id });
                     } else {
-                        handleUploadError(result.message || 'Upload failed');
+                        // Failed - but don't retry automatically
+                        const errorMsg = result.message || 'Upload failed - check if video appears in library';
+                        handleUploadFailed(errorMsg);
                     }
                 } catch (e) {
-                    handleUploadError('Invalid server response');
+                    handleUploadFailed('Invalid server response - video may still have uploaded');
                 }
             } else {
-                handleUploadError(`HTTP error: ${xhr.status}`);
+                handleUploadFailed(`Server error (${xhr.status}) - video may still have uploaded`);
             }
         });
 
-        // Error handler
+        // Error handler - NO retry, just fail
         xhr.addEventListener('error', () => {
             clearTimeout(timeoutId);
-            handleUploadError('Network error');
+            if (uploadComplete) {
+                // Upload bytes sent but no response - video likely uploaded
+                handleUploadFailed('Connection lost after upload - check library');
+            } else {
+                handleUploadFailed('Network error - please try again');
+            }
         });
 
-        // Abort handler (timeout)
+        // Abort handler (timeout) - NO retry
         xhr.addEventListener('abort', () => {
             clearTimeout(timeoutId);
-            handleUploadError('Upload timeout');
+            if (uploadComplete) {
+                // File was sent, just waiting for response
+                handleUploadFailed('Timeout waiting for response - video may have uploaded, check library');
+            } else {
+                handleUploadFailed('Upload timeout - please try again with smaller file');
+            }
         });
 
-        // Handle upload errors with retry logic
-        async function handleUploadError(errorMsg) {
+        // Handle upload failure - NO auto-retry to prevent duplicates
+        function handleUploadFailed(errorMsg) {
             addLog('error', `Failed: ${file.name} - ${errorMsg}`);
-
-            if (retryCount < maxRetries) {
-                addLog('info', `Retrying upload for ${file.name} (attempt ${retryCount + 1}/${maxRetries})`);
-                updateUploadItemStatus(itemId, 'uploading', `Retry ${retryCount + 1}...`, 0);
-
-                // Wait before retrying (exponential backoff: 2s, 4s)
-                await new Promise(r => setTimeout(r, 2000 * (retryCount + 1)));
-
-                const result = await uploadSingleVideoInBulk(file, index, retryCount + 1);
-                resolve(result);
-            } else {
-                // Max retries exceeded - store file reference for manual retry
-                bulkUploadState.failed++;
-                bulkUploadState.failedFiles = bulkUploadState.failedFiles || {};
-                bulkUploadState.failedFiles[index] = file;
-                updateUploadItemStatus(itemId, 'failed', `✗ ${errorMsg}`, 0);
-                updateBulkUploadProgress();
-                resolve({ success: false, error: errorMsg });
-            }
+            bulkUploadState.failed++;
+            bulkUploadState.failedFiles = bulkUploadState.failedFiles || {};
+            bulkUploadState.failedFiles[index] = file;
+            updateUploadItemStatus(itemId, 'failed', `✗ Failed`, 0);
+            updateBulkUploadProgress();
+            resolve({ success: false, error: errorMsg });
         }
 
-        // Set timeout
+        // Set timeout - 5 minutes for large videos
         timeoutId = setTimeout(() => {
             xhr.abort();
         }, uploadTimeout);
