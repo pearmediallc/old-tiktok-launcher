@@ -117,13 +117,34 @@ function logToFile($message) {
 }
 
 // Get current datetime in EST timezone (America/New_York)
-// All TikTok campaigns are set in EST timezone for consistency
+// Used for display purposes and local time references
 function getESTDateTime($modifier = null) {
     $est = new DateTimeZone('America/New_York');
     $dt = new DateTime('now', $est);
     if ($modifier) {
         $dt->modify($modifier);
     }
+    return $dt->format('Y-m-d H:i:s');
+}
+
+// Get current datetime in UTC timezone
+// TikTok API requires schedule times in UTC+0 format
+function getUTCDateTime($modifier = null) {
+    $utc = new DateTimeZone('UTC');
+    $dt = new DateTime('now', $utc);
+    if ($modifier) {
+        $dt->modify($modifier);
+    }
+    return $dt->format('Y-m-d H:i:s');
+}
+
+// Convert EST time string to UTC
+// Use when user provides time in EST (local time) and we need to send to TikTok in UTC
+function convertESTtoUTC($estTimeString) {
+    $est = new DateTimeZone('America/New_York');
+    $utc = new DateTimeZone('UTC');
+    $dt = new DateTime($estTimeString, $est);
+    $dt->setTimezone($utc);
     return $dt->format('Y-m-d H:i:s');
 }
 
@@ -439,9 +460,18 @@ try {
                 ? $_SESSION['oauth_access_token']
                 : ($_ENV['TIKTOK_ACCESS_TOKEN'] ?? '');
 
-            // Schedule times - use EST timezone for consistency
-            $scheduleStartTime = $data['schedule_start_time'] ?? getESTDateTime('+1 hour');
-            $scheduleEndTime = $data['schedule_end_time'] ?? getESTDateTime('+1 year');
+            // Schedule times - TikTok API requires UTC+0 format
+            // If user provides time (in EST), convert to UTC; otherwise use current UTC time
+            if (!empty($data['schedule_start_time'])) {
+                $scheduleStartTime = convertESTtoUTC($data['schedule_start_time']);
+            } else {
+                $scheduleStartTime = getUTCDateTime();  // Start now in UTC
+            }
+            if (!empty($data['schedule_end_time'])) {
+                $scheduleEndTime = convertESTtoUTC($data['schedule_end_time']);
+            } else {
+                $scheduleEndTime = getUTCDateTime('+1 year');
+            }
 
             try {
                 // Build media_info_list for Spark Ads (TikTok posts)
@@ -573,8 +603,8 @@ try {
                 'budget_mode' => 'BUDGET_MODE_INFINITE', // Default - budget set at ad group level
                 'budget_optimize_on' => false,
                 'schedule_type' => 'SCHEDULE_START_END',
-                'schedule_start_time' => getESTDateTime(),
-                'schedule_end_time' => getESTDateTime('+1 year'),
+                'schedule_start_time' => getUTCDateTime(),  // UTC for TikTok API
+                'schedule_end_time' => getUTCDateTime('+1 year'),
                 'optimization_goal' => 'LEAD_GENERATION',
                 'bid_type' => 'BID_TYPE_NO_BID',
                 'billing_event' => 'OCPM',
@@ -713,7 +743,7 @@ try {
                 'budget_mode' => 'BUDGET_MODE_DAY',
                 'budget' => floatval($data['budget'] ?? 50),
                 'schedule_type' => 'SCHEDULE_FROM_NOW',
-                // Note: schedule_start_time added below only if specified (for immediate start, omit it)
+                // schedule_start_time is REQUIRED - added below in UTC format
 
                 // Bidding for Smart+
                 'bid_type' => 'BID_TYPE_CUSTOM',
@@ -726,12 +756,15 @@ try {
                 'attribution_event_count' => 'EVERY'
             ];
 
-            // Only add schedule_start_time if specified (omit for immediate start)
+            // schedule_start_time is REQUIRED - send in UTC format
             if (!empty($data['schedule_start_time'])) {
-                $params['schedule_start_time'] = $data['schedule_start_time'];
-                logToFile("Scheduled start time: " . $data['schedule_start_time']);
+                // User provided time (in EST), convert to UTC
+                $params['schedule_start_time'] = convertESTtoUTC($data['schedule_start_time']);
+                logToFile("Scheduled start time (UTC): " . $params['schedule_start_time']);
             } else {
-                logToFile("No schedule_start_time - TikTok will start immediately");
+                // Start immediately - use current UTC time
+                $params['schedule_start_time'] = getUTCDateTime();
+                logToFile("Starting immediately with UTC time: " . $params['schedule_start_time']);
             }
             
             logToFile("=== SMART+ AD GROUP API CALL ===");
@@ -3721,20 +3754,20 @@ try {
 
             logToFile("Campaign created: " . $newCampaignId);
 
-            // Determine schedule based on input
+            // Determine schedule based on input - TikTok API requires UTC format
             $scheduleType = $data['schedule_type'] ?? 'start_now';
             if ($scheduleType === 'start_now') {
-                // Start now, run continuously (1 year)
-                $scheduleStartTime = getESTDateTime();
-                $scheduleEndTime = getESTDateTime('+1 year');
+                // Start now, run continuously (1 year) - use UTC
+                $scheduleStartTime = getUTCDateTime();
+                $scheduleEndTime = getUTCDateTime('+1 year');
             } else {
-                // Use provided dates
+                // Use provided dates (user provides in EST, convert to UTC)
                 $scheduleStartTime = !empty($data['schedule_start'])
-                    ? date('Y-m-d H:i:s', strtotime($data['schedule_start']))
-                    : getESTDateTime();
+                    ? convertESTtoUTC(date('Y-m-d H:i:s', strtotime($data['schedule_start'])))
+                    : getUTCDateTime();
                 $scheduleEndTime = !empty($data['schedule_end'])
-                    ? date('Y-m-d H:i:s', strtotime($data['schedule_end']))
-                    : getESTDateTime('+30 days');
+                    ? convertESTtoUTC(date('Y-m-d H:i:s', strtotime($data['schedule_end'])))
+                    : getUTCDateTime('+30 days');
             }
 
             // Create ad group in target account

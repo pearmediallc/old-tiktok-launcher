@@ -91,13 +91,34 @@ function generateRequestId() {
 }
 
 // Get current datetime in EST timezone (America/New_York)
-// All TikTok campaigns are set in EST timezone for consistency
+// Used for display purposes and local time references
 function getESTDateTime($modifier = null) {
     $est = new DateTimeZone('America/New_York');
     $dt = new DateTime('now', $est);
     if ($modifier) {
         $dt->modify($modifier);
     }
+    return $dt->format('Y-m-d H:i:s');
+}
+
+// Get current datetime in UTC timezone
+// TikTok API requires schedule times in UTC+0 format
+function getUTCDateTime($modifier = null) {
+    $utc = new DateTimeZone('UTC');
+    $dt = new DateTime('now', $utc);
+    if ($modifier) {
+        $dt->modify($modifier);
+    }
+    return $dt->format('Y-m-d H:i:s');
+}
+
+// Convert EST time string to UTC
+// Use when user provides time in EST (local time) and we need to send to TikTok in UTC
+function convertESTtoUTC($estTimeString) {
+    $est = new DateTimeZone('America/New_York');
+    $utc = new DateTimeZone('UTC');
+    $dt = new DateTime($estTimeString, $est);
+    $dt->setTimezone($utc);
     return $dt->format('Y-m-d H:i:s');
 }
 
@@ -928,26 +949,28 @@ switch ($action) {
         }
 
         // Schedule handling - support both continuous and scheduled options
+        // IMPORTANT: TikTok API requires schedule_start_time in UTC+0 format
+        // schedule_start_time is ALWAYS required - cannot be omitted
         $scheduleType = $data['schedule_type'] ?? 'SCHEDULE_FROM_NOW';
         $scheduleStart = null;
         $scheduleEnd = null;
 
         if ($scheduleType === 'SCHEDULE_START_END' && !empty($data['schedule_start_time']) && !empty($data['schedule_end_time'])) {
-            // User specified start and end times
-            $scheduleStart = $data['schedule_start_time'];
-            $scheduleEnd = $data['schedule_end_time'];
-            logSmartPlus("Using SCHEDULE_START_END: $scheduleStart to $scheduleEnd");
+            // User specified start and end times (provided in EST, convert to UTC for API)
+            $scheduleStart = convertESTtoUTC($data['schedule_start_time']);
+            $scheduleEnd = convertESTtoUTC($data['schedule_end_time']);
+            logSmartPlus("Using SCHEDULE_START_END: $scheduleStart to $scheduleEnd (UTC)");
         } elseif ($scheduleType === 'SCHEDULE_FROM_NOW' && !empty($data['schedule_start_time'])) {
             // User specified a future start time but wants to run continuously (no end time)
-            $scheduleStart = $data['schedule_start_time'];
-            logSmartPlus("Using SCHEDULE_FROM_NOW with scheduled start: $scheduleStart");
+            // Convert from EST to UTC
+            $scheduleStart = convertESTtoUTC($data['schedule_start_time']);
+            logSmartPlus("Using SCHEDULE_FROM_NOW with scheduled start: $scheduleStart (UTC)");
         } else {
             // Default: Run continuously from now (start immediately)
-            // For SCHEDULE_FROM_NOW without a specific start time, DON'T send schedule_start_time
-            // TikTok API will start the ad group immediately when schedule_start_time is omitted
+            // TikTok API REQUIRES schedule_start_time - send current UTC time
             $scheduleType = 'SCHEDULE_FROM_NOW';
-            $scheduleStart = null;  // Let TikTok start immediately
-            logSmartPlus("Using SCHEDULE_FROM_NOW - starting immediately (no schedule_start_time sent)");
+            $scheduleStart = getUTCDateTime();  // Current UTC time
+            logSmartPlus("Using SCHEDULE_FROM_NOW - starting now with UTC time: $scheduleStart");
         }
 
         $adgroupParams = [
@@ -968,10 +991,8 @@ switch ($action) {
             ]
         ];
 
-        // Only add schedule_start_time if specified (for SCHEDULE_FROM_NOW without it, TikTok starts immediately)
-        if ($scheduleStart !== null) {
-            $adgroupParams['schedule_start_time'] = $scheduleStart;
-        }
+        // schedule_start_time is REQUIRED - always add it (in UTC format)
+        $adgroupParams['schedule_start_time'] = $scheduleStart;
 
         // Add schedule_end_time only for SCHEDULE_START_END type
         if ($scheduleType === 'SCHEDULE_START_END' && $scheduleEnd) {
@@ -1383,8 +1404,8 @@ switch ($action) {
         // NOTE: Identity is NOT set at ad group level for Smart+
         // Identity is set at AD level
         logSmartPlus("Step 2: Creating Ad Group...");
-        // Use EST timezone for consistency - all campaigns use EST
-        $scheduleStart = getESTDateTime('+1 hour');
+        // TikTok API requires UTC+0 format for schedule times
+        $scheduleStart = getUTCDateTime();  // Start immediately in UTC
 
         $adgroupParams = [
             'advertiser_id' => $advertiserId,
@@ -2702,8 +2723,8 @@ switch ($action) {
                 logSmartPlus("Campaign created (DISABLED): $campaignId");
 
                 // 2. CREATE AD GROUP
-                // Use EST timezone for consistency - all campaigns use EST
-                $scheduleStart = getESTDateTime('+1 hour');
+                // TikTok API requires UTC+0 format for schedule times
+                $scheduleStart = getUTCDateTime();  // Start immediately in UTC
 
                 $adgroupParams = [
                     'advertiser_id' => $targetAdvertiserId,
