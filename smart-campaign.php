@@ -845,6 +845,9 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
             <button class="main-view-tab" id="tab-campaigns" onclick="switchMainView('campaigns')">
                 <span class="tab-icon">📋</span> My Campaigns
             </button>
+            <button class="main-view-tab" id="tab-media" onclick="switchMainView('media')">
+                <span class="tab-icon">🎬</span> Media Library
+            </button>
         </div>
 
         <!-- CREATE VIEW (existing functionality) -->
@@ -1981,6 +1984,65 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
 
                 <!-- Legacy Campaign Cards Container (hidden) -->
                 <div id="campaign-cards-container" style="display: none;">
+                </div>
+            </div>
+        </div>
+
+        <!-- MEDIA LIBRARY VIEW -->
+        <div id="media-view" style="display: none;">
+            <div class="campaigns-header">
+                <h2>🎬 Media Library</h2>
+                <div class="campaigns-actions">
+                    <input type="file" id="media-upload-input" accept="video/*" multiple style="display: none;" onchange="handleMediaLibraryUpload(event)">
+                    <button class="btn-primary" onclick="document.getElementById('media-upload-input').click()">
+                        📤 Upload Video
+                    </button>
+                    <button class="btn-secondary" onclick="refreshMediaLibrary()">🔄 Refresh</button>
+                </div>
+            </div>
+
+            <!-- Upload Progress -->
+            <div id="media-upload-progress" style="display: none; margin: 20px 0; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                    <span id="media-upload-title" style="font-weight: 600;">Uploading...</span>
+                    <span id="media-upload-count" style="color: #64748b;">0/0</span>
+                </div>
+                <div style="background: #e2e8f0; border-radius: 4px; height: 8px; overflow: hidden;">
+                    <div id="media-upload-bar" style="background: linear-gradient(90deg, #fe2c55, #25f4ee); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                </div>
+                <div id="media-upload-list" style="margin-top: 15px; max-height: 200px; overflow-y: auto;">
+                    <!-- Upload items will be rendered here -->
+                </div>
+            </div>
+
+            <!-- Media Library Stats -->
+            <div style="margin: 20px 0; padding: 15px 20px; background: linear-gradient(135deg, rgba(254, 44, 85, 0.05), rgba(37, 244, 238, 0.05)); border-radius: 12px; display: flex; gap: 30px; align-items: center;">
+                <div>
+                    <span style="font-size: 24px; font-weight: 700; color: #1e293b;" id="media-video-count">0</span>
+                    <span style="color: #64748b; margin-left: 5px;">Videos</span>
+                </div>
+                <div>
+                    <span style="font-size: 24px; font-weight: 700; color: #1e293b;" id="media-image-count">0</span>
+                    <span style="color: #64748b; margin-left: 5px;">Images</span>
+                </div>
+                <div style="margin-left: auto; color: #64748b; font-size: 13px;">
+                    Account: <strong id="media-account-id"><?php echo htmlspecialchars(substr($currentAdvertiserId, -6)); ?></strong>
+                </div>
+            </div>
+
+            <!-- Video Grid -->
+            <div style="margin-bottom: 20px;">
+                <h3 style="margin-bottom: 15px; color: #1e293b;">📹 Videos</h3>
+                <div id="media-video-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px;">
+                    <div style="text-align: center; padding: 40px; color: #94a3b8;">Loading videos...</div>
+                </div>
+            </div>
+
+            <!-- Image Grid -->
+            <div>
+                <h3 style="margin-bottom: 15px; color: #1e293b;">🖼️ Images</h3>
+                <div id="media-image-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px;">
+                    <div style="text-align: center; padding: 40px; color: #94a3b8;">Loading images...</div>
                 </div>
             </div>
         </div>

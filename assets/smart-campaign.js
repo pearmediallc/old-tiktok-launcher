@@ -6648,33 +6648,374 @@ async function switchAdAccount(advertiserId) {
     }
 }
 
-// Switch between Create and My Campaigns views
+// Switch between Create, My Campaigns, and Media Library views
 function switchMainView(view) {
     state.currentView = view;
 
     const createView = document.getElementById('create-view');
     const campaignsView = document.getElementById('campaigns-view');
+    const mediaView = document.getElementById('media-view');
     const tabCreate = document.getElementById('tab-create');
     const tabCampaigns = document.getElementById('tab-campaigns');
+    const tabMedia = document.getElementById('tab-media');
+
+    // Hide all views first
+    if (createView) createView.style.display = 'none';
+    if (campaignsView) campaignsView.style.display = 'none';
+    if (mediaView) mediaView.style.display = 'none';
+
+    // Remove active from all tabs
+    if (tabCreate) tabCreate.classList.remove('active');
+    if (tabCampaigns) tabCampaigns.classList.remove('active');
+    if (tabMedia) tabMedia.classList.remove('active');
 
     if (view === 'create') {
-        createView.style.display = 'block';
-        campaignsView.style.display = 'none';
-        tabCreate.classList.add('active');
-        tabCampaigns.classList.remove('active');
+        if (createView) createView.style.display = 'block';
+        if (tabCreate) tabCreate.classList.add('active');
     } else if (view === 'campaigns') {
-        createView.style.display = 'none';
-        campaignsView.style.display = 'block';
-        tabCreate.classList.remove('active');
-        tabCampaigns.classList.add('active');
+        if (campaignsView) campaignsView.style.display = 'block';
+        if (tabCampaigns) tabCampaigns.classList.add('active');
 
         // Load campaigns if not already loaded
         if (!state.campaignsLoaded) {
             loadCampaigns();
         }
+    } else if (view === 'media') {
+        if (mediaView) mediaView.style.display = 'block';
+        if (tabMedia) tabMedia.classList.add('active');
+
+        // Load media library
+        loadMediaLibraryView();
     }
 
     addLog('info', `Switched to ${view} view`);
+}
+
+// ============================================
+// MEDIA LIBRARY VIEW FUNCTIONS
+// ============================================
+
+// Media library view state
+let mediaLibraryState = {
+    videos: [],
+    images: [],
+    isLoading: false,
+    uploadQueue: [],
+    uploadCompleted: 0,
+    uploadFailed: 0,
+    uploadTotal: 0
+};
+
+// Load and display media library in the Media View tab
+async function loadMediaLibraryView(forceRefresh = false) {
+    if (mediaLibraryState.isLoading) return;
+
+    mediaLibraryState.isLoading = true;
+
+    const videoGrid = document.getElementById('media-video-grid');
+    const imageGrid = document.getElementById('media-image-grid');
+    const videoCount = document.getElementById('media-video-count');
+    const imageCount = document.getElementById('media-image-count');
+
+    // Show loading state
+    if (videoGrid) videoGrid.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8; grid-column: 1/-1;">Loading videos...</div>';
+    if (imageGrid) imageGrid.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8; grid-column: 1/-1;">Loading images...</div>';
+
+    try {
+        const [videosResult, imagesResult] = await Promise.all([
+            apiRequest('get_videos', { force_refresh: forceRefresh }),
+            apiRequest('get_images', { force_refresh: forceRefresh })
+        ]);
+
+        mediaLibraryState.videos = [];
+        mediaLibraryState.images = [];
+
+        if (videosResult.success && videosResult.data) {
+            mediaLibraryState.videos = videosResult.data.map(video => ({
+                video_id: video.video_id,
+                name: video.file_name || video.displayable_name || video.video_id,
+                thumbnail: video.video_cover_url || video.preview_url || '',
+                duration: video.duration || 0,
+                create_time: video.create_time || ''
+            }));
+        }
+
+        if (imagesResult.success && imagesResult.data) {
+            mediaLibraryState.images = imagesResult.data.map(image => ({
+                image_id: image.image_id,
+                name: image.file_name || image.image_id,
+                url: image.image_url || '',
+                create_time: image.create_time || ''
+            }));
+        }
+
+        // Update counts
+        if (videoCount) videoCount.textContent = mediaLibraryState.videos.length;
+        if (imageCount) imageCount.textContent = mediaLibraryState.images.length;
+
+        // Render grids
+        renderMediaVideoGrid();
+        renderMediaImageGrid();
+
+        addLog('success', `Loaded ${mediaLibraryState.videos.length} videos, ${mediaLibraryState.images.length} images`);
+
+    } catch (error) {
+        console.error('Error loading media library:', error);
+        addLog('error', `Failed to load media library: ${error.message}`);
+
+        if (videoGrid) videoGrid.innerHTML = '<div style="text-align: center; padding: 40px; color: #ef4444; grid-column: 1/-1;">Failed to load videos</div>';
+        if (imageGrid) imageGrid.innerHTML = '<div style="text-align: center; padding: 40px; color: #ef4444; grid-column: 1/-1;">Failed to load images</div>';
+    }
+
+    mediaLibraryState.isLoading = false;
+}
+
+// Render video grid in media library view
+function renderMediaVideoGrid() {
+    const grid = document.getElementById('media-video-grid');
+    if (!grid) return;
+
+    if (mediaLibraryState.videos.length === 0) {
+        grid.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8; grid-column: 1/-1;">No videos found. Upload some videos to get started!</div>';
+        return;
+    }
+
+    grid.innerHTML = mediaLibraryState.videos.map(video => `
+        <div class="media-library-item" style="border: 2px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: white; transition: all 0.2s;">
+            <div style="position: relative; height: 120px; background: #0f0f0f; display: flex; align-items: center; justify-content: center;">
+                ${video.thumbnail ?
+                    `<img src="${video.thumbnail}" alt="${video.name}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                     <div style="display: none; color: #64748b; font-size: 32px;">📹</div>` :
+                    `<div style="color: #64748b; font-size: 32px;">📹</div>`
+                }
+                ${video.duration ? `<span style="position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">${formatDuration(video.duration)}</span>` : ''}
+            </div>
+            <div style="padding: 10px;">
+                <div style="font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${video.name}">${video.name}</div>
+                <div style="font-size: 10px; color: #94a3b8; margin-top: 4px;">ID: ${video.video_id.slice(-8)}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Render image grid in media library view
+function renderMediaImageGrid() {
+    const grid = document.getElementById('media-image-grid');
+    if (!grid) return;
+
+    if (mediaLibraryState.images.length === 0) {
+        grid.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8; grid-column: 1/-1;">No images found</div>';
+        return;
+    }
+
+    grid.innerHTML = mediaLibraryState.images.map(image => `
+        <div class="media-library-item" style="border: 2px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: white; transition: all 0.2s;">
+            <div style="position: relative; height: 100px; background: #f8fafc; display: flex; align-items: center; justify-content: center;">
+                ${image.url ?
+                    `<img src="${image.url}" alt="${image.name}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                     <div style="display: none; color: #64748b; font-size: 28px;">🖼️</div>` :
+                    `<div style="color: #64748b; font-size: 28px;">🖼️</div>`
+                }
+            </div>
+            <div style="padding: 8px;">
+                <div style="font-size: 11px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${image.name}">${image.name}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Format duration in seconds to MM:SS
+function formatDuration(seconds) {
+    if (!seconds) return '';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Handle bulk video upload from media library view
+async function handleMediaLibraryUpload(event) {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    // Validate files
+    const validFiles = [];
+    const maxSize = 500 * 1024 * 1024; // 500MB
+
+    for (const file of files) {
+        if (!file.type.startsWith('video/')) {
+            showToast(`Skipped ${file.name}: Not a video file`, 'warning');
+            continue;
+        }
+        if (file.size > maxSize) {
+            showToast(`Skipped ${file.name}: Exceeds 500MB limit`, 'warning');
+            continue;
+        }
+        validFiles.push(file);
+    }
+
+    if (validFiles.length === 0) {
+        showToast('No valid video files selected', 'error');
+        event.target.value = '';
+        return;
+    }
+
+    // Initialize upload state
+    mediaLibraryState.uploadQueue = validFiles;
+    mediaLibraryState.uploadCompleted = 0;
+    mediaLibraryState.uploadFailed = 0;
+    mediaLibraryState.uploadTotal = validFiles.length;
+
+    // Show progress UI
+    showMediaUploadProgress();
+
+    // Upload files sequentially (could do parallel but sequential is more reliable)
+    for (let i = 0; i < validFiles.length; i++) {
+        await uploadMediaVideo(validFiles[i], i);
+    }
+
+    // Complete
+    finishMediaUpload();
+
+    // Clear file input
+    event.target.value = '';
+}
+
+// Show upload progress UI
+function showMediaUploadProgress() {
+    const container = document.getElementById('media-upload-progress');
+    const list = document.getElementById('media-upload-list');
+    const countEl = document.getElementById('media-upload-count');
+
+    if (container) container.style.display = 'block';
+    if (countEl) countEl.textContent = `0/${mediaLibraryState.uploadTotal}`;
+
+    // Create item for each file
+    if (list) {
+        list.innerHTML = mediaLibraryState.uploadQueue.map((file, i) => `
+            <div class="upload-item" id="media-upload-item-${i}" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #f8fafc; border-radius: 6px; margin-bottom: 6px; font-size: 13px;">
+                <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${file.name}</span>
+                <span style="color: #64748b; font-size: 12px;">${(file.size / 1024 / 1024).toFixed(1)}MB</span>
+                <span class="upload-status" style="font-weight: 500; padding: 2px 8px; border-radius: 4px; font-size: 11px; background: #f1f5f9; color: #64748b;">Pending</span>
+            </div>
+        `).join('');
+    }
+}
+
+// Upload single video
+async function uploadMediaVideo(file, index) {
+    const itemId = `media-upload-item-${index}`;
+    updateMediaUploadStatus(itemId, 'uploading', 'Uploading...', '#dbeafe', '#1d4ed8');
+
+    // Add timestamp to filename
+    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+    const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
+    const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
+    const newFileName = `${baseName}_${timestamp}${ext}`;
+
+    const renamedFile = new File([file], newFileName, { type: file.type });
+    const formData = new FormData();
+    formData.append('video', renamedFile);
+
+    try {
+        addLog('info', `Uploading video: ${newFileName}`);
+
+        const response = await fetch('api.php?action=upload_video', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+        console.log('Upload response:', result);
+
+        if (result.success && result.data?.video_id) {
+            mediaLibraryState.uploadCompleted++;
+            updateMediaUploadStatus(itemId, 'success', '✓ Uploaded', '#dcfce7', '#16a34a');
+            addLog('success', `Video uploaded: ${result.data.video_id}`);
+
+            // Add to local state immediately
+            mediaLibraryState.videos.unshift({
+                video_id: result.data.video_id,
+                name: newFileName,
+                thumbnail: URL.createObjectURL(file),
+                duration: 0,
+                create_time: new Date().toISOString()
+            });
+
+            updateMediaUploadProgress();
+            return { success: true, video_id: result.data.video_id };
+        } else {
+            throw new Error(result.message || 'Upload failed - no video ID returned');
+        }
+    } catch (error) {
+        mediaLibraryState.uploadFailed++;
+        updateMediaUploadStatus(itemId, 'failed', `✗ Failed`, '#fee2e2', '#dc2626');
+        addLog('error', `Upload failed for ${file.name}: ${error.message}`);
+        updateMediaUploadProgress();
+        return { success: false, error: error.message };
+    }
+}
+
+// Update single upload item status
+function updateMediaUploadStatus(itemId, status, text, bgColor, textColor) {
+    const item = document.getElementById(itemId);
+    if (!item) return;
+
+    const statusEl = item.querySelector('.upload-status');
+    if (statusEl) {
+        statusEl.textContent = text;
+        statusEl.style.background = bgColor;
+        statusEl.style.color = textColor;
+    }
+}
+
+// Update overall upload progress
+function updateMediaUploadProgress() {
+    const completed = mediaLibraryState.uploadCompleted + mediaLibraryState.uploadFailed;
+    const total = mediaLibraryState.uploadTotal;
+    const percent = Math.round((completed / total) * 100);
+
+    const countEl = document.getElementById('media-upload-count');
+    const barEl = document.getElementById('media-upload-bar');
+
+    if (countEl) countEl.textContent = `${completed}/${total}`;
+    if (barEl) barEl.style.width = `${percent}%`;
+}
+
+// Finish bulk upload
+function finishMediaUpload() {
+    const { uploadCompleted, uploadFailed, uploadTotal } = mediaLibraryState;
+
+    if (uploadFailed === 0) {
+        showToast(`Successfully uploaded ${uploadCompleted} video${uploadCompleted > 1 ? 's' : ''}!`, 'success');
+    } else if (uploadCompleted > 0) {
+        showToast(`Uploaded ${uploadCompleted}/${uploadTotal} videos (${uploadFailed} failed)`, 'warning');
+    } else {
+        showToast(`Failed to upload all ${uploadTotal} videos`, 'error');
+    }
+
+    // Update video count
+    const videoCount = document.getElementById('media-video-count');
+    if (videoCount) videoCount.textContent = mediaLibraryState.videos.length;
+
+    // Refresh video grid
+    renderMediaVideoGrid();
+
+    // Hide progress after delay
+    setTimeout(() => {
+        const container = document.getElementById('media-upload-progress');
+        if (container) container.style.display = 'none';
+    }, 3000);
+
+    // Background refresh to get proper thumbnails from API
+    setTimeout(() => {
+        loadMediaLibraryView(true);
+    }, 2000);
+}
+
+// Refresh media library
+function refreshMediaLibrary() {
+    showToast('Refreshing media library...', 'info');
+    loadMediaLibraryView(true);
 }
 
 // Load campaigns from API (with metrics)
