@@ -8390,30 +8390,55 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
                         ${selectedVideoCount > 0 ? 'Edit Selection' : 'Select Videos'}
                     </button>
                 </div>
-                <div id="dup-bulk-video-list-${advertiserId}" class="dup-bulk-video-list" style="display: none; max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px;">
+                <div id="dup-bulk-video-list-${advertiserId}" class="dup-bulk-video-list" style="display: none; max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px;">
                     ${videos.length === 0 ? '<p style="color: #64748b; text-align: center; margin: 8px 0;">No videos available. Upload or refresh.</p>' : ''}
                     ${videos.map(v => {
                         const isSelected = selectedVideoIds.includes(v.video_id);
-                        const displayName = (v.file_name || v.video_id || '').substring(0, 40) + ((v.file_name || v.video_id || '').length > 40 ? '...' : '');
+                        const displayName = (v.file_name || v.video_id || '').substring(0, 30) + ((v.file_name || v.video_id || '').length > 30 ? '...' : '');
+                        const thumbnailUrl = v.preview_url || v.thumbnail_url || v.poster_url || '';
                         return `
-                            <label class="dup-bulk-video-item ${isSelected ? 'selected' : ''}" style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; cursor: pointer; border-radius: 4px; margin-bottom: 4px; background: ${isSelected ? '#e0f2fe' : '#f8fafc'};">
+                            <label class="dup-bulk-video-item ${isSelected ? 'selected' : ''}" style="display: flex; align-items: center; gap: 10px; padding: 8px; cursor: pointer; border-radius: 6px; margin-bottom: 6px; background: ${isSelected ? '#e0f2fe' : '#f8fafc'}; border: 2px solid ${isSelected ? '#3b82f6' : 'transparent'}; transition: all 0.2s;">
                                 <input type="checkbox"
                                        value="${v.video_id}"
                                        ${isSelected ? 'checked' : ''}
                                        onchange="toggleDupBulkVideoSelection('${advertiserId}', '${v.video_id}')"
-                                       style="width: 16px; height: 16px;">
-                                <span style="font-size: 12px; flex: 1;">${displayName}</span>
-                                ${v.is_new ? '<span style="background: #22c55e; color: white; font-size: 10px; padding: 1px 4px; border-radius: 3px;">NEW</span>' : ''}
+                                       style="width: 18px; height: 18px; flex-shrink: 0;">
+                                <div style="width: 60px; height: 45px; flex-shrink: 0; border-radius: 4px; overflow: hidden; background: #1a1a1a; display: flex; align-items: center; justify-content: center;">
+                                    ${thumbnailUrl ?
+                                        `<img src="${thumbnailUrl}" alt="Video thumbnail" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.parentElement.innerHTML='<span style=\\'color:#64748b;font-size:18px;\\'>🎬</span>';">` :
+                                        '<span style="color:#64748b;font-size:18px;">🎬</span>'
+                                    }
+                                </div>
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="font-size: 12px; font-weight: 500; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</div>
+                                    ${v.duration ? `<div style="font-size: 10px; color: #64748b;">${Math.floor(v.duration / 60)}:${String(v.duration % 60).padStart(2, '0')}</div>` : ''}
+                                </div>
+                                ${v.is_new ? '<span style="background: #22c55e; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">NEW</span>' : ''}
                             </label>
                         `;
                     }).join('')}
                 </div>
                 ${selectedVideoCount > 0 ? `
-                    <div style="margin-top: 6px; font-size: 11px; color: #64748b;">
-                        Selected: ${selectedVideoIds.map(vid => {
-                            const v = videos.find(x => x.video_id === vid);
-                            return v ? (v.file_name || vid).substring(0, 20) : vid.substring(0, 10);
-                        }).join(', ')}
+                    <div style="margin-top: 8px;">
+                        <div style="font-size: 11px; color: #64748b; margin-bottom: 6px;">Selected Videos:</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                            ${selectedVideoIds.map(vid => {
+                                const v = videos.find(x => x.video_id === vid);
+                                const thumbUrl = v ? (v.preview_url || v.thumbnail_url || v.poster_url || '') : '';
+                                const name = v ? (v.file_name || vid).substring(0, 15) : vid.substring(0, 10);
+                                return `
+                                    <div style="display: flex; align-items: center; gap: 4px; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
+                                        <div style="width: 24px; height: 18px; border-radius: 2px; overflow: hidden; background: #1a1a1a; display: flex; align-items: center; justify-content: center;">
+                                            ${thumbUrl ?
+                                                '<img src="' + thumbUrl + '" style="width:100%;height:100%;object-fit:cover;">' :
+                                                '<span style="font-size:10px;">🎬</span>'
+                                            }
+                                        </div>
+                                        <span>${name}${name.length < (v?.file_name || vid).length ? '...' : ''}</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
                     </div>
                 ` : ''}
             </div>
