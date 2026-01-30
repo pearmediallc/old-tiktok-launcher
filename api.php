@@ -2207,13 +2207,16 @@ try {
                 // Use direct cURL for more reliable upload
                 $url = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/upload/';
 
+                // NOTE: flaw_detect and auto_fix_enabled can cause TikTok to process
+                // videos asynchronously, returning code 0 but no video_id immediately.
+                // Setting these to false ensures synchronous response with video_id.
                 $postData = [
                     'advertiser_id' => $upload_advertiser_id,
                     'upload_type' => 'UPLOAD_BY_FILE',
                     'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
                     'video_signature' => $videoSignature,
-                    'flaw_detect' => 'true',
-                    'auto_fix_enabled' => 'true',
+                    'flaw_detect' => 'false',
+                    'auto_fix_enabled' => 'false',
                     'auto_bind_enabled' => 'true'
                 ];
 
@@ -2259,6 +2262,7 @@ try {
                 // Extract video data safely - convert objects to arrays
                 $videoId = null;
                 $responseData = null;
+                $processingStatus = null;
 
                 // Log complete response structure for debugging
                 logToFile("Upload Response Structure: " . json_encode($response));
@@ -2271,23 +2275,31 @@ try {
                     // TikTok API can return it in different places depending on version/endpoint
                     $videoId = $responseData['video_id']
                             ?? $responseData['video']['video_id']
+                            ?? $responseData['file_id']
                             ?? $responseData['material_id']
                             ?? $responseData['id']
                             ?? null;
 
-                    logToFile("Extracted video_id: " . ($videoId ?? 'null') . " from response data: " . json_encode($responseData));
+                    // Check for async processing status
+                    $processingStatus = $responseData['status'] ?? $responseData['processing_status'] ?? null;
+
+                    logToFile("Extracted - video_id: " . ($videoId ?? 'null') .
+                              ", status: " . ($processingStatus ?? 'null') .
+                              ", response data: " . json_encode($responseData));
                 }
 
                 // For video upload, success REQUIRES a video_id to be returned
-                // TikTok may return code 0 but no video_id if the upload wasn't actually processed
+                // TikTok may return code 0 but no video_id if processing async
                 $apiCodeSuccess = (empty($response->code) || $response->code == 0);
                 $hasVideoId = !empty($videoId);
+                $isPending = ($processingStatus === 'pending' || $processingStatus === 'processing');
 
                 // True success requires BOTH: API code success AND video_id returned
                 $success = $apiCodeSuccess && $hasVideoId;
 
                 logToFile("Upload result - API Code Success: " . ($apiCodeSuccess ? 'true' : 'false') .
                           ", Has Video ID: " . ($hasVideoId ? 'true' : 'false') .
+                          ", Is Pending: " . ($isPending ? 'true' : 'false') .
                           ", Video ID: " . ($videoId ?? 'null') .
                           ", Response Code: " . ($response->code ?? 'none'));
 
@@ -2323,10 +2335,14 @@ try {
 
                 if (!$success) {
                     // Determine the specific error
-                    if ($apiCodeSuccess && !$hasVideoId) {
-                        // API said OK but no video_id - likely authorization or processing issue
-                        $errorMessage = 'Upload accepted but no video ID returned. This usually means the access token does not have permission for this advertiser account. Please re-authorize the account.';
-                        logToFile("WARNING: API returned success but no video_id. Check advertiser authorization.");
+                    if ($apiCodeSuccess && !$hasVideoId && $isPending) {
+                        // Video is being processed asynchronously by TikTok
+                        $errorMessage = 'Video is being processed by TikTok. It will appear in your library within 1-2 minutes.';
+                        logToFile("INFO: Video upload pending async processing by TikTok.");
+                    } elseif ($apiCodeSuccess && !$hasVideoId) {
+                        // API said OK but no video_id and not pending - might still be processing
+                        $errorMessage = 'Upload accepted but video is still processing. Check your video library in 1-2 minutes - the video should appear there.';
+                        logToFile("WARNING: API returned success but no video_id. Video may be processing async.");
                     } elseif (isset($response->code) && $response->code != 0) {
                         // TikTok returned an error code
                         $tiktokMsg = isset($response->message) ? (string)$response->message : 'Unknown error';
@@ -2443,13 +2459,15 @@ try {
                 // Upload to TikTok
                 $url = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/upload/';
 
+                // NOTE: flaw_detect and auto_fix_enabled can cause async processing
+                // Setting to false ensures synchronous response with video_id
                 $postData = [
                     'advertiser_id' => $targetAdvertiserId,
                     'upload_type' => 'UPLOAD_BY_FILE',
                     'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
                     'video_signature' => $videoSignature,
-                    'flaw_detect' => 'true',
-                    'auto_fix_enabled' => 'true',
+                    'flaw_detect' => 'false',
+                    'auto_fix_enabled' => 'false',
                     'auto_bind_enabled' => 'true'
                 ];
 
@@ -2488,6 +2506,7 @@ try {
                 // Extract video_id - check multiple possible locations
                 $videoId = null;
                 $responseData = null;
+                $processingStatus = null;
 
                 // Log complete response structure for debugging
                 logToFile("Upload to $targetAdvertiserId - Response Structure: " . json_encode($response));
@@ -2498,27 +2517,37 @@ try {
                     // Check multiple possible locations for video_id
                     $videoId = $responseData['video_id']
                             ?? $responseData['video']['video_id']
+                            ?? $responseData['file_id']
                             ?? $responseData['material_id']
                             ?? $responseData['id']
                             ?? null;
 
-                    logToFile("Extracted video_id: " . ($videoId ?? 'null') . " from response data: " . json_encode($responseData));
+                    // Check for async processing status
+                    $processingStatus = $responseData['status'] ?? $responseData['processing_status'] ?? null;
+
+                    logToFile("Extracted - video_id: " . ($videoId ?? 'null') .
+                              ", status: " . ($processingStatus ?? 'null') .
+                              ", response data: " . json_encode($responseData));
                 }
 
                 // Check for success - REQUIRE video_id
                 $apiCodeSuccess = (empty($response->code) || $response->code == 0);
                 $hasVideoId = !empty($videoId);
+                $isPending = ($processingStatus === 'pending' || $processingStatus === 'processing');
                 $success = $apiCodeSuccess && $hasVideoId;
 
                 logToFile("Upload to $targetAdvertiserId - API Success: " . ($apiCodeSuccess ? 'yes' : 'no') .
                           ", Video ID: " . ($videoId ?? 'null') .
+                          ", Is Pending: " . ($isPending ? 'yes' : 'no') .
                           ", TikTok Code: " . ($response->code ?? 'none'));
 
                 // Build error message if failed
                 $errorMessage = 'Upload failed';
                 if (!$success) {
-                    if ($apiCodeSuccess && !$hasVideoId) {
-                        $errorMessage = 'TikTok accepted the upload but did not return a video ID. This may be a permission issue with this specific account.';
+                    if ($apiCodeSuccess && !$hasVideoId && $isPending) {
+                        $errorMessage = 'Video is processing. It will appear in your library within 1-2 minutes.';
+                    } elseif ($apiCodeSuccess && !$hasVideoId) {
+                        $errorMessage = 'Upload accepted but video is still processing. Check library in 1-2 minutes.';
                     } elseif (isset($response->code) && $response->code != 0) {
                         $tiktokMsg = $response->message ?? 'Unknown error';
                         $errorMessage = "TikTok Error [{$response->code}]: {$tiktokMsg}";
@@ -2615,14 +2644,15 @@ try {
 
             $url = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/upload/';
             
+            // Disable flaw_detect and auto_fix for synchronous response with video_id
             $postFields = [
                 'advertiser_id' => $advertiser_id,
                 'file_name' => $fileName,
                 'upload_type' => 'UPLOAD_BY_FILE',
                 'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
                 'video_signature' => $videoSignature,
-                'flaw_detect' => 'true',
-                'auto_fix_enabled' => 'true',
+                'flaw_detect' => 'false',
+                'auto_fix_enabled' => 'false',
                 'auto_bind_enabled' => 'true'
             ];
 
