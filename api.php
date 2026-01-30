@@ -558,9 +558,10 @@ try {
             $data = $requestData;
 
             // Smart+ campaigns using official TikTok API structure
+            // Campaigns start in PAUSED state - user must manually enable
             $params = [
                 'advertiser_id' => $advertiser_id,
-                'operation_status' => 'ENABLE',
+                'operation_status' => 'DISABLE',
                 'objective_type' => 'LEAD_GENERATION',
                 'campaign_type' => 'REGULAR_CAMPAIGN',
                 'campaign_name' => $data['campaign_name'],
@@ -937,9 +938,9 @@ try {
                 'advertiser_id' => $advertiser_id,
                 'campaign_name' => $data['campaign_name'],
                 'objective_type' => 'LEAD_GENERATION',
-                'operation_status' => 'ENABLE'
+                'operation_status' => 'DISABLE' // Start paused - user must manually enable
             ];
-            
+
             // Handle CBO (Campaign Budget Optimization) settings
             if (isset($data['cbo_enabled']) && $data['cbo_enabled'] === true) {
                 // CBO enabled - set budget at campaign level
@@ -3503,7 +3504,7 @@ try {
                 'campaign_name' => $data['campaign_name'] ?? 'Duplicated Campaign',
                 'objective_type' => strtoupper($data['objective'] ?? 'TRAFFIC'),
                 'budget_mode' => 'BUDGET_MODE_INFINITE', // Budget set at ad group level
-                'operation_status' => 'ENABLE'
+                'operation_status' => 'DISABLE' // Start paused - user must manually enable
             ];
 
             logToFile("Creating campaign: " . json_encode($campaignParams));
