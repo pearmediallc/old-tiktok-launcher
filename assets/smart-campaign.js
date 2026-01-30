@@ -3999,6 +3999,7 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
             console.log(`[Bulk Upload] Response for ${file.name}:`, result);
 
             if (result.success && result.data?.video_id) {
+                // Video uploaded and video_id returned
                 completed++;
                 const previewUrl = URL.createObjectURL(file);
                 uploadedVideos.push({
@@ -4011,6 +4012,15 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
                 });
                 addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
                 console.log(`[Bulk Upload] Success - video_id: ${result.data.video_id}`);
+            } else if (result.success || (result.message && result.message.includes('processing'))) {
+                // Video accepted but still processing - NOT an error
+                completed++;  // Count as success since video was accepted
+                addLog('info', `Video accepted, processing: ${newFileName} on ${advertiserId}`);
+                console.log(`[Bulk Upload] Processing - video accepted: ${file.name}`);
+                // Show info toast for single file uploads
+                if (validFiles.length === 1) {
+                    showToast('Video accepted! It will appear in library in 1-2 minutes.', 'success');
+                }
             } else {
                 // Upload failed - NO retry to prevent duplicates
                 failed++;
@@ -4270,6 +4280,7 @@ async function handlePickerVideoUpload(event) {
             console.log(`[Picker Upload] Response for ${file.name}:`, result);
 
             if (result.success && result.data?.video_id) {
+                // Video uploaded and video_id returned
                 completed++;
                 const previewUrl = URL.createObjectURL(file);
                 uploadedVideos.push({
@@ -4281,6 +4292,13 @@ async function handlePickerVideoUpload(event) {
                     is_new: true
                 });
                 addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
+            } else if (result.success || (result.message && result.message.includes('processing'))) {
+                // Video accepted but still processing - NOT an error
+                completed++;  // Count as success
+                addLog('info', `Video accepted, processing: ${newFileName} on ${advertiserId}`);
+                if (validFiles.length === 1) {
+                    showToast('Video accepted! It will appear in library in 1-2 minutes.', 'success');
+                }
             } else {
                 // Failed - NO retry to prevent duplicates
                 failed++;

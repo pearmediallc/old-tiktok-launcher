@@ -943,10 +943,11 @@ switch ($action) {
             logSmartPlus("Using SCHEDULE_FROM_NOW with scheduled start: $scheduleStart");
         } else {
             // Default: Run continuously from now (start immediately)
-            // Use EST timezone for consistency - all campaigns use EST
+            // For SCHEDULE_FROM_NOW without a specific start time, DON'T send schedule_start_time
+            // TikTok API will start the ad group immediately when schedule_start_time is omitted
             $scheduleType = 'SCHEDULE_FROM_NOW';
-            $scheduleStart = getESTDateTime('+1 hour');
-            logSmartPlus("Using SCHEDULE_FROM_NOW starting immediately at: $scheduleStart (EST)");
+            $scheduleStart = null;  // Let TikTok start immediately
+            logSmartPlus("Using SCHEDULE_FROM_NOW - starting immediately (no schedule_start_time sent)");
         }
 
         $adgroupParams = [
@@ -960,13 +961,17 @@ switch ($action) {
             'billing_event' => 'OCPM',
             'bid_type' => 'BID_TYPE_NO_BID',  // Lowest Cost strategy - no target CPA required
             'schedule_type' => $scheduleType,
-            'schedule_start_time' => $scheduleStart,
             'operation_status' => 'ENABLE',
             'targeting_spec' => [
                 'location_ids' => $data['location_ids'] ?? ['6252001'],
                 'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100']
             ]
         ];
+
+        // Only add schedule_start_time if specified (for SCHEDULE_FROM_NOW without it, TikTok starts immediately)
+        if ($scheduleStart !== null) {
+            $adgroupParams['schedule_start_time'] = $scheduleStart;
+        }
 
         // Add schedule_end_time only for SCHEDULE_START_END type
         if ($scheduleType === 'SCHEDULE_START_END' && $scheduleEnd) {

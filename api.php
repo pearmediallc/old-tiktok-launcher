@@ -699,32 +699,40 @@ try {
                 'optimization_goal' => 'LEAD_GENERATION',
                 'optimization_event' => 'FORM',
                 'billing_event' => 'OCPM',
-                
+
                 // Smart+ campaigns automatically set placement
                 'placement_type' => 'PLACEMENT_TYPE_NORMAL',
                 'placements' => ['PLACEMENT_TIKTOK'],
-                
-                // Targeting 
+
+                // Targeting
                 'location_ids' => processLocationTargeting($data['location_ids'] ?? ['6252001']),
                 'age_groups' => $data['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100'],
                 'gender' => 'GENDER_UNLIMITED',
-                
+
                 // Budget and scheduling
                 'budget_mode' => 'BUDGET_MODE_DAY',
                 'budget' => floatval($data['budget'] ?? 50),
                 'schedule_type' => 'SCHEDULE_FROM_NOW',
-                'schedule_start_time' => $data['schedule_start_time'],
-                
+                // Note: schedule_start_time added below only if specified (for immediate start, omit it)
+
                 // Bidding for Smart+
                 'bid_type' => 'BID_TYPE_CUSTOM',
                 'conversion_bid_price' => floatval($data['conversion_bid_price'] ?? 10),
                 'pacing' => 'PACING_MODE_SMOOTH',
-                
+
                 // Attribution windows
                 'click_attribution_window' => 'SEVEN_DAYS',
                 'view_attribution_window' => 'ONE_DAY',
                 'attribution_event_count' => 'EVERY'
             ];
+
+            // Only add schedule_start_time if specified (omit for immediate start)
+            if (!empty($data['schedule_start_time'])) {
+                $params['schedule_start_time'] = $data['schedule_start_time'];
+                logToFile("Scheduled start time: " . $data['schedule_start_time']);
+            } else {
+                logToFile("No schedule_start_time - TikTok will start immediately");
+            }
             
             logToFile("=== SMART+ AD GROUP API CALL ===");
             logToFile("TikTok API Endpoint: /adgroup/create/");
