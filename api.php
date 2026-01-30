@@ -3787,10 +3787,15 @@ try {
                 'schedule_type' => 'SCHEDULE_START_END',
                 'schedule_start_time' => $scheduleStartTime,
                 'schedule_end_time' => $scheduleEndTime,
-                'pixel_id' => $data['pixel_id'],
                 'identity_type' => 'CUSTOMIZED_USER',
                 'identity_id' => $data['identity_id']
             ];
+
+            // Only add pixel_id if it's provided and valid (pixel_id is only supported for conversion objectives)
+            if (!empty($data['pixel_id']) && strtoupper($data['objective'] ?? 'TRAFFIC') === 'LEAD_GENERATION') {
+                $adgroupParams['pixel_id'] = $data['pixel_id'];
+                logToFile("Adding pixel_id for Lead Gen campaign: " . $data['pixel_id']);
+            }
 
             logToFile("Creating ad group: " . json_encode($adgroupParams));
 

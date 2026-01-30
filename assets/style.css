@@ -3687,8 +3687,70 @@ h3 {
 
 /* Duplicate Modal Styles */
 .duplicate-modal-content {
-    max-width: 550px;
+    max-width: 700px;
     width: 95%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.duplicate-modal-content .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    max-height: calc(90vh - 140px);
+}
+
+/* Bulk Duplicate Account Cards */
+.dup-bulk-account-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    transition: all 0.2s;
+    overflow: hidden;
+}
+
+.dup-bulk-account-card.selected {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.dup-bulk-config-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.dup-bulk-config-item {
+    min-width: 0; /* Prevent grid blowout */
+}
+
+.dup-bulk-config-item.full-width {
+    grid-column: 1 / -1;
+}
+
+.dup-bulk-config-item input,
+.dup-bulk-config-item select,
+.dup-bulk-config-item textarea {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Video list in bulk modal */
+.dup-bulk-video-list {
+    max-height: 200px !important;
+    overflow-y: auto !important;
+}
+
+.dup-bulk-video-item {
+    overflow: hidden;
+}
+
+/* Video actions row fix */
+.dup-bulk-video-actions {
+    flex-wrap: wrap;
 }
 
 .duplicate-campaign-info {

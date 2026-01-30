@@ -8815,6 +8815,17 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
                         ${selectedVideoCount > 0 ? 'Edit Selection' : 'Select Videos'}
                     </button>
                 </div>
+                <!-- Upload Progress Bar -->
+                <div id="dup-bulk-upload-progress-${advertiserId}" style="display: none; margin-bottom: 12px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-weight: 600; font-size: 13px; color: #1a1a1a;">Uploading Videos</span>
+                        <span id="dup-bulk-upload-count-${advertiserId}" style="font-size: 12px; color: #64748b;">0/0</span>
+                    </div>
+                    <div style="background: #e2e8f0; border-radius: 4px; height: 6px; overflow: hidden;">
+                        <div id="dup-bulk-upload-bar-${advertiserId}" style="background: linear-gradient(90deg, #fe2c55, #25f4ee); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                    </div>
+                    <div id="dup-bulk-upload-list-${advertiserId}" style="max-height: 120px; overflow-y: auto; margin-top: 8px;"></div>
+                </div>
                 <div id="dup-bulk-video-list-${advertiserId}" class="dup-bulk-video-list" style="display: none; max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px;">
                     ${videos.length === 0 ? '<p style="color: #64748b; text-align: center; margin: 8px 0;">No videos available. Upload or refresh.</p>' : ''}
                     ${videos.map(v => {
@@ -9229,13 +9240,43 @@ function openDupBulkVideoUpload(advertiserId) {
             return;
         }
 
-        showToast(`Uploading ${validFiles.length} video(s)...`, 'info');
+        // Show progress UI
+        const progressContainer = document.getElementById(`dup-bulk-upload-progress-${advertiserId}`);
+        const progressBar = document.getElementById(`dup-bulk-upload-bar-${advertiserId}`);
+        const progressCount = document.getElementById(`dup-bulk-upload-count-${advertiserId}`);
+        const progressList = document.getElementById(`dup-bulk-upload-list-${advertiserId}`);
+
+        if (progressContainer) {
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressCount.textContent = `0/${validFiles.length}`;
+
+            // Create list items for each file
+            progressList.innerHTML = validFiles.map((file, i) => `
+                <div id="dup-upload-item-${advertiserId}-${i}" style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: #f1f5f9; border-radius: 4px; margin-bottom: 4px; font-size: 12px;">
+                    <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${file.name}</span>
+                    <span style="color: #64748b; flex-shrink: 0;">${(file.size / 1024 / 1024).toFixed(1)}MB</span>
+                    <span id="dup-upload-status-${advertiserId}-${i}" style="padding: 2px 8px; border-radius: 4px; font-size: 11px; background: #e2e8f0; color: #64748b; flex-shrink: 0;">Pending</span>
+                </div>
+            `).join('');
+        }
 
         let completed = 0;
         let failed = 0;
+        let processing = 0;
         const uploadedVideos = [];
 
-        for (const file of validFiles) {
+        for (let i = 0; i < validFiles.length; i++) {
+            const file = validFiles[i];
+            const statusEl = document.getElementById(`dup-upload-status-${advertiserId}-${i}`);
+
+            // Update status to uploading
+            if (statusEl) {
+                statusEl.textContent = 'Uploading...';
+                statusEl.style.background = '#dbeafe';
+                statusEl.style.color = '#1d4ed8';
+            }
+
             try {
                 const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
                 const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
@@ -9244,9 +9285,8 @@ function openDupBulkVideoUpload(advertiserId) {
 
                 const formData = new FormData();
                 formData.append('video', file, newFileName);
-                formData.append('target_advertiser_id', advertiserId); // Use correct endpoint parameter
+                formData.append('target_advertiser_id', advertiserId);
 
-                // Use the validated endpoint that checks advertiser authorization
                 const response = await fetch('api.php?action=upload_video_to_advertiser', {
                     method: 'POST',
                     body: formData
@@ -9254,6 +9294,7 @@ function openDupBulkVideoUpload(advertiserId) {
                 const result = await response.json();
 
                 if (result.success && result.data?.video_id) {
+                    // Video uploaded and video_id returned immediately
                     completed++;
                     uploadedVideos.push({
                         video_id: result.data.video_id,
@@ -9261,14 +9302,51 @@ function openDupBulkVideoUpload(advertiserId) {
                         preview_url: URL.createObjectURL(file),
                         is_new: true
                     });
+                    if (statusEl) {
+                        statusEl.textContent = '✓ Done';
+                        statusEl.style.background = '#dcfce7';
+                        statusEl.style.color = '#16a34a';
+                    }
+                } else if (result.success || (result.message && result.message.toLowerCase().includes('processing'))) {
+                    // Video accepted but still processing (fix_task_id scenario)
+                    processing++;
+                    completed++; // Count as success since video was accepted
+                    if (statusEl) {
+                        statusEl.textContent = '⏳ Processing';
+                        statusEl.style.background = '#fef3c7';
+                        statusEl.style.color = '#d97706';
+                    }
+                    // Add placeholder for processing video
+                    uploadedVideos.push({
+                        video_id: result.data?.video_id || `processing_${Date.now()}_${i}`,
+                        file_name: newFileName,
+                        preview_url: URL.createObjectURL(file),
+                        is_new: true,
+                        is_processing: true
+                    });
                 } else {
                     failed++;
+                    if (statusEl) {
+                        statusEl.textContent = '✗ Failed';
+                        statusEl.style.background = '#fee2e2';
+                        statusEl.style.color = '#dc2626';
+                    }
                     console.error(`Upload failed for ${file.name}:`, result);
                 }
             } catch (error) {
                 failed++;
+                if (statusEl) {
+                    statusEl.textContent = '✗ Error';
+                    statusEl.style.background = '#fee2e2';
+                    statusEl.style.color = '#dc2626';
+                }
                 console.error(`Upload error for ${file.name}:`, error);
             }
+
+            // Update progress bar
+            const progress = ((completed + failed) / validFiles.length) * 100;
+            if (progressBar) progressBar.style.width = `${progress}%`;
+            if (progressCount) progressCount.textContent = `${completed + failed}/${validFiles.length}`;
         }
 
         // Update local state with uploaded videos
@@ -9281,21 +9359,39 @@ function openDupBulkVideoUpload(advertiserId) {
             }
             duplicateState.bulkAccountAssets[advertiserId].videos.unshift(...uploadedVideos);
 
-            // Auto-select first uploaded video if none selected
+            // Auto-select uploaded videos if none selected
             const account = duplicateState.bulkSelectedAccounts.find(a => a.advertiser_id === advertiserId);
-            if (account && (!account.video_ids || account.video_ids.length === 0)) {
-                account.video_ids = uploadedVideos.map(v => v.video_id);
+            if (account) {
+                const newVideoIds = uploadedVideos.filter(v => !v.is_processing).map(v => v.video_id);
+                if (!account.video_ids || account.video_ids.length === 0) {
+                    account.video_ids = newVideoIds;
+                } else {
+                    account.video_ids = [...new Set([...account.video_ids, ...newVideoIds])];
+                }
             }
 
             renderDuplicateBulkAccounts();
         }
 
-        if (failed === 0) {
+        // Show final toast
+        if (failed === 0 && processing === 0) {
             showToast(`Successfully uploaded ${completed} video(s)!`, 'success');
+        } else if (failed === 0 && processing > 0) {
+            showToast(`${completed - processing} uploaded, ${processing} still processing`, 'info');
         } else if (completed > 0) {
             showToast(`Uploaded ${completed}/${validFiles.length} videos (${failed} failed)`, 'warning');
         } else {
             showToast(`Failed to upload all ${validFiles.length} videos`, 'error');
+        }
+
+        // Hide progress bar after a delay
+        setTimeout(() => {
+            if (progressContainer) progressContainer.style.display = 'none';
+        }, 3000);
+
+        // Refresh from TikTok to get proper video IDs for processing videos
+        if (processing > 0) {
+            setTimeout(() => refreshDupBulkVideos(advertiserId), 2000);
         }
     };
     input.click();
@@ -11013,6 +11109,13 @@ async function uploadSingleVideoInBulk(file, index) {
 
                         updateBulkUploadProgress();
                         resolve({ success: true, video_id: result.data.video_id });
+                    } else if (result.success || (result.message && result.message.toLowerCase().includes('processing'))) {
+                        // Video accepted but still processing - this is OK, not an error!
+                        bulkUploadState.completed++;
+                        updateUploadItemStatus(itemId, 'processing', '⏳ Processing', 100);
+                        addLog('info', `Video accepted, processing: ${newFileName}`);
+                        updateBulkUploadProgress();
+                        resolve({ success: true, processing: true });
                     } else {
                         // Failed - but don't retry automatically
                         const errorMsg = result.message || 'Upload failed - check if video appears in library';
