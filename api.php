@@ -1439,6 +1439,100 @@ try {
             ]);
             break;
 
+        case 'create_portfolio':
+            // Simple portfolio creation for bulk launch
+            $portfolioName = $requestData['portfolio_name'] ?? '';
+            $callToAction = $requestData['call_to_action'] ?? 'LEARN_MORE';
+            $landingPageUrl = $requestData['landing_page_url'] ?? '';
+
+            if (empty($portfolioName)) {
+                outputJsonResponse(['success' => false, 'message' => 'Portfolio name is required']);
+                exit;
+            }
+            if (empty($landingPageUrl)) {
+                outputJsonResponse(['success' => false, 'message' => 'Landing page URL is required']);
+                exit;
+            }
+
+            logToFile("======= CREATE PORTFOLIO (Simple) =======");
+            logToFile("Advertiser ID: " . $advertiser_id);
+            logToFile("Portfolio Name: " . $portfolioName);
+            logToFile("CTA: " . $callToAction);
+            logToFile("Landing URL: " . $landingPageUrl);
+
+            // Build portfolio_content in TikTok's expected format
+            $portfolioContent = [
+                [
+                    'asset_content' => json_encode([
+                        'call_to_action' => $callToAction,
+                        'landing_page_urls' => [$landingPageUrl]
+                    ]),
+                    'asset_ids' => []
+                ]
+            ];
+
+            $params = [
+                'advertiser_id' => $advertiser_id,
+                'creative_portfolio_type' => 'CTA',
+                'portfolio_content' => $portfolioContent
+            ];
+
+            $url = "https://business-api.tiktok.com/open_api/v1.3/creative/portfolio/create/";
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($params));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Access-Token: ' . $config['access_token'],
+                'Content-Type: application/json'
+            ]);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            logToFile("Response: " . $response);
+
+            $responseData = json_decode($response, true);
+
+            if ($httpCode === 200 && isset($responseData['code']) && $responseData['code'] === 0) {
+                $portfolioId = $responseData['data']['creative_portfolio_id'] ?? $responseData['data']['portfolio_id'] ?? null;
+
+                // Save to database
+                try {
+                    $db = Database::getInstance();
+                    if ($portfolioId) {
+                        $db->execute(
+                            "INSERT INTO tool_portfolios (advertiser_id, creative_portfolio_id, portfolio_name, portfolio_type, portfolio_content, created_at)
+                             VALUES (:advertiser_id, :portfolio_id, :name, :type, :content, NOW())
+                             ON DUPLICATE KEY UPDATE portfolio_name = :name, portfolio_content = :content",
+                            [
+                                'advertiser_id' => $advertiser_id,
+                                'portfolio_id' => $portfolioId,
+                                'name' => $portfolioName,
+                                'type' => 'CTA',
+                                'content' => json_encode($portfolioContent)
+                            ]
+                        );
+                    }
+                } catch (Exception $e) {
+                    logToFile("DB Error saving portfolio: " . $e->getMessage());
+                }
+
+                outputJsonResponse([
+                    'success' => true,
+                    'data' => ['portfolio_id' => $portfolioId],
+                    'message' => 'Portfolio created successfully'
+                ]);
+            } else {
+                outputJsonResponse([
+                    'success' => false,
+                    'message' => $responseData['message'] ?? 'Failed to create portfolio'
+                ]);
+            }
+            break;
+
         case 'get_cta_portfolios':
             // Fetch CTA portfolios ONLY from database (portfolios created by this tool)
             // NO TikTok API call - we only show what's in our database
@@ -3403,12 +3497,12 @@ try {
             logToFile("Request Data: " . json_encode($data, JSON_PRETTY_PRINT));
 
             // Create campaign in target account
+            // NOTE: Budget is set at ad group level (not campaign level) for compatibility
             $campaignParams = [
                 'advertiser_id' => $targetAdvertiserId,
                 'campaign_name' => $data['campaign_name'] ?? 'Duplicated Campaign',
                 'objective_type' => strtoupper($data['objective'] ?? 'TRAFFIC'),
-                'budget_mode' => 'BUDGET_MODE_DAY',
-                'budget' => floatval($data['budget'] ?? 50),
+                'budget_mode' => 'BUDGET_MODE_INFINITE', // Budget set at ad group level
                 'operation_status' => 'ENABLE'
             ];
 
@@ -3434,6 +3528,22 @@ try {
 
             logToFile("Campaign created: " . $newCampaignId);
 
+            // Determine schedule based on input
+            $scheduleType = $data['schedule_type'] ?? 'start_now';
+            if ($scheduleType === 'start_now') {
+                // Start now, run continuously (1 year)
+                $scheduleStartTime = getESTDateTime();
+                $scheduleEndTime = getESTDateTime('+1 year');
+            } else {
+                // Use provided dates
+                $scheduleStartTime = !empty($data['schedule_start'])
+                    ? date('Y-m-d H:i:s', strtotime($data['schedule_start']))
+                    : getESTDateTime();
+                $scheduleEndTime = !empty($data['schedule_end'])
+                    ? date('Y-m-d H:i:s', strtotime($data['schedule_end']))
+                    : getESTDateTime('+30 days');
+            }
+
             // Create ad group in target account
             $adgroupParams = [
                 'advertiser_id' => $targetAdvertiserId,
@@ -3446,10 +3556,11 @@ try {
                 'optimization_goal' => strtoupper($data['optimization_goal'] ?? 'CLICK'),
                 'bid_type' => $data['bid_type'] ?? 'BID_TYPE_NO_BID',
                 'billing_event' => $data['billing_event'] ?? 'CPC',
-                'budget_mode' => 'BUDGET_MODE_INFINITE',
+                'budget_mode' => 'BUDGET_MODE_DAY', // Daily budget at ad group level
+                'budget' => floatval($data['budget'] ?? 50), // Budget moved from campaign to ad group
                 'schedule_type' => 'SCHEDULE_START_END',
-                'schedule_start_time' => getESTDateTime(),
-                'schedule_end_time' => getESTDateTime('+30 days'),
+                'schedule_start_time' => $scheduleStartTime,
+                'schedule_end_time' => $scheduleEndTime,
                 'pixel_id' => $data['pixel_id'],
                 'identity_type' => 'CUSTOMIZED_USER',
                 'identity_id' => $data['identity_id']

@@ -8471,11 +8471,16 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
             <!-- CTA Portfolio (optional) -->
             <div class="dup-bulk-config-item">
                 <label>CTA Portfolio <span style="color: #94a3b8; font-size: 10px;">(optional)</span></label>
-                <select id="dup-bulk-portfolio-${advertiserId}"
-                        onchange="updateDupBulkAccountConfig('${advertiserId}', 'portfolio_id', this.value)">
-                    <option value="">None (use default CTA)</option>
-                    ${portfolios.map(p => `<option value="${p.portfolio_id}" ${selectedAccount?.portfolio_id === p.portfolio_id ? 'selected' : ''}>${p.portfolio_name}</option>`).join('')}
-                </select>
+                <div style="display: flex; gap: 6px;">
+                    <select id="dup-bulk-portfolio-${advertiserId}" style="flex: 1;"
+                            onchange="updateDupBulkAccountConfig('${advertiserId}', 'portfolio_id', this.value)">
+                        <option value="">None (use default CTA)</option>
+                        ${portfolios.map(p => `<option value="${p.portfolio_id}" ${selectedAccount?.portfolio_id === p.portfolio_id ? 'selected' : ''}>${p.portfolio_name}</option>`).join('')}
+                    </select>
+                    <button type="button" onclick="openDupBulkPortfolioCreate('${advertiserId}')"
+                            style="padding: 6px 10px; background: #8b5cf6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"
+                            title="Create new portfolio">+ New</button>
+                </div>
             </div>
 
             <!-- Videos (Multi-select) -->
@@ -8557,15 +8562,66 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
                        placeholder="${originalLandingUrl || 'https://example.com'}">
             </div>
 
-            <!-- Ad Text -->
+            <!-- Scheduling -->
             <div class="dup-bulk-config-item full-width">
-                <label>Ad Text</label>
-                <textarea id="dup-bulk-adtext-${advertiserId}"
-                          onchange="updateDupBulkAccountConfig('${advertiserId}', 'ad_text', this.value)"
-                          placeholder="Enter ad text..."
-                          rows="2"
-                          style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; resize: vertical;">${selectedAccount?.ad_text || (originalAd?.ad_texts?.[0]?.ad_text || originalAd?.ad_texts?.[0] || originalAd?.ad_text || 'Learn More')}</textarea>
-                <small style="color: #64748b; font-size: 11px;">This text appears with your ad</small>
+                <label>Schedule</label>
+                <div style="display: flex; gap: 16px; margin-bottom: 10px;">
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="radio" name="schedule-${advertiserId}" value="start_now"
+                               ${(selectedAccount?.schedule_type || 'start_now') === 'start_now' ? 'checked' : ''}
+                               onchange="updateDupBulkSchedule('${advertiserId}', 'start_now')">
+                        <span style="font-size: 13px;">Start Now (continuous)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="radio" name="schedule-${advertiserId}" value="scheduled"
+                               ${selectedAccount?.schedule_type === 'scheduled' ? 'checked' : ''}
+                               onchange="updateDupBulkSchedule('${advertiserId}', 'scheduled')">
+                        <span style="font-size: 13px;">Schedule Start & End</span>
+                    </label>
+                </div>
+                <div id="dup-bulk-schedule-dates-${advertiserId}"
+                     style="display: ${selectedAccount?.schedule_type === 'scheduled' ? 'flex' : 'none'}; gap: 10px;">
+                    <div style="flex: 1;">
+                        <label style="font-size: 11px; color: #64748b; display: block; margin-bottom: 4px;">Start Date/Time</label>
+                        <input type="datetime-local" id="dup-bulk-start-${advertiserId}"
+                               value="${selectedAccount?.schedule_start || ''}"
+                               onchange="updateDupBulkAccountConfig('${advertiserId}', 'schedule_start', this.value)"
+                               style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px;">
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="font-size: 11px; color: #64748b; display: block; margin-bottom: 4px;">End Date/Time</label>
+                        <input type="datetime-local" id="dup-bulk-end-${advertiserId}"
+                               value="${selectedAccount?.schedule_end || ''}"
+                               onchange="updateDupBulkAccountConfig('${advertiserId}', 'schedule_end', this.value)"
+                               style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ad Texts (Multiple) -->
+            <div class="dup-bulk-config-item full-width">
+                <label>Ad Texts <span id="dup-bulk-adtext-count-${advertiserId}" style="font-weight: normal; color: #64748b;">(${(selectedAccount?.ad_texts || getDupBulkOriginalAdTexts(originalAd)).length} texts)</span></label>
+                <div id="dup-bulk-adtexts-container-${advertiserId}" style="display: flex; flex-direction: column; gap: 8px;">
+                    ${(selectedAccount?.ad_texts || getDupBulkOriginalAdTexts(originalAd)).map((text, idx) => `
+                        <div class="dup-bulk-adtext-row" style="display: flex; gap: 8px; align-items: flex-start;">
+                            <textarea
+                                class="dup-bulk-adtext-input"
+                                data-index="${idx}"
+                                onchange="updateDupBulkAdText('${advertiserId}', ${idx}, this.value)"
+                                placeholder="Ad text ${idx + 1}..."
+                                rows="2"
+                                style="flex: 1; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; resize: vertical;">${typeof text === 'object' ? (text.ad_text || text.text || '') : text}</textarea>
+                            <button type="button" onclick="removeDupBulkAdText('${advertiserId}', ${idx})"
+                                    style="padding: 8px 12px; background: #fee2e2; color: #dc2626; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; flex-shrink: 0;"
+                                    title="Remove this ad text">&times;</button>
+                        </div>
+                    `).join('')}
+                </div>
+                <button type="button" onclick="addDupBulkAdText('${advertiserId}')"
+                        style="margin-top: 8px; padding: 6px 12px; background: #f1f5f9; color: #475569; border: 1px dashed #cbd5e1; border-radius: 6px; cursor: pointer; font-size: 12px; width: 100%;">
+                    + Add Ad Text
+                </button>
+                <small style="color: #64748b; font-size: 11px; margin-top: 4px; display: block;">Multiple ad texts allow TikTok to test variations</small>
             </div>
         </div>
     `;
@@ -8576,6 +8632,129 @@ function toggleDupBulkVideoList(advertiserId) {
     const list = document.getElementById(`dup-bulk-video-list-${advertiserId}`);
     if (list) {
         list.style.display = list.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+// Get all ad texts from original ad
+function getDupBulkOriginalAdTexts(originalAd) {
+    if (!originalAd) return ['Learn More'];
+
+    let adTexts = [];
+
+    // Try different possible formats
+    if (originalAd.ad_texts && Array.isArray(originalAd.ad_texts)) {
+        adTexts = originalAd.ad_texts.map(t =>
+            typeof t === 'object' ? (t.ad_text || t.text || '') : t
+        ).filter(t => t);
+    } else if (originalAd.ad_text_list && Array.isArray(originalAd.ad_text_list)) {
+        adTexts = originalAd.ad_text_list.map(t =>
+            typeof t === 'object' ? (t.ad_text || t.text || '') : t
+        ).filter(t => t);
+    } else if (originalAd.ad_text) {
+        adTexts = [originalAd.ad_text];
+    }
+
+    return adTexts.length > 0 ? adTexts : ['Learn More'];
+}
+
+// Update a specific ad text for an account
+function updateDupBulkAdText(advertiserId, index, value) {
+    const account = duplicateState.bulkSelectedAccounts.find(a => a.advertiser_id === advertiserId);
+    if (!account) return;
+
+    // Initialize ad_texts if not exists
+    if (!account.ad_texts) {
+        const originalAd = duplicateState.campaignDetails?.ad;
+        account.ad_texts = [...getDupBulkOriginalAdTexts(originalAd)];
+    }
+
+    if (index >= 0 && index < account.ad_texts.length) {
+        account.ad_texts[index] = value;
+    }
+
+    // Update count label
+    const countSpan = document.getElementById(`dup-bulk-adtext-count-${advertiserId}`);
+    if (countSpan) {
+        countSpan.textContent = `(${account.ad_texts.length} texts)`;
+    }
+}
+
+// Add a new ad text field
+function addDupBulkAdText(advertiserId) {
+    const account = duplicateState.bulkSelectedAccounts.find(a => a.advertiser_id === advertiserId);
+    if (!account) return;
+
+    // Initialize ad_texts if not exists
+    if (!account.ad_texts) {
+        const originalAd = duplicateState.campaignDetails?.ad;
+        account.ad_texts = [...getDupBulkOriginalAdTexts(originalAd)];
+    }
+
+    // Add new empty ad text
+    account.ad_texts.push('');
+
+    // Re-render just the ad texts container
+    renderDupBulkAdTextsContainer(advertiserId);
+}
+
+// Remove an ad text
+function removeDupBulkAdText(advertiserId, index) {
+    const account = duplicateState.bulkSelectedAccounts.find(a => a.advertiser_id === advertiserId);
+    if (!account || !account.ad_texts) return;
+
+    // Don't remove if only 1 left
+    if (account.ad_texts.length <= 1) {
+        showToast('At least one ad text is required', 'warning');
+        return;
+    }
+
+    account.ad_texts.splice(index, 1);
+
+    // Re-render just the ad texts container
+    renderDupBulkAdTextsContainer(advertiserId);
+}
+
+// Re-render ad texts container without full re-render
+function renderDupBulkAdTextsContainer(advertiserId) {
+    const account = duplicateState.bulkSelectedAccounts.find(a => a.advertiser_id === advertiserId);
+    const container = document.getElementById(`dup-bulk-adtexts-container-${advertiserId}`);
+    const countSpan = document.getElementById(`dup-bulk-adtext-count-${advertiserId}`);
+
+    if (!container || !account) return;
+
+    const adTexts = account.ad_texts || ['Learn More'];
+
+    container.innerHTML = adTexts.map((text, idx) => `
+        <div class="dup-bulk-adtext-row" style="display: flex; gap: 8px; align-items: flex-start;">
+            <textarea
+                class="dup-bulk-adtext-input"
+                data-index="${idx}"
+                onchange="updateDupBulkAdText('${advertiserId}', ${idx}, this.value)"
+                placeholder="Ad text ${idx + 1}..."
+                rows="2"
+                style="flex: 1; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; resize: vertical;">${typeof text === 'object' ? (text.ad_text || text.text || '') : text}</textarea>
+            <button type="button" onclick="removeDupBulkAdText('${advertiserId}', ${idx})"
+                    style="padding: 8px 12px; background: #fee2e2; color: #dc2626; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; flex-shrink: 0;"
+                    title="Remove this ad text">&times;</button>
+        </div>
+    `).join('');
+
+    if (countSpan) {
+        countSpan.textContent = `(${adTexts.length} texts)`;
+    }
+}
+
+// Update schedule type for an account
+function updateDupBulkSchedule(advertiserId, type) {
+    const account = duplicateState.bulkSelectedAccounts.find(a => a.advertiser_id === advertiserId);
+    if (account) {
+        account.schedule_type = type;
+    }
+
+    // Show/hide date fields
+    const datesDiv = document.getElementById(`dup-bulk-schedule-dates-${advertiserId}`);
+    if (datesDiv) {
+        datesDiv.style.display = type === 'scheduled' ? 'flex' : 'none';
     }
 }
 
@@ -9028,6 +9207,138 @@ async function createDupBulkIdentity(advertiserId) {
     }
 }
 
+// Portfolio creation for bulk launch
+function openDupBulkPortfolioCreate(advertiserId) {
+    const account = duplicateState.bulkAccounts?.find(a => a.advertiser_id === advertiserId);
+    const accountName = account?.advertiser_name || advertiserId;
+
+    const modalHtml = `
+        <div id="dup-bulk-portfolio-modal" class="modal" style="display: flex; z-index: 10002;">
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>Create CTA Portfolio</h3>
+                    <span class="modal-close" onclick="closeDupBulkPortfolioModal()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <p style="margin-bottom: 15px; color: #666;">
+                        Creating portfolio for: <strong>${accountName}</strong>
+                    </p>
+                    <div class="form-group">
+                        <label>Portfolio Name <span style="color: #ef4444;">*</span></label>
+                        <input type="text" id="dup-bulk-portfolio-name" placeholder="Enter portfolio name" maxlength="100">
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label>Call to Action <span style="color: #ef4444;">*</span></label>
+                        <select id="dup-bulk-portfolio-cta" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px;">
+                            <option value="LEARN_MORE">Learn More</option>
+                            <option value="SHOP_NOW">Shop Now</option>
+                            <option value="SIGN_UP">Sign Up</option>
+                            <option value="CONTACT_US">Contact Us</option>
+                            <option value="DOWNLOAD">Download</option>
+                            <option value="BOOK_NOW">Book Now</option>
+                            <option value="GET_QUOTE">Get Quote</option>
+                            <option value="APPLY_NOW">Apply Now</option>
+                            <option value="SUBSCRIBE">Subscribe</option>
+                            <option value="ORDER_NOW">Order Now</option>
+                            <option value="GET_SHOWTIMES">Get Showtimes</option>
+                            <option value="LISTEN_NOW">Listen Now</option>
+                            <option value="WATCH_NOW">Watch Now</option>
+                            <option value="PLAY_GAME">Play Game</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label>Landing Page URL <span style="color: #ef4444;">*</span></label>
+                        <input type="url" id="dup-bulk-portfolio-url" placeholder="https://example.com">
+                    </div>
+                </div>
+                <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button class="btn-secondary" onclick="closeDupBulkPortfolioModal()">Cancel</button>
+                    <button class="btn-primary" onclick="createDupBulkPortfolio('${advertiserId}')" style="background: #8b5cf6;">Create Portfolio</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal if any
+    const existing = document.getElementById('dup-bulk-portfolio-modal');
+    if (existing) existing.remove();
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function closeDupBulkPortfolioModal() {
+    const modal = document.getElementById('dup-bulk-portfolio-modal');
+    if (modal) modal.remove();
+}
+
+async function createDupBulkPortfolio(advertiserId) {
+    const portfolioName = document.getElementById('dup-bulk-portfolio-name').value.trim();
+    const cta = document.getElementById('dup-bulk-portfolio-cta').value;
+    const landingUrl = document.getElementById('dup-bulk-portfolio-url').value.trim();
+
+    if (!portfolioName) {
+        showToast('Please enter a portfolio name', 'error');
+        return;
+    }
+    if (!landingUrl) {
+        showToast('Please enter a landing page URL', 'error');
+        return;
+    }
+    if (!landingUrl.startsWith('http://') && !landingUrl.startsWith('https://')) {
+        showToast('Please enter a valid URL starting with http:// or https://', 'error');
+        return;
+    }
+
+    showToast('Creating portfolio...', 'info');
+
+    try {
+        const response = await fetch(`api.php?action=create_portfolio&advertiser_id=${advertiserId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                portfolio_name: portfolioName,
+                call_to_action: cta,
+                landing_page_url: landingUrl
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success && result.data?.portfolio_id) {
+            showToast('Portfolio created successfully!', 'success');
+            closeDupBulkPortfolioModal();
+
+            // Add new portfolio to assets
+            if (!duplicateState.bulkAccountAssets[advertiserId]) {
+                duplicateState.bulkAccountAssets[advertiserId] = { identities: [], pixels: [], videos: [], portfolios: [] };
+            }
+            if (!duplicateState.bulkAccountAssets[advertiserId].portfolios) {
+                duplicateState.bulkAccountAssets[advertiserId].portfolios = [];
+            }
+
+            duplicateState.bulkAccountAssets[advertiserId].portfolios.unshift({
+                portfolio_id: result.data.portfolio_id,
+                portfolio_name: portfolioName,
+                call_to_action: cta,
+                landing_page_url: landingUrl
+            });
+
+            // Auto-select the new portfolio
+            const selectedAccount = duplicateState.bulkSelectedAccounts.find(a => a.advertiser_id === advertiserId);
+            if (selectedAccount) {
+                selectedAccount.portfolio_id = result.data.portfolio_id;
+            }
+
+            // Re-render to show new portfolio
+            renderDuplicateBulkAccounts();
+        } else {
+            showToast(result.message || 'Failed to create portfolio', 'error');
+        }
+    } catch (error) {
+        showToast('Error creating portfolio: ' + error.message, 'error');
+    }
+}
+
 // Execute bulk duplicate to multiple accounts
 async function executeBulkDuplicateCampaign() {
     const selectedAccounts = duplicateState.bulkSelectedAccounts;
@@ -9113,6 +9424,11 @@ async function executeBulkDuplicateCampaign() {
                 ? account.video_ids
                 : (account.video_id ? [account.video_id] : []);
 
+            // Get ad texts - use account's ad_texts array or fall back to original
+            const adTextsToSend = account.ad_texts && account.ad_texts.length > 0
+                ? account.ad_texts.filter(t => t && t.trim()) // Filter out empty texts
+                : getDupBulkOriginalAdTexts(ad);
+
             // Prepare duplicate request
             const duplicateData = {
                 target_advertiser_id: account.advertiser_id,
@@ -9130,10 +9446,13 @@ async function executeBulkDuplicateCampaign() {
                 optimization_goal: adgroup?.optimization_goal || campaign.optimization_goal || 'CLICK',
                 bid_type: adgroup?.bid_type || 'BID_TYPE_NO_BID',
                 billing_event: adgroup?.billing_event || 'CPC',
-                budget_mode: 'BUDGET_MODE_DAY',
+                // Scheduling
+                schedule_type: account.schedule_type || 'start_now',
+                schedule_start: account.schedule_start || null,
+                schedule_end: account.schedule_end || null,
                 // Ad data
                 ad_name: ad?.ad_name || account.campaign_name + ' - Ad',
-                ad_texts: account.ad_text ? [account.ad_text] : (ad?.ad_texts || ad?.ad_text_list || ['Learn More']),
+                ad_texts: adTextsToSend, // All ad texts (not just first one)
                 call_to_action: ad?.call_to_action || 'LEARN_MORE'
             };
 
