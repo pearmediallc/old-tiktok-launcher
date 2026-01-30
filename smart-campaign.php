@@ -2037,12 +2037,19 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                            onchange="handlePickerVideoUpload(event)">
                     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                         <span style="font-size: 13px; color: #64748b;">Don't see your video? Upload directly:</span>
-                        <button type="button"
-                                id="picker-upload-btn"
-                                onclick="document.getElementById('video-picker-upload-input').click()"
-                                style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #fe2c55, #25f4ee); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
-                            <span>📤</span> Upload Video
-                        </button>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button"
+                                    onclick="refreshVideoPickerList()"
+                                    style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                                <span>🔄</span> Refresh
+                            </button>
+                            <button type="button"
+                                    id="picker-upload-btn"
+                                    onclick="document.getElementById('video-picker-upload-input').click()"
+                                    style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #fe2c55, #25f4ee); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                                <span>📤</span> Upload Video
+                            </button>
+                        </div>
                     </div>
                     <div id="picker-upload-progress" style="display: none; margin-top: 10px;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">

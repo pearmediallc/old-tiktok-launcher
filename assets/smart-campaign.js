@@ -4127,6 +4127,95 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
     event.target.value = '';
 }
 
+// Refresh video list in the video picker by fetching from TikTok API
+async function refreshVideoPickerList() {
+    const advertiserId = videoPickerState.advertiserId;
+    if (!advertiserId) {
+        showToast('Error: No account selected', 'error');
+        return;
+    }
+
+    const grid = document.getElementById('picker-video-grid');
+    const countEl = document.getElementById('picker-video-count');
+
+    // Show loading state
+    grid.innerHTML = `
+        <div class="picker-empty-state">
+            <div class="empty-icon" style="animation: spin 1s linear infinite;">🔄</div>
+            <p>Fetching videos from TikTok...</p>
+        </div>
+    `;
+    countEl.textContent = 'Loading...';
+
+    try {
+        addLog('info', `Refreshing videos for account ${advertiserId}`);
+
+        const result = await apiRequest('get_media_library', {
+            advertiser_id: advertiserId
+        });
+
+        if (result.success && result.data?.videos) {
+            const videos = result.data.videos || [];
+
+            // Update account assets
+            if (!bulkLaunchState.accountAssets[advertiserId]) {
+                bulkLaunchState.accountAssets[advertiserId] = {
+                    videos: [],
+                    images: [],
+                    pixels: [],
+                    identities: [],
+                    portfolios: [],
+                    videoMatch: { match_rate: 0 }
+                };
+            }
+
+            // Merge with any locally uploaded videos (preserve is_new flag)
+            const existingNewVideos = (bulkLaunchState.accountAssets[advertiserId].videos || [])
+                .filter(v => v.is_new);
+            const newVideoIds = new Set(existingNewVideos.map(v => v.video_id));
+
+            // Add fetched videos that aren't duplicates
+            const mergedVideos = [...existingNewVideos];
+            videos.forEach(v => {
+                if (!newVideoIds.has(v.video_id)) {
+                    mergedVideos.push(v);
+                }
+            });
+
+            bulkLaunchState.accountAssets[advertiserId].videos = mergedVideos;
+
+            // Update picker state
+            videoPickerState.videos = [...mergedVideos].sort((a, b) => {
+                const nameA = (a.file_name || '').toLowerCase();
+                const nameB = (b.file_name || '').toLowerCase();
+                return nameA.localeCompare(nameB);
+            });
+
+            renderVideoPickerGrid();
+
+            addLog('success', `Loaded ${videos.length} videos for account ${advertiserId}`);
+            showToast(`Loaded ${videos.length} videos`, 'success');
+        } else {
+            throw new Error(result.message || 'Failed to load videos');
+        }
+    } catch (error) {
+        console.error('Error refreshing videos:', error);
+        addLog('error', `Failed to refresh videos: ${error.message}`);
+        showToast('Failed to load videos', 'error');
+
+        grid.innerHTML = `
+            <div class="picker-empty-state">
+                <div class="empty-icon">❌</div>
+                <p>Failed to load videos. Please try again.</p>
+                <button type="button" onclick="refreshVideoPickerList()"
+                        style="margin-top: 10px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                    Retry
+                </button>
+            </div>
+        `;
+    }
+}
+
 // Handle video upload from within the video picker modal
 async function handlePickerVideoUpload(event) {
     const advertiserId = videoPickerState.advertiserId;
@@ -8333,7 +8422,7 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
     const selectedVideoCount = selectedVideoIds.length;
 
     return `
-        <div class="dup-bulk-config-grid">
+        <div class="dup-bulk-config-grid" data-advertiser="${advertiserId}">
             <!-- Campaign Name -->
             <div class="dup-bulk-config-item full-width">
                 <label>Campaign Name</label>
@@ -8375,7 +8464,7 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
 
             <!-- Videos (Multi-select) -->
             <div class="dup-bulk-config-item full-width">
-                <label>Videos <span style="font-weight: normal; color: #64748b;">(${selectedVideoCount} selected)</span></label>
+                <label>Videos <span id="dup-bulk-video-count-${advertiserId}" style="font-weight: normal; color: #64748b;">(${selectedVideoCount} selected)</span></label>
                 <div class="dup-bulk-video-actions" style="display: flex; gap: 8px; margin-bottom: 8px;">
                     <button type="button" onclick="openDupBulkVideoUpload('${advertiserId}')"
                             style="padding: 6px 12px; font-size: 12px; background: linear-gradient(135deg, #fe2c55, #25f4ee); color: white; border: none; border-radius: 4px; cursor: pointer;">
@@ -8482,9 +8571,82 @@ function toggleDupBulkVideoSelection(advertiserId, videoId) {
         account.video_ids.push(videoId);
     }
 
-    // Re-render to update UI
-    renderDuplicateBulkAccounts();
+    // Update UI WITHOUT re-rendering the entire account list (which would close the dropdown)
+    // 1. Update the video item's visual state
+    const videoItem = document.querySelector(`#dup-bulk-video-list-${advertiserId} input[value="${videoId}"]`)?.closest('label');
+    if (videoItem) {
+        const isSelected = account.video_ids.includes(videoId);
+        videoItem.style.background = isSelected ? '#e0f2fe' : '#f8fafc';
+        videoItem.style.borderColor = isSelected ? '#3b82f6' : 'transparent';
+        videoItem.classList.toggle('selected', isSelected);
+    }
+
+    // 2. Update the "selected count" label using the specific ID
+    const countSpan = document.getElementById(`dup-bulk-video-count-${advertiserId}`);
+    if (countSpan) {
+        countSpan.textContent = `(${account.video_ids.length} selected)`;
+    }
+
+    // 3. Update the selected videos display below the list
+    updateDupBulkSelectedVideosDisplay(advertiserId, account.video_ids);
+
+    // 4. Update summary
     updateDupBulkSummary();
+}
+
+// Update just the selected videos display without re-rendering entire config
+function updateDupBulkSelectedVideosDisplay(advertiserId, selectedVideoIds) {
+    const accountAssets = duplicateState.bulkAccountAssets?.[advertiserId];
+    const videos = accountAssets?.videos || [];
+
+    // Find the container for selected videos display - it's after the video list
+    const videoList = document.getElementById(`dup-bulk-video-list-${advertiserId}`);
+    if (!videoList) return;
+
+    // Find or create the selected videos display
+    let selectedDisplay = videoList.nextElementSibling;
+    if (!selectedDisplay || !selectedDisplay.classList.contains('dup-bulk-selected-display')) {
+        // Remove any existing display
+        if (selectedDisplay && selectedDisplay.classList.contains('dup-bulk-selected-display')) {
+            selectedDisplay.remove();
+        }
+
+        // Create new display element
+        selectedDisplay = document.createElement('div');
+        selectedDisplay.className = 'dup-bulk-selected-display';
+        videoList.parentNode.insertBefore(selectedDisplay, videoList.nextSibling);
+    }
+
+    if (selectedVideoIds.length === 0) {
+        selectedDisplay.innerHTML = '';
+        selectedDisplay.style.display = 'none';
+        return;
+    }
+
+    selectedDisplay.style.display = 'block';
+    selectedDisplay.innerHTML = `
+        <div style="margin-top: 8px;">
+            <div style="font-size: 11px; color: #64748b; margin-bottom: 6px;">Selected Videos:</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                ${selectedVideoIds.map(vid => {
+                    const v = videos.find(x => x.video_id === vid);
+                    const thumbUrl = v ? (v.preview_url || v.thumbnail_url || v.poster_url || '') : '';
+                    const name = v ? (v.file_name || vid).substring(0, 15) : vid.substring(0, 10);
+                    return `
+                        <div style="display: flex; align-items: center; gap: 4px; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
+                            <div style="width: 24px; height: 18px; border-radius: 2px; overflow: hidden; background: #1a1a1a; display: flex; align-items: center; justify-content: center;">
+                                ${thumbUrl ?
+                                    '<img src="' + thumbUrl + '" style="width:100%;height:100%;object-fit:cover;">' :
+                                    '<span style="font-size:10px;">🎬</span>'
+                                }
+                            </div>
+                            <span>${name}${name.length < (v?.file_name || vid).length ? '...' : ''}</span>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
 }
 
 // Update bulk account config
@@ -10264,6 +10426,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Prevent text selection on double-click on buttons
     document.addEventListener('selectstart', function(e) {
+        // Guard against non-element targets (text nodes, etc.)
+        if (!e.target || typeof e.target.closest !== 'function') {
+            return;
+        }
         const target = e.target.closest('button, [onclick], .btn-primary, .btn-secondary, .btn-success');
         if (target) {
             e.preventDefault();
