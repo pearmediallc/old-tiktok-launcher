@@ -2260,10 +2260,22 @@ try {
                 $videoId = null;
                 $responseData = null;
 
+                // Log complete response structure for debugging
+                logToFile("Upload Response Structure: " . json_encode($response));
+
                 if (isset($response->data)) {
                     // Convert response data to array for safe JSON encoding
                     $responseData = json_decode(json_encode($response->data), true);
-                    $videoId = $responseData['video_id'] ?? null;
+
+                    // Check multiple possible locations for video_id
+                    // TikTok API can return it in different places depending on version/endpoint
+                    $videoId = $responseData['video_id']
+                            ?? $responseData['video']['video_id']
+                            ?? $responseData['material_id']
+                            ?? $responseData['id']
+                            ?? null;
+
+                    logToFile("Extracted video_id: " . ($videoId ?? 'null') . " from response data: " . json_encode($responseData));
                 }
 
                 // For video upload, success REQUIRES a video_id to be returned
@@ -2336,6 +2348,14 @@ try {
                     } elseif (isset($response->message) && $response->message) {
                         $errorMessage = (string)$response->message;
                     }
+                }
+
+                // Ensure video_id is at the top level of data for frontend compatibility
+                // The frontend expects result.data.video_id to exist
+                if ($videoId && is_array($responseData)) {
+                    $responseData['video_id'] = $videoId;
+                } elseif ($videoId && !is_array($responseData)) {
+                    $responseData = ['video_id' => $videoId];
                 }
 
                 $jsonResponse = [
@@ -2465,12 +2485,24 @@ try {
                     throw new Exception("Invalid JSON response from TikTok API");
                 }
 
-                // Extract video_id
+                // Extract video_id - check multiple possible locations
                 $videoId = null;
                 $responseData = null;
+
+                // Log complete response structure for debugging
+                logToFile("Upload to $targetAdvertiserId - Response Structure: " . json_encode($response));
+
                 if (isset($response->data)) {
                     $responseData = json_decode(json_encode($response->data), true);
-                    $videoId = $responseData['video_id'] ?? null;
+
+                    // Check multiple possible locations for video_id
+                    $videoId = $responseData['video_id']
+                            ?? $responseData['video']['video_id']
+                            ?? $responseData['material_id']
+                            ?? $responseData['id']
+                            ?? null;
+
+                    logToFile("Extracted video_id: " . ($videoId ?? 'null') . " from response data: " . json_encode($responseData));
                 }
 
                 // Check for success - REQUIRE video_id
@@ -2519,6 +2551,13 @@ try {
                     file_put_contents($storageFile, json_encode($storage, JSON_PRETTY_PRINT));
 
                     logToFile("Video uploaded successfully to $targetAdvertiserId with ID: $videoId");
+                }
+
+                // Ensure video_id is at the top level of data for frontend compatibility
+                if ($videoId && is_array($responseData)) {
+                    $responseData['video_id'] = $videoId;
+                } elseif ($videoId && !is_array($responseData)) {
+                    $responseData = ['video_id' => $videoId];
                 }
 
                 outputJsonResponse([
