@@ -112,14 +112,42 @@ function getUTCDateTime($modifier = null) {
     return $dt->format('Y-m-d H:i:s');
 }
 
-// Convert EST time string to UTC
-// Use when user provides time in EST (local time) and we need to send to TikTok in UTC
-function convertESTtoUTC($estTimeString) {
+// Convert user's scheduled time to UTC
+// User enters time thinking in EST, we calculate offset from now and apply to UTC
+// This matches the "Start Immediately" approach which works correctly
+function convertScheduledTimeToUTC($scheduledTimeString) {
+    // Parse the user's input as EST time
     $est = new DateTimeZone('America/New_York');
     $utc = new DateTimeZone('UTC');
-    $dt = new DateTime($estTimeString, $est);
-    $dt->setTimezone($utc);
-    return $dt->format('Y-m-d H:i:s');
+
+    // Get current time in EST (user's perspective)
+    $nowEST = new DateTime('now', $est);
+
+    // Parse scheduled time as EST
+    $scheduledEST = new DateTime($scheduledTimeString, $est);
+
+    // Calculate the difference in seconds
+    $diffSeconds = $scheduledEST->getTimestamp() - $nowEST->getTimestamp();
+
+    // Apply the same offset to current UTC time
+    // This matches how "Start Immediately" works (which uses getUTCDateTime)
+    $utcTime = new DateTime('now', $utc);
+    $utcTime->modify("+{$diffSeconds} seconds");
+
+    $result = $utcTime->format('Y-m-d H:i:s');
+
+    // Log for debugging
+    logSmartPlus("Schedule conversion: User input (EST): $scheduledTimeString");
+    logSmartPlus("Schedule conversion: Now EST: " . $nowEST->format('Y-m-d H:i:s'));
+    logSmartPlus("Schedule conversion: Diff seconds: $diffSeconds");
+    logSmartPlus("Schedule conversion: Result UTC: $result");
+
+    return $result;
+}
+
+// Legacy function - kept for backwards compatibility
+function convertESTtoUTC($estTimeString) {
+    return convertScheduledTimeToUTC($estTimeString);
 }
 
 // Get fresh image URL by searching the image library

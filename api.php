@@ -138,14 +138,32 @@ function getUTCDateTime($modifier = null) {
     return $dt->format('Y-m-d H:i:s');
 }
 
-// Convert EST time string to UTC
-// Use when user provides time in EST (local time) and we need to send to TikTok in UTC
-function convertESTtoUTC($estTimeString) {
+// Convert user's scheduled time to UTC
+// User enters time thinking in EST, we calculate offset from now and apply to UTC
+// This matches the "Start Immediately" approach which works correctly
+function convertScheduledTimeToUTC($scheduledTimeString) {
     $est = new DateTimeZone('America/New_York');
     $utc = new DateTimeZone('UTC');
-    $dt = new DateTime($estTimeString, $est);
-    $dt->setTimezone($utc);
-    return $dt->format('Y-m-d H:i:s');
+
+    // Get current time in EST (user's perspective)
+    $nowEST = new DateTime('now', $est);
+
+    // Parse scheduled time as EST
+    $scheduledEST = new DateTime($scheduledTimeString, $est);
+
+    // Calculate the difference in seconds from now
+    $diffSeconds = $scheduledEST->getTimestamp() - $nowEST->getTimestamp();
+
+    // Apply the same offset to current UTC time
+    $utcTime = new DateTime('now', $utc);
+    $utcTime->modify("+{$diffSeconds} seconds");
+
+    return $utcTime->format('Y-m-d H:i:s');
+}
+
+// Legacy function - kept for backwards compatibility
+function convertESTtoUTC($estTimeString) {
+    return convertScheduledTimeToUTC($estTimeString);
 }
 
 // Helper function to output clean JSON response
