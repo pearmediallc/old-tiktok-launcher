@@ -6900,7 +6900,7 @@ async function handleMediaLibraryUpload(event) {
     event.target.value = '';
 }
 
-// Show upload progress UI
+// Show upload progress UI with individual progress bars
 function showMediaUploadProgress() {
     const container = document.getElementById('media-upload-progress');
     const list = document.getElementById('media-upload-list');
@@ -6909,22 +6909,27 @@ function showMediaUploadProgress() {
     if (container) container.style.display = 'block';
     if (countEl) countEl.textContent = `0/${mediaLibraryState.uploadTotal}`;
 
-    // Create item for each file
+    // Create item for each file with individual progress bar
     if (list) {
         list.innerHTML = mediaLibraryState.uploadQueue.map((file, i) => `
-            <div class="upload-item" id="media-upload-item-${i}" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #f8fafc; border-radius: 6px; margin-bottom: 6px; font-size: 13px;">
-                <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${file.name}</span>
-                <span style="color: #64748b; font-size: 12px;">${(file.size / 1024 / 1024).toFixed(1)}MB</span>
-                <span class="upload-status" style="font-weight: 500; padding: 2px 8px; border-radius: 4px; font-size: 11px; background: #f1f5f9; color: #64748b;">Pending</span>
+            <div class="upload-item" id="media-upload-item-${i}" style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: #f8fafc; border-radius: 6px; margin-bottom: 8px; font-size: 13px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500;">${file.name}</span>
+                    <span style="color: #64748b; font-size: 12px;">${(file.size / 1024 / 1024).toFixed(1)}MB</span>
+                    <span class="upload-status" style="font-weight: 600; padding: 2px 10px; border-radius: 4px; font-size: 11px; background: #f1f5f9; color: #64748b; min-width: 60px; text-align: center;">Pending</span>
+                </div>
+                <div style="height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden;">
+                    <div class="upload-item-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.2s ease;"></div>
+                </div>
             </div>
         `).join('');
     }
 }
 
-// Upload single video
+// Upload single video with real-time progress
 async function uploadMediaVideo(file, index) {
     const itemId = `media-upload-item-${index}`;
-    updateMediaUploadStatus(itemId, 'uploading', 'Uploading...', '#dbeafe', '#1d4ed8');
+    updateMediaUploadStatus(itemId, 'uploading', '0%', '#dbeafe', '#1d4ed8', 0);
 
     // Add timestamp to filename
     const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
@@ -6932,59 +6937,112 @@ async function uploadMediaVideo(file, index) {
     const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
     const newFileName = `${baseName}_${timestamp}${ext}`;
 
-    const renamedFile = new File([file], newFileName, { type: file.type });
     const formData = new FormData();
-    formData.append('video', renamedFile);
+    formData.append('video', file, newFileName);
 
-    try {
-        addLog('info', `Uploading video: ${newFileName}`);
+    addLog('info', `Uploading video: ${newFileName}`);
 
-        const response = await fetch('api.php?action=upload_video', {
-            method: 'POST',
-            body: formData
+    return new Promise((resolve) => {
+        const xhr = new XMLHttpRequest();
+        const uploadTimeout = 300000; // 5 minutes timeout
+        let timeoutId;
+        let uploadComplete = false;
+
+        // Real-time progress tracking
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                updateMediaUploadStatus(itemId, 'uploading', `${percent}%`, '#dbeafe', '#1d4ed8', percent);
+                if (percent === 100) {
+                    uploadComplete = true;
+                    updateMediaUploadStatus(itemId, 'uploading', 'Processing...', '#dbeafe', '#1d4ed8', 100);
+                }
+            }
         });
 
-        const result = await response.json();
-        console.log('Upload response:', result);
+        // Success handler
+        xhr.addEventListener('load', () => {
+            clearTimeout(timeoutId);
 
-        if (result.success && result.data?.video_id) {
-            // Video uploaded and video_id returned immediately
-            mediaLibraryState.uploadCompleted++;
-            updateMediaUploadStatus(itemId, 'success', '✓ Uploaded', '#dcfce7', '#16a34a');
-            addLog('success', `Video uploaded: ${result.data.video_id}`);
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    let result;
+                    try {
+                        result = JSON.parse(xhr.responseText);
+                    } catch (e) {
+                        const jsonMatch = xhr.responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
+                        if (jsonMatch) {
+                            result = JSON.parse(jsonMatch[0]);
+                        } else {
+                            throw new Error('Invalid server response');
+                        }
+                    }
 
-            // Add to local state immediately
-            mediaLibraryState.videos.unshift({
-                video_id: result.data.video_id,
-                name: newFileName,
-                thumbnail: URL.createObjectURL(file),
-                duration: 0,
-                create_time: new Date().toISOString()
-            });
+                    console.log('Upload response:', result);
 
+                    if (result.success && result.data?.video_id) {
+                        mediaLibraryState.uploadCompleted++;
+                        updateMediaUploadStatus(itemId, 'success', '✓ Uploaded', '#dcfce7', '#16a34a', 100);
+                        addLog('success', `Video uploaded: ${result.data.video_id}`);
+
+                        mediaLibraryState.videos.unshift({
+                            video_id: result.data.video_id,
+                            name: newFileName,
+                            thumbnail: URL.createObjectURL(file),
+                            duration: 0,
+                            create_time: new Date().toISOString()
+                        });
+
+                        updateMediaUploadProgress();
+                        resolve({ success: true, video_id: result.data.video_id });
+                    } else if (result.success || (result.message && result.message.toLowerCase().includes('processing'))) {
+                        mediaLibraryState.uploadProcessing++;
+                        updateMediaUploadStatus(itemId, 'processing', '⏳ Processing', '#fef3c7', '#d97706', 100);
+                        addLog('info', `Video accepted, processing: ${newFileName}`);
+                        updateMediaUploadProgress();
+                        resolve({ success: true, processing: true });
+                    } else {
+                        handleUploadError(result.message || 'Upload failed');
+                    }
+                } catch (e) {
+                    handleUploadError('Invalid server response');
+                }
+            } else {
+                handleUploadError(`Server error (${xhr.status})`);
+            }
+        });
+
+        // Error handler
+        xhr.addEventListener('error', () => {
+            clearTimeout(timeoutId);
+            handleUploadError(uploadComplete ? 'Connection lost after upload - check library' : 'Network error');
+        });
+
+        // Abort handler (timeout)
+        xhr.addEventListener('abort', () => {
+            clearTimeout(timeoutId);
+            handleUploadError(uploadComplete ? 'Timeout - video may have uploaded, check library' : 'Upload timeout');
+        });
+
+        function handleUploadError(errorMsg) {
+            mediaLibraryState.uploadFailed++;
+            updateMediaUploadStatus(itemId, 'failed', '✗ Failed', '#fee2e2', '#dc2626', 0);
+            addLog('error', `Upload failed for ${file.name}: ${errorMsg}`);
             updateMediaUploadProgress();
-            return { success: true, video_id: result.data.video_id };
-        } else if (result.success || (result.message && result.message.includes('processing'))) {
-            // Video accepted but still processing - this is NOT an error
-            mediaLibraryState.uploadProcessing++;
-            updateMediaUploadStatus(itemId, 'processing', '⏳ Processing', '#fef3c7', '#d97706');
-            addLog('info', `Video accepted, processing: ${newFileName}`);
-            updateMediaUploadProgress();
-            return { success: true, processing: true };
-        } else {
-            throw new Error(result.message || 'Upload failed');
+            resolve({ success: false, error: errorMsg });
         }
-    } catch (error) {
-        mediaLibraryState.uploadFailed++;
-        updateMediaUploadStatus(itemId, 'failed', `✗ Failed`, '#fee2e2', '#dc2626');
-        addLog('error', `Upload failed for ${file.name}: ${error.message}`);
-        updateMediaUploadProgress();
-        return { success: false, error: error.message };
-    }
+
+        // Set timeout
+        timeoutId = setTimeout(() => xhr.abort(), uploadTimeout);
+
+        // Send request
+        xhr.open('POST', 'api.php?action=upload_video');
+        xhr.send(formData);
+    });
 }
 
-// Update single upload item status
-function updateMediaUploadStatus(itemId, status, text, bgColor, textColor) {
+// Update single upload item status with progress bar
+function updateMediaUploadStatus(itemId, status, text, bgColor, textColor, progress = null) {
     const item = document.getElementById(itemId);
     if (!item) return;
 
@@ -6993,6 +7051,12 @@ function updateMediaUploadStatus(itemId, status, text, bgColor, textColor) {
         statusEl.textContent = text;
         statusEl.style.background = bgColor;
         statusEl.style.color = textColor;
+    }
+
+    // Update individual progress bar if present
+    const progressBar = item.querySelector('.upload-item-progress-bar');
+    if (progressBar && progress !== null) {
+        progressBar.style.width = `${progress}%`;
     }
 }
 

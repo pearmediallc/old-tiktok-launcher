@@ -1063,12 +1063,22 @@ try {
                 return $ts;
             }
 
+            // Base required fields (budget is conditional based on budget_mode)
             $required_fields = ['campaign_id', 'adgroup_name', 'placement_type', 'placements',
-                                'promotion_type', 'optimization_goal', 'billing_event', 'budget_mode', 'budget'];
+                                'promotion_type', 'optimization_goal', 'billing_event', 'budget_mode'];
             foreach ($required_fields as $field) {
                 if (empty($data[$field])) {
                     http_response_code(400);
                     echo json_encode(['success' => false, 'message' => "Required field missing: {$field}"]);
+                    exit;
+                }
+            }
+
+            // Budget is required ONLY when budget_mode is NOT INFINITE (CBO disabled)
+            if ($data['budget_mode'] !== 'BUDGET_MODE_INFINITE') {
+                if (empty($data['budget']) || floatval($data['budget']) < 20) {
+                    http_response_code(400);
+                    echo json_encode(['success' => false, 'message' => 'Budget is required and must be at least $20 when CBO is disabled']);
                     exit;
                 }
             }
@@ -1141,10 +1151,14 @@ try {
                 'placement_type'     => $data['placement_type'],
                 'placements'         => $data['placements'],
                 'budget_mode'        => $data['budget_mode'],
-                'budget'             => floatval($data['budget']),
-                'bid_type'           => $data['bid_type'],
+                'bid_type'           => $data['bid_type'] ?? 'BID_TYPE_NO_BID',
                 'location_ids'       => $data['location_ids'] ?? ['6252001'],
             ];
+
+            // Only include budget when budget_mode is not INFINITE (CBO disabled)
+            if ($data['budget_mode'] !== 'BUDGET_MODE_INFINITE' && !empty($data['budget'])) {
+                $params['budget'] = floatval($data['budget']);
+            }
 
             if (!empty($data['conversion_bid_price']) && floatval($data['conversion_bid_price']) > 0) {
                 $params['conversion_bid_price'] = floatval($data['conversion_bid_price']);
