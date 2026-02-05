@@ -803,7 +803,20 @@ switch ($action) {
 
         logSmartPlus("Found " . count($customIdentities) . " CUSTOMIZED_USER identities");
 
-        // 2. Fetch ALL pages of BC_AUTH_TT identities (Business Center TikTok accounts)
+        // 2. Fetch ALL Business Centers first, then fetch BC_AUTH_TT identities for each
+        logSmartPlus("Fetching Business Centers for BC_AUTH_TT identities...");
+
+        $businessCenters = [];
+        $bcResult = makeApiCall('/bc/get/', [], $accessToken, 'GET');
+
+        if ($bcResult['code'] == 0 && isset($bcResult['data']['list'])) {
+            $businessCenters = $bcResult['data']['list'];
+            logSmartPlus("Found " . count($businessCenters) . " Business Centers: " . json_encode(array_column($businessCenters, 'bc_id')));
+        } else {
+            logSmartPlus("No Business Centers found or API error: " . json_encode($bcResult));
+        }
+
+        // 2a. First try fetching BC_AUTH_TT without specific BC ID (gets all accessible)
         $page = 1;
         do {
             $result = makeApiCall('/identity/get/', [
@@ -813,7 +826,7 @@ switch ($action) {
                 'page_size' => $pageSize
             ], $accessToken, 'GET');
 
-            logSmartPlus("BC_AUTH_TT page $page response code: " . ($result['code'] ?? 'null'));
+            logSmartPlus("BC_AUTH_TT (general) page $page response code: " . ($result['code'] ?? 'null'));
 
             if ($result['code'] == 0 && isset($result['data']['identity_list'])) {
                 foreach ($result['data']['identity_list'] as $identity) {
@@ -839,7 +852,53 @@ switch ($action) {
             $page++;
         } while ($page <= $totalPages && $page <= 20);
 
-        logSmartPlus("Found " . count($bcAuthIdentities) . " BC_AUTH_TT identities");
+        logSmartPlus("Found " . count($bcAuthIdentities) . " BC_AUTH_TT identities (general query)");
+
+        // 2b. Also fetch BC_AUTH_TT identities for each specific Business Center
+        // This ensures we get identities that might only be accessible via specific BC
+        $existingIdentityIds = array_column($bcAuthIdentities, 'identity_id');
+
+        foreach ($businessCenters as $bc) {
+            $bcId = $bc['bc_id'] ?? null;
+            if (!$bcId) continue;
+
+            logSmartPlus("Fetching BC_AUTH_TT identities for BC: $bcId");
+            $page = 1;
+            do {
+                $result = makeApiCall('/identity/get/', [
+                    'advertiser_id' => $advertiserId,
+                    'identity_type' => 'BC_AUTH_TT',
+                    'identity_authorized_bc_id' => $bcId,
+                    'page' => $page,
+                    'page_size' => $pageSize
+                ], $accessToken, 'GET');
+
+                logSmartPlus("BC_AUTH_TT (BC: $bcId) page $page response code: " . ($result['code'] ?? 'null'));
+
+                if ($result['code'] == 0 && isset($result['data']['identity_list'])) {
+                    foreach ($result['data']['identity_list'] as $identity) {
+                        // Skip if already added from general query
+                        if (in_array($identity['identity_id'], $existingIdentityIds)) {
+                            continue;
+                        }
+                        $identity['identity_type'] = 'BC_AUTH_TT';
+                        $identity['source_type'] = 'bc_auth_tt';
+                        // Ensure BC ID is set
+                        if (!isset($identity['identity_authorized_bc_id'])) {
+                            $identity['identity_authorized_bc_id'] = $bcId;
+                        }
+                        logSmartPlus("Added BC_AUTH_TT identity from BC $bcId: " . ($identity['identity_id'] ?? 'unknown'));
+                        $bcAuthIdentities[] = $identity;
+                        $existingIdentityIds[] = $identity['identity_id'];
+                    }
+                }
+
+                $totalPages = $result['data']['page_info']['total_page'] ?? 1;
+                $page++;
+            } while ($page <= $totalPages && $page <= 10); // Lower limit per BC
+        }
+
+        logSmartPlus("Total BC_AUTH_TT identities after BC-specific queries: " . count($bcAuthIdentities));
 
         // 3. Fetch ALL pages of TT_USER identities (direct TikTok accounts)
         $page = 1;
