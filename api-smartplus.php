@@ -817,10 +817,22 @@ switch ($action) {
 
             if ($result['code'] == 0 && isset($result['data']['identity_list'])) {
                 foreach ($result['data']['identity_list'] as $identity) {
+                    // Log full identity structure on first one for debugging
+                    if (count($bcAuthIdentities) === 0) {
+                        logSmartPlus("BC_AUTH_TT sample identity structure: " . json_encode($identity));
+                    }
                     $identity['identity_type'] = 'BC_AUTH_TT';
                     $identity['source_type'] = 'bc_auth_tt';
+                    // Log if identity_authorized_bc_id is present
+                    if (isset($identity['identity_authorized_bc_id'])) {
+                        logSmartPlus("BC_AUTH_TT identity has identity_authorized_bc_id: " . $identity['identity_authorized_bc_id']);
+                    } else {
+                        logSmartPlus("WARNING: BC_AUTH_TT identity missing identity_authorized_bc_id - identity_id: " . ($identity['identity_id'] ?? 'unknown'));
+                    }
                     $bcAuthIdentities[] = $identity;
                 }
+            } else if ($result['code'] != 0) {
+                logSmartPlus("BC_AUTH_TT API error: " . json_encode($result));
             }
 
             $totalPages = $result['data']['page_info']['total_page'] ?? 1;
