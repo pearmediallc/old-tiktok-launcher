@@ -821,6 +821,46 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
             border-color: #0284c7;
             box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
         }
+
+        /* Refresh Button Styles */
+        .refresh-btn {
+            background: transparent;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #64748b;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+            min-width: 32px;
+            justify-content: center;
+        }
+        .refresh-btn:hover {
+            background: #f1f5f9;
+            border-color: #cbd5e1;
+            color: #334155;
+        }
+        .refresh-btn:disabled, .refresh-btn.loading {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+        .refresh-btn .spinner {
+            display: inline-block;
+            animation: refreshSpin 1s linear infinite;
+        }
+        @keyframes refreshSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Processing status for video uploads */
+        .upload-item-status.processing {
+            background: #fef3c7;
+            color: #92400e;
+        }
     </style>
 </head>
 <body>
@@ -1027,9 +1067,14 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                     <div class="form-row">
                         <div class="form-group">
                             <label>Select Pixel for Form Tracking</label>
-                            <select id="pixel-select">
-                                <option value="">Loading pixels...</option>
-                            </select>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <select id="pixel-select" style="flex: 1;">
+                                    <option value="">Loading pixels...</option>
+                                </select>
+                                <button type="button" class="refresh-btn" id="pixel-refresh-btn" onclick="refreshPixels()" title="Refresh pixel list">
+                                    <span id="pixel-refresh-icon">🔄</span>
+                                </button>
+                            </div>
                             <small>Required for External Website optimization</small>
                         </div>
                         <div class="form-group">
@@ -1224,9 +1269,14 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                     <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                         <div class="form-group">
                             <label>Identity</label>
-                            <select id="global-identity" required>
-                                <option value="">Select identity...</option>
-                            </select>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <select id="global-identity" required style="flex: 1;">
+                                    <option value="">Select identity...</option>
+                                </select>
+                                <button type="button" class="refresh-btn" id="identity-refresh-btn" onclick="refreshIdentities()" title="Refresh identity list">
+                                    <span id="identity-refresh-icon">🔄</span>
+                                </button>
+                            </div>
                             <button type="button" class="btn-secondary" onclick="openCreateIdentityModal()" style="margin-top: 8px; width: 100%;">+ Create New Identity</button>
                         </div>
                         <div class="form-group">

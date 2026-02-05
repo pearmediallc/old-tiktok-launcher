@@ -837,6 +837,163 @@ async function loadIdentities() {
     }
 }
 
+// ========================================
+// REFRESH FUNCTIONS FOR PIXELS & IDENTITIES
+// ========================================
+
+// Refresh pixels - supports both main page and per-account
+async function refreshPixels(advertiserId = null) {
+    const iconId = advertiserId ? `pixel-refresh-icon-${advertiserId}` : 'pixel-refresh-icon';
+    const btnId = advertiserId ? `pixel-refresh-btn-${advertiserId}` : 'pixel-refresh-btn';
+    const selectId = advertiserId ? `pixel-${advertiserId}` : 'pixel-select';
+
+    const icon = document.getElementById(iconId);
+    const btn = document.getElementById(btnId);
+    const select = document.getElementById(selectId);
+
+    // Show loading state
+    if (icon) icon.innerHTML = '<span class="spinner">🔄</span>';
+    if (btn) btn.disabled = true;
+    if (select) select.disabled = true;
+
+    try {
+        const endpoint = advertiserId ? 'api-smartplus.php' : 'api-smartplus.php';
+        const params = new URLSearchParams({ action: 'get_pixels', force_refresh: 'true' });
+        if (advertiserId) params.append('advertiser_id', advertiserId);
+
+        const response = await fetch(`${endpoint}?${params}`);
+        const result = await response.json();
+
+        if (result.success && result.data?.pixels) {
+            const pixels = result.data.pixels;
+            const currentValue = select?.value;
+
+            // Rebuild dropdown
+            select.innerHTML = '<option value="">Select pixel...</option>';
+            pixels.forEach(p => {
+                const name = p.pixel_name || p.name || `Pixel ${p.pixel_id}`;
+                const option = document.createElement('option');
+                option.value = p.pixel_id;
+                option.textContent = name;
+                select.appendChild(option);
+            });
+
+            // Restore previous selection if still valid
+            if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
+                select.value = currentValue;
+            }
+
+            showToast(`Refreshed ${pixels.length} pixel(s)`, 'success');
+            addLog('success', `Refreshed ${pixels.length} pixels${advertiserId ? ` for account ${advertiserId}` : ''}`);
+        } else {
+            showToast(result.message || 'Failed to refresh pixels', 'error');
+        }
+    } catch (e) {
+        console.error('Refresh pixels error:', e);
+        showToast('Error refreshing pixels: ' + e.message, 'error');
+    } finally {
+        if (icon) icon.innerHTML = '🔄';
+        if (btn) btn.disabled = false;
+        if (select) select.disabled = false;
+    }
+}
+
+// Refresh identities - supports both main page and per-account
+async function refreshIdentities(advertiserId = null) {
+    const iconId = advertiserId ? `identity-refresh-icon-${advertiserId}` : 'identity-refresh-icon';
+    const btnId = advertiserId ? `identity-refresh-btn-${advertiserId}` : 'identity-refresh-btn';
+    const selectId = advertiserId ? `identity-${advertiserId}` : 'global-identity';
+
+    const icon = document.getElementById(iconId);
+    const btn = document.getElementById(btnId);
+    const select = document.getElementById(selectId);
+
+    // Show loading state
+    if (icon) icon.innerHTML = '<span class="spinner">🔄</span>';
+    if (btn) btn.disabled = true;
+    if (select) select.disabled = true;
+
+    try {
+        const endpoint = advertiserId ? 'api-smartplus.php' : 'api-smartplus.php';
+        const params = new URLSearchParams({ action: 'get_identities', force_refresh: 'true' });
+        if (advertiserId) params.append('advertiser_id', advertiserId);
+
+        const response = await fetch(`${endpoint}?${params}`);
+        const result = await response.json();
+
+        if (result.success) {
+            const identities = result.data?.list || result.data?.identities || [];
+            const pages = result.data?.pages || [];
+            const currentValue = select?.value;
+
+            // Rebuild dropdown with optgroups
+            select.innerHTML = '<option value="">Select identity...</option>';
+
+            if (identities.length > 0) {
+                const customGroup = document.createElement('optgroup');
+                customGroup.label = 'Custom Identities';
+                identities.forEach(id => {
+                    const option = document.createElement('option');
+                    option.value = id.identity_id;
+                    option.dataset.type = id.identity_type || 'CUSTOMIZED_USER';
+                    option.textContent = id.display_name || id.identity_name || id.identity_id;
+                    customGroup.appendChild(option);
+                });
+                select.appendChild(customGroup);
+            }
+
+            if (pages.length > 0) {
+                const bcGroup = document.createElement('optgroup');
+                bcGroup.label = 'TikTok Pages (Business Center)';
+                pages.forEach(id => {
+                    const option = document.createElement('option');
+                    option.value = id.identity_id;
+                    option.dataset.type = 'BC_AUTH_TT';
+                    option.dataset.bcId = id.identity_authorized_bc_id || '';
+                    option.textContent = id.display_name || id.identity_name || id.identity_id;
+                    bcGroup.appendChild(option);
+                });
+                select.appendChild(bcGroup);
+            }
+
+            // Restore previous selection if still valid
+            if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
+                select.value = currentValue;
+            }
+
+            // Update state if main page refresh
+            if (!advertiserId) {
+                state.identities = [...identities, ...pages];
+                state.customIdentities = identities;
+                state.tiktokPages = pages;
+            }
+
+            const totalCount = identities.length + pages.length;
+            showToast(`Refreshed ${totalCount} identity(ies)`, 'success');
+            addLog('success', `Refreshed ${totalCount} identities${advertiserId ? ` for account ${advertiserId}` : ''}`);
+        } else {
+            showToast(result.message || 'Failed to refresh identities', 'error');
+        }
+    } catch (e) {
+        console.error('Refresh identities error:', e);
+        showToast('Error refreshing identities: ' + e.message, 'error');
+    } finally {
+        if (icon) icon.innerHTML = '🔄';
+        if (btn) btn.disabled = false;
+        if (select) select.disabled = false;
+    }
+}
+
+// Refresh pixels for duplicate bulk modal (alias)
+async function refreshDupBulkPixels(advertiserId) {
+    return refreshPixels(advertiserId);
+}
+
+// Refresh identities for duplicate bulk modal (alias)
+async function refreshDupBulkIdentities(advertiserId) {
+    return refreshIdentities(advertiserId);
+}
+
 // Load CTA Portfolios
 async function loadCtaPortfolios() {
     try {
@@ -3476,21 +3633,26 @@ function renderAccountAssetsDropdowns(advertiserId, assets) {
         <div class="bulk-asset-grid">
             <div class="bulk-asset-item">
                 <label><span class="asset-icon">📊</span> Pixel</label>
-                <select id="pixel-${advertiserId}" onchange="updateAccountAssetSelection('${advertiserId}')">
-                    ${pixelsArray.length === 0
-                        ? `<option value="">${hasPixelError ? 'Error loading' : 'No pixels'}</option>`
-                        : `<option value="">Select Pixel...</option>
-                           ${pixelsArray.map(p =>
-                               `<option value="${p.pixel_id}" ${p.pixel_id === selectedPixelId ? 'selected' : ''}>${p.pixel_name || p.pixel_id}</option>`
-                           ).join('')}`
-                    }
-                </select>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <select id="pixel-${advertiserId}" onchange="updateAccountAssetSelection('${advertiserId}')" style="flex: 1;">
+                        ${pixelsArray.length === 0
+                            ? `<option value="">${hasPixelError ? 'Error loading' : 'No pixels'}</option>`
+                            : `<option value="">Select Pixel...</option>
+                               ${pixelsArray.map(p =>
+                                   `<option value="${p.pixel_id}" ${p.pixel_id === selectedPixelId ? 'selected' : ''}>${p.pixel_name || p.pixel_id}</option>`
+                               ).join('')}`
+                        }
+                    </select>
+                    <button type="button" class="refresh-btn" id="pixel-refresh-btn-${advertiserId}" onclick="refreshPixels('${advertiserId}')" title="Refresh pixels">
+                        <span id="pixel-refresh-icon-${advertiserId}">🔄</span>
+                    </button>
+                </div>
                 ${pixelsArray.length > 0 ? `<span class="asset-count">${pixelsArray.length} available</span>` : ''}
             </div>
             <div class="bulk-asset-item">
                 <label><span class="asset-icon">👤</span> Identity</label>
-                <div class="identity-select-wrapper">
-                    <select id="identity-${advertiserId}" onchange="updateAccountAssetSelection('${advertiserId}')">
+                <div class="identity-select-wrapper" style="display: flex; gap: 6px; align-items: center;">
+                    <select id="identity-${advertiserId}" onchange="updateAccountAssetSelection('${advertiserId}')" style="flex: 1;">
                         ${identitiesArray.length === 0
                             ? `<option value="">${hasIdentityError ? 'Error loading' : 'No identities'}</option>`
                             : `<option value="">Select Identity...</option>
@@ -3499,6 +3661,9 @@ function renderAccountAssetsDropdowns(advertiserId, assets) {
                                ).join('')}`
                         }
                     </select>
+                    <button type="button" class="refresh-btn" id="identity-refresh-btn-${advertiserId}" onclick="refreshIdentities('${advertiserId}')" title="Refresh identities">
+                        <span id="identity-refresh-icon-${advertiserId}">🔄</span>
+                    </button>
                     <button type="button" class="btn-create-identity" onclick="openBulkIdentityCreate('${advertiserId}')" title="Create new identity">+</button>
                 </div>
                 ${identitiesArray.length > 0 ? `<span class="asset-count">${identitiesArray.length} available</span>` : '<span class="asset-count">Click + to create</span>'}
@@ -3999,7 +4164,7 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
             console.log(`[Bulk Upload] Response for ${file.name}:`, result);
 
             if (result.success && result.data?.video_id) {
-                // Video uploaded and video_id returned
+                // Video uploaded and video_id returned immediately
                 completed++;
                 const previewUrl = URL.createObjectURL(file);
                 uploadedVideos.push({
@@ -4012,14 +4177,30 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
                 });
                 addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
                 console.log(`[Bulk Upload] Success - video_id: ${result.data.video_id}`);
-            } else if (result.success || (result.message && result.message.includes('processing'))) {
-                // Video accepted but still processing - NOT an error
-                completed++;  // Count as success since video was accepted
+            } else if (result.success && result.processing) {
+                // Video accepted but still processing - count as SUCCESS
+                completed++;
+                const previewUrl = URL.createObjectURL(file);
+                uploadedVideos.push({
+                    video_id: 'processing_' + Date.now(),
+                    file_name: newFileName,
+                    video_cover_url: previewUrl,
+                    preview_url: previewUrl,
+                    type: 'video',
+                    is_new: true,
+                    is_processing: true
+                });
                 addLog('info', `Video accepted, processing: ${newFileName} on ${advertiserId}`);
                 console.log(`[Bulk Upload] Processing - video accepted: ${file.name}`);
-                // Show info toast for single file uploads
                 if (validFiles.length === 1) {
                     showToast('Video accepted! It will appear in library in 1-2 minutes.', 'success');
+                }
+            } else if (result.success) {
+                // Success but no video_id (legacy processing response)
+                completed++;
+                addLog('info', `Video accepted: ${newFileName} on ${advertiserId}`);
+                if (validFiles.length === 1) {
+                    showToast('Video accepted! Check library in 1-2 minutes.', 'success');
                 }
             } else {
                 // Upload failed - NO retry to prevent duplicates
@@ -4280,7 +4461,7 @@ async function handlePickerVideoUpload(event) {
             console.log(`[Picker Upload] Response for ${file.name}:`, result);
 
             if (result.success && result.data?.video_id) {
-                // Video uploaded and video_id returned
+                // Video uploaded and video_id returned immediately
                 completed++;
                 const previewUrl = URL.createObjectURL(file);
                 uploadedVideos.push({
@@ -4292,15 +4473,32 @@ async function handlePickerVideoUpload(event) {
                     is_new: true
                 });
                 addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
-            } else if (result.success || (result.message && result.message.includes('processing'))) {
-                // Video accepted but still processing - NOT an error
-                completed++;  // Count as success
+            } else if (result.success && result.processing) {
+                // Video accepted but processing - count as SUCCESS!
+                completed++;
+                const previewUrl = URL.createObjectURL(file);
+                uploadedVideos.push({
+                    video_id: 'processing_' + Date.now(),
+                    file_name: newFileName,
+                    video_cover_url: previewUrl,
+                    preview_url: previewUrl,
+                    type: 'video',
+                    is_new: true,
+                    is_processing: true
+                });
                 addLog('info', `Video accepted, processing: ${newFileName} on ${advertiserId}`);
                 if (validFiles.length === 1) {
                     showToast('Video accepted! It will appear in library in 1-2 minutes.', 'success');
                 }
+            } else if (result.success) {
+                // Success but no video_id (legacy response)
+                completed++;
+                addLog('info', `Video accepted: ${newFileName} on ${advertiserId}`);
+                if (validFiles.length === 1) {
+                    showToast('Video accepted! Check library in 1-2 minutes.', 'success');
+                }
             } else {
-                // Failed - NO retry to prevent duplicates
+                // Actual failure
                 failed++;
                 let errorMsg = result.message || result.error || 'Upload failed - check library';
                 console.error(`[Picker Upload] Failed:`, result);
@@ -6981,6 +7179,7 @@ async function uploadMediaVideo(file, index) {
                     console.log('Upload response:', result);
 
                     if (result.success && result.data?.video_id) {
+                        // Immediate success with video_id
                         mediaLibraryState.uploadCompleted++;
                         updateMediaUploadStatus(itemId, 'success', '✓ Uploaded', '#dcfce7', '#16a34a', 100);
                         addLog('success', `Video uploaded: ${result.data.video_id}`);
@@ -6995,13 +7194,22 @@ async function uploadMediaVideo(file, index) {
 
                         updateMediaUploadProgress();
                         resolve({ success: true, video_id: result.data.video_id });
-                    } else if (result.success || (result.message && result.message.toLowerCase().includes('processing'))) {
+                    } else if (result.success && result.processing) {
+                        // Video accepted but processing - count as SUCCESS!
                         mediaLibraryState.uploadProcessing++;
                         updateMediaUploadStatus(itemId, 'processing', '⏳ Processing', '#fef3c7', '#d97706', 100);
                         addLog('info', `Video accepted, processing: ${newFileName}`);
                         updateMediaUploadProgress();
                         resolve({ success: true, processing: true });
+                    } else if (result.success) {
+                        // Success but no video_id (legacy response)
+                        mediaLibraryState.uploadProcessing++;
+                        updateMediaUploadStatus(itemId, 'processing', '⏳ Accepted', '#fef3c7', '#d97706', 100);
+                        addLog('info', `Video accepted: ${newFileName}`);
+                        updateMediaUploadProgress();
+                        resolve({ success: true, processing: true });
                     } else {
+                        // Actual failure
                         handleUploadError(result.message || 'Upload failed');
                     }
                 } catch (e) {
@@ -8825,11 +9033,16 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
             <!-- Pixel -->
             <div class="dup-bulk-config-item">
                 <label>Pixel</label>
-                <select id="dup-bulk-pixel-${advertiserId}"
-                        onchange="updateDupBulkAccountConfig('${advertiserId}', 'pixel_id', this.value)">
-                    <option value="">Select Pixel...</option>
-                    ${pixels.map(p => `<option value="${p.pixel_id}" ${selectedAccount?.pixel_id === p.pixel_id ? 'selected' : ''}>${p.pixel_name}</option>`).join('')}
-                </select>
+                <div style="display: flex; gap: 6px;">
+                    <select id="dup-bulk-pixel-${advertiserId}" style="flex: 1;"
+                            onchange="updateDupBulkAccountConfig('${advertiserId}', 'pixel_id', this.value)">
+                        <option value="">Select Pixel...</option>
+                        ${pixels.map(p => `<option value="${p.pixel_id}" ${selectedAccount?.pixel_id === p.pixel_id ? 'selected' : ''}>${p.pixel_name}</option>`).join('')}
+                    </select>
+                    <button type="button" class="refresh-btn" id="pixel-refresh-btn-${advertiserId}" onclick="refreshPixels('${advertiserId}')" title="Refresh pixels">
+                        <span id="pixel-refresh-icon-${advertiserId}">🔄</span>
+                    </button>
+                </div>
             </div>
 
             <!-- Identity -->
@@ -8841,6 +9054,9 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
                         <option value="">Select Identity...</option>
                         ${identities.map(i => `<option value="${i.identity_id}" ${selectedAccount?.identity_id === i.identity_id ? 'selected' : ''}>${i.display_name || i.identity_name}</option>`).join('')}
                     </select>
+                    <button type="button" class="refresh-btn" id="identity-refresh-btn-${advertiserId}" onclick="refreshIdentities('${advertiserId}')" title="Refresh identities">
+                        <span id="identity-refresh-icon-${advertiserId}">🔄</span>
+                    </button>
                     <button type="button" onclick="openDupBulkIdentityCreate('${advertiserId}')"
                             style="padding: 6px 10px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"
                             title="Create new identity">+ New</button>
@@ -11157,6 +11373,7 @@ async function uploadSingleVideoInBulk(file, index) {
                     }
 
                     if (result.success && result.data?.video_id) {
+                        // Immediate success with video_id
                         bulkUploadState.completed++;
                         updateUploadItemStatus(itemId, 'success', '✓ Uploaded', 100);
                         addLog('success', `Uploaded: ${newFileName} (${result.data.video_id})`);
@@ -11173,15 +11390,22 @@ async function uploadSingleVideoInBulk(file, index) {
 
                         updateBulkUploadProgress();
                         resolve({ success: true, video_id: result.data.video_id });
-                    } else if (result.success || (result.message && result.message.toLowerCase().includes('processing'))) {
-                        // Video accepted but still processing - this is OK, not an error!
+                    } else if (result.success && result.processing) {
+                        // Video accepted but processing - count as SUCCESS, not failure!
                         bulkUploadState.completed++;
                         updateUploadItemStatus(itemId, 'processing', '⏳ Processing', 100);
                         addLog('info', `Video accepted, processing: ${newFileName}`);
                         updateBulkUploadProgress();
                         resolve({ success: true, processing: true });
+                    } else if (result.success) {
+                        // Success but no video_id (legacy response)
+                        bulkUploadState.completed++;
+                        updateUploadItemStatus(itemId, 'processing', '⏳ Accepted', 100);
+                        addLog('info', `Video accepted: ${newFileName}`);
+                        updateBulkUploadProgress();
+                        resolve({ success: true, processing: true });
                     } else {
-                        // Failed - but don't retry automatically
+                        // Actual failure
                         const errorMsg = result.message || 'Upload failed - check if video appears in library';
                         handleUploadFailed(errorMsg);
                     }

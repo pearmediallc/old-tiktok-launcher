@@ -668,33 +668,62 @@ switch ($action) {
         break;
 
     // ==========================================
-    // GET PIXELS (Cached - 10 min TTL)
+    // GET PIXELS with FULL PAGINATION (Cached - 10 min TTL)
     // ==========================================
     case 'get_pixels':
         $cacheKey = $cache->generateKey('pixels', $advertiserId);
-        $cachedData = $cache->get($cacheKey);
+        $forceRefresh = isset($input['force_refresh']) && $input['force_refresh'];
 
-        if ($cachedData !== null) {
-            logSmartPlus("Cache HIT for pixels - Advertiser: $advertiserId");
-            echo json_encode([
-                'success' => true,
-                'data' => ['pixels' => $cachedData],
-                'cached' => true
-            ]);
-            break;
+        // Check cache unless force refresh
+        if (!$forceRefresh) {
+            $cachedData = $cache->get($cacheKey);
+            if ($cachedData !== null) {
+                logSmartPlus("Cache HIT for pixels - Advertiser: $advertiserId");
+                echo json_encode([
+                    'success' => true,
+                    'data' => ['pixels' => $cachedData],
+                    'cached' => true
+                ]);
+                break;
+            }
+        } else {
+            logSmartPlus("Force refresh pixels - clearing cache");
+            $cache->delete($cacheKey);
         }
 
-        logSmartPlus("Cache MISS for pixels - Advertiser: $advertiserId");
-        $result = makeApiCall('/pixel/list/', [
-            'advertiser_id' => $advertiserId
-        ], $accessToken, 'GET');
+        logSmartPlus("Cache MISS for pixels - Advertiser: $advertiserId - fetching ALL pages");
 
-        if ($result['code'] == 0 && isset($result['data']['pixels'])) {
+        $allPixels = [];
+        $page = 1;
+        $pageSize = 100;
+
+        // Fetch ALL pages of pixels
+        do {
+            $result = makeApiCall('/pixel/list/', [
+                'advertiser_id' => $advertiserId,
+                'page' => $page,
+                'page_size' => $pageSize
+            ], $accessToken, 'GET');
+
+            logSmartPlus("Pixel page $page response code: " . ($result['code'] ?? 'null'));
+
+            if ($result['code'] == 0 && isset($result['data']['pixels'])) {
+                $allPixels = array_merge($allPixels, $result['data']['pixels']);
+            }
+
+            $totalPages = $result['data']['page_info']['total_page'] ?? 1;
+            $page++;
+        } while ($page <= $totalPages && $page <= 20); // Safety limit 20 pages
+
+        logSmartPlus("Found " . count($allPixels) . " pixels total");
+
+        if (count($allPixels) > 0 || $result['code'] == 0) {
             // Cache the pixels for 10 minutes
-            $cache->set($cacheKey, $result['data']['pixels'], Cache::TTL_LONG);
+            $cache->set($cacheKey, $allPixels, Cache::TTL_LONG);
             echo json_encode([
                 'success' => true,
-                'data' => ['pixels' => $result['data']['pixels']]
+                'data' => ['pixels' => $allPixels],
+                'total_count' => count($allPixels)
             ]);
         } else {
             echo json_encode([
@@ -705,115 +734,148 @@ switch ($action) {
         break;
 
     // ==========================================
-    // GET IDENTITIES - All types for Smart+ (Cached - 10 min TTL)
+    // GET IDENTITIES - All types with FULL PAGINATION (Cached - 10 min TTL)
     // ==========================================
     case 'get_identities':
         $cacheKey = $cache->generateKey('identities', $advertiserId);
-        $cachedData = $cache->get($cacheKey);
+        $forceRefresh = isset($input['force_refresh']) && $input['force_refresh'];
 
-        if ($cachedData !== null) {
-            logSmartPlus("Cache HIT for identities - Advertiser: $advertiserId");
-            // Handle both old format (array) and new format (object with identities/pages)
-            if (isset($cachedData['identities'])) {
-                // New format
-                echo json_encode([
-                    'success' => true,
-                    'data' => [
-                        'list' => $cachedData['identities'],
-                        'identities' => $cachedData['identities'],
-                        'pages' => $cachedData['pages'] ?? []
-                    ],
-                    'cached' => true
-                ]);
-            } else {
-                // Old format - just identities array
-                echo json_encode([
-                    'success' => true,
-                    'data' => ['list' => $cachedData, 'identities' => $cachedData, 'pages' => []],
-                    'cached' => true
-                ]);
+        // Check cache unless force refresh
+        if (!$forceRefresh) {
+            $cachedData = $cache->get($cacheKey);
+            if ($cachedData !== null) {
+                logSmartPlus("Cache HIT for identities - Advertiser: $advertiserId");
+                // Handle both old format (array) and new format (object with identities/pages)
+                if (isset($cachedData['identities'])) {
+                    echo json_encode([
+                        'success' => true,
+                        'data' => [
+                            'list' => $cachedData['identities'],
+                            'identities' => $cachedData['identities'],
+                            'pages' => $cachedData['pages'] ?? []
+                        ],
+                        'cached' => true
+                    ]);
+                } else {
+                    echo json_encode([
+                        'success' => true,
+                        'data' => ['list' => $cachedData, 'identities' => $cachedData, 'pages' => []],
+                        'cached' => true
+                    ]);
+                }
+                break;
             }
-            break;
+        } else {
+            logSmartPlus("Force refresh identities - clearing cache");
+            $cache->delete($cacheKey);
         }
 
-        logSmartPlus("Cache MISS for identities - Advertiser: $advertiserId");
-        // Smart+ campaigns support CUSTOMIZED_USER and BC_AUTH_TT identity types
-        // BC_AUTH_TT requires identity_authorized_bc_id parameter when creating ads
+        logSmartPlus("Cache MISS for identities - Advertiser: $advertiserId - fetching ALL pages");
+
         $customIdentities = [];
         $bcAuthIdentities = [];
+        $ttUserIdentities = [];
+        $pageSize = 100;
 
-        // Get all identities (no filter - returns all types)
-        $result = makeApiCall('/identity/get/', [
-            'advertiser_id' => $advertiserId
-        ], $accessToken, 'GET');
+        // 1. Fetch ALL pages of CUSTOMIZED_USER identities
+        $page = 1;
+        do {
+            $result = makeApiCall('/identity/get/', [
+                'advertiser_id' => $advertiserId,
+                'identity_type' => 'CUSTOMIZED_USER',
+                'page' => $page,
+                'page_size' => $pageSize
+            ], $accessToken, 'GET');
 
-        if ($result['code'] == 0 && isset($result['data']['identity_list'])) {
-            foreach ($result['data']['identity_list'] as $identity) {
-                $identityType = $identity['identity_type'] ?? 'CUSTOMIZED_USER';
+            logSmartPlus("CUSTOMIZED_USER page $page response code: " . ($result['code'] ?? 'null'));
 
-                if ($identityType === 'CUSTOMIZED_USER' || !isset($identity['identity_type'])) {
-                    $identity['identity_type'] = 'CUSTOMIZED_USER';  // Ensure it's set
+            if ($result['code'] == 0 && isset($result['data']['identity_list'])) {
+                foreach ($result['data']['identity_list'] as $identity) {
+                    $identity['identity_type'] = 'CUSTOMIZED_USER';
                     $identity['source_type'] = 'custom_identity';
                     $customIdentities[] = $identity;
-                } elseif ($identityType === 'BC_AUTH_TT') {
-                    // BC_AUTH_TT - TikTok account authorized via Business Center
-                    $identity['identity_type'] = 'BC_AUTH_TT';  // Ensure it's set
+                }
+            }
+
+            $totalPages = $result['data']['page_info']['total_page'] ?? 1;
+            $page++;
+        } while ($page <= $totalPages && $page <= 20); // Safety limit 20 pages
+
+        logSmartPlus("Found " . count($customIdentities) . " CUSTOMIZED_USER identities");
+
+        // 2. Fetch ALL pages of BC_AUTH_TT identities (Business Center TikTok accounts)
+        $page = 1;
+        do {
+            $result = makeApiCall('/identity/get/', [
+                'advertiser_id' => $advertiserId,
+                'identity_type' => 'BC_AUTH_TT',
+                'page' => $page,
+                'page_size' => $pageSize
+            ], $accessToken, 'GET');
+
+            logSmartPlus("BC_AUTH_TT page $page response code: " . ($result['code'] ?? 'null'));
+
+            if ($result['code'] == 0 && isset($result['data']['identity_list'])) {
+                foreach ($result['data']['identity_list'] as $identity) {
+                    $identity['identity_type'] = 'BC_AUTH_TT';
                     $identity['source_type'] = 'bc_auth_tt';
                     $bcAuthIdentities[] = $identity;
                 }
             }
-            logSmartPlus("Found " . count($customIdentities) . " custom identities, " . count($bcAuthIdentities) . " BC_AUTH_TT identities");
-        }
 
-        // Also try to get BC_AUTH_TT identities specifically (some may not show in general call)
-        $bcAuthResult = makeApiCall('/identity/get/', [
-            'advertiser_id' => $advertiserId,
-            'identity_type' => 'BC_AUTH_TT'
-        ], $accessToken, 'GET');
+            $totalPages = $result['data']['page_info']['total_page'] ?? 1;
+            $page++;
+        } while ($page <= $totalPages && $page <= 20);
 
-        // Log full BC_AUTH_TT response for debugging
-        logSmartPlus("BC_AUTH_TT identity response: " . json_encode($bcAuthResult));
+        logSmartPlus("Found " . count($bcAuthIdentities) . " BC_AUTH_TT identities");
 
-        if ($bcAuthResult['code'] == 0 && isset($bcAuthResult['data']['identity_list'])) {
-            foreach ($bcAuthResult['data']['identity_list'] as $bcIdentity) {
-                // Log each identity to see what fields are returned
-                logSmartPlus("BC_AUTH_TT identity details: " . json_encode($bcIdentity));
+        // 3. Fetch ALL pages of TT_USER identities (direct TikTok accounts)
+        $page = 1;
+        do {
+            $result = makeApiCall('/identity/get/', [
+                'advertiser_id' => $advertiserId,
+                'identity_type' => 'TT_USER',
+                'page' => $page,
+                'page_size' => $pageSize
+            ], $accessToken, 'GET');
 
-                // Check if not already in list
-                $exists = false;
-                foreach ($bcAuthIdentities as $existing) {
-                    if ($existing['identity_id'] === $bcIdentity['identity_id']) {
-                        $exists = true;
-                        break;
-                    }
-                }
-                if (!$exists) {
-                    // IMPORTANT: Explicitly set identity_type to BC_AUTH_TT
-                    // TikTok may not always return this field in the response
-                    $bcIdentity['identity_type'] = 'BC_AUTH_TT';
-                    $bcIdentity['source_type'] = 'bc_auth_tt';
-                    $bcAuthIdentities[] = $bcIdentity;
+            logSmartPlus("TT_USER page $page response code: " . ($result['code'] ?? 'null'));
+
+            if ($result['code'] == 0 && isset($result['data']['identity_list'])) {
+                foreach ($result['data']['identity_list'] as $identity) {
+                    $identity['identity_type'] = 'TT_USER';
+                    $identity['source_type'] = 'tt_user';
+                    $ttUserIdentities[] = $identity;
                 }
             }
-            logSmartPlus("After BC_AUTH_TT specific call: " . count($bcAuthIdentities) . " BC_AUTH_TT identities total");
-        }
 
-        // Combine data for caching
+            $totalPages = $result['data']['page_info']['total_page'] ?? 1;
+            $page++;
+        } while ($page <= $totalPages && $page <= 20);
+
+        logSmartPlus("Found " . count($ttUserIdentities) . " TT_USER identities");
+
+        // Combine custom + TT_USER for main list, BC_AUTH_TT as pages (TikTok Pages)
+        $allIdentities = array_merge($customIdentities, $ttUserIdentities);
+
+        // Cache combined data
         $combinedData = [
-            'identities' => $customIdentities,
-            'pages' => $bcAuthIdentities  // BC_AUTH_TT identities (TikTok Pages)
+            'identities' => $allIdentities,
+            'pages' => $bcAuthIdentities
         ];
-
-        // Cache identities for 10 minutes
         $cache->set($cacheKey, $combinedData, Cache::TTL_LONG);
+
+        $totalCount = count($allIdentities) + count($bcAuthIdentities);
+        logSmartPlus("Total identities found: $totalCount (custom+tt_user: " . count($allIdentities) . ", bc_auth: " . count($bcAuthIdentities) . ")");
 
         echo json_encode([
             'success' => true,
             'data' => [
-                'list' => $customIdentities,  // Keep for backward compatibility
-                'identities' => $customIdentities,
+                'list' => $allIdentities,
+                'identities' => $allIdentities,
                 'pages' => $bcAuthIdentities
-            ]
+            ],
+            'total_count' => $totalCount
         ]);
         break;
 

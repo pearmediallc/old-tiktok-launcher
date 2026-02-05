@@ -2464,25 +2464,44 @@ try {
                 }
 
                 // Build response - ensure all data is JSON-serializable
-                // Include error code in message for better debugging
+                // KEY FIX: Return success=true with processing=true when video is accepted but still processing
+                $accepted = $apiCodeSuccess && !$hasVideoId;  // Video accepted but no video_id yet
                 $errorMessage = 'Upload failed';
 
-                if (!$success) {
-                    // Determine the specific error
-                    if ($apiCodeSuccess && !$hasVideoId && $isPending) {
-                        // Video is being processed asynchronously by TikTok
-                        $errorMessage = 'Video is being processed by TikTok. It will appear in your library within 1-2 minutes.';
-                        logToFile("INFO: Video upload pending async processing by TikTok.");
-                    } elseif ($apiCodeSuccess && !$hasVideoId) {
-                        // API said OK but no video_id and not pending - might still be processing
-                        $errorMessage = 'Upload accepted but video is still processing. Check your video library in 1-2 minutes - the video should appear there.';
-                        logToFile("WARNING: API returned success but no video_id. Video may be processing async.");
-                    } elseif (isset($response->code) && $response->code != 0) {
-                        // TikTok returned an error code
+                // Ensure video_id is at the top level of data for frontend compatibility
+                if ($videoId && is_array($responseData)) {
+                    $responseData['video_id'] = $videoId;
+                } elseif ($videoId && !is_array($responseData)) {
+                    $responseData = ['video_id' => $videoId];
+                }
+
+                if ($success) {
+                    // Full success - have video_id
+                    $jsonResponse = [
+                        'success' => true,
+                        'processing' => false,
+                        'data' => $responseData,
+                        'message' => 'Video uploaded successfully',
+                        'code' => 0
+                    ];
+                    logToFile("Video upload SUCCESS with video_id: $videoId");
+                } elseif ($accepted) {
+                    // Accepted but processing - return success with processing flag
+                    // This prevents frontend from showing error when video is actually being processed
+                    $jsonResponse = [
+                        'success' => true,
+                        'processing' => true,
+                        'data' => $responseData,
+                        'message' => 'Video accepted! Processing in background - will appear in library in 1-2 minutes.',
+                        'code' => 0
+                    ];
+                    logToFile("Video ACCEPTED and processing - returning success with processing flag");
+                } else {
+                    // Actual error - build error message
+                    if (isset($response->code) && $response->code != 0) {
                         $tiktokMsg = isset($response->message) ? (string)$response->message : 'Unknown error';
                         $errorMessage = "TikTok Error [{$response->code}]: {$tiktokMsg}";
 
-                        // Common TikTok error codes with better descriptions
                         $errorCodes = [
                             40001 => 'Access token invalid or expired - please re-login',
                             40002 => 'Advertiser not authorized - this account was not included in OAuth authorization',
@@ -2498,22 +2517,16 @@ try {
                     } elseif (isset($response->message) && $response->message) {
                         $errorMessage = (string)$response->message;
                     }
-                }
 
-                // Ensure video_id is at the top level of data for frontend compatibility
-                // The frontend expects result.data.video_id to exist
-                if ($videoId && is_array($responseData)) {
-                    $responseData['video_id'] = $videoId;
-                } elseif ($videoId && !is_array($responseData)) {
-                    $responseData = ['video_id' => $videoId];
+                    $jsonResponse = [
+                        'success' => false,
+                        'processing' => false,
+                        'data' => $responseData,
+                        'message' => $errorMessage,
+                        'code' => isset($response->code) ? (int)$response->code : -1
+                    ];
+                    logToFile("Video upload FAILED: $errorMessage");
                 }
-
-                $jsonResponse = [
-                    'success' => $success,
-                    'data' => $responseData,
-                    'message' => $success ? 'Video uploaded successfully' : $errorMessage,
-                    'code' => isset($response->code) ? (int)$response->code : 0
-                ];
 
                 // Log what we're about to return
                 logToFile("Returning JSON response: " . json_encode($jsonResponse, JSON_PRETTY_PRINT));
@@ -2719,40 +2732,16 @@ try {
                     }
                 }
 
-                // Check for success - REQUIRE video_id
+                // Check for success states
                 $apiCodeSuccess = (empty($response->code) || $response->code == 0);
                 $hasVideoId = !empty($videoId);
-                $isPending = ($processingStatus === 'pending' || $processingStatus === 'processing');
                 $success = $apiCodeSuccess && $hasVideoId;
+                $accepted = $apiCodeSuccess && !$hasVideoId;  // Video accepted but still processing
 
                 logToFile("Upload to $targetAdvertiserId - API Success: " . ($apiCodeSuccess ? 'yes' : 'no') .
                           ", Video ID: " . ($videoId ?? 'null') .
-                          ", Is Pending: " . ($isPending ? 'yes' : 'no') .
+                          ", Accepted: " . ($accepted ? 'yes' : 'no') .
                           ", TikTok Code: " . ($response->code ?? 'none'));
-
-                // Build error message if failed
-                $errorMessage = 'Upload failed';
-                if (!$success) {
-                    if ($apiCodeSuccess && !$hasVideoId && $isPending) {
-                        $errorMessage = 'Video is processing. It will appear in your library within 1-2 minutes.';
-                    } elseif ($apiCodeSuccess && !$hasVideoId) {
-                        $errorMessage = 'Upload accepted but video is still processing. Check library in 1-2 minutes.';
-                    } elseif (isset($response->code) && $response->code != 0) {
-                        $tiktokMsg = $response->message ?? 'Unknown error';
-                        $errorMessage = "TikTok Error [{$response->code}]: {$tiktokMsg}";
-
-                        // Add helpful descriptions for common errors
-                        $errorDescriptions = [
-                            40001 => 'Access token invalid or expired',
-                            40002 => 'Advertiser not authorized',
-                            40100 => 'Permission denied for this advertiser',
-                            40105 => 'Token does not match advertiser'
-                        ];
-                        if (isset($errorDescriptions[$response->code])) {
-                            $errorMessage .= " - " . $errorDescriptions[$response->code];
-                        }
-                    }
-                }
 
                 // Store video if successful
                 if ($success) {
@@ -2778,13 +2767,55 @@ try {
                     $responseData = ['video_id' => $videoId];
                 }
 
-                outputJsonResponse([
-                    'success' => $success,
-                    'data' => $responseData,
-                    'message' => $success ? 'Video uploaded successfully' : $errorMessage,
-                    'code' => isset($response->code) ? (int)$response->code : 0,
-                    'target_advertiser_id' => $targetAdvertiserId
-                ]);
+                // KEY FIX: Return success=true with processing=true when video is accepted but processing
+                if ($success) {
+                    // Full success - have video_id
+                    outputJsonResponse([
+                        'success' => true,
+                        'processing' => false,
+                        'data' => $responseData,
+                        'message' => 'Video uploaded successfully',
+                        'code' => 0,
+                        'target_advertiser_id' => $targetAdvertiserId
+                    ]);
+                } elseif ($accepted) {
+                    // Accepted but processing - return success with processing flag
+                    outputJsonResponse([
+                        'success' => true,
+                        'processing' => true,
+                        'data' => $responseData,
+                        'message' => 'Video accepted! Processing in background - will appear in library in 1-2 minutes.',
+                        'code' => 0,
+                        'target_advertiser_id' => $targetAdvertiserId
+                    ]);
+                    logToFile("Video ACCEPTED to $targetAdvertiserId - processing in background");
+                } else {
+                    // Actual error
+                    $errorMessage = 'Upload failed';
+                    if (isset($response->code) && $response->code != 0) {
+                        $tiktokMsg = $response->message ?? 'Unknown error';
+                        $errorMessage = "TikTok Error [{$response->code}]: {$tiktokMsg}";
+
+                        $errorDescriptions = [
+                            40001 => 'Access token invalid or expired',
+                            40002 => 'Advertiser not authorized',
+                            40100 => 'Permission denied for this advertiser',
+                            40105 => 'Token does not match advertiser'
+                        ];
+                        if (isset($errorDescriptions[$response->code])) {
+                            $errorMessage .= " - " . $errorDescriptions[$response->code];
+                        }
+                    }
+
+                    outputJsonResponse([
+                        'success' => false,
+                        'processing' => false,
+                        'data' => $responseData,
+                        'message' => $errorMessage,
+                        'code' => isset($response->code) ? (int)$response->code : -1,
+                        'target_advertiser_id' => $targetAdvertiserId
+                    ]);
+                }
 
             } catch (Exception $e) {
                 logToFile("Upload to advertiser exception: " . $e->getMessage());
@@ -2888,77 +2919,77 @@ try {
 
         case 'get_identities':
             $identity = new Identity($config);
-            
-            logToFile("Get Identities - Advertiser ID: " . $advertiser_id);
-            
-            // Try to get both TT_USER and CUSTOMIZED_USER identities
+
+            logToFile("Get Identities - Advertiser ID: " . $advertiser_id . " - fetching ALL pages");
+
+            // Fetch ALL pages for each identity type
             $allIdentities = [];
-            
-            // First get TT_USER identities (TikTok accounts)
-            $params = [
-                'advertiser_id' => $advertiser_id,
-                'identity_type' => 'TT_USER',
-                'page' => 1,
-                'page_size' => 100
-            ];
-            
-            $response = $identity->getSelf($params);
-            logToFile("Get TT_USER Identities Response: " . json_encode($response, JSON_PRETTY_PRINT));
-            
-            // Format the identities properly for frontend - check both list and identity_list
-            $identityList = $response->data->identity_list ?? $response->data->list ?? null;
-            
-            if (empty($response->code) && $identityList) {
-                foreach ($identityList as $id) {
-                    $allIdentities[] = [
-                        'identity_id' => $id->identity_id,
-                        'identity_name' => $id->identity_name ?? $id->display_name ?? 'TikTok User',
-                        'display_name' => $id->display_name ?? $id->identity_name ?? 'TikTok User',
-                        'identity_type' => $id->identity_type ?? 'TT_USER'
+            $bcAuthIdentities = [];
+            $pageSize = 100;
+
+            // Helper function to fetch all pages of a specific identity type
+            $fetchAllPages = function($identityType) use ($identity, $advertiser_id, $pageSize) {
+                $identities = [];
+                $page = 1;
+
+                do {
+                    $params = [
+                        'advertiser_id' => $advertiser_id,
+                        'identity_type' => $identityType,
+                        'page' => $page,
+                        'page_size' => $pageSize
                     ];
-                }
-            }
-            
-            // Also try to get CUSTOMIZED_USER identities
-            $params['identity_type'] = 'CUSTOMIZED_USER';
-            $response = $identity->getSelf($params);
-            logToFile("Get CUSTOMIZED_USER Identities Response: " . json_encode($response, JSON_PRETTY_PRINT));
-            
-            $identityList = $response->data->identity_list ?? $response->data->list ?? null;
-            if (empty($response->code) && $identityList) {
-                foreach ($identityList as $id) {
-                    $allIdentities[] = [
-                        'identity_id' => $id->identity_id,
-                        'identity_name' => $id->identity_name ?? $id->display_name ?? 'Custom User',
-                        'display_name' => $id->display_name ?? $id->identity_name ?? 'Custom User',
-                        'identity_type' => $id->identity_type ?? 'CUSTOMIZED_USER'
-                    ];
-                }
-            }
-            
-            // If still no identities, try without identity_type filter
-            if (empty($allIdentities)) {
-                unset($params['identity_type']);
-                $response = $identity->getSelf($params);
-                logToFile("Get ALL Identities Response: " . json_encode($response, JSON_PRETTY_PRINT));
-                
-                $identityList = $response->data->identity_list ?? $response->data->list ?? null;
-                if (empty($response->code) && $identityList) {
-                    foreach ($identityList as $id) {
-                        $allIdentities[] = [
-                            'identity_id' => $id->identity_id,
-                            'identity_name' => $id->identity_name ?? $id->display_name ?? 'Identity',
-                            'display_name' => $id->display_name ?? $id->identity_name ?? 'Identity',
-                            'identity_type' => $id->identity_type ?? 'UNKNOWN'
-                        ];
+
+                    $response = $identity->getSelf($params);
+                    logToFile("Get $identityType page $page response code: " . ($response->code ?? 'null'));
+
+                    $identityList = $response->data->identity_list ?? $response->data->list ?? null;
+
+                    if (empty($response->code) && $identityList) {
+                        foreach ($identityList as $id) {
+                            $identities[] = [
+                                'identity_id' => $id->identity_id,
+                                'identity_name' => $id->identity_name ?? $id->display_name ?? $identityType,
+                                'display_name' => $id->display_name ?? $id->identity_name ?? $identityType,
+                                'identity_type' => $id->identity_type ?? $identityType,
+                                'identity_authorized_bc_id' => $id->identity_authorized_bc_id ?? null
+                            ];
+                        }
                     }
-                }
-            }
-            
+
+                    $totalPages = $response->data->page_info->total_page ?? 1;
+                    $page++;
+                } while ($page <= $totalPages && $page <= 20); // Safety limit
+
+                return $identities;
+            };
+
+            // 1. Fetch ALL pages of TT_USER identities
+            $ttUserIdentities = $fetchAllPages('TT_USER');
+            logToFile("Found " . count($ttUserIdentities) . " TT_USER identities");
+            $allIdentities = array_merge($allIdentities, $ttUserIdentities);
+
+            // 2. Fetch ALL pages of CUSTOMIZED_USER identities
+            $customIdentities = $fetchAllPages('CUSTOMIZED_USER');
+            logToFile("Found " . count($customIdentities) . " CUSTOMIZED_USER identities");
+            $allIdentities = array_merge($allIdentities, $customIdentities);
+
+            // 3. Fetch ALL pages of BC_AUTH_TT identities (Business Center)
+            $bcAuthIdentities = $fetchAllPages('BC_AUTH_TT');
+            logToFile("Found " . count($bcAuthIdentities) . " BC_AUTH_TT identities");
+
+            $totalCount = count($allIdentities) + count($bcAuthIdentities);
+            logToFile("Total identities found: $totalCount");
+
             echo json_encode([
                 'success' => true,
-                'data' => ['list' => $allIdentities],
-                'message' => empty($allIdentities) ? 'No identities found - Create one in TikTok Ads Manager' : null
+                'data' => [
+                    'list' => $allIdentities,
+                    'identities' => $allIdentities,
+                    'pages' => $bcAuthIdentities
+                ],
+                'total_count' => $totalCount,
+                'message' => empty($allIdentities) && empty($bcAuthIdentities) ? 'No identities found - Create one in TikTok Ads Manager' : null
             ]);
             break;
 
