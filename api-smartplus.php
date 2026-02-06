@@ -1562,7 +1562,8 @@ switch ($action) {
             'campaign_id' => $campaignId,
             'adgroup_name' => $data['campaign_name'] . ' - Ad Group',
             'promotion_type' => 'LEAD_GENERATION',
-            'optimization_goal' => 'LEAD_GENERATION',  // Must be LEAD_GENERATION for lead gen
+            'promotion_target_type' => 'EXTERNAL_WEBSITE',  // Required for Website destination
+            'optimization_goal' => 'CONVERT',  // Use CONVERT for Lead Gen with External Website
             'billing_event' => 'OCPM',
             'bid_type' => 'BID_TYPE_NO_BID',  // Lowest Cost strategy - no target CPA required
             'schedule_type' => 'SCHEDULE_FROM_NOW',
