@@ -871,53 +871,75 @@ try {
             }
             
             $url = "https://business-api.tiktok.com/open_api/v1.3/oauth2/advertiser/get/";
-            
-            // Add query parameters
-            $params = [
-                'app_id' => $appId,
-                'secret' => $secret
-            ];
-            
-            $ch = curl_init();
-            curl_setopt_array($ch, [
-                CURLOPT_URL => $url . '?' . http_build_query($params),
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => "",
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 30,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => "GET",
-                CURLOPT_HTTPHEADER => [
-                    "Access-Token: " . $accessToken,
-                    "Content-Type: application/json"
-                ],
-            ]);
-            
-            $result = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-            
-            logToFile("Get Advertisers Response - HTTP Code: {$httpCode}");
-            logToFile("Response: " . $result);
-            
-            if ($httpCode === 200) {
-                $response = json_decode($result, true);
-                if ($response && isset($response['code']) && $response['code'] == 0) {
-                    echo json_encode([
-                        'success' => true,
-                        'data' => $response['data']['list'] ?? []
-                    ]);
+
+            // Fetch ALL advertisers with pagination
+            $allAdvertisers = [];
+            $page = 1;
+            $pageSize = 100; // Max page size for efficiency
+            $maxPages = 50; // Safety limit (5000 accounts max)
+            $totalPages = 1;
+
+            do {
+                $params = [
+                    'app_id' => $appId,
+                    'secret' => $secret,
+                    'page' => $page,
+                    'page_size' => $pageSize
+                ];
+
+                $ch = curl_init();
+                curl_setopt_array($ch, [
+                    CURLOPT_URL => $url . '?' . http_build_query($params),
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_ENCODING => "",
+                    CURLOPT_MAXREDIRS => 10,
+                    CURLOPT_TIMEOUT => 30,
+                    CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                    CURLOPT_CUSTOMREQUEST => "GET",
+                    CURLOPT_HTTPHEADER => [
+                        "Access-Token: " . $accessToken,
+                        "Content-Type: application/json"
+                    ],
+                ]);
+
+                $result = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                logToFile("Get Advertisers Page $page - HTTP Code: {$httpCode}");
+
+                if ($httpCode === 200) {
+                    $response = json_decode($result, true);
+                    if ($response && isset($response['code']) && $response['code'] == 0) {
+                        $pageData = $response['data']['list'] ?? [];
+                        $allAdvertisers = array_merge($allAdvertisers, $pageData);
+                        $totalPages = $response['data']['page_info']['total_page'] ?? 1;
+                        logToFile("Page $page of $totalPages: found " . count($pageData) . " advertisers");
+                    } else {
+                        logToFile("API error on page $page: " . ($response['message'] ?? 'Unknown error'));
+                        break;
+                    }
                 } else {
-                    echo json_encode([
-                        'success' => false,
-                        'message' => $response['message'] ?? 'Failed to get advertisers'
-                    ]);
+                    logToFile("HTTP error on page $page: $httpCode");
+                    break;
                 }
+
+                $page++;
+            } while ($page <= $totalPages && $page <= $maxPages);
+
+            logToFile("Total advertisers fetched: " . count($allAdvertisers));
+
+            if (count($allAdvertisers) > 0) {
+                echo json_encode([
+                    'success' => true,
+                    'data' => $allAdvertisers,
+                    'total_count' => count($allAdvertisers)
+                ]);
             } else {
                 echo json_encode([
                     'success' => false,
-                    'message' => 'API request failed with HTTP code: ' . $httpCode
+                    'message' => 'No advertisers found or API request failed'
                 ]);
             }
             break;
@@ -4222,61 +4244,74 @@ try {
                 exit;
             }
             
-            // Get the advertiser details from TikTok API
+            // Get the advertiser details from TikTok API with pagination
             $accessToken = $_ENV['TIKTOK_ACCESS_TOKEN'] ?? '';
-            $url = "https://business-api.tiktok.com/open_api/v1.3/oauth2/advertiser/get/?" . 
-                   "app_id=" . ($_ENV['TIKTOK_APP_ID'] ?? '') . "&" .
-                   "secret=" . ($_ENV['TIKTOK_APP_SECRET'] ?? '');
-            
-            $ch = curl_init();
-            curl_setopt_array($ch, [
-                CURLOPT_URL => $url,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_HTTPHEADER => [
-                    "Access-Token: " . $accessToken,
-                    "Content-Type: application/json"
-                ],
-            ]);
-            
-            $result = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-            
-            if ($httpCode === 200) {
-                $response = json_decode($result, true);
-                if ($response && isset($response['code']) && $response['code'] == 0) {
-                    // Find the selected advertiser in the list
-                    $selectedAdvertiser = null;
-                    foreach ($response['data']['list'] as $advertiser) {
-                        if ($advertiser['advertiser_id'] == $selectedAdvertiserId) {
-                            $selectedAdvertiser = $advertiser;
-                            break;
+            $appId = $_ENV['TIKTOK_APP_ID'] ?? '';
+            $secret = $_ENV['TIKTOK_APP_SECRET'] ?? '';
+            $url = "https://business-api.tiktok.com/open_api/v1.3/oauth2/advertiser/get/";
+
+            // Search through paginated results to find the selected advertiser
+            $selectedAdvertiser = null;
+            $page = 1;
+            $pageSize = 100;
+            $maxPages = 50; // Safety limit
+            $totalPages = 1;
+
+            do {
+                $params = [
+                    'app_id' => $appId,
+                    'secret' => $secret,
+                    'page' => $page,
+                    'page_size' => $pageSize
+                ];
+
+                $ch = curl_init();
+                curl_setopt_array($ch, [
+                    CURLOPT_URL => $url . '?' . http_build_query($params),
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HTTPHEADER => [
+                        "Access-Token: " . $accessToken,
+                        "Content-Type: application/json"
+                    ],
+                ]);
+
+                $result = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                if ($httpCode === 200) {
+                    $response = json_decode($result, true);
+                    if ($response && isset($response['code']) && $response['code'] == 0) {
+                        $totalPages = $response['data']['page_info']['total_page'] ?? 1;
+
+                        // Search for the selected advertiser in this page
+                        foreach ($response['data']['list'] as $advertiser) {
+                            if ($advertiser['advertiser_id'] == $selectedAdvertiserId) {
+                                $selectedAdvertiser = $advertiser;
+                                break 2; // Found it, exit both loops
+                            }
                         }
-                    }
-                    
-                    if ($selectedAdvertiser) {
-                        logToFile("Selected advertiser found: " . json_encode($selectedAdvertiser));
-                        echo json_encode([
-                            'success' => true,
-                            'advertiser' => $selectedAdvertiser
-                        ]);
                     } else {
-                        logToFile("Selected advertiser ID not found in available advertisers");
-                        echo json_encode([
-                            'success' => false,
-                            'message' => 'Selected advertiser not found'
-                        ]);
+                        break; // API error
                     }
                 } else {
-                    echo json_encode([
-                        'success' => false,
-                        'message' => $response['message'] ?? 'Failed to get advertisers'
-                    ]);
+                    break; // HTTP error
                 }
+
+                $page++;
+            } while ($page <= $totalPages && $page <= $maxPages && $selectedAdvertiser === null);
+
+            if ($selectedAdvertiser) {
+                logToFile("Selected advertiser found: " . json_encode($selectedAdvertiser));
+                echo json_encode([
+                    'success' => true,
+                    'advertiser' => $selectedAdvertiser
+                ]);
             } else {
+                logToFile("Selected advertiser ID not found in available advertisers (searched $page pages)");
                 echo json_encode([
                     'success' => false,
-                    'message' => 'API request failed'
+                    'message' => 'Selected advertiser not found'
                 ]);
             }
             exit;

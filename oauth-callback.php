@@ -69,46 +69,63 @@ $_SESSION['oauth_token_type'] = $tokenData['data']['token_type'] ?? 'Bearer';
 error_log("OAuth Success: Token obtained");
 error_log("Advertiser IDs: " . json_encode($_SESSION['oauth_advertiser_ids']));
 
-// Fetch advertiser names using correct OAuth2 endpoint
+// Fetch advertiser names using correct OAuth2 endpoint with PAGINATION
 $advertiser_details = [];
 if (!empty($_SESSION['oauth_advertiser_ids'])) {
     try {
-        // Use TikTok OAuth2 advertiser endpoint
+        // Use TikTok OAuth2 advertiser endpoint with pagination to get ALL accounts
         $advertiser_info_url = 'https://business-api.tiktok.com/open_api/v1.3/oauth2/advertiser/get/';
+        $pageSize = 100; // Max page size for efficiency
+        $page = 1;
+        $maxPages = 50; // Safety limit (5000 accounts max)
 
-        $info_params = [
-            'app_id' => $config['app_id'],
-            'secret' => $config['app_secret']
-        ];
+        do {
+            $info_params = [
+                'app_id' => $config['app_id'],
+                'secret' => $config['app_secret'],
+                'page' => $page,
+                'page_size' => $pageSize
+            ];
 
-        $ch = curl_init($advertiser_info_url . '?' . http_build_query($info_params));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Access-Token: ' . $access_token
-        ]);
+            $ch = curl_init($advertiser_info_url . '?' . http_build_query($info_params));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Access-Token: ' . $access_token
+            ]);
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
 
-        error_log("Advertiser Info Response Code: " . $httpCode);
-        error_log("Advertiser Info Response: " . $response);
+            error_log("Advertiser Info Page $page - Response Code: " . $httpCode);
 
-        $infoData = json_decode($response, true);
+            $infoData = json_decode($response, true);
 
-        if ($httpCode === 200 && isset($infoData['data']['list']) && is_array($infoData['data']['list'])) {
-            foreach ($infoData['data']['list'] as $advertiser) {
-                $advertiser_details[$advertiser['advertiser_id']] = [
-                    'id' => $advertiser['advertiser_id'],
-                    'name' => $advertiser['advertiser_name'] ?? 'Account',
-                    'status' => $advertiser['status'] ?? 'active',
-                    'rejection_reason' => $advertiser['rejection_reason'] ?? null,
-                    'company' => $advertiser['company'] ?? null,
-                    'contacter' => $advertiser['contacter'] ?? null,
-                    'description' => $advertiser['description'] ?? null
-                ];
+            if ($httpCode === 200 && isset($infoData['data']['list']) && is_array($infoData['data']['list'])) {
+                foreach ($infoData['data']['list'] as $advertiser) {
+                    $advertiser_details[$advertiser['advertiser_id']] = [
+                        'id' => $advertiser['advertiser_id'],
+                        'name' => $advertiser['advertiser_name'] ?? 'Account',
+                        'status' => $advertiser['status'] ?? 'active',
+                        'rejection_reason' => $advertiser['rejection_reason'] ?? null,
+                        'company' => $advertiser['company'] ?? null,
+                        'contacter' => $advertiser['contacter'] ?? null,
+                        'description' => $advertiser['description'] ?? null
+                    ];
+                }
+
+                // Check if more pages exist
+                $totalPages = $infoData['data']['page_info']['total_page'] ?? 1;
+                error_log("Advertiser Info: Page $page of $totalPages, found " . count($infoData['data']['list']) . " accounts");
+            } else {
+                // API error or no more data, stop pagination
+                break;
             }
-        }
+
+            $page++;
+        } while ($page <= $totalPages && $page <= $maxPages);
+
+        error_log("Total advertiser details fetched: " . count($advertiser_details));
     } catch (Exception $e) {
         error_log("Error fetching advertiser info: " . $e->getMessage());
     }
