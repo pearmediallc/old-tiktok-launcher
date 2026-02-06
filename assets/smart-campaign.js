@@ -1379,9 +1379,9 @@ async function handleSmartMediaUpload(event) {
             failed++;
         }
 
-        // Add delay between uploads to avoid rate limiting
+        // Add delay between uploads to avoid rate limiting (reduced for speed)
         if (i < validFiles.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 300));
         }
     }
 
@@ -1508,7 +1508,9 @@ async function uploadSingleMediaFile(file, index, total) {
         addLog('error', `Failed: ${file.name} - ${errorMsg}`);
 
         // NO AUTO-RETRY to prevent duplicates - just fail and let user manually retry
-        updateSmartUploadItemStatus(itemId, 'failed', `✗ Failed`);
+        // Show truncated error for better visibility
+        const shortError = errorMsg.length > 25 ? errorMsg.substring(0, 25) + '...' : errorMsg;
+        updateSmartUploadItemStatus(itemId, 'failed', `✗ ${shortError}`);
         return { success: false, error: errorMsg };
     }
 }
@@ -4227,9 +4229,9 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
         if (countEl) countEl.textContent = `${totalProcessed}/${validFiles.length}`;
         if (barEl) barEl.style.width = `${(totalProcessed / validFiles.length) * 100}%`;
 
-        // Add delay between files to avoid rate limiting
+        // Add delay between files to avoid rate limiting (reduced for speed)
         if (completed + failed < validFiles.length) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 300));
         }
     }
 
@@ -4522,9 +4524,9 @@ async function handlePickerVideoUpload(event) {
         if (countEl) countEl.textContent = `${totalProcessed}/${validFiles.length}`;
         if (barEl) barEl.style.width = `${(totalProcessed / validFiles.length) * 100}%`;
 
-        // Delay between files
+        // Delay between files (reduced for speed)
         if (completed + failed < validFiles.length) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 300));
         }
     }
 
@@ -7234,7 +7236,9 @@ async function uploadMediaVideo(file, index) {
 
         function handleUploadError(errorMsg) {
             mediaLibraryState.uploadFailed++;
-            updateMediaUploadStatus(itemId, 'failed', '✗ Failed', '#fee2e2', '#dc2626', 0);
+            // Show truncated error in status for better visibility
+            const shortError = errorMsg.length > 20 ? errorMsg.substring(0, 20) + '...' : errorMsg;
+            updateMediaUploadStatus(itemId, 'failed', `✗ ${shortError}`, '#fee2e2', '#dc2626', 0);
             addLog('error', `Upload failed for ${file.name}: ${errorMsg}`);
             updateMediaUploadProgress();
             resolve({ success: false, error: errorMsg });
@@ -11304,9 +11308,9 @@ async function handleBulkVideoUpload(event) {
     for (let i = 0; i < validFiles.length; i++) {
         await uploadSingleVideoInBulk(validFiles[i], i);
 
-        // Add a small delay between uploads to avoid rate limiting (500ms)
+        // Add a small delay between uploads to avoid rate limiting (300ms for speed)
         if (i < validFiles.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 300));
         }
     }
 
@@ -11445,7 +11449,9 @@ async function uploadSingleVideoInBulk(file, index) {
             bulkUploadState.failed++;
             bulkUploadState.failedFiles = bulkUploadState.failedFiles || {};
             bulkUploadState.failedFiles[index] = file;
-            updateUploadItemStatus(itemId, 'failed', `✗ Failed`, 0);
+            // Show truncated error in status for visibility
+            const shortError = errorMsg.length > 25 ? errorMsg.substring(0, 25) + '...' : errorMsg;
+            updateUploadItemStatus(itemId, 'failed', `✗ ${shortError}`, 0);
             updateBulkUploadProgress();
             resolve({ success: false, error: errorMsg });
         }

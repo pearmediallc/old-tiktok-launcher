@@ -2366,7 +2366,7 @@ try {
                         logToFile("Fix task detected, polling for completion: " . $fixTaskId);
 
                         $maxWaitTime = 60; // Max 60 seconds
-                        $pollInterval = 3; // Poll every 3 seconds
+                        $pollInterval = 2; // Poll every 2 seconds for faster response
                         $startTime = time();
 
                         while (time() - $startTime < $maxWaitTime) {
@@ -2683,7 +2683,7 @@ try {
                         logToFile("Fix task detected for $targetAdvertiserId, polling: " . $fixTaskId);
 
                         $maxWaitTime = 60;
-                        $pollInterval = 3;
+                        $pollInterval = 2; // Poll every 2 seconds for faster response
                         $startTime = time();
 
                         while (time() - $startTime < $maxWaitTime) {
