@@ -1356,13 +1356,18 @@ async function handleSmartMediaUpload(event) {
     if (countEl) countEl.textContent = `0/${validFiles.length}`;
     if (progressBar) progressBar.style.width = '0%';
 
-    // Create file list items
+    // Create file list items with individual progress bars
     if (fileList) {
         fileList.innerHTML = validFiles.map((file, i) => `
-            <div class="upload-item" id="smart-upload-item-${i}">
-                <span class="upload-item-name" title="${file.name}">${file.name}</span>
-                <span class="upload-item-size">${(file.size / 1024 / 1024).toFixed(1)}MB</span>
-                <span class="upload-item-status pending">Pending</span>
+            <div class="upload-item" id="smart-upload-item-${i}" data-file-index="${i}" style="display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; background: #f8fafc; border-radius: 6px; margin-bottom: 6px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="upload-item-name" title="${file.name}" style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px;">${file.name}</span>
+                    <span class="upload-item-size" style="color: #64748b; font-size: 11px;">${(file.size / 1024 / 1024).toFixed(1)}MB</span>
+                    <span class="upload-item-status pending" style="font-weight: 600; font-size: 11px; min-width: 50px; text-align: right;">Pending</span>
+                </div>
+                <div class="upload-item-progress-container" style="height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden;">
+                    <div class="upload-item-progress-bar" id="smart-progress-bar-${i}" style="height: 100%; width: 0%; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.15s ease;"></div>
+                </div>
             </div>
         `).join('');
     }
@@ -1413,10 +1418,11 @@ async function handleSmartMediaUpload(event) {
 // Helper function to upload a single media file - NO AUTO-RETRY to prevent duplicates
 async function uploadSingleMediaFile(file, index, total) {
     const itemId = `smart-upload-item-${index}`;
+    const progressBarId = `smart-progress-bar-${index}`;
     const isVideo = file.type.startsWith('video/');
     const uploadTimeout = isVideo ? 300000 : 120000; // 5 min for video, 2 min for image
 
-    updateSmartUploadItemStatus(itemId, 'uploading', 'Uploading...');
+    updateSmartUploadItemStatus(itemId, 'uploading', '0%', 0);
 
     // Add timestamp to filename
     const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
@@ -1430,93 +1436,150 @@ async function uploadSingleMediaFile(file, index, total) {
     const formData = new FormData();
     formData.append(isVideo ? 'video' : 'image', file, newFileName);
 
-    try {
-        addLog('request', `Uploading ${isVideo ? 'video' : 'image'}: ${newFileName}`);
+    addLog('request', `Uploading ${isVideo ? 'video' : 'image'}: ${newFileName}`);
 
-        // Create AbortController for timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), uploadTimeout);
+    return new Promise((resolve) => {
+        const xhr = new XMLHttpRequest();
+        let timeoutId;
+        let uploadComplete = false;
 
-        const response = await fetch(`api.php?action=${isVideo ? 'upload_video' : 'upload_image'}`, {
-            method: 'POST',
-            body: formData,
-            signal: controller.signal
+        // Real-time progress tracking
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                updateSmartUploadItemStatus(itemId, 'uploading', `${percent}%`, percent);
+                if (percent === 100) {
+                    uploadComplete = true;
+                    updateSmartUploadItemStatus(itemId, 'uploading', 'Processing...', 100);
+                }
+            }
         });
 
-        clearTimeout(timeoutId);
+        // Response handler
+        xhr.addEventListener('load', () => {
+            clearTimeout(timeoutId);
 
-        if (!response.ok) {
-            throw new Error(`HTTP error: ${response.status}`);
-        }
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    let result;
+                    try {
+                        result = JSON.parse(xhr.responseText);
+                    } catch (e) {
+                        const jsonMatch = xhr.responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
+                        if (jsonMatch) {
+                            result = JSON.parse(jsonMatch[0]);
+                        } else {
+                            throw new Error('Invalid server response');
+                        }
+                    }
 
-        const responseText = await response.text();
-        let result;
-        try {
-            result = JSON.parse(responseText);
-        } catch (e) {
-            // Try to extract JSON from response
-            const jsonMatch = responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
-            if (jsonMatch) {
-                result = JSON.parse(jsonMatch[0]);
+                    const previewUrl = URL.createObjectURL(file);
+
+                    if (result.success && result.data?.video_id) {
+                        // Immediate success with video_id
+                        updateSmartUploadItemStatus(itemId, 'success', '✓ Uploaded', 100);
+                        addLog('success', `Uploaded: ${newFileName} (${result.data.video_id})`);
+
+                        if (isVideo) {
+                            state.mediaLibrary.unshift({
+                                type: 'video',
+                                id: result.data.video_id,
+                                url: previewUrl,
+                                name: newFileName,
+                                is_new: true
+                            });
+                            renderVideoSelectionGrid();
+                        }
+                        updateOverallProgress(index, total);
+                        resolve({ success: true, video_id: result.data.video_id });
+
+                    } else if (result.success && result.processing) {
+                        // Video accepted but processing - still count as success!
+                        updateSmartUploadItemStatus(itemId, 'processing', '⏳ Processing', 100);
+                        addLog('info', `Video accepted, processing: ${newFileName}`);
+
+                        // Add to state with temporary ID for immediate display
+                        if (isVideo) {
+                            state.mediaLibrary.unshift({
+                                type: 'video',
+                                id: 'processing_' + Date.now() + '_' + index,
+                                url: previewUrl,
+                                name: newFileName,
+                                is_new: true,
+                                is_processing: true
+                            });
+                            renderVideoSelectionGrid();
+                        }
+                        updateOverallProgress(index, total);
+                        resolve({ success: true, processing: true });
+
+                    } else if (result.success && !isVideo && result.data?.image_id) {
+                        // Image upload success
+                        updateSmartUploadItemStatus(itemId, 'success', '✓ Uploaded', 100);
+                        addLog('success', `Uploaded: ${newFileName}`);
+
+                        state.mediaLibrary.unshift({
+                            type: 'image',
+                            id: result.data.image_id,
+                            url: previewUrl,
+                            name: newFileName,
+                            is_new: true
+                        });
+                        renderImageGrid();
+                        updateOverallProgress(index, total);
+                        resolve({ success: true, image_id: result.data.image_id });
+
+                    } else {
+                        // Actual failure
+                        const errorMsg = result.message || 'Upload failed';
+                        handleUploadError(errorMsg);
+                    }
+                } catch (e) {
+                    handleUploadError('Invalid server response');
+                }
             } else {
-                throw new Error('Invalid server response');
+                handleUploadError(`Server error (${xhr.status})`);
             }
+        });
+
+        // Error handler
+        xhr.addEventListener('error', () => {
+            clearTimeout(timeoutId);
+            handleUploadError(uploadComplete ? 'Connection lost - check library' : 'Network error');
+        });
+
+        // Abort handler (timeout)
+        xhr.addEventListener('abort', () => {
+            clearTimeout(timeoutId);
+            handleUploadError(uploadComplete ? 'Timeout - check library' : 'Upload timeout');
+        });
+
+        function handleUploadError(errorMsg) {
+            addLog('error', `Failed: ${file.name} - ${errorMsg}`);
+            const shortError = errorMsg.length > 20 ? errorMsg.substring(0, 20) + '...' : errorMsg;
+            updateSmartUploadItemStatus(itemId, 'failed', `✗ ${shortError}`, 0);
+            resolve({ success: false, error: errorMsg });
         }
 
-        if (result.success) {
-            updateSmartUploadItemStatus(itemId, 'success', '✓ Uploaded');
-            addLog('success', `Uploaded: ${newFileName}`);
-
-            // Create preview URL and add to state
-            const previewUrl = URL.createObjectURL(file);
-
-            if (isVideo && result.data?.video_id) {
-                state.mediaLibrary.unshift({
-                    type: 'video',
-                    id: result.data.video_id,
-                    url: previewUrl,
-                    name: newFileName,
-                    is_new: true
-                });
-                renderVideoSelectionGrid();
-            } else if (!isVideo && result.data?.image_id) {
-                state.mediaLibrary.unshift({
-                    type: 'image',
-                    id: result.data.image_id,
-                    url: previewUrl,
-                    name: newFileName,
-                    is_new: true
-                });
-                renderImageGrid();
-            }
-
-            // Update overall progress
+        function updateOverallProgress(currentIndex, totalFiles) {
             const countEl = document.getElementById('upload-count');
             const progressBar = document.getElementById('upload-progress-bar');
-            const currentCount = parseInt((countEl?.textContent || '0/1').split('/')[0]) + 1;
-            if (countEl) countEl.textContent = `${currentCount}/${total}`;
-            if (progressBar) progressBar.style.width = `${(currentCount / total) * 100}%`;
-
-            return { success: true };
-        } else {
-            throw new Error(result.message || 'Upload may have succeeded - check library');
+            const completed = currentIndex + 1;
+            if (countEl) countEl.textContent = `${completed}/${totalFiles}`;
+            if (progressBar) progressBar.style.width = `${(completed / totalFiles) * 100}%`;
         }
-    } catch (error) {
-        const errorMsg = error.name === 'AbortError'
-            ? 'Timeout - video may have uploaded, check library'
-            : error.message;
-        addLog('error', `Failed: ${file.name} - ${errorMsg}`);
 
-        // NO AUTO-RETRY to prevent duplicates - just fail and let user manually retry
-        // Show truncated error for better visibility
-        const shortError = errorMsg.length > 25 ? errorMsg.substring(0, 25) + '...' : errorMsg;
-        updateSmartUploadItemStatus(itemId, 'failed', `✗ ${shortError}`);
-        return { success: false, error: errorMsg };
-    }
+        // Set timeout
+        timeoutId = setTimeout(() => xhr.abort(), uploadTimeout);
+
+        // Send request
+        xhr.open('POST', `api.php?action=${isVideo ? 'upload_video' : 'upload_image'}`);
+        xhr.send(formData);
+    });
 }
 
-// Helper to update individual upload item status in Step 3 modal
-function updateSmartUploadItemStatus(itemId, status, text) {
+// Helper to update individual upload item status in Step 3 modal with progress bar
+function updateSmartUploadItemStatus(itemId, status, text, progress = null) {
     const item = document.getElementById(itemId);
     if (!item) return;
 
@@ -1524,6 +1587,37 @@ function updateSmartUploadItemStatus(itemId, status, text) {
     if (statusEl) {
         statusEl.className = `upload-item-status ${status}`;
         statusEl.textContent = text;
+
+        // Update status colors
+        if (status === 'uploading') {
+            statusEl.style.color = '#3b82f6';
+        } else if (status === 'success') {
+            statusEl.style.color = '#22c55e';
+        } else if (status === 'failed') {
+            statusEl.style.color = '#ef4444';
+        } else if (status === 'processing') {
+            statusEl.style.color = '#f59e0b';
+        } else {
+            statusEl.style.color = '#64748b';
+        }
+    }
+
+    // Update progress bar
+    const index = item.dataset.fileIndex;
+    const progressBar = document.getElementById(`smart-progress-bar-${index}`);
+    if (progressBar && progress !== null) {
+        progressBar.style.width = `${progress}%`;
+
+        // Update progress bar color based on status
+        if (status === 'success') {
+            progressBar.style.background = 'linear-gradient(90deg, #22c55e, #4ade80)';
+        } else if (status === 'failed') {
+            progressBar.style.background = 'linear-gradient(90deg, #ef4444, #f87171)';
+        } else if (status === 'processing') {
+            progressBar.style.background = 'linear-gradient(90deg, #f59e0b, #fbbf24)';
+        } else {
+            progressBar.style.background = 'linear-gradient(90deg, #3b82f6, #60a5fa)';
+        }
     }
 }
 
@@ -7327,8 +7421,8 @@ function finishMediaUpload() {
     }, 2000);
 }
 
-// Refresh media library
-function refreshMediaLibrary() {
+// Refresh media library (Media View tab)
+function refreshMediaViewLibrary() {
     showToast('Refreshing media library...', 'info');
     loadMediaLibraryView(true);
 }

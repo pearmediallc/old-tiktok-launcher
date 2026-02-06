@@ -2047,7 +2047,7 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                     <button class="btn-primary" onclick="document.getElementById('media-upload-input').click()">
                         📤 Upload Video
                     </button>
-                    <button class="btn-secondary" onclick="refreshMediaLibrary()">🔄 Refresh</button>
+                    <button class="btn-secondary" onclick="refreshMediaViewLibrary()">🔄 Refresh</button>
                 </div>
             </div>
 
