@@ -1156,14 +1156,13 @@ switch ($action) {
         // Note: Identity is set at AD level for Smart+, not at adgroup level
 
         // For LEAD_GENERATION objective: budget is ALWAYS at AdGroup level (not campaign)
-        // TikTok API requires budget AND budget_mode at adgroup level for this objective
+        // TikTok API requires budget at adgroup level for this objective
+        // NOTE: Smart+ API does NOT accept budget_mode - causes "Invalid budget type" error
         if (!empty($data['budget'])) {
             $budget = floatval($data['budget']);
             if ($budget >= 20) {
                 $adgroupParams['budget'] = $budget;
-                // budget_mode is REQUIRED when setting budget - use BUDGET_MODE_DAY for daily budget
-                $adgroupParams['budget_mode'] = 'BUDGET_MODE_DAY';
-                logSmartPlus("Setting budget at AdGroup level: $budget with budget_mode: BUDGET_MODE_DAY");
+                logSmartPlus("Setting budget at AdGroup level: $budget");
             } else {
                 logSmartPlus("WARNING: Budget $budget is less than minimum $20");
             }
@@ -1583,12 +1582,10 @@ switch ($action) {
 
         // For LEAD_GENERATION objective: budget is ALWAYS at AdGroup level (not campaign)
         // Check for adgroup_budget first, then fall back to budget
-        // budget_mode is REQUIRED when setting budget
         $adgroupBudget = $data['adgroup_budget'] ?? $data['budget'] ?? null;
         if (!empty($adgroupBudget)) {
             $adgroupParams['budget'] = floatval($adgroupBudget);
-            $adgroupParams['budget_mode'] = 'BUDGET_MODE_DAY';
-            logSmartPlus("Setting budget at AdGroup level: " . $adgroupParams['budget'] . " with budget_mode: BUDGET_MODE_DAY");
+            logSmartPlus("Setting budget at AdGroup level: " . $adgroupParams['budget']);
         }
 
         // Optional: Add Target CPA only if provided and using Cost Cap strategy
@@ -2904,10 +2901,8 @@ switch ($action) {
                 }
 
                 // Add budget at adgroup level for LEAD_GENERATION
-                // budget_mode is REQUIRED when setting budget
                 if (!empty($campaignConfig['budget'])) {
                     $adgroupParams['budget'] = floatval($campaignConfig['budget']);
-                    $adgroupParams['budget_mode'] = 'BUDGET_MODE_DAY';
                 }
 
                 // Optional: Add Target CPA only if provided
