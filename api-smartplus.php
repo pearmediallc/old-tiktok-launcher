@@ -1155,14 +1155,14 @@ switch ($action) {
 
         // Note: Identity is set at AD level for Smart+, not at adgroup level
 
-        // For LEAD_GENERATION objective: budget is ALWAYS at AdGroup level (not campaign)
-        // TikTok API requires budget at adgroup level for this objective
-        // NOTE: Smart+ API does NOT accept budget_mode - causes "Invalid budget type" error
+        // For LEAD_GENERATION objective: budget is at AdGroup level
+        // TikTok API requires BOTH budget AND budget_mode when setting adgroup budget
         if (!empty($data['budget'])) {
             $budget = floatval($data['budget']);
             if ($budget >= 20) {
                 $adgroupParams['budget'] = $budget;
-                logSmartPlus("Setting budget at AdGroup level: $budget");
+                $adgroupParams['budget_mode'] = 'BUDGET_MODE_DAY';  // Required with budget
+                logSmartPlus("Setting budget at AdGroup level: $budget with BUDGET_MODE_DAY");
             } else {
                 logSmartPlus("WARNING: Budget $budget is less than minimum $20");
             }
@@ -1581,12 +1581,13 @@ switch ($action) {
             $adgroupParams['optimization_event'] = $data['optimization_event'] ?? 'FORM';
         }
 
-        // For LEAD_GENERATION objective: budget is ALWAYS at AdGroup level (not campaign)
-        // Check for adgroup_budget first, then fall back to budget
+        // For LEAD_GENERATION objective: budget is at AdGroup level
+        // TikTok API requires BOTH budget AND budget_mode when setting adgroup budget
         $adgroupBudget = $data['adgroup_budget'] ?? $data['budget'] ?? null;
         if (!empty($adgroupBudget)) {
             $adgroupParams['budget'] = floatval($adgroupBudget);
-            logSmartPlus("Setting budget at AdGroup level: " . $adgroupParams['budget']);
+            $adgroupParams['budget_mode'] = 'BUDGET_MODE_DAY';  // Required with budget
+            logSmartPlus("Setting budget at AdGroup level: " . $adgroupParams['budget'] . " with BUDGET_MODE_DAY");
         }
 
         // Optional: Add Target CPA only if provided and using Cost Cap strategy
@@ -2902,8 +2903,10 @@ switch ($action) {
                 }
 
                 // Add budget at adgroup level for LEAD_GENERATION
+                // TikTok API requires BOTH budget AND budget_mode when setting adgroup budget
                 if (!empty($campaignConfig['budget'])) {
                     $adgroupParams['budget'] = floatval($campaignConfig['budget']);
+                    $adgroupParams['budget_mode'] = 'BUDGET_MODE_DAY';  // Required with budget
                 }
 
                 // Optional: Add Target CPA only if provided
