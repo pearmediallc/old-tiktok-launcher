@@ -668,7 +668,7 @@ switch ($action) {
         break;
 
     // ==========================================
-    // GET PIXELS with FULL PAGINATION (Cached - 10 min TTL)
+    // GET PIXELS (Cached - 10 min TTL)
     // ==========================================
     case 'get_pixels':
         $cacheKey = $cache->generateKey('pixels', $advertiserId);
@@ -691,41 +691,28 @@ switch ($action) {
             $cache->delete($cacheKey);
         }
 
-        logSmartPlus("Cache MISS for pixels - Advertiser: $advertiserId - fetching ALL pages");
+        logSmartPlus("Cache MISS for pixels - Advertiser: $advertiserId");
 
-        $allPixels = [];
-        $page = 1;
-        $pageSize = 100;
+        // Note: /pixel/list/ endpoint doesn't support pagination parameters
+        $result = makeApiCall('/pixel/list/', [
+            'advertiser_id' => $advertiserId
+        ], $accessToken, 'GET');
 
-        // Fetch ALL pages of pixels
-        do {
-            $result = makeApiCall('/pixel/list/', [
-                'advertiser_id' => $advertiserId,
-                'page' => $page,
-                'page_size' => $pageSize
-            ], $accessToken, 'GET');
+        logSmartPlus("Pixel response code: " . ($result['code'] ?? 'null'));
 
-            logSmartPlus("Pixel page $page response code: " . ($result['code'] ?? 'null'));
+        if ($result['code'] == 0 && isset($result['data']['pixels'])) {
+            $pixels = $result['data']['pixels'];
+            logSmartPlus("Found " . count($pixels) . " pixels");
 
-            if ($result['code'] == 0 && isset($result['data']['pixels'])) {
-                $allPixels = array_merge($allPixels, $result['data']['pixels']);
-            }
-
-            $totalPages = $result['data']['page_info']['total_page'] ?? 1;
-            $page++;
-        } while ($page <= $totalPages && $page <= 20); // Safety limit 20 pages
-
-        logSmartPlus("Found " . count($allPixels) . " pixels total");
-
-        if (count($allPixels) > 0 || $result['code'] == 0) {
             // Cache the pixels for 10 minutes
-            $cache->set($cacheKey, $allPixels, Cache::TTL_LONG);
+            $cache->set($cacheKey, $pixels, Cache::TTL_LONG);
             echo json_encode([
                 'success' => true,
-                'data' => ['pixels' => $allPixels],
-                'total_count' => count($allPixels)
+                'data' => ['pixels' => $pixels],
+                'total_count' => count($pixels)
             ]);
         } else {
+            logSmartPlus("Pixel API error: " . json_encode($result));
             echo json_encode([
                 'success' => false,
                 'message' => $result['message'] ?? 'Failed to get pixels'
