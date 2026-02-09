@@ -3782,6 +3782,16 @@ function renderAccountAssetsDropdowns(advertiserId, assets) {
                     </button>
                 </div>
             </div>
+            <!-- Upload Progress Bar for this account -->
+            <div id="bulk-upload-progress-${advertiserId}" style="display: none; margin: 8px 0; padding: 10px; background: #f0f9ff; border-radius: 6px; border: 1px solid #bae6fd;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span id="bulk-upload-status-${advertiserId}" style="font-size: 12px; color: #0369a1; font-weight: 500;">Uploading...</span>
+                    <span id="bulk-upload-count-${advertiserId}" style="font-size: 12px; color: #0369a1;">0/0</span>
+                </div>
+                <div style="background: #e0f2fe; border-radius: 4px; height: 6px; overflow: hidden;">
+                    <div id="bulk-upload-bar-${advertiserId}" style="background: linear-gradient(90deg, #0284c7, #22d3ee); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                </div>
+            </div>
         `;
     }
 
@@ -4347,8 +4357,10 @@ async function refreshVideoPickerList() {
     try {
         addLog('info', `Refreshing videos for account ${advertiserId}`);
 
-        const result = await apiRequest('get_media_library', {
-            advertiser_id: advertiserId
+        // Use get_videos action with force_refresh to get fresh data from TikTok
+        const result = await apiRequest('get_videos', {
+            advertiser_id: advertiserId,
+            force_refresh: true
         });
 
         if (result.success && result.data?.videos) {
