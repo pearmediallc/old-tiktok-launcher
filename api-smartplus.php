@@ -1046,19 +1046,17 @@ switch ($action) {
 
         // Smart+ Lead Generation Campaign - exact parameters from TikTok docs
         // Create as DISABLED by default - user must explicitly enable
+        // Use BUDGET_MODE_INFINITE at campaign level - budget will be set at adgroup level
+        // This ensures compatibility with all account types (some require adgroup-level budget only)
         $campaignParams = [
             'advertiser_id' => $advertiserId,
             'campaign_name' => $data['campaign_name'],
             'objective_type' => 'LEAD_GENERATION',
             'request_id' => generateRequestId(),
-            'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
+            'budget_mode' => 'BUDGET_MODE_INFINITE',  // No campaign budget - set at adgroup level
             'operation_status' => 'DISABLE'  // Create as DISABLED - safer default
         ];
-
-        // Only add budget if provided
-        if (!empty($data['budget'])) {
-            $campaignParams['budget'] = floatval($data['budget']);
-        }
+        // Note: Budget is NOT set at campaign level - it will be set at adgroup level
 
         logSmartPlus("Campaign params: " . json_encode($campaignParams));
 
@@ -1519,19 +1517,17 @@ switch ($action) {
         // Create as DISABLED by default - safer, user can enable when ready
         logSmartPlus("Step 1: Creating Campaign (as DISABLED)...");
 
+        // Use BUDGET_MODE_INFINITE at campaign level - budget will be set at adgroup level
+        // This ensures compatibility with all account types
         $campaignParams = [
             'advertiser_id' => $advertiserId,
             'campaign_name' => $data['campaign_name'],
             'objective_type' => 'LEAD_GENERATION',
             'request_id' => generateRequestId(),
-            'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
+            'budget_mode' => 'BUDGET_MODE_INFINITE',  // No campaign budget - set at adgroup level
             'operation_status' => 'DISABLE'  // Create as DISABLED - safer default
         ];
-
-        // Only add budget if provided
-        if (!empty($data['budget'])) {
-            $campaignParams['budget'] = floatval($data['budget']);
-        }
+        // Note: Budget is NOT set at campaign level - it will be set at adgroup level
 
         $campaignResult = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
 
@@ -2851,18 +2847,16 @@ switch ($action) {
 
             try {
                 // 1. CREATE CAMPAIGN
+                // Use BUDGET_MODE_INFINITE - budget will be set at adgroup level for all account types
                 $campaignParams = [
                     'advertiser_id' => $targetAdvertiserId,
                     'campaign_name' => $campaignName,
                     'objective_type' => 'LEAD_GENERATION',
                     'request_id' => generateRequestId(),
-                    'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
+                    'budget_mode' => 'BUDGET_MODE_INFINITE',  // No campaign budget - set at adgroup level
                     'operation_status' => 'DISABLE'  // Create as DISABLED - safer default
                 ];
-
-                if (!empty($campaignConfig['budget'])) {
-                    $campaignParams['budget'] = floatval($campaignConfig['budget']);
-                }
+                // Note: Budget is NOT set at campaign level - it will be set at adgroup level
 
                 $campaignResult = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
 

@@ -1375,18 +1375,33 @@ async function handleSmartMediaUpload(event) {
     let completed = 0;
     let failed = 0;
 
-    // Upload files SEQUENTIALLY for reliability (TikTok API can be sensitive to concurrent uploads)
-    for (let i = 0; i < validFiles.length; i++) {
-        const result = await uploadSingleMediaFile(validFiles[i], i, validFiles.length);
-        if (result?.success) {
-            completed++;
-        } else {
-            failed++;
-        }
+    // Upload files in PARALLEL BATCHES of 5 for speed
+    const BATCH_SIZE = 5;
+    const totalBatches = Math.ceil(validFiles.length / BATCH_SIZE);
 
-        // Add delay between uploads to avoid rate limiting (reduced for speed)
-        if (i < validFiles.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 300));
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const startIdx = batchIndex * BATCH_SIZE;
+        const batch = validFiles.slice(startIdx, startIdx + BATCH_SIZE);
+
+        addLog('info', `Uploading batch ${batchIndex + 1}/${totalBatches} (${batch.length} files)`);
+
+        // Upload batch in parallel
+        const batchResults = await Promise.all(
+            batch.map((file, idx) => uploadSingleMediaFile(file, startIdx + idx, validFiles.length))
+        );
+
+        // Count results
+        batchResults.forEach(result => {
+            if (result?.success) {
+                completed++;
+            } else {
+                failed++;
+            }
+        });
+
+        // Small delay between batches to avoid rate limiting
+        if (batchIndex < totalBatches - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
     }
 
@@ -7182,9 +7197,23 @@ async function handleMediaLibraryUpload(event) {
     // Show progress UI
     showMediaUploadProgress();
 
-    // Upload files sequentially (could do parallel but sequential is more reliable)
-    for (let i = 0; i < validFiles.length; i++) {
-        await uploadMediaVideo(validFiles[i], i);
+    // Upload files in PARALLEL BATCHES of 5 for speed
+    const BATCH_SIZE = 5;
+    const totalBatches = Math.ceil(validFiles.length / BATCH_SIZE);
+
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const startIdx = batchIndex * BATCH_SIZE;
+        const batch = validFiles.slice(startIdx, startIdx + BATCH_SIZE);
+
+        // Upload entire batch in parallel
+        await Promise.all(
+            batch.map((file, idx) => uploadMediaVideo(file, startIdx + idx))
+        );
+
+        // Small delay between batches to prevent server overload
+        if (batchIndex < totalBatches - 1) {
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
     }
 
     // Complete
@@ -9644,9 +9673,9 @@ function openDupBulkVideoUpload(advertiserId) {
         let processing = 0;
         const uploadedVideos = [];
 
-        for (let i = 0; i < validFiles.length; i++) {
-            const file = validFiles[i];
-            const statusEl = document.getElementById(`dup-upload-status-${advertiserId}-${i}`);
+        // Helper function to upload single file
+        const uploadSingleFile = async (file, index) => {
+            const statusEl = document.getElementById(`dup-upload-status-${advertiserId}-${index}`);
 
             // Update status to uploading
             if (statusEl) {
@@ -9673,58 +9702,91 @@ function openDupBulkVideoUpload(advertiserId) {
 
                 if (result.success && result.data?.video_id) {
                     // Video uploaded and video_id returned immediately
-                    completed++;
-                    uploadedVideos.push({
-                        video_id: result.data.video_id,
-                        file_name: newFileName,
-                        preview_url: URL.createObjectURL(file),
-                        is_new: true
-                    });
                     if (statusEl) {
                         statusEl.textContent = '✓ Done';
                         statusEl.style.background = '#dcfce7';
                         statusEl.style.color = '#16a34a';
                     }
+                    return {
+                        success: true,
+                        video: {
+                            video_id: result.data.video_id,
+                            file_name: newFileName,
+                            preview_url: URL.createObjectURL(file),
+                            is_new: true
+                        }
+                    };
                 } else if (result.success || (result.message && result.message.toLowerCase().includes('processing'))) {
                     // Video accepted but still processing (fix_task_id scenario)
-                    processing++;
-                    completed++; // Count as success since video was accepted
                     if (statusEl) {
                         statusEl.textContent = '⏳ Processing';
                         statusEl.style.background = '#fef3c7';
                         statusEl.style.color = '#d97706';
                     }
-                    // Add placeholder for processing video
-                    uploadedVideos.push({
-                        video_id: result.data?.video_id || `processing_${Date.now()}_${i}`,
-                        file_name: newFileName,
-                        preview_url: URL.createObjectURL(file),
-                        is_new: true,
-                        is_processing: true
-                    });
+                    return {
+                        success: true,
+                        processing: true,
+                        video: {
+                            video_id: result.data?.video_id || `processing_${Date.now()}_${index}`,
+                            file_name: newFileName,
+                            preview_url: URL.createObjectURL(file),
+                            is_new: true,
+                            is_processing: true
+                        }
+                    };
                 } else {
-                    failed++;
                     if (statusEl) {
                         statusEl.textContent = '✗ Failed';
                         statusEl.style.background = '#fee2e2';
                         statusEl.style.color = '#dc2626';
                     }
                     console.error(`Upload failed for ${file.name}:`, result);
+                    return { success: false };
                 }
             } catch (error) {
-                failed++;
                 if (statusEl) {
                     statusEl.textContent = '✗ Error';
                     statusEl.style.background = '#fee2e2';
                     statusEl.style.color = '#dc2626';
                 }
                 console.error(`Upload error for ${file.name}:`, error);
+                return { success: false };
             }
+        };
 
-            // Update progress bar
+        // Upload in PARALLEL BATCHES of 5 for speed
+        const BATCH_SIZE = 5;
+        const totalBatches = Math.ceil(validFiles.length / BATCH_SIZE);
+
+        for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+            const startIdx = batchIndex * BATCH_SIZE;
+            const batch = validFiles.slice(startIdx, startIdx + BATCH_SIZE);
+
+            // Upload entire batch in parallel
+            const results = await Promise.all(
+                batch.map((file, idx) => uploadSingleFile(file, startIdx + idx))
+            );
+
+            // Process batch results
+            results.forEach(result => {
+                if (result.success) {
+                    completed++;
+                    if (result.processing) processing++;
+                    if (result.video) uploadedVideos.push(result.video);
+                } else {
+                    failed++;
+                }
+            });
+
+            // Update progress bar after each batch
             const progress = ((completed + failed) / validFiles.length) * 100;
             if (progressBar) progressBar.style.width = `${progress}%`;
             if (progressCount) progressCount.textContent = `${completed + failed}/${validFiles.length}`;
+
+            // Small delay between batches to prevent server overload
+            if (batchIndex < totalBatches - 1) {
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
         }
 
         // Update local state with uploaded videos
@@ -11392,19 +11454,29 @@ async function handleBulkVideoUpload(event) {
         isUploading: true
     };
 
-    addLog('info', `Starting bulk upload of ${validFiles.length} videos (sequential for reliability)`);
+    addLog('info', `Starting bulk upload of ${validFiles.length} videos (parallel batches of 5)`);
 
     // Show progress UI
     showBulkUploadProgress();
 
-    // Upload files SEQUENTIALLY (one at a time) for maximum reliability
-    // TikTok API can be sensitive to concurrent uploads
-    for (let i = 0; i < validFiles.length; i++) {
-        await uploadSingleVideoInBulk(validFiles[i], i);
+    // Upload files in PARALLEL BATCHES of 5 for speed
+    const BATCH_SIZE = 5;
+    const totalBatches = Math.ceil(validFiles.length / BATCH_SIZE);
 
-        // Add a small delay between uploads to avoid rate limiting (300ms for speed)
-        if (i < validFiles.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 300));
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const startIdx = batchIndex * BATCH_SIZE;
+        const batch = validFiles.slice(startIdx, startIdx + BATCH_SIZE);
+
+        addLog('info', `Uploading batch ${batchIndex + 1}/${totalBatches} (${batch.length} videos)`);
+
+        // Upload batch in parallel - all 5 videos upload simultaneously
+        await Promise.all(
+            batch.map((file, idx) => uploadSingleVideoInBulk(file, startIdx + idx))
+        );
+
+        // Small delay between batches to avoid rate limiting
+        if (batchIndex < totalBatches - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
     }
 
