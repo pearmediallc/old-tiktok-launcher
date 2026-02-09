@@ -2336,6 +2336,16 @@ h3 {
 
 .progress-status.failed {
     color: var(--destructive);
+    font-weight: 600;
+    max-width: 300px;
+    text-align: right;
+    word-wrap: break-word;
+    font-size: 12px;
+}
+
+.progress-item.has-error {
+    background: rgba(239, 68, 68, 0.08);
+    border-left: 3px solid var(--destructive);
 }
 
 /* ============================================

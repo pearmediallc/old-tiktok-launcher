@@ -6000,6 +6000,13 @@ async function executeBulkLaunch() {
         return;
     }
 
+    // Check that we have creatives (videos) to use
+    if (!state.creatives || state.creatives.length === 0) {
+        showToast('Please add at least one video before launching', 'error');
+        addLog('error', 'Bulk launch cancelled: No videos/creatives configured');
+        return;
+    }
+
     // IMPORTANT: Deduplicate accounts by advertiser_id to prevent duplicate campaigns
     const uniqueAccountsMap = new Map();
     bulkLaunchState.selectedAccounts.forEach(account => {
@@ -6014,13 +6021,26 @@ async function executeBulkLaunch() {
         bulkLaunchState.selectedAccounts = uniqueAccounts;
     }
 
-    // IMPORTANT: If original account already has a campaign created (from single account flow),
-    // skip it in bulk launch to prevent duplicate campaigns
-    let originalAccountSkipped = false;
     const originalAccountId = bulkLaunchState.accounts.find(a => a.is_current)?.advertiser_id;
+    const originalAccount = bulkLaunchState.accounts.find(a => a.is_current);
+    let originalAccountSkipped = false;
+    let originalNeedsAdCompletion = false;
 
-    if (state.campaignId && originalAccountId) {
-        // Original account already has a campaign - remove it from bulk launch
+    // STEP 1: Check if original account needs its ad completed
+    // If campaign exists but ad doesn't, mark it for completion
+    if (state.campaignId && state.adGroupId && !state.adId && originalAccountId) {
+        const originalInList = bulkLaunchState.selectedAccounts.find(a =>
+            String(a.advertiser_id) === String(originalAccountId) && a.is_original
+        );
+        if (originalInList) {
+            originalNeedsAdCompletion = true;
+            addLog('info', `Original account has incomplete campaign (missing ad) - will complete it first`);
+        }
+    }
+
+    // STEP 2: Handle original account - skip if it already has a COMPLETE campaign
+    if (state.campaignId && state.adId && originalAccountId) {
+        // Original account has a complete campaign - remove it from bulk launch
         const originalInList = bulkLaunchState.selectedAccounts.find(a =>
             String(a.advertiser_id) === String(originalAccountId) && a.is_original
         );
@@ -6030,15 +6050,43 @@ async function executeBulkLaunch() {
                 String(a.advertiser_id) !== String(originalAccountId)
             );
             originalAccountSkipped = true;
-            console.log(`[Bulk Launch] Original account ${originalAccountId} already has campaign ${state.campaignId} - skipping to prevent duplicate`);
-            addLog('info', `Original account already has campaign - will only launch to other accounts`);
+            console.log(`[Bulk Launch] Original account ${originalAccountId} already has complete campaign ${state.campaignId} - skipping to prevent duplicate`);
+            addLog('info', `Original account campaign complete - launching to other accounts only`);
         }
     }
 
-    // Check if we have any accounts left after filtering
-    if (bulkLaunchState.selectedAccounts.length === 0) {
+    // STEP 3: Validate video mappings for non-original accounts
+    const accountsMissingVideos = [];
+    const sourceVideoIds = state.creatives.map(c => c.video_id);
+
+    for (const account of bulkLaunchState.selectedAccounts) {
+        if (account.is_original) continue; // Original account uses its own videos
+
+        const videoMapping = account.video_mapping || {};
+        const missingVideos = sourceVideoIds.filter(vid => !videoMapping[vid]);
+
+        if (missingVideos.length > 0) {
+            accountsMissingVideos.push({
+                name: account.advertiser_name,
+                id: account.advertiser_id,
+                missing: missingVideos.length
+            });
+        }
+    }
+
+    if (accountsMissingVideos.length > 0) {
+        const accountNames = accountsMissingVideos.map(a => a.name).join(', ');
+        showToast(`Please upload/select videos for: ${accountNames}`, 'error');
+        addLog('error', `Video mapping missing for accounts: ${accountNames}`);
+        addLog('info', `Each account needs videos uploaded or selected from their library before bulk launch`);
+        return;
+    }
+
+    // Check if we have any accounts left after filtering (not counting original if it needs ad completion)
+    const accountsForBulkLaunch = bulkLaunchState.selectedAccounts.filter(a => !a.is_original);
+    if (accountsForBulkLaunch.length === 0 && !originalNeedsAdCompletion) {
         if (originalAccountSkipped) {
-            showToast('Original account already has a campaign. Select other accounts for bulk launch.', 'info');
+            showToast('Original account campaign already complete! Select other accounts for bulk launch.', 'info');
         } else {
             showToast('No accounts configured for bulk launch', 'error');
         }
@@ -6056,14 +6104,31 @@ async function executeBulkLaunch() {
     progressList.innerHTML = '';
     progressBar.style.width = '0%';
 
+    // Calculate total: original (if needs completion) + other accounts for bulk launch
+    const totalAccounts = (originalNeedsAdCompletion ? 1 : 0) + accountsForBulkLaunch.length;
+
     // Update progress stats
-    document.getElementById('progress-total').textContent = bulkLaunchState.selectedAccounts.length;
+    document.getElementById('progress-total').textContent = totalAccounts;
     document.getElementById('progress-completed').textContent = '0';
     document.getElementById('progress-success').textContent = '0';
     document.getElementById('progress-failed').textContent = '0';
 
-    // Add initial progress items
-    bulkLaunchState.selectedAccounts.forEach(account => {
+    let completedCount = 0;
+    let successCount = 0;
+    let failedCount = 0;
+
+    // Add progress item for original account if it needs ad completion
+    if (originalNeedsAdCompletion && originalAccount) {
+        progressList.innerHTML += `
+            <div class="progress-item" id="progress-item-${originalAccountId}">
+                <span class="progress-account-name">${originalAccount.advertiser_name} (completing ad)</span>
+                <span class="progress-status pending">Creating ad...</span>
+            </div>
+        `;
+    }
+
+    // Add progress items for other accounts
+    accountsForBulkLaunch.forEach(account => {
         progressList.innerHTML += `
             <div class="progress-item" id="progress-item-${account.advertiser_id}">
                 <span class="progress-account-name">${account.advertiser_name}</span>
@@ -6072,7 +6137,81 @@ async function executeBulkLaunch() {
         `;
     });
 
-    addLog('info', `Starting bulk launch to ${bulkLaunchState.selectedAccounts.length} accounts`);
+    addLog('info', `Starting bulk launch: ${originalNeedsAdCompletion ? '1 original (completing) + ' : ''}${accountsForBulkLaunch.length} accounts`);
+
+    // STEP 4: Complete original account's ad first if needed
+    if (originalNeedsAdCompletion) {
+        try {
+            updateProgressItem(originalAccountId, 'pending', 'Creating ad...');
+
+            const identityType = state.globalIdentityType || 'CUSTOMIZED_USER';
+            const identityAuthorizedBcId = state.globalIdentityAuthorizedBcId || null;
+
+            const creativeList = state.creatives.map(creative => ({
+                video_id: creative.video_id,
+                ad_text: creative.ad_text,
+                image_id: creative.image_id || null
+            }));
+
+            const adRequestData = {
+                adgroup_id: state.adGroupId,
+                ad_name: state.campaignName + ' - Ad',
+                identity_id: state.globalIdentityId,
+                identity_type: identityType,
+                landing_page_url: state.globalLandingUrl,
+                call_to_action_id: state.globalCtaPortfolioId,
+                creatives: creativeList,
+                ad_texts: state.adTexts
+            };
+
+            if (identityType === 'BC_AUTH_TT' && identityAuthorizedBcId) {
+                adRequestData.identity_authorized_bc_id = identityAuthorizedBcId;
+            }
+
+            const adResult = await apiRequest('create_smartplus_ad', adRequestData);
+
+            completedCount++;
+            document.getElementById('progress-completed').textContent = completedCount;
+            progressBar.style.width = `${(completedCount / totalAccounts) * 100}%`;
+
+            if (adResult.success && adResult.smart_plus_ad_id) {
+                state.adId = adResult.smart_plus_ad_id;
+                state.adCreated = true;
+                successCount++;
+                document.getElementById('progress-success').textContent = successCount;
+                updateProgressItem(originalAccountId, 'success', `✓ Ad: ${adResult.smart_plus_ad_id}`);
+                addLog('success', `Original account ad created: ${adResult.smart_plus_ad_id}`);
+            } else {
+                failedCount++;
+                document.getElementById('progress-failed').textContent = failedCount;
+                updateProgressItem(originalAccountId, 'failed', `✗ ${adResult.message || 'Failed to create ad'}`);
+                addLog('error', `Failed to create ad for original account: ${adResult.message}`);
+            }
+        } catch (error) {
+            completedCount++;
+            failedCount++;
+            document.getElementById('progress-completed').textContent = completedCount;
+            document.getElementById('progress-failed').textContent = failedCount;
+            updateProgressItem(originalAccountId, 'failed', `✗ ${error.message}`);
+            addLog('error', `Error creating ad for original account: ${error.message}`);
+        }
+
+        // Remove original from selectedAccounts so it's not sent to bulk launch backend
+        bulkLaunchState.selectedAccounts = bulkLaunchState.selectedAccounts.filter(a =>
+            String(a.advertiser_id) !== String(originalAccountId)
+        );
+    }
+
+    // If no more accounts to launch after completing original, show results
+    if (bulkLaunchState.selectedAccounts.length === 0) {
+        progressFooter.style.display = 'block';
+        if (successCount > 0) {
+            showToast('Original account campaign completed successfully!', 'success');
+        } else {
+            showToast('Failed to complete original campaign', 'error');
+        }
+        return;
+    }
 
     // Get duplicate settings
     const duplicatesEnabled = document.getElementById('bulk-enable-duplicates')?.checked || false;
@@ -6158,27 +6297,30 @@ async function executeBulkLaunch() {
         if (result.success && result.data) {
             const data = result.data;
 
-            // Update progress UI
-            let completed = 0;
-            let successCount = 0;
-            let failedCount = 0;
-
+            // Update progress UI - accumulate with any previous counts (from original account)
             // Update success items
             (data.success || []).forEach(item => {
-                completed++;
+                completedCount++;
                 successCount++;
                 updateProgressItem(item.advertiser_id, 'success', `✓ Campaign: ${item.campaign_id}`);
             });
 
-            // Update failed items
+            // Update failed items with detailed error logging
             (data.failed || []).forEach(item => {
-                completed++;
+                completedCount++;
                 failedCount++;
-                updateProgressItem(item.advertiser_id, 'failed', `✗ ${item.error}`);
+                // Truncate long error messages for display
+                const displayError = item.error && item.error.length > 50
+                    ? item.error.substring(0, 50) + '...'
+                    : (item.error || 'Unknown error');
+                updateProgressItem(item.advertiser_id, 'failed', `✗ ${displayError}`);
+                // Log full error details
+                addLog('error', `Failed: ${item.advertiser_name} (${item.advertiser_id}) - ${item.error}`);
+                console.error(`[Bulk Launch] Failed for ${item.advertiser_id}:`, item);
             });
 
-            // Update stats
-            document.getElementById('progress-completed').textContent = completed;
+            // Update stats with total counts (including original if it was processed)
+            document.getElementById('progress-completed').textContent = completedCount;
             document.getElementById('progress-success').textContent = successCount;
             document.getElementById('progress-failed').textContent = failedCount;
             progressBar.style.width = '100%';
@@ -6189,17 +6331,35 @@ async function executeBulkLaunch() {
             addLog('info', `Bulk launch completed: ${successCount} success, ${failedCount} failed`);
 
             if (failedCount === 0) {
-                showToast(`Successfully launched to ${successCount} accounts!`, 'success');
+                showToast(`Successfully launched to ${successCount} account(s)!`, 'success');
             } else if (successCount > 0) {
-                showToast(`Launched to ${successCount} accounts, ${failedCount} failed`, 'warning');
+                showToast(`Launched to ${successCount} account(s), ${failedCount} failed`, 'warning');
             } else {
                 showToast(`Bulk launch failed for all accounts`, 'error');
             }
         } else {
+            // Mark all remaining accounts as failed
+            bulkLaunchState.selectedAccounts.forEach(account => {
+                updateProgressItem(account.advertiser_id, 'failed', `✗ ${result.message || 'API error'}`);
+                failedCount++;
+                completedCount++;
+            });
+            document.getElementById('progress-completed').textContent = completedCount;
+            document.getElementById('progress-failed').textContent = failedCount;
+            progressBar.style.width = '100%';
             showToast('Bulk launch failed: ' + (result.message || 'Unknown error'), 'error');
             progressFooter.style.display = 'block';
         }
     } catch (error) {
+        // Mark all remaining accounts as failed
+        bulkLaunchState.selectedAccounts.forEach(account => {
+            updateProgressItem(account.advertiser_id, 'failed', `✗ ${error.message}`);
+            failedCount++;
+            completedCount++;
+        });
+        document.getElementById('progress-completed').textContent = completedCount;
+        document.getElementById('progress-failed').textContent = failedCount;
+        progressBar.style.width = '100%';
         addLog('error', 'Bulk launch error: ' + error.message);
         showToast('Error during bulk launch: ' + error.message, 'error');
         progressFooter.style.display = 'block';
@@ -6215,6 +6375,17 @@ function updateProgressItem(advertiserId, status, message) {
     if (statusEl) {
         statusEl.className = `progress-status ${status}`;
         statusEl.textContent = message;
+        // Add tooltip for long error messages
+        if (status === 'failed' && message.length > 30) {
+            statusEl.title = message;
+        }
+    }
+
+    // Add error styling to the item container for failed items
+    if (status === 'failed') {
+        item.classList.add('has-error');
+    } else {
+        item.classList.remove('has-error');
     }
 }
 
