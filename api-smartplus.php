@@ -2897,9 +2897,19 @@ switch ($action) {
                 $scheduleEnd = null;
 
                 if (!empty($campaignConfig['schedule_start_time'])) {
-                    // Convert timestamp to UTC datetime string
-                    $scheduleStart = gmdate('Y-m-d H:i:s', intval($campaignConfig['schedule_start_time']));
-                    logSmartPlus("Using scheduled start time (UTC): $scheduleStart");
+                    $rawStartTime = $campaignConfig['schedule_start_time'];
+                    logSmartPlus("Raw schedule_start_time received: " . (is_string($rawStartTime) ? $rawStartTime : "timestamp: $rawStartTime"));
+
+                    // Check if it's a string (new format "YYYY-MM-DD HH:MM:SS") or number (legacy timestamp)
+                    if (is_string($rawStartTime) && strpos($rawStartTime, '-') !== false) {
+                        // String format - convert from EST to UTC (same as single account flow)
+                        $scheduleStart = convertESTtoUTC($rawStartTime);
+                        logSmartPlus("Converted EST string to UTC: $scheduleStart");
+                    } else {
+                        // Legacy timestamp format - convert to UTC datetime string
+                        $scheduleStart = gmdate('Y-m-d H:i:s', intval($rawStartTime));
+                        logSmartPlus("Converted timestamp to UTC: $scheduleStart");
+                    }
                 } else {
                     // Start immediately in UTC
                     $scheduleStart = getUTCDateTime();
@@ -2907,9 +2917,19 @@ switch ($action) {
                 }
 
                 if (!empty($campaignConfig['schedule_end_time'])) {
-                    // Convert timestamp to UTC datetime string
-                    $scheduleEnd = gmdate('Y-m-d H:i:s', intval($campaignConfig['schedule_end_time']));
-                    logSmartPlus("Using scheduled end time (UTC): $scheduleEnd");
+                    $rawEndTime = $campaignConfig['schedule_end_time'];
+                    logSmartPlus("Raw schedule_end_time received: " . (is_string($rawEndTime) ? $rawEndTime : "timestamp: $rawEndTime"));
+
+                    // Check if it's a string or number
+                    if (is_string($rawEndTime) && strpos($rawEndTime, '-') !== false) {
+                        // String format - convert from EST to UTC
+                        $scheduleEnd = convertESTtoUTC($rawEndTime);
+                        logSmartPlus("Converted EST end time to UTC: $scheduleEnd");
+                    } else {
+                        // Legacy timestamp format
+                        $scheduleEnd = gmdate('Y-m-d H:i:s', intval($rawEndTime));
+                        logSmartPlus("Converted timestamp end time to UTC: $scheduleEnd");
+                    }
                 }
 
                 $adgroupParams = [

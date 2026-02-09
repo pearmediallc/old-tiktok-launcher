@@ -6543,10 +6543,11 @@ function toggleBulkDuplicates() {
 
 // Toggle bulk schedule type (in Bulk Launch modal)
 function toggleBulkScheduleType() {
-    const scheduleType = document.querySelector('input[name="bulk_schedule_type"]:checked')?.value || 'continuous';
+    const scheduleType = document.querySelector('input[name="bulk_schedule_type"]:checked')?.value || 'same_as_original';
     const startOnlyContainer = document.getElementById('bulk-schedule-start-only-container');
     const dateTimeContainer = document.getElementById('bulk-schedule-datetime-container');
     const scheduleOptions = document.querySelectorAll('.bulk-schedule-option');
+    const originalScheduleInfo = document.getElementById('bulk-original-schedule-info');
 
     // Hide both containers first
     if (startOnlyContainer) {
@@ -6554,6 +6555,16 @@ function toggleBulkScheduleType() {
     }
     if (dateTimeContainer) {
         dateTimeContainer.style.display = 'none';
+    }
+
+    // Update original schedule info display
+    if (originalScheduleInfo && scheduleType === 'same_as_original') {
+        const originalSchedule = getScheduleData();
+        if (originalSchedule.schedule_start_time) {
+            originalScheduleInfo.textContent = `Will use: ${originalSchedule.schedule_type === 'SCHEDULE_START_END' ? 'Start & End' : 'Scheduled Start'} - ${originalSchedule.schedule_start_time}`;
+        } else {
+            originalScheduleInfo.textContent = 'Will use: Start Immediately (continuous)';
+        }
     }
 
     // Show appropriate container based on selection
@@ -6607,10 +6618,31 @@ function toggleBulkScheduleType() {
     addLog('info', `Bulk schedule type set to: ${scheduleType}`);
 }
 
+// Format datetime-local value to 'YYYY-MM-DD HH:MM:SS' string for API
+// Same format as single account flow - times are interpreted as EST
+function formatBulkScheduleTime(dateTimeLocalValue) {
+    if (!dateTimeLocalValue) return null;
+
+    // Parse the datetime-local value (e.g., "2025-01-28T14:00")
+    const [datePart, timePart] = dateTimeLocalValue.split('T');
+
+    // Return in API format: "YYYY-MM-DD HH:MM:SS"
+    // Time is passed as-is since user enters EST and TikTok interprets as account timezone (EST)
+    return `${datePart} ${timePart}:00`;
+}
+
 // Get bulk schedule data for API
 function getBulkScheduleData() {
-    const scheduleType = document.querySelector('input[name="bulk_schedule_type"]:checked')?.value || 'continuous';
+    const scheduleType = document.querySelector('input[name="bulk_schedule_type"]:checked')?.value || 'same_as_original';
 
+    // Same as original - use the schedule from the original campaign
+    if (scheduleType === 'same_as_original') {
+        const originalSchedule = getScheduleData();
+        addLog('info', `Using same schedule as original: ${JSON.stringify(originalSchedule)}`);
+        return originalSchedule;
+    }
+
+    // Start immediately - no schedule times
     if (scheduleType === 'continuous') {
         return {
             schedule_type: 'SCHEDULE_FROM_NOW',
@@ -6619,32 +6651,32 @@ function getBulkScheduleData() {
         };
     }
 
+    // Scheduled start only - run continuously from a specific time
     if (scheduleType === 'scheduled_start_only') {
         const startInput = document.getElementById('bulk-schedule-start-only-datetime');
         if (startInput && startInput.value) {
-            const startDate = new Date(startInput.value);
-            // Convert to UTC timestamp
-            const startTimestamp = Math.floor(startDate.getTime() / 1000);
+            // Use string format like single account flow (EST time)
+            const formattedTime = formatBulkScheduleTime(startInput.value);
             return {
-                // Use SCHEDULE_FROM_NOW with start time for "scheduled start, run indefinitely"
                 schedule_type: 'SCHEDULE_FROM_NOW',
-                schedule_start_time: startTimestamp,
+                schedule_start_time: formattedTime,
                 schedule_end_time: null
             };
         }
     }
 
+    // Scheduled start and end
     if (scheduleType === 'scheduled') {
         const startInput = document.getElementById('bulk-schedule-start-datetime');
         const endInput = document.getElementById('bulk-schedule-end-datetime');
 
-        const startDate = startInput?.value ? new Date(startInput.value) : null;
-        const endDate = endInput?.value ? new Date(endInput.value) : null;
+        const startTime = startInput?.value ? formatBulkScheduleTime(startInput.value) : null;
+        const endTime = endInput?.value ? formatBulkScheduleTime(endInput.value) : null;
 
         return {
             schedule_type: 'SCHEDULE_START_END',
-            schedule_start_time: startDate ? Math.floor(startDate.getTime() / 1000) : null,
-            schedule_end_time: endDate ? Math.floor(endDate.getTime() / 1000) : null
+            schedule_start_time: startTime,
+            schedule_end_time: endTime
         };
     }
 

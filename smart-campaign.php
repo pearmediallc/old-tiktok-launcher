@@ -1630,8 +1630,16 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                         <h4>📅 Schedule</h4>
                         <p class="bulk-section-desc">Choose when your campaigns should run.</p>
                         <div class="bulk-schedule-options" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+                            <!-- Same as Original Option -->
                             <label class="bulk-schedule-option" style="display: flex; align-items: flex-start; gap: 10px; padding: 10px; background: white; border: 2px solid #1a1a1a; border-radius: 6px; cursor: pointer; margin-bottom: 8px;">
-                                <input type="radio" name="bulk_schedule_type" value="continuous" checked onchange="toggleBulkScheduleType()" style="margin-top: 3px;">
+                                <input type="radio" name="bulk_schedule_type" value="same_as_original" checked onchange="toggleBulkScheduleType()" style="margin-top: 3px;">
+                                <div>
+                                    <strong style="display: block; margin-bottom: 2px;">Same as Original Campaign</strong>
+                                    <span id="bulk-original-schedule-info" style="font-size: 12px; color: #64748b;">Use the same schedule settings as the original campaign</span>
+                                </div>
+                            </label>
+                            <label class="bulk-schedule-option" style="display: flex; align-items: flex-start; gap: 10px; padding: 10px; background: white; border: 2px solid #e2e8f0; border-radius: 6px; cursor: pointer; margin-bottom: 8px;">
+                                <input type="radio" name="bulk_schedule_type" value="continuous" onchange="toggleBulkScheduleType()" style="margin-top: 3px;">
                                 <div>
                                     <strong style="display: block; margin-bottom: 2px;">Start Immediately</strong>
                                     <span style="font-size: 12px; color: #64748b;">Campaign runs continuously with no end date</span>
@@ -1641,20 +1649,20 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                 <input type="radio" name="bulk_schedule_type" value="scheduled_start_only" onchange="toggleBulkScheduleType()" style="margin-top: 3px;">
                                 <div>
                                     <strong style="display: block; margin-bottom: 2px;">Scheduled Start</strong>
-                                    <span style="font-size: 12px; color: #64748b;">Start at a specific time, run continuously</span>
+                                    <span style="font-size: 12px; color: #64748b;">Start at a specific time, run continuously (EST timezone)</span>
                                 </div>
                             </label>
                             <label class="bulk-schedule-option" style="display: flex; align-items: flex-start; gap: 10px; padding: 10px; background: white; border: 2px solid #e2e8f0; border-radius: 6px; cursor: pointer;">
                                 <input type="radio" name="bulk_schedule_type" value="scheduled" onchange="toggleBulkScheduleType()" style="margin-top: 3px;">
                                 <div>
                                     <strong style="display: block; margin-bottom: 2px;">Scheduled Start & End</strong>
-                                    <span style="font-size: 12px; color: #64748b;">Set both start and end dates</span>
+                                    <span style="font-size: 12px; color: #64748b;">Set both start and end dates (EST timezone)</span>
                                 </div>
                             </label>
 
                             <!-- Start Time Only Picker -->
                             <div id="bulk-schedule-start-only-container" style="display: none; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 6px;">
-                                <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px;">Start Date & Time:</label>
+                                <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px;">Start Date & Time (EST):</label>
                                 <input type="datetime-local" id="bulk-schedule-start-only-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
                                 <p style="margin: 6px 0 0; font-size: 11px; color: #64748b;">Campaign will start at this time and run indefinitely</p>
                             </div>
@@ -1663,15 +1671,15 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                             <div id="bulk-schedule-datetime-container" style="display: none; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 6px;">
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                                     <div>
-                                        <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px;">Start Date & Time:</label>
+                                        <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px;">Start Date & Time (EST):</label>
                                         <input type="datetime-local" id="bulk-schedule-start-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
                                     </div>
                                     <div>
-                                        <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px;">End Date & Time:</label>
+                                        <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px;">End Date & Time (EST):</label>
                                         <input type="datetime-local" id="bulk-schedule-end-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
                                     </div>
                                 </div>
-                                <p style="margin: 6px 0 0; font-size: 11px; color: #64748b;">Campaign will run between these dates</p>
+                                <p style="margin: 6px 0 0; font-size: 11px; color: #64748b;">Campaign will run between these dates (all times in EST)</p>
                             </div>
                         </div>
                     </div>
