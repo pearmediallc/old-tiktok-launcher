@@ -7,7 +7,7 @@ let state = {
     currentStep: 1,
     campaignId: null,
     campaignName: null,
-    campaignBudget: null,
+    adGroupBudget: null,  // Budget is always at adgroup level
     adGroupId: null,
     adId: null,  // Smart+ Ad ID
     pixelId: null,
@@ -20,7 +20,6 @@ let state = {
     identities: [],
     mediaLibrary: [],
     selectedVideos: [],
-    cboEnabled: true,
     ctaPortfolios: [],
     selectedPortfolioId: null,
     selectedPortfolioName: null,
@@ -269,20 +268,20 @@ const Validation = {
             });
         }
 
-        // Budget validation
-        const budgetField = document.getElementById('campaign-budget');
+        // Budget validation (now at ad group level)
+        const budgetField = document.getElementById('adgroup-budget');
         if (budgetField) {
             budgetField.addEventListener('blur', () => {
                 const result = this.validateBudget(budgetField.value);
                 if (!result.valid) {
-                    this.showFieldError('campaign-budget', result.message);
+                    this.showFieldError('adgroup-budget', result.message);
                 } else {
-                    this.clearFieldError('campaign-budget');
+                    this.clearFieldError('adgroup-budget');
                 }
             });
 
             budgetField.addEventListener('input', () => {
-                this.clearFieldError('campaign-budget');
+                this.clearFieldError('adgroup-budget');
             });
         }
     }
@@ -513,8 +512,6 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeDateRange();  // Initialize date range filter (default: today)
     initializeStepNavigation();  // Make step indicators clickable
 
-    state.cboEnabled = true;
-
     // Check for URL parameter to auto-switch to campaigns view
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('view') === 'campaigns') {
@@ -573,43 +570,9 @@ function updateAgeGroupsState() {
     console.log('Current age groups:', state.ageGroups);
 }
 
-// Toggle CBO budget section
+// Toggle CBO budget section (deprecated - budget is always at ad group level now)
 function toggleCBOBudget() {
-    const cboEnabled = document.getElementById('cbo-enabled').checked;
-
-    // Step 1 elements
-    const campaignBudgetSection = document.getElementById('campaign-budget-section');
-    const cboDisabledNote = document.getElementById('campaign-cbo-disabled-note');
-
-    // Step 2 elements
-    const adGroupBudgetSection = document.getElementById('adgroup-budget-section');
-    const cboBudgetNote = document.getElementById('cbo-budget-note');
-    const displayBudgetInfo = document.getElementById('display-budget-info');
-
-    state.cboEnabled = cboEnabled;
-
-    if (cboEnabled) {
-        // CBO Enabled: Show campaign budget input in Step 1, hide ad group budget in Step 2
-        if (campaignBudgetSection) campaignBudgetSection.style.display = 'block';
-        if (cboDisabledNote) cboDisabledNote.style.display = 'none';
-        if (adGroupBudgetSection) adGroupBudgetSection.style.display = 'none';
-        if (cboBudgetNote) cboBudgetNote.style.display = 'block';
-        if (displayBudgetInfo) {
-            const budgetVal = document.getElementById('campaign-budget')?.value || '50';
-            displayBudgetInfo.innerHTML = '<strong>Budget:</strong> $<span id="display-budget">' + budgetVal + '</span>/day (Campaign Level)';
-        }
-    } else {
-        // CBO Disabled: Hide campaign budget in Step 1, show ad group budget input in Step 2
-        if (campaignBudgetSection) campaignBudgetSection.style.display = 'none';
-        if (cboDisabledNote) cboDisabledNote.style.display = 'block';
-        if (adGroupBudgetSection) adGroupBudgetSection.style.display = 'block';
-        if (cboBudgetNote) cboBudgetNote.style.display = 'none';
-        if (displayBudgetInfo) {
-            displayBudgetInfo.innerHTML = '<strong>Budget:</strong> Set at Ad Group level (Step 2)';
-        }
-    }
-
-    addLog('info', `CBO ${cboEnabled ? 'enabled' : 'disabled'} - Budget will be set at ${cboEnabled ? 'Campaign' : 'Ad Group'} level`);
+    // No-op: Budget is always set at Ad Group level
 }
 
 // Load Advertiser Timezone (for schedule time conversion)
@@ -2288,21 +2251,12 @@ function prevStep() {
 // =====================
 async function createCampaign() {
     const campaignName = document.getElementById('campaign-name').value.trim();
-    const campaignBudget = parseFloat(document.getElementById('campaign-budget').value) || 50;
 
     // Validate campaign name
     const nameValidation = Validation.validateCampaignName(campaignName);
     if (!nameValidation.valid) {
         Validation.showFieldError('campaign-name', nameValidation.message);
         showToast(nameValidation.message, 'error');
-        return;
-    }
-
-    // Validate budget
-    const budgetValidation = Validation.validateBudget(campaignBudget);
-    if (!budgetValidation.valid) {
-        Validation.showFieldError('campaign-budget', budgetValidation.message);
-        showToast(budgetValidation.message, 'error');
         return;
     }
 
@@ -2315,9 +2269,9 @@ async function createCampaign() {
     addLog('info', '=== Creating Smart+ Campaign ===');
 
     try {
+        // Budget is set at Ad Group level, not campaign level
         const result = await apiRequest('create_smartplus_campaign', {
-            campaign_name: campaignName,
-            budget: campaignBudget
+            campaign_name: campaignName
         });
 
         hideLoading();
@@ -2325,29 +2279,14 @@ async function createCampaign() {
         if (result.success && result.campaign_id) {
             state.campaignId = result.campaign_id;
             state.campaignName = campaignName;
-            state.budget = campaignBudget;
             state.campaignCreated = true;  // Mark as created
 
             // Update display
             const displayNameEl = document.getElementById('display-campaign-name');
-            const displayBudgetEl = document.getElementById('display-budget');
             const displayCampaignIdEl = document.getElementById('display-campaign-id');
-            const cboBudgetDisplay = document.getElementById('cbo-budget-display');
 
             if (displayNameEl) displayNameEl.textContent = campaignName;
-            if (displayBudgetEl) displayBudgetEl.textContent = campaignBudget;
             if (displayCampaignIdEl) displayCampaignIdEl.textContent = result.campaign_id;
-            if (cboBudgetDisplay) cboBudgetDisplay.textContent = campaignBudget;
-
-            // Update Step 2 budget info based on CBO state
-            const displayBudgetInfo = document.getElementById('display-budget-info');
-            if (displayBudgetInfo) {
-                if (state.cboEnabled) {
-                    displayBudgetInfo.innerHTML = '<strong>Budget:</strong> $<span id="display-budget">' + campaignBudget + '</span>/day (Campaign Level)';
-                } else {
-                    displayBudgetInfo.innerHTML = '<strong>Budget:</strong> Set at Ad Group level below';
-                }
-            }
 
             // Update button text
             updateStepButtonLabels();
@@ -2369,29 +2308,25 @@ async function createCampaign() {
 // UPDATE existing campaign
 async function updateCampaign() {
     const campaignName = document.getElementById('campaign-name').value.trim();
-    const campaignBudget = parseFloat(document.getElementById('campaign-budget').value) || 50;
 
     showLoading('Updating Campaign...');
     addLog('info', '=== Updating Smart+ Campaign ===');
 
     try {
+        // Budget is set at Ad Group level, not campaign level
         const result = await apiRequest('update_smartplus_campaign', {
             campaign_id: state.campaignId,
-            campaign_name: campaignName,
-            budget: campaignBudget
+            campaign_name: campaignName
         });
 
         hideLoading();
 
         if (result.success) {
             state.campaignName = campaignName;
-            state.budget = campaignBudget;
 
             // Update display
             const displayNameEl = document.getElementById('display-campaign-name');
-            const displayBudgetEl = document.getElementById('display-budget');
             if (displayNameEl) displayNameEl.textContent = campaignName;
-            if (displayBudgetEl) displayBudgetEl.textContent = campaignBudget;
 
             showToast('Campaign updated successfully!', 'success');
             addLog('info', `Campaign updated: ${state.campaignId}`);
@@ -2425,18 +2360,9 @@ async function createAdGroup() {
     addLog('info', `Location targeting: ${locationIds.length} location(s) selected`);
     console.log('Location IDs being sent to API:', locationIds);
 
-    // For LEAD_GENERATION objective: budget is ALWAYS at AdGroup level (not campaign)
-    // Get budget from either campaign budget field (if CBO was enabled in step 1) or adgroup budget field
-    let adGroupBudget;
-    if (state.cboEnabled) {
-        // If CBO was "enabled", the budget was entered in campaign budget field but still goes to AdGroup
-        adGroupBudget = state.budget || parseFloat(document.getElementById('campaign-budget')?.value) || 50;
-        addLog('info', `Using Campaign-level budget for AdGroup: $${adGroupBudget}`);
-    } else {
-        // If CBO was disabled, get from adgroup budget field
-        adGroupBudget = parseFloat(document.getElementById('adgroup-budget')?.value) || 50;
-        addLog('info', `Using AdGroup-level budget: $${adGroupBudget}`);
-    }
+    // Budget is ALWAYS at AdGroup level
+    const adGroupBudget = parseFloat(document.getElementById('adgroup-budget')?.value) || 50;
+    addLog('info', `Ad Group budget: $${adGroupBudget}`);
 
     if (!pixelId) {
         showToast('Please select a pixel', 'error');
@@ -2930,10 +2856,9 @@ function reviewAds() {
     const identity = identityFromPages || identityFromCustom || identityFromAll;
     const identityName = identity ? (identity.display_name || identity.identity_name) : identityId;
 
-    // Populate review summaries
-    const budgetDisplay = state.cboEnabled
-        ? `$${state.budget}/day (Campaign Level)`
-        : `$${state.adGroupBudget}/day (Ad Group Level)`;
+    // Populate review summaries - Budget is always at Ad Group level
+    const adgroupBudgetVal = document.getElementById('adgroup-budget')?.value || state.adGroupBudget || '50';
+    const budgetDisplay = `$${adgroupBudgetVal}/day`;
 
     document.getElementById('campaign-summary').innerHTML = `
         <p><strong>Campaign Name:</strong> ${state.campaignName}</p>
@@ -3529,7 +3454,8 @@ function openBulkLaunchModal() {
 
     // Populate campaign info
     document.getElementById('bulk-campaign-name').textContent = state.campaignName || '-';
-    document.getElementById('bulk-campaign-budget').textContent = state.budget || state.adGroupBudget || '0';
+    const adgroupBudgetVal = document.getElementById('adgroup-budget')?.value || '50';
+    document.getElementById('bulk-campaign-budget').textContent = adgroupBudgetVal;
 
     // Render accounts
     renderBulkAccountsInModal();
@@ -5231,7 +5157,7 @@ function updateBulkModalCounts() {
         return a.pixel_id && a.identity_id && a.portfolio_id && videoMatch && videoMatch.match_rate === 100;
     }).length;
 
-    const budget = parseFloat(state.budget || state.adGroupBudget || 0);
+    const budget = parseFloat(document.getElementById('adgroup-budget')?.value || state.adGroupBudget || 50);
     const totalBudget = budget * selectedCount;
 
     // Modal counts (include all accounts including original)
@@ -5649,7 +5575,7 @@ function updateBulkLaunchSummary() {
     summaryDiv.style.display = 'block';
 
     // Update stats
-    const budget = parseFloat(state.budget || state.adGroupBudget || 0);
+    const budget = parseFloat(document.getElementById('adgroup-budget')?.value || state.adGroupBudget || 50);
     document.getElementById('bulk-selected-count').textContent = bulkLaunchState.selectedAccounts.length;
     document.getElementById('bulk-total-budget').textContent = `$${(budget * bulkLaunchState.selectedAccounts.length).toFixed(2)}`;
     document.getElementById('bulk-ready-count').textContent = bulkLaunchState.selectedAccounts.length;
@@ -5748,11 +5674,9 @@ async function launchDuplicateCampaigns(count) {
                 // Create new campaign
                 addLog('info', `Creating campaign ${i + 1}/${count}: "${campaignName}"`);
 
+                // Budget is set at ad group level, not campaign level
                 const campaignResult = await apiRequest('create_smartplus_campaign', {
-                    campaign_name: campaignName,
-                    budget: state.budget,
-                    budget_mode: 'BUDGET_MODE_DAY',
-                    cbo_enabled: state.cboEnabled
+                    campaign_name: campaignName
                 });
 
                 if (!campaignResult.success) {
@@ -5766,7 +5690,7 @@ async function launchDuplicateCampaigns(count) {
 
                 addLog('info', `Creating ad group: "${adGroupName}"`);
 
-                // Create ad group for this campaign
+                // Create ad group for this campaign - budget always at adgroup level
                 const adGroupResult = await apiRequest('create_smartplus_adgroup', {
                     campaign_id: newCampaignId,
                     adgroup_name: adGroupName,
@@ -5775,7 +5699,7 @@ async function launchDuplicateCampaigns(count) {
                     location_ids: state.locationIds,
                     age_groups: state.ageGroups,
                     dayparting: state.dayparting,
-                    budget: state.cboEnabled ? null : state.adGroupBudget
+                    budget: state.adGroupBudget || parseFloat(document.getElementById('adgroup-budget')?.value) || 50
                 });
 
                 if (!adGroupResult.success) {
@@ -6014,10 +5938,10 @@ async function executeBulkLaunch() {
     const duplicatesEnabled = document.getElementById('bulk-enable-duplicates')?.checked || false;
     const duplicateCount = duplicatesEnabled ? parseInt(document.getElementById('bulk-duplicate-count')?.value) || 1 : 1;
 
-    // Build campaign config
+    // Build campaign config - budget always at adgroup level
     const campaignConfig = {
         campaign_name: state.campaignName,
-        budget: state.budget || state.adGroupBudget,
+        budget: parseFloat(document.getElementById('adgroup-budget')?.value) || state.adGroupBudget || 50,
         location_ids: state.locationIds,
         age_groups: state.ageGroups,
         dayparting: state.dayparting,
