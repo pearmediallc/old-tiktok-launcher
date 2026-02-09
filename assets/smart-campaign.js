@@ -1338,8 +1338,8 @@ async function handleSmartMediaUpload(event) {
     let completed = 0;
     let failed = 0;
 
-    // Upload files in PARALLEL BATCHES of 5 for speed
-    const BATCH_SIZE = 5;
+    // Upload files in PARALLEL BATCHES of 2 for reliability
+    const BATCH_SIZE = 2;
     const totalBatches = Math.ceil(validFiles.length / BATCH_SIZE);
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
@@ -7143,8 +7143,8 @@ async function handleMediaLibraryUpload(event) {
     // Show progress UI
     showMediaUploadProgress();
 
-    // Upload files in PARALLEL BATCHES of 5 for speed
-    const BATCH_SIZE = 5;
+    // Upload files in PARALLEL BATCHES of 2 for reliability
+    const BATCH_SIZE = 2;
     const totalBatches = Math.ceil(validFiles.length / BATCH_SIZE);
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
@@ -9700,8 +9700,8 @@ function openDupBulkVideoUpload(advertiserId) {
             }
         };
 
-        // Upload in PARALLEL BATCHES of 5 for speed
-        const BATCH_SIZE = 5;
+        // Upload in PARALLEL BATCHES of 2 for reliability
+        const BATCH_SIZE = 2;
         const totalBatches = Math.ceil(validFiles.length / BATCH_SIZE);
 
         for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
@@ -11405,8 +11405,8 @@ async function handleBulkVideoUpload(event) {
     // Show progress UI
     showBulkUploadProgress();
 
-    // Upload files in PARALLEL BATCHES of 5 for speed
-    const BATCH_SIZE = 5;
+    // Upload files in PARALLEL BATCHES of 2 for reliability
+    const BATCH_SIZE = 2;
     const totalBatches = Math.ceil(validFiles.length / BATCH_SIZE);
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
