@@ -2883,6 +2883,33 @@ h3 {
     letter-spacing: 0.5px;
 }
 
+/* New Badge for newly uploaded videos */
+.new-badge {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    animation: pulse-new 2s ease-in-out infinite;
+}
+
+@keyframes pulse-new {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+/* Newly uploaded video item highlight */
+.media-item.newly-uploaded {
+    border: 2px solid #3b82f6;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+}
+
 /* Media Item Info Overlay */
 .account-media-item .item-info {
     position: absolute;

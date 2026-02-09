@@ -3385,6 +3385,7 @@ let bulkLaunchState = {
     selectedAccounts: [],
     accountAssets: {},
     videoDistributionMode: 'match',
+    scheduleType: 'continuous',  // Default schedule type
     isConfigured: false
 };
 
@@ -4325,6 +4326,9 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
             renderVideoPickerGrid();
         }
 
+        // Update the media library UI to show newly uploaded videos immediately
+        updateAccountMediaLibraryUI(advertiserId);
+
         showToast(`Uploaded ${uploadedVideos.length} videos successfully! Select one to use.`, 'success');
     } else if (failed > 0) {
         showToast(`Failed to upload ${failed} video(s). Please try again.`, 'error');
@@ -4363,8 +4367,9 @@ async function refreshVideoPickerList() {
             force_refresh: true
         });
 
-        if (result.success && result.data?.videos) {
-            const videos = result.data.videos || [];
+        if (result.success && result.data) {
+            // Handle both response formats: data as array directly OR data.videos
+            const videos = Array.isArray(result.data) ? result.data : (result.data.videos || []);
 
             // Update account assets
             if (!bulkLaunchState.accountAssets[advertiserId]) {
@@ -4619,6 +4624,9 @@ async function handlePickerVideoUpload(event) {
         videoPickerState.videos = [...bulkLaunchState.accountAssets[advertiserId].videos];
         renderVideoPickerGrid();
 
+        // Update the media library UI to show newly uploaded videos immediately
+        updateAccountMediaLibraryUI(advertiserId);
+
         showToast(`Uploaded ${uploadedVideos.length} videos! Select one to use.`, 'success');
 
         // Hide progress after a moment
@@ -4651,6 +4659,65 @@ function toggleMediaLibrary(advertiserId) {
     if (btn) {
         btn.textContent = isExpanded ? '📁 View Library' : '📁 Hide Library';
     }
+}
+
+// Update the media library UI after video upload (immediate rendering)
+function updateAccountMediaLibraryUI(advertiserId) {
+    const assets = bulkLaunchState.accountAssets[advertiserId];
+    if (!assets) return;
+
+    const videos = assets.videos || [];
+    const images = assets.images || [];
+
+    // Update video count in header
+    const videoCountEl = document.querySelector(`#media-library-${advertiserId} .video-count`);
+    if (videoCountEl) {
+        videoCountEl.textContent = `🎬 ${videos.length} videos`;
+    }
+
+    // Update "All Videos in Account" section title
+    const videoSectionTitle = document.querySelector(`#media-library-${advertiserId} .media-section-title`);
+    if (videoSectionTitle && videoSectionTitle.textContent.includes('All Videos')) {
+        videoSectionTitle.textContent = `All Videos in Account (${videos.length})`;
+    }
+
+    // Find and update the video grid
+    const libraryEl = document.getElementById(`media-library-${advertiserId}`);
+    if (libraryEl) {
+        // Get the video match info for proper rendering
+        const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+        const videoMapping = selectedAccount?.video_mapping || {};
+        const matchedTargetIds = new Set(Object.values(videoMapping));
+
+        // Find the video grid container
+        const videoGrids = libraryEl.querySelectorAll('.media-grid');
+        if (videoGrids.length > 0) {
+            const videoGrid = videoGrids[0]; // First grid is for videos
+
+            if (videos.length === 0) {
+                videoGrid.innerHTML = '<p class="no-media-text">No videos in this account</p>';
+            } else {
+                let html = '';
+                videos.forEach(video => {
+                    const isUsedInCampaign = matchedTargetIds.has(video.video_id);
+                    const isNew = video.is_new;
+                    html += `
+                        <div class="media-item video-item ${isUsedInCampaign ? 'used-in-campaign' : ''} ${isNew ? 'newly-uploaded' : ''}">
+                            <div class="media-thumb">
+                                ${video.video_cover_url ? `<img src="${video.video_cover_url}" alt="">` : '<div class="media-placeholder">🎬</div>'}
+                                ${isUsedInCampaign ? '<span class="used-badge">✓</span>' : ''}
+                                ${isNew ? '<span class="new-badge">NEW</span>' : ''}
+                            </div>
+                            <div class="media-name">${(video.file_name || 'Video').substring(0, 15)}${video.file_name?.length > 15 ? '...' : ''}</div>
+                        </div>
+                    `;
+                });
+                videoGrid.innerHTML = html;
+            }
+        }
+    }
+
+    console.log(`[Media Library] Updated UI for account ${advertiserId}: ${videos.length} videos`);
 }
 
 // Update video mapping when user manually selects a video
@@ -4926,7 +4993,8 @@ function autoMatchAssetsByName(advertiserId, assets) {
     const campaignIdentity = state.identities?.find(i => i.identity_id === state.globalIdentityId);
     const campaignIdentityName = (campaignIdentity?.display_name || campaignIdentity?.identity_name)?.toLowerCase().trim();
 
-    const campaignPortfolio = state.ctaPortfolios?.find(p => p.portfolio_id === state.selectedPortfolioId);
+    // Note: campaign portfolios use creative_portfolio_id, target account portfolios use portfolio_id
+    const campaignPortfolio = state.ctaPortfolios?.find(p => p.creative_portfolio_id === state.selectedPortfolioId || p.portfolio_id === state.selectedPortfolioId);
     const campaignPortfolioName = campaignPortfolio?.portfolio_name?.toLowerCase().trim();
 
     // Get or create selected account entry
@@ -5019,6 +5087,7 @@ function toggleBulkAccountSelection(advertiserId) {
                 pixel_id: null,
                 identity_id: null,
                 identity_type: 'CUSTOMIZED_USER',
+                portfolio_id: null,
                 video_mapping: {}
             });
         }
@@ -5960,6 +6029,9 @@ async function executeBulkLaunch() {
     const duplicatesEnabled = document.getElementById('bulk-enable-duplicates')?.checked || false;
     const duplicateCount = duplicatesEnabled ? parseInt(document.getElementById('bulk-duplicate-count')?.value) || 1 : 1;
 
+    // Get schedule data for bulk launch
+    const bulkScheduleData = getBulkScheduleData();
+
     // Build campaign config - budget always at adgroup level
     const campaignConfig = {
         campaign_name: state.campaignName,
@@ -5974,7 +6046,11 @@ async function executeBulkLaunch() {
             video_id: c.video_id,
             ad_text: c.ad_text
         })),
-        duplicate_count: duplicateCount  // Add duplicate count to config
+        duplicate_count: duplicateCount,  // Add duplicate count to config
+        // Schedule data from bulk launch modal
+        schedule_type: bulkScheduleData.schedule_type,
+        schedule_start_time: bulkScheduleData.schedule_start_time,
+        schedule_end_time: bulkScheduleData.schedule_end_time
     };
 
     // Prepare accounts with video mappings
@@ -6243,6 +6319,121 @@ function toggleBulkDuplicates() {
 
     updateBulkModalCounts();
     addLog('info', `Bulk duplicates ${enabled ? 'enabled' : 'disabled'}, count: ${bulkLaunchState.duplicateCount}`);
+}
+
+// Toggle bulk schedule type (in Bulk Launch modal)
+function toggleBulkScheduleType() {
+    const scheduleType = document.querySelector('input[name="bulk_schedule_type"]:checked')?.value || 'continuous';
+    const startOnlyContainer = document.getElementById('bulk-schedule-start-only-container');
+    const dateTimeContainer = document.getElementById('bulk-schedule-datetime-container');
+    const scheduleOptions = document.querySelectorAll('.bulk-schedule-option');
+
+    // Hide both containers first
+    if (startOnlyContainer) {
+        startOnlyContainer.style.display = 'none';
+    }
+    if (dateTimeContainer) {
+        dateTimeContainer.style.display = 'none';
+    }
+
+    // Show appropriate container based on selection
+    if (scheduleType === 'scheduled_start_only' && startOnlyContainer) {
+        startOnlyContainer.style.display = 'block';
+    } else if (scheduleType === 'scheduled' && dateTimeContainer) {
+        dateTimeContainer.style.display = 'block';
+    }
+
+    // Update border styling to show selected option
+    scheduleOptions.forEach(option => {
+        const radio = option.querySelector('input[type="radio"]');
+        if (radio && radio.checked) {
+            option.style.borderColor = '#1a1a1a';
+        } else {
+            option.style.borderColor = '#e2e8f0';
+        }
+    });
+
+    // Set default start time if not set (now + 1 hour)
+    if (scheduleType === 'scheduled_start_only') {
+        const startInput = document.getElementById('bulk-schedule-start-only-datetime');
+
+        if (startInput && !startInput.value) {
+            const now = new Date();
+            now.setHours(now.getHours() + 1);
+            now.setMinutes(0, 0, 0);
+            startInput.value = formatDateTimeLocal(now);
+        }
+    } else if (scheduleType === 'scheduled') {
+        const startInput = document.getElementById('bulk-schedule-start-datetime');
+        const endInput = document.getElementById('bulk-schedule-end-datetime');
+
+        if (startInput && !startInput.value) {
+            const now = new Date();
+            now.setHours(now.getHours() + 1);
+            now.setMinutes(0, 0, 0);
+            startInput.value = formatDateTimeLocal(now);
+        }
+
+        if (endInput && !endInput.value) {
+            const endDate = new Date();
+            endDate.setDate(endDate.getDate() + 7); // Default: 1 week from now
+            endDate.setHours(23, 59, 0, 0);
+            endInput.value = formatDateTimeLocal(endDate);
+        }
+    }
+
+    // Update bulk launch state
+    bulkLaunchState.scheduleType = scheduleType;
+    addLog('info', `Bulk schedule type set to: ${scheduleType}`);
+}
+
+// Get bulk schedule data for API
+function getBulkScheduleData() {
+    const scheduleType = document.querySelector('input[name="bulk_schedule_type"]:checked')?.value || 'continuous';
+
+    if (scheduleType === 'continuous') {
+        return {
+            schedule_type: 'SCHEDULE_FROM_NOW',
+            schedule_start_time: null,
+            schedule_end_time: null
+        };
+    }
+
+    if (scheduleType === 'scheduled_start_only') {
+        const startInput = document.getElementById('bulk-schedule-start-only-datetime');
+        if (startInput && startInput.value) {
+            const startDate = new Date(startInput.value);
+            // Convert to UTC timestamp
+            const startTimestamp = Math.floor(startDate.getTime() / 1000);
+            return {
+                // Use SCHEDULE_FROM_NOW with start time for "scheduled start, run indefinitely"
+                schedule_type: 'SCHEDULE_FROM_NOW',
+                schedule_start_time: startTimestamp,
+                schedule_end_time: null
+            };
+        }
+    }
+
+    if (scheduleType === 'scheduled') {
+        const startInput = document.getElementById('bulk-schedule-start-datetime');
+        const endInput = document.getElementById('bulk-schedule-end-datetime');
+
+        const startDate = startInput?.value ? new Date(startInput.value) : null;
+        const endDate = endInput?.value ? new Date(endInput.value) : null;
+
+        return {
+            schedule_type: 'SCHEDULE_START_END',
+            schedule_start_time: startDate ? Math.floor(startDate.getTime() / 1000) : null,
+            schedule_end_time: endDate ? Math.floor(endDate.getTime() / 1000) : null
+        };
+    }
+
+    // Default fallback
+    return {
+        schedule_type: 'SCHEDULE_FROM_NOW',
+        schedule_start_time: null,
+        schedule_end_time: null
+    };
 }
 
 // ==========================================

@@ -2871,7 +2871,26 @@ switch ($action) {
 
                 // 2. CREATE AD GROUP
                 // TikTok API requires UTC+0 format for schedule times
-                $scheduleStart = getUTCDateTime();  // Start immediately in UTC
+                // Use schedule data from campaign config if provided, otherwise start immediately
+                $scheduleType = $campaignConfig['schedule_type'] ?? 'SCHEDULE_FROM_NOW';
+                $scheduleStart = null;
+                $scheduleEnd = null;
+
+                if (!empty($campaignConfig['schedule_start_time'])) {
+                    // Convert timestamp to UTC datetime string
+                    $scheduleStart = gmdate('Y-m-d H:i:s', intval($campaignConfig['schedule_start_time']));
+                    logSmartPlus("Using scheduled start time (UTC): $scheduleStart");
+                } else {
+                    // Start immediately in UTC
+                    $scheduleStart = getUTCDateTime();
+                    logSmartPlus("Using immediate start time (UTC): $scheduleStart");
+                }
+
+                if (!empty($campaignConfig['schedule_end_time'])) {
+                    // Convert timestamp to UTC datetime string
+                    $scheduleEnd = gmdate('Y-m-d H:i:s', intval($campaignConfig['schedule_end_time']));
+                    logSmartPlus("Using scheduled end time (UTC): $scheduleEnd");
+                }
 
                 $adgroupParams = [
                     'advertiser_id' => $targetAdvertiserId,
@@ -2883,7 +2902,7 @@ switch ($action) {
                     'optimization_goal' => 'CONVERT',
                     'billing_event' => 'OCPM',
                     'bid_type' => 'BID_TYPE_NO_BID',  // Lowest Cost strategy - no target CPA required
-                    'schedule_type' => 'SCHEDULE_FROM_NOW',
+                    'schedule_type' => $scheduleType,
                     'schedule_start_time' => $scheduleStart,
                     'operation_status' => 'ENABLE',
                     'targeting_spec' => [
@@ -2891,6 +2910,11 @@ switch ($action) {
                         'age_groups' => $campaignConfig['age_groups'] ?? ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100']
                     ]
                 ];
+
+                // Add schedule_end_time if provided
+                if (!empty($scheduleEnd)) {
+                    $adgroupParams['schedule_end_time'] = $scheduleEnd;
+                }
 
                 // Add pixel if provided for this account
                 if (!empty($pixelId)) {
