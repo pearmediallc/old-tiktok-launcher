@@ -366,9 +366,29 @@ function batchGetVideoCoverImages($videoIds, $advertiserId, $accessToken) {
 
     // Step 5: For any remaining videos without covers, use fallback
     foreach ($videoIds as $videoId) {
-        if (!isset($coverMap[$videoId])) {
-            logSmartPlus("WARNING: No cover for video $videoId, using fallback");
+        if (!isset($coverMap[$videoId]) || empty($coverMap[$videoId])) {
+            logSmartPlus("WARNING: No cover for video $videoId, using fallback from cache");
             $coverMap[$videoId] = findAnyValidImageFromCache($imageLibrary);
+
+            // If cache fallback failed, try API-based fallback
+            if (empty($coverMap[$videoId])) {
+                logSmartPlus("WARNING: Cache fallback failed for $videoId, trying API fallback");
+                $coverMap[$videoId] = findAnyValidImage($advertiserId, $accessToken);
+            }
+
+            // If still no cover, try to upload the video's cover URL directly as last resort
+            if (empty($coverMap[$videoId])) {
+                $videoInfo = $videoInfoMap[$videoId] ?? null;
+                $coverUrl = $videoInfo['video_cover_url'] ?? null;
+                if ($coverUrl) {
+                    logSmartPlus("LAST RESORT: Attempting direct cover upload for $videoId");
+                    $uploadResult = uploadImageByUrl($coverUrl, $advertiserId, $accessToken);
+                    if ($uploadResult['success']) {
+                        $coverMap[$videoId] = $uploadResult['image_id'];
+                        logSmartPlus("LAST RESORT SUCCESS: Video $videoId -> Image " . $uploadResult['image_id']);
+                    }
+                }
+            }
         }
     }
 
@@ -2951,6 +2971,20 @@ switch ($action) {
                 logSmartPlus("Video mapping received: " . json_encode($videoMapping));
                 logSmartPlus("Creatives config: " . json_encode($campaignConfig['creatives'] ?? []));
 
+                // First, collect all target video IDs for batch processing
+                $targetVideoIds = [];
+                foreach ($campaignConfig['creatives'] ?? [] as $creative) {
+                    $sourceVideoId = $creative['video_id'];
+                    $targetVideoId = $videoMapping[$sourceVideoId] ?? $sourceVideoId;
+                    $targetVideoIds[] = $targetVideoId;
+                }
+                logSmartPlus("Target video IDs for cover batch: " . json_encode($targetVideoIds));
+
+                // Batch fetch cover images for ALL videos at once (more efficient)
+                $coverMap = batchGetVideoCoverImages($targetVideoIds, $targetAdvertiserId, $accessToken);
+                logSmartPlus("Cover map result: " . json_encode($coverMap));
+
+                // Build creative list with cover images
                 $creativeList = [];
                 foreach ($campaignConfig['creatives'] ?? [] as $creative) {
                     $sourceVideoId = $creative['video_id'];
@@ -2960,12 +2994,26 @@ switch ($action) {
                     $targetVideoId = $videoMapping[$sourceVideoId] ?? $sourceVideoId;
                     logSmartPlus("Target video ID (after mapping): $targetVideoId");
 
-                    // Get cover image for this video in target account
-                    $coverImageId = getVideoCoverImage($targetVideoId, $targetAdvertiserId, $accessToken);
+                    // Get cover image from batch result
+                    $coverImageId = $coverMap[$targetVideoId] ?? null;
+
+                    // If no cover from batch, try direct fetch as fallback
+                    if (empty($coverImageId)) {
+                        logSmartPlus("No cover in batch for $targetVideoId, trying direct fetch");
+                        $coverImageId = getVideoCoverImage($targetVideoId, $targetAdvertiserId, $accessToken);
+                    }
+
+                    // If still no cover, this is a critical error
+                    if (empty($coverImageId)) {
+                        throw new Exception("Video cover image required for video $targetVideoId. Please ensure the video has a cover or upload an image to the account's media library.");
+                    }
+
+                    logSmartPlus("Using cover image for $targetVideoId: $coverImageId");
 
                     $creativeInfo = [
                         'video_info' => ['video_id' => $targetVideoId],
-                        'ad_format' => 'SINGLE_VIDEO'
+                        'ad_format' => 'SINGLE_VIDEO',
+                        'image_info' => [['web_uri' => $coverImageId]]  // Always include image_info
                     ];
 
                     // For BC_AUTH_TT, add identity info to each creative_info
@@ -2977,10 +3025,6 @@ switch ($action) {
                             $creativeInfo['identity_bc_id'] = $identityAuthorizedBcId;
                             $creativeInfo['identity_authorized_bc_id'] = $identityAuthorizedBcId;
                         }
-                    }
-
-                    if ($coverImageId) {
-                        $creativeInfo['image_info'] = [['web_uri' => $coverImageId]];
                     }
 
                     $creativeList[] = ['creative_info' => $creativeInfo];
