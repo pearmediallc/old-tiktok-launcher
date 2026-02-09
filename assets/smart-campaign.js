@@ -4100,19 +4100,27 @@ function renderVideoPickerGrid() {
             mediaPreview = '<div class="no-preview">🎬</div>';
         }
 
+        // Check if video is still processing (has fake processing_ ID)
+        const isStillProcessing = isProcessing || (video.video_id && video.video_id.startsWith('processing_'));
+
+        // Don't allow selection of processing videos - they don't have real TikTok IDs yet
+        const clickHandler = isStillProcessing
+            ? `showToast('This video is still processing. Please wait or click Refresh to check status.', 'warning')`
+            : `selectVideoFromPicker('${video.video_id}', '${fileName.replace(/'/g, "\\'")}')`;
+
         html += `
-            <div class="picker-video-item ${isSelected ? 'selected' : ''} ${isNew ? 'newly-uploaded' : ''} ${isProcessing ? 'processing' : ''}"
-                 onclick="selectVideoFromPicker('${video.video_id}', '${fileName.replace(/'/g, "\\'")}')">
+            <div class="picker-video-item ${isSelected ? 'selected' : ''} ${isNew ? 'newly-uploaded' : ''} ${isStillProcessing ? 'processing not-selectable' : ''}"
+                 onclick="${clickHandler}">
                 <div class="picker-video-thumb">
                     ${mediaPreview}
-                    ${isNew ? '<span class="new-badge">NEW</span>' : ''}
-                    ${isProcessing ? '<span class="processing-badge">⏳</span>' : ''}
+                    ${isNew && !isStillProcessing ? '<span class="new-badge">NEW</span>' : ''}
+                    ${isStillProcessing ? '<span class="processing-badge">⏳ Processing</span>' : ''}
                 </div>
                 <div class="picker-video-info">
                     <span class="picker-video-name">${fileName}</span>
                 </div>
                 <div class="selected-badge">✓</div>
-                <div class="select-hint">${isSelected ? 'Selected' : 'Click to select'}</div>
+                <div class="select-hint">${isStillProcessing ? 'Processing...' : (isSelected ? 'Selected' : 'Click to select')}</div>
             </div>
         `;
     });
@@ -4646,17 +4654,28 @@ async function handlePickerVideoUpload(event) {
         // Update the media library UI to show newly uploaded videos immediately
         updateAccountMediaLibraryUI(advertiserId);
 
-        // Auto-select the first uploaded video if we have one
-        if (uploadedVideos.length > 0 && uploadedVideos[0].video_id && !uploadedVideos[0].video_id.startsWith('processing_')) {
-            const firstVideo = uploadedVideos[0];
-            videoPickerState.currentSelection = firstVideo.video_id;
+        // Auto-select the first uploaded video if we have one with a real video ID
+        const hasRealVideoId = uploadedVideos.some(v => v.video_id && !v.video_id.startsWith('processing_'));
+
+        if (hasRealVideoId) {
+            const firstRealVideo = uploadedVideos.find(v => v.video_id && !v.video_id.startsWith('processing_'));
+            videoPickerState.currentSelection = firstRealVideo.video_id;
             renderVideoPickerGrid();  // Re-render to show selection
 
             // Actually select it in the mapping
-            selectVideoFromPicker(firstVideo.video_id, firstVideo.file_name);
+            selectVideoFromPicker(firstRealVideo.video_id, firstRealVideo.file_name);
             showToast(`✓ Video uploaded and selected!`, 'success');
         } else {
-            showToast(`Uploaded ${uploadedVideos.length} videos! Select one to use.`, 'success');
+            // Video is still processing - show message and schedule auto-refresh
+            showToast(`Video uploaded! Processing on TikTok... Click Refresh in ~30 seconds to select it.`, 'info');
+
+            // Auto-refresh after 30 seconds to check if video is ready
+            setTimeout(() => {
+                if (videoPickerState.advertiserId === advertiserId) {
+                    addLog('info', 'Auto-refreshing video list to check for processed videos...');
+                    refreshVideoPickerList();
+                }
+            }, 30000);
         }
 
         // Hide progress after a moment

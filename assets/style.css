@@ -1653,9 +1653,9 @@ h3 {
     font-size: 13px;
 }
 
-/* Bulk Launch Modal */
+/* Bulk Launch Modal - Made larger for better account selection */
 .bulk-launch-modal-content {
-    max-width: 800px;
+    max-width: 1000px;
     width: 95%;
     max-height: 90vh;
     overflow-y: auto;
@@ -1759,13 +1759,13 @@ h3 {
     font-size: 13px;
 }
 
-/* Bulk Accounts Container */
+/* Bulk Accounts Container - Increased height for better visibility */
 .bulk-accounts-container {
-    max-height: 400px;
+    max-height: 500px;
     overflow-y: auto;
     border: 1px solid var(--border);
     border-radius: calc(var(--radius) - 4px);
-    padding: 10px;
+    padding: 12px;
 }
 
 .loading-accounts {
@@ -2948,7 +2948,36 @@ h3 {
 }
 
 .picker-video-item.processing {
-    opacity: 0.8;
+    opacity: 0.7;
+}
+
+.picker-video-item.not-selectable {
+    cursor: not-allowed;
+    position: relative;
+}
+
+.picker-video-item.not-selectable::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    pointer-events: none;
+}
+
+.picker-video-item.not-selectable .select-hint {
+    color: #f59e0b;
+    font-weight: 600;
+}
+
+/* Processing badge style update */
+.processing-badge {
+    background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+    font-size: 10px !important;
+    padding: 4px 8px !important;
 }
 
 /* Media Item Info Overlay */
