@@ -923,10 +923,19 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                     <input type="text" id="campaign-name" placeholder="Enter campaign name" required>
                 </div>
 
+                <div class="form-section">
+                    <h3>Budget Settings</h3>
+                    <div class="form-group">
+                        <label>Daily Budget ($)</label>
+                        <input type="number" id="campaign-budget" value="50" min="20" placeholder="50">
+                        <small>Minimum $20 daily budget. TikTok will optimize spend across ad groups.</small>
+                    </div>
+                </div>
+
                 <div class="form-info smart-info">
                     <p><strong>Objective:</strong> Lead Generation</p>
                     <p><strong>Type:</strong> Smart+ Campaign (AI-Optimized)</p>
-                    <p><strong>Budget:</strong> Set at Ad Group level (Step 2)</p>
+                    <p><strong>Budget Mode:</strong> Dynamic Daily Budget (CBO)</p>
                 </div>
                 <button class="btn-primary" onclick="createCampaign()">Create Campaign →</button>
             </div>
@@ -944,18 +953,11 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                 <div class="form-info" style="margin-bottom: 20px; background: #e8f5e9; padding: 12px; border-radius: 6px;">
                     <p><strong>Campaign:</strong> <span id="display-campaign-name">-</span></p>
                     <p><strong>Campaign ID:</strong> <span id="display-campaign-id" style="color: #22c55e; font-weight: bold;">-</span></p>
+                    <p><strong>Budget:</strong> $<span id="display-budget">-</span>/day (Campaign Level)</p>
                 </div>
 
                 <div class="form-section">
-                    <h3>Budget & Schedule</h3>
-                    <div id="adgroup-budget-section">
-                        <div class="form-group">
-                            <label>Daily Budget ($)</label>
-                            <input type="number" id="adgroup-budget" placeholder="50" min="20" value="50">
-                            <small>Minimum $20 daily budget</small>
-                        </div>
-                    </div>
-
+                    <h3>Schedule</h3>
                     <!-- Schedule Options -->
                     <div class="form-group" style="margin-top: 20px;">
                         <label style="font-weight: 600; margin-bottom: 12px; display: block;">Schedule</label>

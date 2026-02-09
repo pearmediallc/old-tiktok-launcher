@@ -1046,17 +1046,21 @@ switch ($action) {
 
         // Smart+ Lead Generation Campaign - exact parameters from TikTok docs
         // Create as DISABLED by default - user must explicitly enable
-        // Use BUDGET_MODE_INFINITE at campaign level - budget will be set at adgroup level
-        // This ensures compatibility with all account types (some require adgroup-level budget only)
+        // Smart+ campaigns REQUIRE: BUDGET_MODE_DYNAMIC_DAILY_BUDGET + budget_optimize_on at campaign level
+        // AdGroup will use BUDGET_MODE_INFINITE (no adgroup budget)
+        $budget = floatval($data['budget'] ?? 50);
+        if ($budget < 20) $budget = 50;  // Minimum $20, default $50
+
         $campaignParams = [
             'advertiser_id' => $advertiserId,
             'campaign_name' => $data['campaign_name'],
             'objective_type' => 'LEAD_GENERATION',
             'request_id' => generateRequestId(),
-            'budget_mode' => 'BUDGET_MODE_INFINITE',  // No campaign budget - set at adgroup level
+            'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',  // Required for Smart+ campaigns
+            'budget' => $budget,
+            'budget_optimize_on' => true,  // CBO enabled - TikTok optimizes across ad groups
             'operation_status' => 'DISABLE'  // Create as DISABLED - safer default
         ];
-        // Note: Budget is NOT set at campaign level - it will be set at adgroup level
 
         logSmartPlus("Campaign params: " . json_encode($campaignParams));
 
@@ -1153,18 +1157,11 @@ switch ($action) {
 
         // Note: Identity is set at AD level for Smart+, not at adgroup level
 
-        // For LEAD_GENERATION objective: budget is at AdGroup level
-        // TikTok API requires BOTH budget AND budget_mode when setting adgroup budget
-        if (!empty($data['budget'])) {
-            $budget = floatval($data['budget']);
-            if ($budget >= 20) {
-                $adgroupParams['budget'] = $budget;
-                $adgroupParams['budget_mode'] = 'BUDGET_MODE_DAY';  // Required with budget
-                logSmartPlus("Setting budget at AdGroup level: $budget with BUDGET_MODE_DAY");
-            } else {
-                logSmartPlus("WARNING: Budget $budget is less than minimum $20");
-            }
-        }
+        // For Smart+ campaigns with CBO (budget_optimize_on=true at campaign level):
+        // AdGroup should use BUDGET_MODE_INFINITE with no budget
+        // Budget is managed at campaign level, TikTok optimizes across ad groups
+        $adgroupParams['budget_mode'] = 'BUDGET_MODE_INFINITE';
+        logSmartPlus("Using BUDGET_MODE_INFINITE at AdGroup level (budget set at Campaign level)");
 
         // Optional: Add Target CPA only if provided and using Cost Cap strategy
         // If user provides a target CPA, switch to BID_TYPE_CUSTOM (Cost Cap)
@@ -1517,17 +1514,21 @@ switch ($action) {
         // Create as DISABLED by default - safer, user can enable when ready
         logSmartPlus("Step 1: Creating Campaign (as DISABLED)...");
 
-        // Use BUDGET_MODE_INFINITE at campaign level - budget will be set at adgroup level
-        // This ensures compatibility with all account types
+        // Smart+ campaigns REQUIRE: BUDGET_MODE_DYNAMIC_DAILY_BUDGET + budget_optimize_on at campaign level
+        // AdGroup will use BUDGET_MODE_INFINITE (no adgroup budget)
+        $budget = floatval($data['budget'] ?? 50);
+        if ($budget < 20) $budget = 50;  // Minimum $20, default $50
+
         $campaignParams = [
             'advertiser_id' => $advertiserId,
             'campaign_name' => $data['campaign_name'],
             'objective_type' => 'LEAD_GENERATION',
             'request_id' => generateRequestId(),
-            'budget_mode' => 'BUDGET_MODE_INFINITE',  // No campaign budget - set at adgroup level
+            'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',  // Required for Smart+ campaigns
+            'budget' => $budget,
+            'budget_optimize_on' => true,  // CBO enabled - TikTok optimizes across ad groups
             'operation_status' => 'DISABLE'  // Create as DISABLED - safer default
         ];
-        // Note: Budget is NOT set at campaign level - it will be set at adgroup level
 
         $campaignResult = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
 
@@ -1577,14 +1578,11 @@ switch ($action) {
             $adgroupParams['optimization_event'] = $data['optimization_event'] ?? 'FORM';
         }
 
-        // For LEAD_GENERATION objective: budget is at AdGroup level
-        // TikTok API requires BOTH budget AND budget_mode when setting adgroup budget
-        $adgroupBudget = $data['adgroup_budget'] ?? $data['budget'] ?? null;
-        if (!empty($adgroupBudget)) {
-            $adgroupParams['budget'] = floatval($adgroupBudget);
-            $adgroupParams['budget_mode'] = 'BUDGET_MODE_DAY';  // Required with budget
-            logSmartPlus("Setting budget at AdGroup level: " . $adgroupParams['budget'] . " with BUDGET_MODE_DAY");
-        }
+        // For Smart+ campaigns with CBO (budget_optimize_on=true at campaign level):
+        // AdGroup should use BUDGET_MODE_INFINITE with no budget
+        // Budget is managed at campaign level, TikTok optimizes across ad groups
+        $adgroupParams['budget_mode'] = 'BUDGET_MODE_INFINITE';
+        logSmartPlus("Using BUDGET_MODE_INFINITE at AdGroup level (budget set at Campaign level)");
 
         // Optional: Add Target CPA only if provided and using Cost Cap strategy
         if (!empty($data['conversion_bid_price'])) {
@@ -2847,16 +2845,20 @@ switch ($action) {
 
             try {
                 // 1. CREATE CAMPAIGN
-                // Use BUDGET_MODE_INFINITE - budget will be set at adgroup level for all account types
+                // Smart+ campaigns REQUIRE: BUDGET_MODE_DYNAMIC_DAILY_BUDGET + budget_optimize_on at campaign level
+                $budget = floatval($campaignConfig['budget'] ?? 50);
+                if ($budget < 20) $budget = 50;  // Minimum $20, default $50
+
                 $campaignParams = [
                     'advertiser_id' => $targetAdvertiserId,
                     'campaign_name' => $campaignName,
                     'objective_type' => 'LEAD_GENERATION',
                     'request_id' => generateRequestId(),
-                    'budget_mode' => 'BUDGET_MODE_INFINITE',  // No campaign budget - set at adgroup level
+                    'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',  // Required for Smart+ campaigns
+                    'budget' => $budget,
+                    'budget_optimize_on' => true,  // CBO enabled - TikTok optimizes across ad groups
                     'operation_status' => 'DISABLE'  // Create as DISABLED - safer default
                 ];
-                // Note: Budget is NOT set at campaign level - it will be set at adgroup level
 
                 $campaignResult = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
 
@@ -2896,12 +2898,9 @@ switch ($action) {
                     $adgroupParams['optimization_event'] = $campaignConfig['optimization_event'] ?? 'FORM';
                 }
 
-                // Add budget at adgroup level for LEAD_GENERATION
-                // TikTok API requires BOTH budget AND budget_mode when setting adgroup budget
-                if (!empty($campaignConfig['budget'])) {
-                    $adgroupParams['budget'] = floatval($campaignConfig['budget']);
-                    $adgroupParams['budget_mode'] = 'BUDGET_MODE_DAY';  // Required with budget
-                }
+                // For Smart+ campaigns with CBO (budget_optimize_on=true at campaign level):
+                // AdGroup should use BUDGET_MODE_INFINITE with no budget
+                $adgroupParams['budget_mode'] = 'BUDGET_MODE_INFINITE';
 
                 // Optional: Add Target CPA only if provided
                 if (!empty($campaignConfig['conversion_bid_price'])) {
