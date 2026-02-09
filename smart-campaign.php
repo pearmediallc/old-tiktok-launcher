@@ -1625,35 +1625,7 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                         </div>
                     </div>
 
-                    <!-- Accounts Selection Section -->
-                    <div class="bulk-section">
-                        <h4>Select Accounts & Configure</h4>
-                        <div class="bulk-accounts-header">
-                            <button type="button" class="btn-sm" onclick="selectAllBulkAccounts()">Select All</button>
-                            <button type="button" class="btn-sm" onclick="deselectAllBulkAccounts()">Deselect All</button>
-                            <span class="accounts-selected-text"><span id="modal-selected-count">0</span> selected</span>
-                        </div>
-
-                        <!-- Search Bar for Accounts -->
-                        <div class="bulk-account-search" style="margin: 12px 0;">
-                            <input type="text"
-                                   id="bulk-account-search-input"
-                                   placeholder="Search accounts by name or ID..."
-                                   oninput="filterBulkAccounts(this.value)"
-                                   style="width: 100%; padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
-                            <span id="bulk-search-results-count" style="display: block; margin-top: 6px; font-size: 12px; color: #6b7280;"></span>
-                        </div>
-
-                        <div id="bulk-accounts-container" class="bulk-accounts-container">
-                            <!-- Account cards will be populated by JavaScript -->
-                            <div class="loading-accounts">
-                                <div class="spinner-small"></div>
-                                <span>Loading accounts...</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Schedule Options Section -->
+                    <!-- Schedule Options Section (moved before accounts for visibility) -->
                     <div class="bulk-section">
                         <h4>📅 Schedule</h4>
                         <p class="bulk-section-desc">Choose when your campaigns should run.</p>
@@ -1700,6 +1672,34 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                     </div>
                                 </div>
                                 <p style="margin: 6px 0 0; font-size: 11px; color: #64748b;">Campaign will run between these dates</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accounts Selection Section -->
+                    <div class="bulk-section">
+                        <h4>Select Accounts & Configure</h4>
+                        <div class="bulk-accounts-header">
+                            <button type="button" class="btn-sm" onclick="selectAllBulkAccounts()">Select All</button>
+                            <button type="button" class="btn-sm" onclick="deselectAllBulkAccounts()">Deselect All</button>
+                            <span class="accounts-selected-text"><span id="modal-selected-count">0</span> selected</span>
+                        </div>
+
+                        <!-- Search Bar for Accounts -->
+                        <div class="bulk-account-search" style="margin: 12px 0;">
+                            <input type="text"
+                                   id="bulk-account-search-input"
+                                   placeholder="Search accounts by name or ID..."
+                                   oninput="filterBulkAccounts(this.value)"
+                                   style="width: 100%; padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                            <span id="bulk-search-results-count" style="display: block; margin-top: 6px; font-size: 12px; color: #6b7280;"></span>
+                        </div>
+
+                        <div id="bulk-accounts-container" class="bulk-accounts-container">
+                            <!-- Account cards will be populated by JavaScript -->
+                            <div class="loading-accounts">
+                                <div class="spinner-small"></div>
+                                <span>Loading accounts...</span>
                             </div>
                         </div>
                     </div>
@@ -2187,14 +2187,15 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                             </button>
                         </div>
                     </div>
-                    <div id="picker-upload-progress" style="display: none; margin-top: 10px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                            <span id="picker-upload-status" style="font-size: 12px; color: #64748b;">Uploading...</span>
-                            <span id="picker-upload-count" style="font-size: 12px; color: #64748b;">0/0</span>
+                    <div id="picker-upload-progress" style="display: none; margin-top: 12px; padding: 12px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1)); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span id="picker-upload-status" style="font-size: 13px; color: #3b82f6; font-weight: 600;">📤 Uploading...</span>
+                            <span id="picker-upload-count" style="font-size: 13px; color: #3b82f6; font-weight: 600;">0/0</span>
                         </div>
-                        <div style="background: #e2e8f0; border-radius: 4px; height: 6px; overflow: hidden;">
-                            <div id="picker-upload-bar" style="background: linear-gradient(90deg, #fe2c55, #25f4ee); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                        <div style="background: #e2e8f0; border-radius: 6px; height: 8px; overflow: hidden;">
+                            <div id="picker-upload-bar" style="background: linear-gradient(90deg, #3b82f6, #8b5cf6); height: 100%; width: 0%; transition: width 0.3s;"></div>
                         </div>
+                        <p style="margin: 8px 0 0; font-size: 11px; color: #64748b; text-align: center;">Please wait while your video is being uploaded...</p>
                     </div>
                 </div>
 

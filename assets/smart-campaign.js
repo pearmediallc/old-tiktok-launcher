@@ -4081,14 +4081,33 @@ function renderVideoPickerGrid() {
     filteredVideos.forEach(video => {
         const isSelected = videoPickerState.currentSelection === video.video_id;
         const fileName = video.file_name || video.video_id || 'Untitled';
-        const coverUrl = video.video_cover_url || '';
+        const coverUrl = video.video_cover_url || video.preview_url || '';
+        const isLocalBlob = coverUrl.startsWith('blob:');
+        const isNew = video.is_new;
+        const isProcessing = video.is_processing;
+
+        // For local blob URLs (newly uploaded), use video element for preview
+        // For remote URLs (from TikTok), use img element
+        let mediaPreview;
+        if (coverUrl && isLocalBlob) {
+            // Local video file - use video element with autoplay muted to show first frame
+            mediaPreview = `<video src="${coverUrl}" muted preload="metadata" style="width:100%; height:100%; object-fit:cover;"></video>`;
+        } else if (coverUrl) {
+            // Remote image URL
+            mediaPreview = `<img src="${coverUrl}" alt="${fileName}" loading="lazy" style="width:100%; height:100%; object-fit:cover;">`;
+        } else {
+            // No preview available
+            mediaPreview = '<div class="no-preview">🎬</div>';
+        }
 
         html += `
-            <div class="picker-video-item ${isSelected ? 'selected' : ''}"
+            <div class="picker-video-item ${isSelected ? 'selected' : ''} ${isNew ? 'newly-uploaded' : ''} ${isProcessing ? 'processing' : ''}"
                  onclick="selectVideoFromPicker('${video.video_id}', '${fileName.replace(/'/g, "\\'")}')">
-                ${coverUrl
-                    ? `<img src="${coverUrl}" alt="${fileName}" loading="lazy">`
-                    : '<div class="no-preview">🎬</div>'}
+                <div class="picker-video-thumb">
+                    ${mediaPreview}
+                    ${isNew ? '<span class="new-badge">NEW</span>' : ''}
+                    ${isProcessing ? '<span class="processing-badge">⏳</span>' : ''}
+                </div>
                 <div class="picker-video-info">
                     <span class="picker-video-name">${fileName}</span>
                 </div>
@@ -4627,7 +4646,18 @@ async function handlePickerVideoUpload(event) {
         // Update the media library UI to show newly uploaded videos immediately
         updateAccountMediaLibraryUI(advertiserId);
 
-        showToast(`Uploaded ${uploadedVideos.length} videos! Select one to use.`, 'success');
+        // Auto-select the first uploaded video if we have one
+        if (uploadedVideos.length > 0 && uploadedVideos[0].video_id && !uploadedVideos[0].video_id.startsWith('processing_')) {
+            const firstVideo = uploadedVideos[0];
+            videoPickerState.currentSelection = firstVideo.video_id;
+            renderVideoPickerGrid();  // Re-render to show selection
+
+            // Actually select it in the mapping
+            selectVideoFromPicker(firstVideo.video_id, firstVideo.file_name);
+            showToast(`✓ Video uploaded and selected!`, 'success');
+        } else {
+            showToast(`Uploaded ${uploadedVideos.length} videos! Select one to use.`, 'success');
+        }
 
         // Hide progress after a moment
         setTimeout(() => {
