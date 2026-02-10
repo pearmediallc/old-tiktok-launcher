@@ -695,24 +695,47 @@ function removeAccountAlerts() {
 
 // Load Pixels
 async function loadPixels() {
+    const select = document.getElementById('pixel-select');
+
     try {
+        // Log the advertiser ID being used
+        const advertiserId = state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID;
+        addLog('info', `Loading pixels for advertiser: ${advertiserId}`);
+
+        if (!advertiserId) {
+            addLog('error', 'No advertiser ID available for pixel loading');
+            select.innerHTML = '<option value="">No ad account selected</option>';
+            return;
+        }
+
         const result = await apiRequest('get_pixels');
-        const select = document.getElementById('pixel-select');
 
         if (result.success && result.data && result.data.pixels) {
-            select.innerHTML = '<option value="">Select a pixel...</option>';
-            result.data.pixels.forEach(pixel => {
-                const option = document.createElement('option');
-                option.value = pixel.pixel_id;
-                option.textContent = pixel.pixel_name || pixel.pixel_id;
-                select.appendChild(option);
-            });
-            addLog('info', `Loaded ${result.data.pixels.length} pixels`);
+            const pixels = result.data.pixels;
+            if (pixels.length === 0) {
+                select.innerHTML = '<option value="">No pixels found in this account</option>';
+                addLog('info', 'No pixels found for this ad account');
+            } else {
+                select.innerHTML = '<option value="">Select a pixel...</option>';
+                pixels.forEach(pixel => {
+                    const option = document.createElement('option');
+                    option.value = pixel.pixel_id;
+                    option.textContent = pixel.pixel_name || pixel.pixel_id;
+                    select.appendChild(option);
+                });
+                addLog('success', `Loaded ${pixels.length} pixels`);
+            }
         } else {
-            select.innerHTML = '<option value="">No pixels found</option>';
+            // API returned an error
+            const errorMsg = result.message || 'Unknown error';
+            select.innerHTML = '<option value="">Error loading pixels</option>';
+            addLog('error', `Pixel load error: ${errorMsg}`);
+            console.error('Pixel API error:', result);
         }
     } catch (error) {
         console.error('Error loading pixels:', error);
+        select.innerHTML = '<option value="">Error loading pixels</option>';
+        addLog('error', `Pixel load exception: ${error.message}`);
     }
 }
 
@@ -8197,9 +8220,15 @@ function formatNumber(value) {
 }
 
 // Format percent for display
+// TikTok API returns CTR as decimal (e.g., 0.05 for 5%), so multiply by 100
 function formatPercent(value) {
     const num = parseFloat(value) || 0;
-    return num.toFixed(2) + '%';
+    // If value is already > 1, it's likely already a percentage, don't multiply
+    if (num > 1) {
+        return num.toFixed(2) + '%';
+    }
+    // Otherwise multiply by 100 to convert decimal to percentage
+    return (num * 100).toFixed(2) + '%';
 }
 
 // Escape HTML to prevent XSS
