@@ -4553,16 +4553,35 @@ async function refreshVideoPickerList() {
                 };
             }
 
-            // Merge with any locally uploaded videos (preserve is_new flag)
+            // Merge with any locally uploaded videos (preserve thumbnails and is_new flag)
             const existingNewVideos = (bulkLaunchState.accountAssets[advertiserId].videos || [])
                 .filter(v => v.is_new);
-            const newVideoIds = new Set(existingNewVideos.map(v => v.video_id));
 
-            // Add fetched videos that aren't duplicates
+            // Create maps for both video IDs and filenames to catch all duplicates
+            const newVideoIds = new Set(existingNewVideos.map(v => v.video_id));
+            const newVideoFileNames = new Map(existingNewVideos.map(v => [v.file_name?.toLowerCase(), v]));
+
+            // Process API videos - update local processing videos with real IDs when matched by filename
             const mergedVideos = [...existingNewVideos];
-            videos.forEach(v => {
-                if (!newVideoIds.has(v.video_id)) {
-                    mergedVideos.push(v);
+            videos.forEach(apiVideo => {
+                const apiFileName = apiVideo.file_name?.toLowerCase();
+                const localMatch = newVideoFileNames.get(apiFileName);
+
+                if (localMatch && localMatch.video_id?.startsWith('processing_')) {
+                    // Found matching local processing video - update it with real ID
+                    // but KEEP the local thumbnail if API doesn't have one yet
+                    localMatch.video_id = apiVideo.video_id;
+                    if (apiVideo.video_cover_url && !apiVideo.video_cover_url.startsWith('blob:')) {
+                        // API has a real TikTok thumbnail - use it
+                        localMatch.video_cover_url = apiVideo.video_cover_url;
+                        localMatch.preview_url = apiVideo.video_cover_url;
+                    }
+                    // Keep is_new and is_processing flags, clear processing flag now that we have real ID
+                    delete localMatch.is_processing;
+                    console.log(`[Merge] Updated local video with real ID: ${apiVideo.video_id}, thumbnail: ${localMatch.video_cover_url ? 'kept' : 'none'}`);
+                } else if (!newVideoIds.has(apiVideo.video_id)) {
+                    // New video from API - add it
+                    mergedVideos.push(apiVideo);
                 }
             });
 
