@@ -3608,10 +3608,17 @@ async function renderBulkAccountsInModal() {
                     <span class="bulk-account-name">${account.advertiser_name}</span>
                     <span class="bulk-account-id">${account.advertiser_id}</span>
                 </div>
-                <button type="button" class="btn-load-assets" onclick="loadAccountAssets('${account.advertiser_id}')"
-                        ${assets ? 'style="display:none;"' : ''}>
-                    Load Assets
-                </button>
+                <div class="bulk-account-header-actions">
+                    <button type="button" class="btn-load-assets" onclick="loadAccountAssets('${account.advertiser_id}')"
+                            ${assets ? 'style="display:none;"' : ''}>
+                        Load Assets
+                    </button>
+                    <button type="button" class="btn-toggle-assets" id="toggle-btn-${account.advertiser_id}"
+                            onclick="toggleAccountAssets('${account.advertiser_id}')"
+                            title="Expand/Collapse" ${assets ? '' : 'style="display:none;"'}>
+                        <span id="toggle-icon-${account.advertiser_id}">▼</span>
+                    </button>
+                </div>
             </div>
             <div class="bulk-account-assets" id="assets-${account.advertiser_id}" style="${assets ? '' : 'display:none;'}">
                 ${assets ? renderAccountAssetsDropdowns(account.advertiser_id, assets) : '<div class="loading-assets"><div class="spinner-small"></div> Loading...</div>'}
@@ -3775,6 +3782,26 @@ function renderAccountAssetsDropdowns(advertiserId, assets) {
                    style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; transition: border-color 0.2s;">
             <small style="color: #94a3b8; font-size: 11px; margin-top: 4px; display: block;">
                 Leave empty to use campaign default: <span style="color: #64748b;">${globalLandingUrl || 'Not set'}</span>
+            </small>
+        </div>
+    `;
+
+    // Campaign name override section
+    const currentCampaignName = selectedAccount?.campaign_name || '';
+    const defaultCampaignName = state.campaignName || '';
+    html += `
+        <div class="bulk-campaign-name-section" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e2e8f0;">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; margin-bottom: 6px;">
+                <span class="asset-icon">📝</span> Campaign Name <span style="color: #94a3b8;">(optional override)</span>
+            </label>
+            <input type="text"
+                   id="campaign-name-${advertiserId}"
+                   placeholder="${defaultCampaignName || 'Use default campaign name...'}"
+                   value="${currentCampaignName}"
+                   onchange="updateAccountCampaignName('${advertiserId}')"
+                   style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; transition: border-color 0.2s;">
+            <small style="color: #94a3b8; font-size: 11px; margin-top: 4px; display: block;">
+                Leave empty to use: <span style="color: #64748b;">${defaultCampaignName || 'Not set'}</span>
             </small>
         </div>
     `;
@@ -4976,6 +5003,10 @@ async function loadAccountAssets(advertiserId) {
             // Render dropdowns
             assetsContainer.innerHTML = renderAccountAssetsDropdowns(advertiserId, result.data);
 
+            // Show toggle button now that assets are loaded
+            const toggleBtn = document.getElementById(`toggle-btn-${advertiserId}`);
+            if (toggleBtn) toggleBtn.style.display = 'inline-block';
+
             // Log with any errors
             const hasErrors = data.errors && Object.keys(data.errors).length > 0;
             if (hasErrors) {
@@ -5134,6 +5165,29 @@ function autoMatchAssetsByName(advertiserId, assets) {
     }
 }
 
+// Toggle expand/collapse for account assets section
+function toggleAccountAssets(advertiserId) {
+    const assetsDiv = document.getElementById(`assets-${advertiserId}`);
+    const statusDiv = document.getElementById(`status-${advertiserId}`);
+    const icon = document.getElementById(`toggle-icon-${advertiserId}`);
+
+    if (!assetsDiv) return;
+
+    const isCollapsed = assetsDiv.style.display === 'none';
+
+    if (isCollapsed) {
+        // Expand
+        assetsDiv.style.display = 'block';
+        if (statusDiv) statusDiv.style.display = 'block';
+        if (icon) icon.textContent = '▼';
+    } else {
+        // Collapse
+        assetsDiv.style.display = 'none';
+        if (statusDiv) statusDiv.style.display = 'none';
+        if (icon) icon.textContent = '▶';
+    }
+}
+
 // Toggle account selection
 function toggleBulkAccountSelection(advertiserId) {
     const checkbox = document.getElementById(`bulk-check-${advertiserId}`);
@@ -5231,6 +5285,23 @@ function updateAccountLandingUrl(advertiserId) {
     selectedAccount.landing_page_url = url || null; // null means use campaign default
 
     addLog('info', `Updated landing page URL for ${advertiserId}: ${url || '(using default)'}`);
+}
+
+// Update account campaign name (optional override)
+function updateAccountCampaignName(advertiserId) {
+    const nameInput = document.getElementById(`campaign-name-${advertiserId}`);
+    if (!nameInput) return;
+
+    const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+    if (!selectedAccount) {
+        // If account not selected yet, just store the value for when it gets selected
+        return;
+    }
+
+    const name = nameInput.value.trim();
+    selectedAccount.campaign_name = name || null; // null means use campaign default
+
+    addLog('info', `Updated campaign name for ${advertiserId}: ${name || '(using default)'}`);
 }
 
 // Update original account landing page URL
@@ -6279,7 +6350,9 @@ async function executeBulkLaunch() {
                 // For original account, videos don't need mapping (same account)
                 video_mapping: {},
                 // Landing page URL override (null = use campaign default)
-                landing_page_url: account.landing_page_url || null
+                landing_page_url: account.landing_page_url || null,
+                // Campaign name override (null = use campaign default)
+                campaign_name: account.campaign_name || null
             };
             // Include identity_authorized_bc_id for BC_AUTH_TT identities
             if (state.globalIdentityType === 'BC_AUTH_TT' && state.globalIdentityAuthorizedBcId) {
@@ -6298,7 +6371,9 @@ async function executeBulkLaunch() {
             portfolio_id: account.portfolio_id,
             video_mapping: account.video_mapping || {},
             // Landing page URL override (null = use campaign default)
-            landing_page_url: account.landing_page_url || null
+            landing_page_url: account.landing_page_url || null,
+            // Campaign name override (null = use campaign default)
+            campaign_name: account.campaign_name || null
         };
         // Include identity_authorized_bc_id for BC_AUTH_TT identities
         if (account.identity_type === 'BC_AUTH_TT' && account.identity_authorized_bc_id) {
@@ -11872,7 +11947,7 @@ async function handleBulkVideoUpload(event) {
         isUploading: true
     };
 
-    addLog('info', `Starting bulk upload of ${validFiles.length} videos (parallel batches of 5)`);
+    addLog('info', `Starting bulk upload of ${validFiles.length} videos (parallel batches of 2)`);
 
     // Show progress UI
     showBulkUploadProgress();

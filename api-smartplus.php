@@ -989,11 +989,20 @@ switch ($action) {
         ], $accessToken, 'GET');
 
         if ($result['code'] == 0 && isset($result['data']['list'])) {
-            // Cache videos for 5 minutes (shorter TTL as videos may be added)
-            $cache->set($cacheKey, $result['data']['list'], Cache::TTL_MEDIUM);
+            $videos = $result['data']['list'];
+
+            // Sort videos by create_time descending (latest first)
+            usort($videos, function($a, $b) {
+                $timeA = strtotime($a['create_time'] ?? '0');
+                $timeB = strtotime($b['create_time'] ?? '0');
+                return $timeB - $timeA; // Descending order (newest first)
+            });
+
+            // Cache sorted videos for 5 minutes (shorter TTL as videos may be added)
+            $cache->set($cacheKey, $videos, Cache::TTL_MEDIUM);
             echo json_encode([
                 'success' => true,
-                'data' => $result['data']['list']
+                'data' => $videos
             ]);
         } else {
             echo json_encode([
@@ -2754,6 +2763,11 @@ switch ($action) {
             $identityAuthorizedBcId = $account['identity_authorized_bc_id'] ?? null;
             $videoMapping = $account['video_mapping'] ?? [];
             $accountLandingPageUrl = $account['landing_page_url'] ?? null;  // Optional per-account landing URL override
+            $accountCampaignName = $account['campaign_name'] ?? null;  // Optional per-account campaign name override
+
+            if ($accountCampaignName) {
+                logSmartPlus("Using per-account campaign name: $accountCampaignName");
+            }
 
             logSmartPlus("--- Processing Account: $accountName ($targetAdvertiserId) ---");
 
@@ -2856,10 +2870,15 @@ switch ($action) {
 
             // Loop for creating duplicate campaigns
             for ($copyNum = 1; $copyNum <= $duplicateCount; $copyNum++) {
+                // Use per-account campaign name if set, otherwise use config default
+                $baseCampaignName = !empty($account['campaign_name'])
+                    ? $account['campaign_name']
+                    : $campaignConfig['campaign_name'];
+
                 // Generate campaign name with copy number (if duplicates > 1)
                 $campaignName = $duplicateCount > 1
-                    ? $campaignConfig['campaign_name'] . ' (' . $copyNum . ')'
-                    : $campaignConfig['campaign_name'];
+                    ? $baseCampaignName . ' (' . $copyNum . ')'
+                    : $baseCampaignName;
 
                 logSmartPlus("Creating campaign copy $copyNum/$duplicateCount: $campaignName");
 

@@ -2387,7 +2387,7 @@ try {
                     if ($fixTaskId && !$videoId) {
                         logToFile("Fix task detected, polling for completion: " . $fixTaskId);
 
-                        $maxWaitTime = 60; // Max 60 seconds
+                        $maxWaitTime = 15; // Max 15 seconds - return quickly, video will process in background
                         $pollInterval = 2; // Poll every 2 seconds for faster response
                         $startTime = time();
 
@@ -2704,7 +2704,7 @@ try {
                     if ($fixTaskId && !$videoId) {
                         logToFile("Fix task detected for $targetAdvertiserId, polling: " . $fixTaskId);
 
-                        $maxWaitTime = 60;
+                        $maxWaitTime = 15; // Max 15 seconds - return quickly, video will process in background
                         $pollInterval = 2; // Poll every 2 seconds for faster response
                         $startTime = time();
 
@@ -3576,7 +3576,8 @@ try {
                             'height' => $video['height'] ?? null,
                             'size' => $video['size'] ?? null,
                             'type' => 'video',
-                            'has_thumbnail' => !empty($thumbnailUrl)
+                            'has_thumbnail' => !empty($thumbnailUrl),
+                            'create_time' => $video['create_time'] ?? null
                         ];
 
                         // Sync to local storage if not exists
@@ -3637,7 +3638,14 @@ try {
                 }
             }
 
-            logToFile("Returning " . count($videos) . " videos");
+            // Sort videos by create_time descending (latest first)
+            usort($videos, function($a, $b) {
+                $timeA = strtotime($a['create_time'] ?? '0');
+                $timeB = strtotime($b['create_time'] ?? '0');
+                return $timeB - $timeA; // Descending order (newest first)
+            });
+
+            logToFile("Returning " . count($videos) . " videos (sorted by create_time)");
             logToFile("============ END GET VIDEOS REQUEST ============");
 
             echo json_encode([
