@@ -1423,6 +1423,14 @@ async function uploadSingleMediaFile(file, index, total) {
     const isVideo = file.type.startsWith('video/');
     const uploadTimeout = isVideo ? 300000 : 120000; // 5 min for video, 2 min for image
 
+    // Pre-generate thumbnail for instant preview (if video)
+    let previewUrl = '';
+    if (isVideo) {
+        console.log('[SmartUpload] Pre-generating thumbnail for', file.name);
+        previewUrl = await generateVideoThumbnailSafe(file);
+        console.log('[SmartUpload] Thumbnail generated:', previewUrl ? 'success' : 'failed');
+    }
+
     updateSmartUploadItemStatus(itemId, 'uploading', '0%', 0);
 
     // Add timestamp to filename
@@ -1474,7 +1482,7 @@ async function uploadSingleMediaFile(file, index, total) {
                         }
                     }
 
-                    const previewUrl = URL.createObjectURL(file);
+                    // previewUrl is already pre-generated at the start of the function for videos
 
                     if (result.success && result.data?.video_id) {
                         // Immediate success with video_id
@@ -3260,6 +3268,79 @@ function hideLoading() {
     document.getElementById('loading-overlay').style.display = 'none';
 }
 
+// =====================
+// Video Thumbnail Generation (Client-Side)
+// =====================
+// Generate thumbnail from video file using Canvas - instant preview before upload
+async function generateVideoThumbnail(file, seekPercent = 0.25) {
+    return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.muted = true;
+        video.playsInline = true;
+
+        // Timeout after 10 seconds
+        const timeout = setTimeout(() => {
+            URL.revokeObjectURL(video.src);
+            reject(new Error('Thumbnail generation timed out'));
+        }, 10000);
+
+        video.onloadedmetadata = function() {
+            // Seek to specified percent of video (default 25%)
+            video.currentTime = Math.min(video.duration * seekPercent, video.duration - 0.1);
+        };
+
+        video.onseeked = function() {
+            clearTimeout(timeout);
+            try {
+                const canvas = document.createElement('canvas');
+                // Use reasonable dimensions for thumbnail (max 480px width)
+                const scale = Math.min(1, 480 / video.videoWidth);
+                canvas.width = video.videoWidth * scale;
+                canvas.height = video.videoHeight * scale;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                // Convert to blob URL for immediate display
+                canvas.toBlob(blob => {
+                    if (blob) {
+                        const thumbnailUrl = URL.createObjectURL(blob);
+                        URL.revokeObjectURL(video.src);
+                        resolve(thumbnailUrl);
+                    } else {
+                        URL.revokeObjectURL(video.src);
+                        reject(new Error('Failed to create thumbnail blob'));
+                    }
+                }, 'image/jpeg', 0.8);
+            } catch (e) {
+                URL.revokeObjectURL(video.src);
+                reject(e);
+            }
+        };
+
+        video.onerror = function() {
+            clearTimeout(timeout);
+            URL.revokeObjectURL(video.src);
+            reject(new Error('Failed to load video for thumbnail'));
+        };
+
+        video.src = URL.createObjectURL(file);
+    });
+}
+
+// Generate thumbnail with fallback - returns blob URL or empty string
+async function generateVideoThumbnailSafe(file) {
+    try {
+        const thumbnail = await generateVideoThumbnail(file);
+        console.log('[Thumbnail] Generated client-side thumbnail for:', file.name);
+        return thumbnail;
+    } catch (e) {
+        console.warn('[Thumbnail] Failed to generate thumbnail:', e.message);
+        return ''; // Return empty string as fallback
+    }
+}
+
 function showToast(message, type = 'info') {
     const toast = document.getElementById('toast');
     toast.textContent = message;
@@ -4136,15 +4217,12 @@ function renderVideoPickerGrid() {
         const isNew = video.is_new;
         const isProcessing = video.is_processing;
 
-        // For local blob URLs (newly uploaded), use video element for preview
-        // For remote URLs (from TikTok), use img element
+        // For any URL (local blob thumbnail or remote TikTok URL), use img element
+        // Client-side thumbnails are now JPEG images, not video blobs
         let mediaPreview;
-        if (coverUrl && isLocalBlob) {
-            // Local video file - use video element with autoplay muted to show first frame
-            mediaPreview = `<video src="${coverUrl}" muted preload="metadata" style="width:100%; height:100%; object-fit:cover;"></video>`;
-        } else if (coverUrl) {
-            // Remote image URL
-            mediaPreview = `<img src="${coverUrl}" alt="${fileName}" loading="lazy" style="width:100%; height:100%; object-fit:cover;">`;
+        if (coverUrl) {
+            // Use img for both local thumbnails and remote URLs
+            mediaPreview = `<img src="${coverUrl}" alt="${fileName}" loading="lazy" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.innerHTML='<div class=\\'no-preview\\'>🎬</div>'">`;
         } else {
             // No preview available
             mediaPreview = '<div class="no-preview">🎬</div>';
@@ -4250,6 +4328,20 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
 
     addLog('info', `Starting upload of ${validFiles.length} videos to account ${advertiserId}`);
 
+    // Pre-generate thumbnails for all videos (instant preview)
+    if (statusEl) statusEl.textContent = 'Generating previews...';
+    const thumbnailMap = new Map();
+    for (const file of validFiles) {
+        try {
+            const thumbnail = await generateVideoThumbnailSafe(file);
+            thumbnailMap.set(file, thumbnail);
+        } catch (e) {
+            console.warn(`[Thumbnail] Failed for ${file.name}:`, e);
+            thumbnailMap.set(file, '');
+        }
+    }
+    addLog('info', `Generated ${thumbnailMap.size} thumbnails`);
+
     let completed = 0;
     let failed = 0;
     const uploadedVideos = [];
@@ -4261,6 +4353,9 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
             const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
             const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
             const newFileName = `${baseName}_${timestamp}${ext}`;
+
+            // Get pre-generated thumbnail
+            const thumbnailUrl = thumbnailMap.get(file) || '';
 
             const formData = new FormData();
             formData.append('video', file, newFileName);
@@ -4301,32 +4396,30 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
             if (result.success && result.data?.video_id) {
                 // Video uploaded and video_id returned immediately
                 completed++;
-                const previewUrl = URL.createObjectURL(file);
                 uploadedVideos.push({
                     video_id: result.data.video_id,
                     file_name: newFileName,
-                    video_cover_url: previewUrl,
-                    preview_url: previewUrl,
+                    video_cover_url: thumbnailUrl,  // Use client-side generated thumbnail
+                    preview_url: thumbnailUrl,
                     type: 'video',
                     is_new: true
                 });
                 addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
-                console.log(`[Bulk Upload] Success - video_id: ${result.data.video_id}`);
+                console.log(`[Bulk Upload] Success - video_id: ${result.data.video_id}, thumbnail: ${thumbnailUrl ? 'generated' : 'none'}`);
             } else if (result.success && result.processing) {
                 // Video accepted but still processing - count as SUCCESS
                 completed++;
-                const previewUrl = URL.createObjectURL(file);
                 uploadedVideos.push({
                     video_id: 'processing_' + Date.now(),
                     file_name: newFileName,
-                    video_cover_url: previewUrl,
-                    preview_url: previewUrl,
+                    video_cover_url: thumbnailUrl,  // Use client-side generated thumbnail
+                    preview_url: thumbnailUrl,
                     type: 'video',
                     is_new: true,
                     is_processing: true
                 });
                 addLog('info', `Video accepted, processing: ${newFileName} on ${advertiserId}`);
-                console.log(`[Bulk Upload] Processing - video accepted: ${file.name}`);
+                console.log(`[Bulk Upload] Processing - video accepted: ${file.name}, thumbnail: ${thumbnailUrl ? 'generated' : 'none'}`);
                 if (validFiles.length === 1) {
                     showToast('Video accepted! It will appear in library in 1-2 minutes.', 'success');
                 }
@@ -4539,6 +4632,17 @@ async function handlePickerVideoUpload(event) {
         return;
     }
 
+    // Pre-generate thumbnails for all files BEFORE uploading (for instant preview)
+    const thumbnailMap = new Map();
+    console.log('[Picker Upload] Pre-generating thumbnails for', validFiles.length, 'files');
+    await Promise.all(validFiles.map(async (file) => {
+        const thumbnail = await generateVideoThumbnailSafe(file);
+        if (thumbnail) {
+            thumbnailMap.set(file, thumbnail);
+        }
+    }));
+    console.log('[Picker Upload] Generated', thumbnailMap.size, 'thumbnails');
+
     // Show progress UI
     const progressContainer = document.getElementById('picker-upload-progress');
     const statusEl = document.getElementById('picker-upload-status');
@@ -4604,7 +4708,8 @@ async function handlePickerVideoUpload(event) {
             if (result.success && result.data?.video_id) {
                 // Video uploaded and video_id returned immediately
                 completed++;
-                const previewUrl = URL.createObjectURL(file);
+                // Use pre-generated thumbnail for instant preview
+                const previewUrl = thumbnailMap.get(file) || '';
                 uploadedVideos.push({
                     video_id: result.data.video_id,
                     file_name: newFileName,
@@ -4617,7 +4722,8 @@ async function handlePickerVideoUpload(event) {
             } else if (result.success && result.processing) {
                 // Video accepted but processing - count as SUCCESS!
                 completed++;
-                const previewUrl = URL.createObjectURL(file);
+                // Use pre-generated thumbnail for instant preview
+                const previewUrl = thumbnailMap.get(file) || '';
                 uploadedVideos.push({
                     video_id: 'processing_' + Date.now(),
                     file_name: newFileName,
@@ -7747,6 +7853,11 @@ async function uploadMediaVideo(file, index) {
     const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
     const newFileName = `${baseName}_${timestamp}${ext}`;
 
+    // Pre-generate thumbnail for instant preview (before upload starts)
+    console.log('[MediaLibrary Upload] Pre-generating thumbnail for', file.name);
+    const thumbnailUrl = await generateVideoThumbnailSafe(file);
+    console.log('[MediaLibrary Upload] Thumbnail generated:', thumbnailUrl ? 'success' : 'failed');
+
     const formData = new FormData();
     formData.append('video', file, newFileName);
 
@@ -7799,7 +7910,8 @@ async function uploadMediaVideo(file, index) {
                         mediaLibraryState.videos.unshift({
                             video_id: result.data.video_id,
                             name: newFileName,
-                            thumbnail: URL.createObjectURL(file),
+                            // Use pre-generated thumbnail for instant preview
+                            thumbnail: thumbnailUrl || '',
                             duration: 0,
                             create_time: new Date().toISOString()
                         });
@@ -10140,6 +10252,17 @@ function openDupBulkVideoUpload(advertiserId) {
             return;
         }
 
+        // Pre-generate thumbnails for all files BEFORE uploading (for instant preview)
+        const thumbnailMap = new Map();
+        console.log('[DupBulk Upload] Pre-generating thumbnails for', validFiles.length, 'files');
+        await Promise.all(validFiles.map(async (file) => {
+            const thumbnail = await generateVideoThumbnailSafe(file);
+            if (thumbnail) {
+                thumbnailMap.set(file, thumbnail);
+            }
+        }));
+        console.log('[DupBulk Upload] Generated', thumbnailMap.size, 'thumbnails');
+
         // Show progress UI
         const progressContainer = document.getElementById(`dup-bulk-upload-progress-${advertiserId}`);
         const progressBar = document.getElementById(`dup-bulk-upload-bar-${advertiserId}`);
@@ -10205,7 +10328,8 @@ function openDupBulkVideoUpload(advertiserId) {
                         video: {
                             video_id: result.data.video_id,
                             file_name: newFileName,
-                            preview_url: URL.createObjectURL(file),
+                            // Use pre-generated thumbnail for instant preview
+                            preview_url: thumbnailMap.get(file) || '',
                             is_new: true
                         }
                     };
@@ -10222,7 +10346,8 @@ function openDupBulkVideoUpload(advertiserId) {
                         video: {
                             video_id: result.data?.video_id || `processing_${Date.now()}_${index}`,
                             file_name: newFileName,
-                            preview_url: URL.createObjectURL(file),
+                            // Use pre-generated thumbnail for instant preview
+                            preview_url: thumbnailMap.get(file) || '',
                             is_new: true,
                             is_processing: true
                         }
@@ -11723,6 +11848,11 @@ async function handleVideoModalUpload(event) {
         return;
     }
 
+    // Pre-generate thumbnail for instant preview (before upload starts)
+    console.log('[VideoModal Upload] Pre-generating thumbnail for', file.name);
+    const thumbnailUrl = await generateVideoThumbnailSafe(file);
+    console.log('[VideoModal Upload] Thumbnail generated:', thumbnailUrl ? 'success' : 'failed');
+
     // Add timestamp to filename to prevent duplicates
     const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
     const originalName = file.name;
@@ -11795,8 +11925,8 @@ async function handleVideoModalUpload(event) {
             addLog('success', `Video uploaded: ${result.data.video_id}`);
             showToast('Video uploaded successfully!', 'success');
 
-            // Create a temporary preview URL for the uploaded video
-            const previewUrl = URL.createObjectURL(file);
+            // Use pre-generated thumbnail for instant preview (image, not video blob)
+            const previewUrl = thumbnailUrl || '';
 
             // Add new video to state immediately so it shows right away
             // Use format that matches loadMediaLibrary: id, url, name, type
@@ -11938,13 +12068,23 @@ async function handleBulkVideoUpload(event) {
         return;
     }
 
+    // Pre-generate thumbnails for instant preview
+    addLog('info', `Generating thumbnails for ${validFiles.length} videos...`);
+    const thumbnails = new Map();
+    for (const file of validFiles) {
+        const thumbnail = await generateVideoThumbnailSafe(file);
+        thumbnails.set(file, thumbnail);
+    }
+    addLog('info', `Generated ${thumbnails.size} thumbnails`);
+
     // Initialize state
     bulkUploadState = {
         queue: validFiles,
         completed: 0,
         failed: 0,
         total: validFiles.length,
-        isUploading: true
+        isUploading: true,
+        thumbnails: thumbnails  // Store thumbnails for use during upload
     };
 
     addLog('info', `Starting bulk upload of ${validFiles.length} videos (parallel batches of 2)`);
@@ -12041,11 +12181,16 @@ async function uploadSingleVideoInBulk(file, index) {
                         updateUploadItemStatus(itemId, 'success', '✓ Uploaded', 100);
                         addLog('success', `Uploaded: ${newFileName} (${result.data.video_id})`);
 
-                        // Add to state immediately
+                        // Get pre-generated thumbnail from bulkUploadState
+                        const thumbnailUrl = bulkUploadState.thumbnails?.get(file) || '';
+
+                        // Add to state immediately with thumbnail
                         const newVideo = {
                             type: 'video',
                             id: result.data.video_id,
-                            url: URL.createObjectURL(file),
+                            url: thumbnailUrl,  // Use client-side thumbnail for instant preview
+                            video_cover_url: thumbnailUrl,
+                            preview_url: thumbnailUrl,
                             name: newFileName,
                             is_new: true
                         };
