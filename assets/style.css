@@ -2982,7 +2982,9 @@ h3 {
 }
 
 .picker-video-item.processing {
-    opacity: 0.7;
+    /* Show thumbnail clearly - don't dim the whole card */
+    opacity: 1;
+    border: 2px solid #f59e0b;
 }
 
 .picker-video-item.not-selectable {
@@ -2990,16 +2992,9 @@ h3 {
     position: relative;
 }
 
+/* Remove the dark overlay for processing videos - just show the thumbnail with a badge */
 .picker-video-item.not-selectable::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.1);
-    border-radius: 8px;
-    pointer-events: none;
+    content: none;
 }
 
 .picker-video-item.not-selectable .select-hint {
@@ -3007,11 +3002,16 @@ h3 {
     font-weight: 600;
 }
 
-/* Processing badge style update */
+/* Processing badge style - small and positioned in corner */
 .processing-badge {
+    position: absolute !important;
+    bottom: 4px !important;
+    right: 4px !important;
     background: linear-gradient(135deg, #f59e0b, #d97706) !important;
-    font-size: 10px !important;
-    padding: 4px 8px !important;
+    font-size: 9px !important;
+    padding: 3px 6px !important;
+    border-radius: 4px !important;
+    z-index: 5 !important;
 }
 
 /* Media Item Info Overlay */
