@@ -1,0 +1,669 @@
+/* ============================================
+   APP SHELL LAYOUT
+   ============================================ */
+
+/* Override default body styles when in shell */
+body.app-shell {
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+}
+
+/* ============================================
+   FIXED HEADER
+   ============================================ */
+.app-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(135deg, rgb(30, 157, 241), rgb(26, 138, 216));
+    color: var(--primary-foreground);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 24px;
+    z-index: 100;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+.app-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.app-header-left h1 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.3px;
+}
+
+.app-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Connect TikTok Button (small, top-right) */
+.btn-connect-tiktok {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.25s ease;
+    cursor: pointer;
+}
+
+.btn-connect-tiktok:hover {
+    background: white;
+    color: rgb(30, 157, 241);
+    border-color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-connect-tiktok svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Connected Badge */
+.connection-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.connection-badge.connected {
+    background: rgba(0, 184, 122, 0.2);
+    border: 2px solid rgba(0, 184, 122, 0.4);
+    color: white;
+}
+
+.badge-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #00e68a;
+    box-shadow: 0 0 6px rgba(0, 230, 138, 0.6);
+    animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { box-shadow: 0 0 6px rgba(0, 230, 138, 0.6); }
+    50% { box-shadow: 0 0 12px rgba(0, 230, 138, 0.9); }
+}
+
+/* Header Logout Button */
+.app-header .btn-header-logout {
+    padding: 7px 16px;
+    background: rgba(255, 255, 255, 0.12);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.app-header .btn-header-logout:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* ============================================
+   APP LAYOUT (header + sidebar + main)
+   ============================================ */
+.app-layout {
+    display: flex;
+    padding-top: 60px;
+    min-height: 100vh;
+}
+
+/* ============================================
+   LEFT SIDEBAR
+   ============================================ */
+.sidebar {
+    position: fixed;
+    top: 60px;
+    left: 0;
+    bottom: 0;
+    width: 240px;
+    background: #fff;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    z-index: 50;
+    overflow-y: auto;
+}
+
+.sidebar-nav {
+    flex: 1;
+    padding: 16px 0;
+}
+
+.sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 24px;
+    color: #475569;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border-left: 3px solid transparent;
+    position: relative;
+}
+
+.sidebar-item:hover {
+    background: #f1f5f9;
+    color: rgb(30, 157, 241);
+}
+
+.sidebar-item.active {
+    background: linear-gradient(90deg, rgba(30, 157, 241, 0.08), transparent);
+    color: rgb(30, 157, 241);
+    border-left-color: rgb(30, 157, 241);
+    font-weight: 600;
+}
+
+.sidebar-icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.sidebar-label {
+    white-space: nowrap;
+}
+
+.sidebar-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 8px 16px;
+}
+
+.sidebar-section-label {
+    padding: 12px 24px 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #94a3b8;
+}
+
+.sidebar-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+/* ============================================
+   MAIN CONTENT AREA
+   ============================================ */
+.main-content {
+    margin-left: 240px;
+    flex: 1;
+    padding: 24px;
+    max-width: calc(100% - 240px);
+    min-height: calc(100vh - 60px);
+    background: #f8fafc;
+}
+
+/* Override .container inside shell so it goes full-width */
+body.app-shell .main-content .container {
+    max-width: 100%;
+    padding: 0;
+    margin: 0;
+}
+
+/* Override .header inside shell (content headers, not app-header) */
+body.app-shell .main-content .header {
+    position: static;
+    border-radius: var(--radius);
+    margin-bottom: 20px;
+}
+
+/* ============================================
+   ACCOUNT PANEL
+   ============================================ */
+.account-panel {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.account-panel-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+/* Single-select dropdown */
+.account-dropdown-wrapper {
+    position: relative;
+    flex: 1;
+    max-width: 400px;
+}
+
+.account-search-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: var(--font-sans);
+    background: #fff;
+    transition: border-color 0.2s;
+    color: var(--foreground);
+}
+
+.account-search-input:focus {
+    outline: none;
+    border-color: rgb(30, 157, 241);
+    box-shadow: 0 0 0 3px rgba(30, 157, 241, 0.1);
+}
+
+.account-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 320px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    z-index: 1000;
+}
+
+.account-option {
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background 0.15s;
+}
+
+.account-option:last-child {
+    border-bottom: none;
+}
+
+.account-option:hover {
+    background: #f1f5f9;
+}
+
+.account-option.selected {
+    background: rgba(30, 157, 241, 0.06);
+    border-left: 3px solid rgb(30, 157, 241);
+}
+
+.account-option-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: #1e293b;
+}
+
+.account-option-id {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+.account-info-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: #f1f5f9;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.account-info-badge .count {
+    background: rgb(30, 157, 241);
+    color: white;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 11px;
+}
+
+/* ============================================
+   MULTI-SELECT DROPDOWN (Campaigns view)
+   ============================================ */
+.multi-select-dropdown {
+    position: relative;
+    flex: 1;
+    max-width: 400px;
+}
+
+.multi-select-trigger {
+    padding: 10px 14px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fff;
+    font-size: 14px;
+    font-family: var(--font-sans);
+    color: var(--foreground);
+    transition: border-color 0.2s;
+    user-select: none;
+}
+
+.multi-select-trigger:hover {
+    border-color: #94a3b8;
+}
+
+.multi-select-trigger.open {
+    border-color: rgb(30, 157, 241);
+    box-shadow: 0 0 0 3px rgba(30, 157, 241, 0.1);
+}
+
+.multi-select-arrow {
+    font-size: 10px;
+    color: #94a3b8;
+    transition: transform 0.2s;
+}
+
+.multi-select-trigger.open .multi-select-arrow {
+    transform: rotate(180deg);
+}
+
+.multi-select-count {
+    background: rgb(30, 157, 241);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.multi-select-options {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 350px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    z-index: 1000;
+}
+
+.multi-select-search {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 1;
+}
+
+.multi-select-search input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: var(--font-sans);
+}
+
+.multi-select-search input:focus {
+    outline: none;
+    border-color: rgb(30, 157, 241);
+}
+
+.multi-select-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid #f8fafc;
+    transition: background 0.15s;
+    font-size: 14px;
+}
+
+.multi-select-option:hover {
+    background: #f1f5f9;
+}
+
+.multi-select-option.select-all {
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    background: #f8fafc;
+}
+
+.multi-select-option input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: rgb(30, 157, 241);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.multi-select-option .option-name {
+    flex: 1;
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.multi-select-option .option-id {
+    font-size: 12px;
+    color: #94a3b8;
+    flex-shrink: 0;
+}
+
+/* ============================================
+   MULTI-ACCOUNT CAMPAIGN GROUPS
+   ============================================ */
+.multi-account-campaigns-container {
+    margin-top: 0;
+}
+
+.account-group {
+    margin-bottom: 24px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.account-group-header {
+    background: linear-gradient(135deg, #e0f2fe, #f0f9ff);
+    padding: 14px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #bae6fd;
+}
+
+.account-group-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0c4a6e;
+    margin: 0;
+}
+
+.account-group-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.account-group-count {
+    font-size: 13px;
+    font-weight: 600;
+    color: #0369a1;
+    background: rgba(3, 105, 161, 0.1);
+    padding: 3px 10px;
+    border-radius: 10px;
+}
+
+.account-group-spend {
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.account-group .metrics-table-wrapper {
+    display: block !important;
+}
+
+.account-group .campaign-loading {
+    padding: 30px;
+    text-align: center;
+    color: #64748b;
+}
+
+/* ============================================
+   EMPTY STATE
+   ============================================ */
+.shell-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 40px;
+    text-align: center;
+}
+
+.shell-empty-state .empty-icon {
+    font-size: 56px;
+    margin-bottom: 20px;
+}
+
+.shell-empty-state h3 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 8px;
+}
+
+.shell-empty-state p {
+    font-size: 15px;
+    color: #64748b;
+    margin-bottom: 24px;
+    max-width: 400px;
+}
+
+.shell-empty-state .btn-connect-large {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 28px;
+    background: linear-gradient(135deg, rgb(30, 157, 241), rgb(26, 138, 216));
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.25s;
+}
+
+.shell-empty-state .btn-connect-large:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(30, 157, 241, 0.35);
+}
+
+/* ============================================
+   VIEW PANEL CONTAINERS
+   ============================================ */
+.view-panel {
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================
+   RESPONSIVE / MOBILE
+   ============================================ */
+@media (max-width: 768px) {
+    .sidebar {
+        display: none;
+    }
+
+    .main-content {
+        margin-left: 0;
+        max-width: 100%;
+        padding: 16px;
+    }
+
+    .app-header {
+        padding: 0 16px;
+    }
+
+    .app-header-left h1 {
+        font-size: 15px;
+    }
+
+    .account-panel {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .account-dropdown-wrapper,
+    .multi-select-dropdown {
+        max-width: 100%;
+    }
+
+    .account-group-header {
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 480px) {
+    .app-header-left h1 {
+        font-size: 13px;
+    }
+
+    .btn-connect-tiktok,
+    .connection-badge {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+}

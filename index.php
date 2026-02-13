@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['login_time'] = time();
                 $_SESSION['last_activity'] = time();
 
-                header('Location: select-advertiser.php');
+                header('Location: app-shell.php');
                 exit;
             } else {
                 // Record failed attempt
@@ -84,7 +84,7 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
     } else {
         // Update last activity and redirect
         $_SESSION['last_activity'] = time();
-        header('Location: select-advertiser.php');
+        header('Location: app-shell.php');
         exit;
     }
 }

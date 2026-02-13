@@ -499,44 +499,95 @@ document.addEventListener('DOMContentLoaded', function() {
         addLog('info', `Advertiser ID initialized: ${state.currentAdvertiserId}`);
     }
 
-    loadPixels();
-    loadIdentities();
-    loadCtaPortfolios();  // Load CTA portfolios for Lead Gen campaigns
-    loadMediaLibrary();
-    loadAdvertiserTimezone();  // Get advertiser timezone for schedule time conversion
-    checkAccountBalance();  // Check account balance and show warnings if needed
-    initializeDayparting();
-    initializeLocationTargeting();
-    initializeAgeTargeting();  // Initialize age selection buttons
-    loadBulkAccounts();  // Pre-load accounts for bulk launch feature
-    initializeDateRange();  // Initialize date range filter (default: today)
-    initializeStepNavigation();  // Make step indicators clickable
-
-    // Check for URL parameter to auto-switch to campaigns view
+    // APP SHELL MODE: Determine which view to initialize based on URL
+    const isShellMode = window.APP_SHELL_MODE === true;
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('view') === 'campaigns') {
-        // Use setTimeout to ensure DOM is fully ready
-        setTimeout(() => {
-            switchMainView('campaigns');
-        }, 100);
-    }
+    const shellView = urlParams.get('view') || '';
 
-    // Initialize launch mode (single is default and selected)
-    const singleOption = document.getElementById('single-launch-option');
-    if (singleOption) singleOption.classList.add('selected');
+    if (isShellMode && shellView === 'campaigns') {
+        // Shell campaigns view: only load campaigns-related data
+        initializeDateRange();
+        loadAdvertiserTimezone();
 
-    const statusElement = document.getElementById('timezone-status');
-    if (statusElement) {
-        statusElement.innerHTML = '<span style="color: #22c55e;">✓</span> Smart+ Campaign Mode';
-        statusElement.style.color = '#22c55e';
-    }
+        // Make campaigns-view visible (shell partial sets it as default)
+        const campaignsView = document.getElementById('campaigns-view');
+        if (campaignsView) campaignsView.style.display = 'block';
 
-    const identityInput = document.getElementById('identity-display-name');
-    const charCounter = document.getElementById('identity-char-count');
-    if (identityInput && charCounter) {
-        identityInput.addEventListener('input', function() {
-            charCounter.textContent = this.value.length;
-        });
+        // Load campaigns immediately
+        state.currentView = 'campaigns';
+        loadCampaigns();
+
+    } else if (isShellMode && shellView === 'create-smart') {
+        // Shell create-smart view: load all creation resources
+        loadPixels();
+        loadIdentities();
+        loadCtaPortfolios();
+        loadMediaLibrary();
+        loadAdvertiserTimezone();
+        checkAccountBalance();
+        initializeDayparting();
+        initializeLocationTargeting();
+        initializeAgeTargeting();
+        loadBulkAccounts();
+        initializeDateRange();
+        initializeStepNavigation();
+
+        // Show create view
+        const createView = document.getElementById('create-view');
+        if (createView) createView.style.display = 'block';
+        state.currentView = 'create';
+
+        // Initialize launch mode
+        const singleOption = document.getElementById('single-launch-option');
+        if (singleOption) singleOption.classList.add('selected');
+
+        const identityInput = document.getElementById('identity-display-name');
+        const charCounter = document.getElementById('identity-char-count');
+        if (identityInput && charCounter) {
+            identityInput.addEventListener('input', function() {
+                charCounter.textContent = this.value.length;
+            });
+        }
+
+    } else {
+        // Original standalone mode (smart-campaign.php loaded directly)
+        loadPixels();
+        loadIdentities();
+        loadCtaPortfolios();
+        loadMediaLibrary();
+        loadAdvertiserTimezone();
+        checkAccountBalance();
+        initializeDayparting();
+        initializeLocationTargeting();
+        initializeAgeTargeting();
+        loadBulkAccounts();
+        initializeDateRange();
+        initializeStepNavigation();
+
+        // Check for URL parameter to auto-switch to campaigns view
+        if (urlParams.get('view') === 'campaigns') {
+            setTimeout(() => {
+                switchMainView('campaigns');
+            }, 100);
+        }
+
+        // Initialize launch mode (single is default and selected)
+        const singleOption = document.getElementById('single-launch-option');
+        if (singleOption) singleOption.classList.add('selected');
+
+        const statusElement = document.getElementById('timezone-status');
+        if (statusElement) {
+            statusElement.innerHTML = '<span style="color: #22c55e;">✓</span> Smart+ Campaign Mode';
+            statusElement.style.color = '#22c55e';
+        }
+
+        const identityInput = document.getElementById('identity-display-name');
+        const charCounter = document.getElementById('identity-char-count');
+        if (identityInput && charCounter) {
+            identityInput.addEventListener('input', function() {
+                charCounter.textContent = this.value.length;
+            });
+        }
     }
 });
 
@@ -7247,6 +7298,11 @@ function setDatePreset(preset) {
     // Reload campaigns with new date range
     state.campaignsLoaded = false;
     loadCampaigns();
+
+    // Notify shell.js for multi-account mode
+    if (typeof window.onShellDateRangeChange === 'function') {
+        window.onShellDateRangeChange();
+    }
 }
 
 // Toggle custom date picker visibility
@@ -7299,6 +7355,11 @@ function applyCustomDateRange() {
     // Reload campaigns with new date range
     state.campaignsLoaded = false;
     loadCampaigns();
+
+    // Notify shell.js for multi-account mode
+    if (typeof window.onShellDateRangeChange === 'function') {
+        window.onShellDateRangeChange();
+    }
 }
 
 // Update date preset button active states
@@ -8173,6 +8234,9 @@ function applyFiltersAndRender() {
             c.campaign_id.toLowerCase().includes(state.campaignSearchQuery)
         );
     }
+
+    // Sort by spend descending (highest spending campaigns first)
+    filtered.sort((a, b) => (parseFloat(b.spend) || 0) - (parseFloat(a.spend) || 0));
 
     state.filteredCampaigns = filtered;
 

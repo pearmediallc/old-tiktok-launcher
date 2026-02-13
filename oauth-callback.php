@@ -134,6 +134,6 @@ if (!empty($_SESSION['oauth_advertiser_ids'])) {
 $_SESSION['oauth_advertiser_details'] = $advertiser_details;
 error_log("Advertiser Details: " . json_encode($advertiser_details));
 
-// Redirect to advertiser selection page where JavaScript will store token in localStorage
-header('Location: select-advertiser-oauth.php');
+// Redirect to unified app shell (accounts shown inline, no separate selection page)
+header('Location: app-shell.php');
 exit;

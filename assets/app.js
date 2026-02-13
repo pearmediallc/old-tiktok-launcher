@@ -354,6 +354,10 @@ async function loadTimezones() {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
+    // APP SHELL MODE: Skip header/logout setup (shell handles it)
+    // The manual form works within any container - no special handling needed
+    const isShellMode = window.APP_SHELL_MODE === true;
+
     initializeDayparting();
     initializeLocationTargeting();
     loadIdentities();
@@ -373,6 +377,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Ad group start date - set default for custom time selection
     if (document.getElementById('start-date')) {
         document.getElementById('start-date').value = formatDateTimeLocal(tomorrow);
+    }
+
+    if (isShellMode) {
+        console.log('Manual Campaign JS loaded in shell mode');
     }
 });
 
