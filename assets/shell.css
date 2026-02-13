@@ -359,6 +359,79 @@ body.app-shell .main-content .header {
 }
 
 /* ============================================
+   ACCOUNT BALANCE DISPLAY
+   ============================================ */
+.account-balance-display {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+}
+
+.balance-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 14px;
+    border-radius: 8px;
+    min-width: 90px;
+}
+
+.balance-item.balance-available {
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+}
+
+.balance-item.balance-spent {
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+}
+
+.balance-item.balance-grant {
+    background: #eff6ff;
+    border: 1px solid #93c5fd;
+}
+
+.balance-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.balance-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1e293b;
+    white-space: nowrap;
+}
+
+.balance-item.balance-available .balance-value {
+    color: #059669;
+}
+
+.balance-item.balance-spent .balance-value {
+    color: #b45309;
+}
+
+.balance-item.balance-grant .balance-value {
+    color: #2563eb;
+}
+
+/* Balance in multi-account group header */
+.account-group-balance {
+    font-size: 13px;
+    font-weight: 600;
+    color: #059669;
+    background: #ecfdf5;
+    padding: 3px 10px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
+/* ============================================
    MULTI-SELECT DROPDOWN (Campaigns view)
    ============================================ */
 .multi-select-dropdown {
@@ -642,6 +715,11 @@ body.app-shell .main-content .header {
     .account-panel {
         flex-direction: column;
         align-items: stretch;
+    }
+
+    .account-balance-display {
+        margin-left: 0;
+        justify-content: flex-start;
     }
 
     .account-dropdown-wrapper,

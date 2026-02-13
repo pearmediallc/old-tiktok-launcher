@@ -664,6 +664,7 @@ switch ($action) {
             $grantBalance = floatval($result['data']['grant_balance'] ?? 0);
             $totalBalance = $balance + $grantBalance;
             $currency = $result['data']['currency'] ?? 'USD';
+            $totalCost = floatval($result['data']['total_cost'] ?? 0);
 
             echo json_encode([
                 'success' => true,
@@ -671,7 +672,9 @@ switch ($action) {
                     'balance' => $balance,
                     'grant_balance' => $grantBalance,
                     'total_balance' => $totalBalance,
-                    'currency' => $currency
+                    'total_cost' => $totalCost,
+                    'currency' => $currency,
+                    'raw' => $result['data']
                 ]
             ]);
         } else {

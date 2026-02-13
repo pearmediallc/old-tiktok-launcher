@@ -280,6 +280,16 @@
         const results = await Promise.all(promises);
         window.shellState.multiAccountCampaigns = results;
 
+        // Fetch balances for all selected accounts in parallel
+        const balancePromises = selectedIds.map(async (id) => {
+            const bal = await fetchAccountBalance(id);
+            if (bal) {
+                window.shellState.accountBalances = window.shellState.accountBalances || {};
+                window.shellState.accountBalances[id] = bal;
+            }
+        });
+        await Promise.all(balancePromises);
+
         // Render
         renderMultiAccountCampaigns(results, statusFilter, searchQuery);
     };
@@ -318,12 +328,20 @@
             const activeCount = account.campaigns.filter(c => c.operation_status === 'ENABLE').length;
             const inactiveCount = account.campaigns.filter(c => c.operation_status === 'DISABLE').length;
 
+            // Get balance info if available
+            const balances = window.shellState.accountBalances || {};
+            const bal = balances[account.advertiserId];
+            const balanceHtml = bal
+                ? `<span class="account-group-balance">Balance: ${formatCurrency(bal.balance, bal.currency)}</span>`
+                : '';
+
             // Render group
             return `
                 <div class="account-group" data-advertiser-id="${escapeAttr(account.advertiserId)}">
                     <div class="account-group-header">
                         <h3 class="account-group-name">${escapeHtml(account.accountName)}</h3>
                         <div class="account-group-meta">
+                            ${balanceHtml}
                             <span class="account-group-count">${campaigns.length} campaign${campaigns.length !== 1 ? 's' : ''}</span>
                             <span class="account-group-spend">Total Spend: $${totalSpend.toFixed(2)}</span>
                         </div>
@@ -470,6 +488,92 @@
     };
 
     // ============================================
+    // ACCOUNT BALANCE / SPENDING DISPLAY
+    // ============================================
+
+    function formatCurrency(amount, currency) {
+        currency = currency || 'USD';
+        const symbols = { 'USD': '$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'CNY': '¥', 'KRW': '₩', 'INR': '₹' };
+        const sym = symbols[currency] || currency + ' ';
+        if (amount >= 1000000) return sym + (amount / 1000000).toFixed(2) + 'M';
+        if (amount >= 10000) return sym + (amount / 1000).toFixed(1) + 'K';
+        return sym + amount.toFixed(2);
+    }
+
+    // Fetch and display balance for the currently selected account
+    window.loadAccountBalance = async function(advertiserId) {
+        advertiserId = advertiserId || window.TIKTOK_ADVERTISER_ID || '';
+        if (!advertiserId) return;
+
+        const display = document.getElementById('account-balance-display');
+        if (!display) return;
+
+        try {
+            const response = await fetch('api-smartplus.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'get_account_balance',
+                    _advertiser_id: advertiserId
+                })
+            });
+            const result = await response.json();
+
+            if (result.success && result.data) {
+                const balance = parseFloat(result.data.total_balance) || 0;
+                const totalCost = parseFloat(result.data.total_cost) || 0;
+                const grantBalance = parseFloat(result.data.grant_balance) || 0;
+                const currency = result.data.currency || 'USD';
+
+                // Update display
+                document.getElementById('balance-available').textContent = formatCurrency(balance, currency);
+                document.getElementById('balance-total-spent').textContent = formatCurrency(totalCost, currency);
+
+                if (grantBalance > 0) {
+                    document.getElementById('balance-grant').textContent = formatCurrency(grantBalance, currency);
+                    document.getElementById('balance-grant-wrapper').style.display = '';
+                } else {
+                    document.getElementById('balance-grant-wrapper').style.display = 'none';
+                }
+
+                display.style.display = 'flex';
+
+                // Store for later use
+                window.shellState.accountBalances = window.shellState.accountBalances || {};
+                window.shellState.accountBalances[advertiserId] = { balance, totalCost, grantBalance, currency };
+            }
+        } catch (err) {
+            console.warn('Could not load account balance:', err);
+        }
+    };
+
+    // Fetch balance for a specific advertiser (used by multi-account view)
+    async function fetchAccountBalance(advertiserId) {
+        try {
+            const response = await fetch('api-smartplus.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'get_account_balance',
+                    _advertiser_id: advertiserId
+                })
+            });
+            const result = await response.json();
+            if (result.success && result.data) {
+                return {
+                    balance: parseFloat(result.data.total_balance) || 0,
+                    totalCost: parseFloat(result.data.total_cost) || 0,
+                    grantBalance: parseFloat(result.data.grant_balance) || 0,
+                    currency: result.data.currency || 'USD'
+                };
+            }
+        } catch (err) {
+            console.warn('Could not fetch balance for', advertiserId, err);
+        }
+        return null;
+    }
+
+    // ============================================
     // UTILITY FUNCTIONS
     // ============================================
     function getAccountName(advertiserId) {
@@ -539,6 +643,9 @@
                 if (label && cb.dataset.name) label.textContent = cb.dataset.name;
                 window.shellState.selectedAccountIds = [currentAdvId];
             }
+
+            // Load balance for current account
+            loadAccountBalance(currentAdvId);
         }
     });
 

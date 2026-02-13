@@ -1292,11 +1292,40 @@ async function loadMediaLibrary(forceRefresh = false) {
             });
         }
 
+        // Merge new uploads: replace processing_* IDs with real IDs from API (matched by filename)
+        const mergedNewItems = newItems.map(item => {
+            if (item.id && String(item.id).startsWith('processing_') && item.name) {
+                // Look for matching video in API results by filename
+                const apiMatch = state.mediaLibrary.find(m =>
+                    m.type === 'video' && m.name && m.name === item.name
+                );
+                if (apiMatch) {
+                    console.log(`[Merge] Replaced processing ID ${item.id} with real ID ${apiMatch.id} for ${item.name}`);
+                    // Update selectedVideos too
+                    const selectedIdx = state.selectedVideos.findIndex(v => v.id === item.id);
+                    if (selectedIdx >= 0) {
+                        state.selectedVideos[selectedIdx].id = apiMatch.id;
+                        state.selectedVideos[selectedIdx].url = apiMatch.url || item.url;
+                        delete state.selectedVideos[selectedIdx].is_processing;
+                    }
+                    // Update creatives too
+                    const creativeIdx = state.creatives.findIndex(c => c.video_id === item.id);
+                    if (creativeIdx >= 0) {
+                        state.creatives[creativeIdx].video_id = apiMatch.id;
+                    }
+                    // Remove the API duplicate (we're keeping the merged newItem)
+                    state.mediaLibrary = state.mediaLibrary.filter(m => m.id !== apiMatch.id);
+                    return { ...item, id: apiMatch.id, url: apiMatch.url || item.url, is_processing: false };
+                }
+            }
+            return item;
+        });
+
         // Merge in the new uploads at the beginning (they appear first)
-        state.mediaLibrary = [...newItems, ...state.mediaLibrary];
+        state.mediaLibrary = [...mergedNewItems, ...state.mediaLibrary];
 
         // Clear is_new flag after 30 seconds (by then API should have them)
-        if (newItems.length > 0) {
+        if (mergedNewItems.length > 0) {
             setTimeout(() => {
                 state.mediaLibrary.forEach(m => {
                     if (m.is_new) delete m.is_new;
@@ -3066,6 +3095,14 @@ async function createAd() {
         return await updateAd();
     }
 
+    // Block submission if any video is still processing
+    const processingVideos = state.creatives.filter(c => c.video_id && String(c.video_id).startsWith('processing_'));
+    if (processingVideos.length > 0) {
+        showToast('Some videos are still processing. Click "Refresh Library" and try again.', 'error');
+        addLog('error', `Blocked: ${processingVideos.length} video(s) still have processing IDs`);
+        return;
+    }
+
     showLoading('Creating Smart+ Ad...');
     addLog('info', '=== Creating Smart+ Ad ===');
 
@@ -4415,13 +4452,38 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
         return;
     }
 
-    // Show progress UI
+    // Show per-file progress UI
     const progressContainer = document.getElementById(`bulk-upload-progress-${advertiserId}`);
     const statusEl = document.getElementById(`bulk-upload-status-${advertiserId}`);
     const countEl = document.getElementById(`bulk-upload-count-${advertiserId}`);
     const barEl = document.getElementById(`bulk-upload-bar-${advertiserId}`);
 
-    if (progressContainer) progressContainer.style.display = 'block';
+    if (progressContainer) {
+        progressContainer.style.display = 'block';
+        // Build per-file progress items
+        let perFileHtml = '';
+        validFiles.forEach((file, i) => {
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+            perFileHtml += `
+                <div id="bulk-item-${advertiserId}-${i}" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
+                    <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#334155;">${file.name}</span>
+                    <span style="font-size:11px;color:#94a3b8;min-width:45px;text-align:right;">${sizeMB}MB</span>
+                    <div style="width:120px;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;">
+                        <div id="bulk-bar-${advertiserId}-${i}" style="width:0%;height:100%;background:linear-gradient(90deg,#3b82f6,#60a5fa);border-radius:3px;transition:width 0.2s;"></div>
+                    </div>
+                    <span id="bulk-status-${advertiserId}-${i}" style="font-size:11px;min-width:70px;text-align:right;color:#94a3b8;">Pending</span>
+                </div>
+            `;
+        });
+        let perFileContainer = document.getElementById(`bulk-per-file-${advertiserId}`);
+        if (!perFileContainer) {
+            perFileContainer = document.createElement('div');
+            perFileContainer.id = `bulk-per-file-${advertiserId}`;
+            perFileContainer.style.cssText = 'max-height:200px;overflow-y:auto;margin-top:8px;';
+            progressContainer.appendChild(perFileContainer);
+        }
+        perFileContainer.innerHTML = perFileHtml;
+    }
     if (statusEl) statusEl.textContent = 'Uploading...';
     if (countEl) countEl.textContent = `0/${validFiles.length}`;
     if (barEl) barEl.style.width = '0%';
@@ -4446,122 +4508,109 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
     let failed = 0;
     const uploadedVideos = [];
 
-    // Upload files sequentially - NO AUTO-RETRY to prevent duplicates
-    for (const file of validFiles) {
+    // Upload files sequentially using XMLHttpRequest for per-file progress
+    for (let fileIdx = 0; fileIdx < validFiles.length; fileIdx++) {
+        const file = validFiles[fileIdx];
+        const itemBarEl = document.getElementById(`bulk-bar-${advertiserId}-${fileIdx}`);
+        const itemStatusEl = document.getElementById(`bulk-status-${advertiserId}-${fileIdx}`);
+
         try {
             const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
             const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
             const baseName = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name;
             const newFileName = `${baseName}_${timestamp}${ext}`;
-
-            // Get pre-generated thumbnail
             const thumbnailUrl = thumbnailMap.get(file) || '';
 
             const formData = new FormData();
             formData.append('video', file, newFileName);
             formData.append('target_advertiser_id', advertiserId);
 
-            if (statusEl) {
-                statusEl.textContent = `Uploading ${file.name}...`;
-            }
+            if (statusEl) statusEl.textContent = `Uploading ${file.name}...`;
+            if (itemStatusEl) { itemStatusEl.textContent = 'Uploading...'; itemStatusEl.style.color = '#3b82f6'; }
 
-            // Use dedicated endpoint for cross-account uploads with 5 min timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
+            // Use XMLHttpRequest for real-time progress tracking
+            const result = await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                const timeoutId = setTimeout(() => xhr.abort(), 300000);
 
-            const response = await fetch('api.php?action=upload_video_to_advertiser', {
-                method: 'POST',
-                body: formData,
-                signal: controller.signal
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percent = Math.round((e.loaded / e.total) * 100);
+                        if (itemBarEl) itemBarEl.style.width = `${percent}%`;
+                        if (itemStatusEl) itemStatusEl.textContent = percent < 100 ? `${percent}%` : 'Processing...';
+                    }
+                });
+
+                xhr.addEventListener('load', () => {
+                    clearTimeout(timeoutId);
+                    try {
+                        let parsed;
+                        try { parsed = JSON.parse(xhr.responseText); } catch (e) {
+                            const m = xhr.responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
+                            parsed = m ? JSON.parse(m[0]) : null;
+                        }
+                        resolve(parsed);
+                    } catch (e) { reject(new Error('Invalid server response')); }
+                });
+
+                xhr.addEventListener('error', () => { clearTimeout(timeoutId); reject(new Error('Network error')); });
+                xhr.addEventListener('abort', () => { clearTimeout(timeoutId); reject(new Error('Upload timed out')); });
+
+                xhr.open('POST', 'api.php?action=upload_video_to_advertiser');
+                xhr.send(formData);
             });
-
-            clearTimeout(timeoutId);
-
-            const responseText = await response.text();
-            let result;
-            try {
-                result = JSON.parse(responseText);
-            } catch (e) {
-                const jsonMatch = responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
-                if (jsonMatch) {
-                    result = JSON.parse(jsonMatch[0]);
-                } else {
-                    console.error('Failed to parse upload response:', responseText);
-                    throw new Error('Invalid server response');
-                }
-            }
 
             console.log(`[Bulk Upload] Response for ${file.name}:`, result);
 
-            if (result.success && result.data?.video_id) {
-                // Video uploaded and video_id returned immediately
+            if (result && result.success && result.data?.video_id) {
                 completed++;
                 uploadedVideos.push({
-                    video_id: result.data.video_id,
-                    file_name: newFileName,
-                    video_cover_url: thumbnailUrl,  // Use client-side generated thumbnail
-                    preview_url: thumbnailUrl,
-                    type: 'video',
-                    is_new: true
+                    video_id: result.data.video_id, file_name: newFileName,
+                    video_cover_url: thumbnailUrl, preview_url: thumbnailUrl,
+                    type: 'video', is_new: true
                 });
+                if (itemStatusEl) { itemStatusEl.textContent = '✓ Done'; itemStatusEl.style.color = '#16a34a'; }
+                if (itemBarEl) { itemBarEl.style.background = '#22c55e'; itemBarEl.style.width = '100%'; }
                 addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
-                console.log(`[Bulk Upload] Success - video_id: ${result.data.video_id}, thumbnail: ${thumbnailUrl ? 'generated' : 'none'}`);
-            } else if (result.success && result.processing) {
-                // Video accepted but still processing - count as SUCCESS
+            } else if (result && result.success && result.processing) {
                 completed++;
                 uploadedVideos.push({
-                    video_id: 'processing_' + Date.now(),
-                    file_name: newFileName,
-                    video_cover_url: thumbnailUrl,  // Use client-side generated thumbnail
-                    preview_url: thumbnailUrl,
-                    type: 'video',
-                    is_new: true,
-                    is_processing: true
+                    video_id: 'processing_' + Date.now(), file_name: newFileName,
+                    video_cover_url: thumbnailUrl, preview_url: thumbnailUrl,
+                    type: 'video', is_new: true, is_processing: true
                 });
+                if (itemStatusEl) { itemStatusEl.textContent = '⏳ Processing'; itemStatusEl.style.color = '#d97706'; }
+                if (itemBarEl) { itemBarEl.style.background = '#f59e0b'; itemBarEl.style.width = '100%'; }
                 addLog('info', `Video accepted, processing: ${newFileName} on ${advertiserId}`);
-                console.log(`[Bulk Upload] Processing - video accepted: ${file.name}, thumbnail: ${thumbnailUrl ? 'generated' : 'none'}`);
-                if (validFiles.length === 1) {
-                    showToast('Video accepted! It will appear in library in 1-2 minutes.', 'success');
-                }
-            } else if (result.success) {
-                // Success but no video_id (legacy processing response)
+            } else if (result && result.success) {
                 completed++;
+                if (itemStatusEl) { itemStatusEl.textContent = '✓ Accepted'; itemStatusEl.style.color = '#16a34a'; }
+                if (itemBarEl) { itemBarEl.style.width = '100%'; }
                 addLog('info', `Video accepted: ${newFileName} on ${advertiserId}`);
-                if (validFiles.length === 1) {
-                    showToast('Video accepted! Check library in 1-2 minutes.', 'success');
-                }
             } else {
-                // Upload failed - NO retry to prevent duplicates
                 failed++;
-                let errorMsg = result.message || result.error || 'Upload failed - check library';
-                console.error(`[Bulk Upload] Failed for ${file.name}:`, result);
-                addLog('error', `Failed to upload ${file.name}: ${errorMsg}`);
-                if (validFiles.length === 1) {
-                    showToast(`Upload failed: ${errorMsg}`, 'error');
-                }
+                if (itemStatusEl) { itemStatusEl.textContent = '✗ Failed'; itemStatusEl.style.color = '#dc2626'; }
+                if (itemBarEl) { itemBarEl.style.background = '#ef4444'; itemBarEl.style.width = '100%'; }
+                addLog('error', `Failed to upload ${file.name}: ${result?.message || 'Upload failed'}`);
             }
         } catch (error) {
-            // NO retry to prevent duplicates
             failed++;
-            const errorMsg = error.name === 'AbortError'
-                ? 'Timeout - video may have uploaded, check library'
-                : error.message;
-            console.error(`[Bulk Upload] Exception for ${file.name}:`, error);
-            addLog('error', `Error uploading ${file.name}: ${errorMsg}`);
+            if (itemStatusEl) { itemStatusEl.textContent = '✗ Error'; itemStatusEl.style.color = '#dc2626'; }
+            if (itemBarEl) { itemBarEl.style.background = '#ef4444'; itemBarEl.style.width = '100%'; }
+            addLog('error', `Error uploading ${file.name}: ${error.message}`);
         }
 
-        // Update progress
+        // Update overall progress
         const totalProcessed = completed + failed;
         if (countEl) countEl.textContent = `${totalProcessed}/${validFiles.length}`;
         if (barEl) barEl.style.width = `${(totalProcessed / validFiles.length) * 100}%`;
 
-        // Add delay between files to avoid rate limiting (reduced for speed)
-        if (completed + failed < validFiles.length) {
+        if (totalProcessed < validFiles.length) {
             await new Promise(resolve => setTimeout(resolve, 300));
         }
     }
 
-    // Update status
+    // Final status
     if (statusEl) {
         statusEl.textContent = failed === 0
             ? `✓ Uploaded ${completed} videos`
@@ -4762,14 +4811,40 @@ async function handlePickerVideoUpload(event) {
     }));
     console.log('[Picker Upload] Generated', thumbnailMap.size, 'thumbnails');
 
-    // Show progress UI
+    // Show per-file progress UI
     const progressContainer = document.getElementById('picker-upload-progress');
     const statusEl = document.getElementById('picker-upload-status');
     const countEl = document.getElementById('picker-upload-count');
     const barEl = document.getElementById('picker-upload-bar');
     const uploadBtn = document.getElementById('picker-upload-btn');
 
-    if (progressContainer) progressContainer.style.display = 'block';
+    if (progressContainer) {
+        progressContainer.style.display = 'block';
+        // Build per-file progress items
+        let perFileHtml = '';
+        validFiles.forEach((file, i) => {
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+            perFileHtml += `
+                <div id="picker-upload-item-${i}" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
+                    <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#334155;">${file.name}</span>
+                    <span style="font-size:11px;color:#94a3b8;min-width:45px;text-align:right;">${sizeMB}MB</span>
+                    <div style="width:120px;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;">
+                        <div id="picker-bar-${i}" style="width:0%;height:100%;background:linear-gradient(90deg,#3b82f6,#60a5fa);border-radius:3px;transition:width 0.2s;"></div>
+                    </div>
+                    <span id="picker-status-${i}" style="font-size:11px;min-width:70px;text-align:right;color:#94a3b8;">Pending</span>
+                </div>
+            `;
+        });
+        // Insert per-file list after the overall progress bar
+        let perFileContainer = document.getElementById('picker-per-file-list');
+        if (!perFileContainer) {
+            perFileContainer = document.createElement('div');
+            perFileContainer.id = 'picker-per-file-list';
+            perFileContainer.style.cssText = 'max-height:200px;overflow-y:auto;margin-top:8px;';
+            progressContainer.appendChild(perFileContainer);
+        }
+        perFileContainer.innerHTML = perFileHtml;
+    }
     if (uploadBtn) uploadBtn.disabled = true;
     if (statusEl) statusEl.textContent = 'Uploading...';
     if (countEl) countEl.textContent = `0/${validFiles.length}`;
@@ -4781,8 +4856,12 @@ async function handlePickerVideoUpload(event) {
     let failed = 0;
     const uploadedVideos = [];
 
-    // Upload files sequentially - NO AUTO-RETRY to prevent duplicates
-    for (const file of validFiles) {
+    // Upload files sequentially using XMLHttpRequest for per-file progress
+    for (let fileIdx = 0; fileIdx < validFiles.length; fileIdx++) {
+        const file = validFiles[fileIdx];
+        const itemBarEl = document.getElementById(`picker-bar-${fileIdx}`);
+        const itemStatusEl = document.getElementById(`picker-status-${fileIdx}`);
+
         try {
             const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
             const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
@@ -4793,108 +4872,95 @@ async function handlePickerVideoUpload(event) {
             formData.append('video', file, newFileName);
             formData.append('target_advertiser_id', advertiserId);
 
-            if (statusEl) {
-                statusEl.textContent = `Uploading ${file.name}...`;
-            }
+            if (statusEl) statusEl.textContent = `Uploading ${file.name}...`;
+            if (itemStatusEl) { itemStatusEl.textContent = 'Uploading...'; itemStatusEl.style.color = '#3b82f6'; }
 
-            // Use dedicated endpoint with 5 min timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 300000);
+            // Use XMLHttpRequest for real-time progress tracking
+            const result = await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                const timeoutId = setTimeout(() => xhr.abort(), 300000); // 5 min timeout
 
-            const response = await fetch('api.php?action=upload_video_to_advertiser', {
-                method: 'POST',
-                body: formData,
-                signal: controller.signal
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percent = Math.round((e.loaded / e.total) * 100);
+                        if (itemBarEl) itemBarEl.style.width = `${percent}%`;
+                        if (itemStatusEl) itemStatusEl.textContent = percent < 100 ? `${percent}%` : 'Processing...';
+                    }
+                });
+
+                xhr.addEventListener('load', () => {
+                    clearTimeout(timeoutId);
+                    try {
+                        let parsed;
+                        try { parsed = JSON.parse(xhr.responseText); } catch (e) {
+                            const m = xhr.responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
+                            parsed = m ? JSON.parse(m[0]) : null;
+                        }
+                        resolve(parsed);
+                    } catch (e) { reject(new Error('Invalid server response')); }
+                });
+
+                xhr.addEventListener('error', () => { clearTimeout(timeoutId); reject(new Error('Network error')); });
+                xhr.addEventListener('abort', () => { clearTimeout(timeoutId); reject(new Error('Upload timed out')); });
+
+                xhr.open('POST', 'api.php?action=upload_video_to_advertiser');
+                xhr.send(formData);
             });
-
-            clearTimeout(timeoutId);
-
-            const responseText = await response.text();
-            let result;
-            try {
-                result = JSON.parse(responseText);
-            } catch (e) {
-                const jsonMatch = responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
-                if (jsonMatch) {
-                    result = JSON.parse(jsonMatch[0]);
-                } else {
-                    throw new Error('Invalid server response');
-                }
-            }
 
             console.log(`[Picker Upload] Response for ${file.name}:`, result);
 
-            if (result.success && result.data?.video_id) {
-                // Video uploaded and video_id returned immediately
+            if (result && result.success && result.data?.video_id) {
                 completed++;
-                // Use pre-generated thumbnail for instant preview
                 const previewUrl = thumbnailMap.get(file) || '';
                 uploadedVideos.push({
-                    video_id: result.data.video_id,
-                    file_name: newFileName,
-                    video_cover_url: previewUrl,
-                    preview_url: previewUrl,
-                    type: 'video',
-                    is_new: true
+                    video_id: result.data.video_id, file_name: newFileName,
+                    video_cover_url: previewUrl, preview_url: previewUrl,
+                    type: 'video', is_new: true
                 });
+                if (itemStatusEl) { itemStatusEl.textContent = '✓ Done'; itemStatusEl.style.color = '#16a34a'; }
+                if (itemBarEl) { itemBarEl.style.background = '#22c55e'; itemBarEl.style.width = '100%'; }
                 addLog('success', `Uploaded ${newFileName} to ${advertiserId}`);
-            } else if (result.success && result.processing) {
-                // Video accepted but processing - count as SUCCESS!
+            } else if (result && result.success && result.processing) {
                 completed++;
-                // Use pre-generated thumbnail for instant preview
                 const previewUrl = thumbnailMap.get(file) || '';
                 uploadedVideos.push({
-                    video_id: 'processing_' + Date.now(),
-                    file_name: newFileName,
-                    video_cover_url: previewUrl,
-                    preview_url: previewUrl,
-                    type: 'video',
-                    is_new: true,
-                    is_processing: true
+                    video_id: 'processing_' + Date.now(), file_name: newFileName,
+                    video_cover_url: previewUrl, preview_url: previewUrl,
+                    type: 'video', is_new: true, is_processing: true
                 });
+                if (itemStatusEl) { itemStatusEl.textContent = '⏳ Processing'; itemStatusEl.style.color = '#d97706'; }
+                if (itemBarEl) { itemBarEl.style.background = '#f59e0b'; itemBarEl.style.width = '100%'; }
                 addLog('info', `Video accepted, processing: ${newFileName} on ${advertiserId}`);
-                if (validFiles.length === 1) {
-                    showToast('Video accepted! It will appear in library in 1-2 minutes.', 'success');
-                }
-            } else if (result.success) {
-                // Success but no video_id (legacy response)
+            } else if (result && result.success) {
                 completed++;
+                if (itemStatusEl) { itemStatusEl.textContent = '✓ Accepted'; itemStatusEl.style.color = '#16a34a'; }
+                if (itemBarEl) { itemBarEl.style.width = '100%'; }
                 addLog('info', `Video accepted: ${newFileName} on ${advertiserId}`);
-                if (validFiles.length === 1) {
-                    showToast('Video accepted! Check library in 1-2 minutes.', 'success');
-                }
             } else {
-                // Actual failure
                 failed++;
-                let errorMsg = result.message || result.error || 'Upload failed - check library';
-                console.error(`[Picker Upload] Failed:`, result);
+                const errorMsg = result?.message || 'Upload failed';
+                if (itemStatusEl) { itemStatusEl.textContent = '✗ Failed'; itemStatusEl.style.color = '#dc2626'; }
+                if (itemBarEl) { itemBarEl.style.background = '#ef4444'; itemBarEl.style.width = '100%'; }
                 addLog('error', `Failed to upload ${file.name}: ${errorMsg}`);
-                if (validFiles.length === 1) {
-                    showToast(`Upload failed: ${errorMsg}`, 'error');
-                }
             }
         } catch (error) {
-            // NO retry to prevent duplicates
             failed++;
-            const errorMsg = error.name === 'AbortError'
-                ? 'Timeout - video may have uploaded, check library'
-                : error.message;
-            console.error(`[Picker Upload] Exception:`, error);
-            addLog('error', `Error uploading ${file.name}: ${errorMsg}`);
+            if (itemStatusEl) { itemStatusEl.textContent = '✗ Error'; itemStatusEl.style.color = '#dc2626'; }
+            if (itemBarEl) { itemBarEl.style.background = '#ef4444'; itemBarEl.style.width = '100%'; }
+            addLog('error', `Error uploading ${file.name}: ${error.message}`);
         }
 
-        // Update progress
+        // Update overall progress
         const totalProcessed = completed + failed;
         if (countEl) countEl.textContent = `${totalProcessed}/${validFiles.length}`;
         if (barEl) barEl.style.width = `${(totalProcessed / validFiles.length) * 100}%`;
 
-        // Delay between files (reduced for speed)
-        if (completed + failed < validFiles.length) {
+        if (totalProcessed < validFiles.length) {
             await new Promise(resolve => setTimeout(resolve, 300));
         }
     }
 
-    // Update status
+    // Final status
     if (statusEl) {
         statusEl.textContent = failed === 0
             ? `✓ Uploaded ${completed} videos`
