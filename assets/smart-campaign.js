@@ -3604,7 +3604,7 @@ function createNewCampaign() {
     location.reload();
 }
 
-// Finish and redirect to advertiser selection page
+// Finish and redirect to campaigns view
 function finishAndReset() {
     // Remove success modal
     const modal = document.getElementById('success-modal');
@@ -3612,8 +3612,8 @@ function finishAndReset() {
         modal.remove();
     }
 
-    // Redirect to advertiser selection page (home)
-    window.location.href = 'select-advertiser-oauth.php';
+    // Redirect to app shell campaigns view
+    window.location.href = window.APP_SHELL_MODE ? 'app-shell.php?view=campaigns' : 'app-shell.php?view=campaigns';
 }
 
 // =====================
@@ -6517,7 +6517,31 @@ async function executeBulkLaunch() {
 
     addLog('info', `Starting bulk launch: ${originalNeedsAdCompletion ? '1 original (completing) + ' : ''}${accountsForBulkLaunch.length} accounts`);
 
-    // STEP 4: Complete original account's ad first if needed
+    // STEP 4a: Auto-resolve any processing_* video IDs before creating ads
+    const processingCreatives = state.creatives.filter(c => c.video_id && String(c.video_id).startsWith('processing_'));
+    if (processingCreatives.length > 0) {
+        addLog('info', `Found ${processingCreatives.length} processing video(s) - refreshing library to resolve...`);
+        try {
+            await loadMediaLibrary();
+            // Check again after refresh
+            const stillProcessing = state.creatives.filter(c => c.video_id && String(c.video_id).startsWith('processing_'));
+            if (stillProcessing.length > 0) {
+                addLog('warning', `${stillProcessing.length} video(s) still processing after library refresh`);
+                // For original account ad: abort if videos aren't ready
+                if (originalNeedsAdCompletion) {
+                    showToast(`${stillProcessing.length} video(s) still processing. Please wait and try again, or click "Refresh Library" first.`, 'error');
+                    progressModal.style.display = 'none';
+                    return;
+                }
+            } else {
+                addLog('success', 'All processing videos resolved successfully');
+            }
+        } catch (e) {
+            addLog('warning', 'Could not refresh library: ' + e.message);
+        }
+    }
+
+    // STEP 4b: Complete original account's ad first if needed
     if (originalNeedsAdCompletion) {
         try {
             updateProgressItem(originalAccountId, 'pending', 'Creating ad...');

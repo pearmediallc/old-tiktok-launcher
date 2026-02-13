@@ -872,7 +872,7 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                 <div id="advertiser-timezone-info" style="font-size: 0.9rem; color: #666; margin-right: 15px;">
                     <span id="timezone-status">Loading...</span>
                 </div>
-                <button class="btn-secondary" onclick="window.location.href='select-advertiser-oauth.php'" style="margin-right: 10px;">Back</button>
+                <button class="btn-secondary" onclick="window.location.href='app-shell.php?view=campaigns'" style="margin-right: 10px;">Back</button>
                 <button class="btn-logout" onclick="logout()">Logout</button>
             </div>
         </header>
