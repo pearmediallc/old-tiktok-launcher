@@ -2306,10 +2306,7 @@ try {
                     'advertiser_id' => $upload_advertiser_id,
                     'upload_type' => 'UPLOAD_BY_FILE',
                     'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
-                    'video_signature' => $videoSignature,
-                    'flaw_detect' => 'true',
-                    'auto_fix_enabled' => 'true',
-                    'auto_bind_enabled' => 'true'
+                    'video_signature' => $videoSignature
                 ];
 
                 $ch = curl_init();
@@ -2372,76 +2369,12 @@ try {
                             ?? $responseData['id']
                             ?? null;
 
-                    // Check for fix_task_id (Smart Fix async processing)
-                    $fixTaskId = $responseData['fix_task_id'] ?? null;
-
                     // Check for async processing status
                     $processingStatus = $responseData['status'] ?? $responseData['processing_status'] ?? null;
 
                     logToFile("Extracted - video_id: " . ($videoId ?? 'null') .
-                              ", fix_task_id: " . ($fixTaskId ?? 'null') .
                               ", status: " . ($processingStatus ?? 'null') .
                               ", response data: " . json_encode($responseData));
-
-                    // If we have a fix_task_id but no video_id, poll for completion
-                    if ($fixTaskId && !$videoId) {
-                        logToFile("Fix task detected, polling for completion: " . $fixTaskId);
-
-                        $maxWaitTime = 15; // Max 15 seconds - return quickly, video will process in background
-                        $pollInterval = 2; // Poll every 2 seconds for faster response
-                        $startTime = time();
-
-                        while (time() - $startTime < $maxWaitTime) {
-                            // Call fix task status endpoint
-                            $taskStatusUrl = 'https://business-api.tiktok.com/open_api/v1.3/video/fix/task/get/';
-                            $taskPayload = json_encode([
-                                'advertiser_id' => $upload_advertiser_id,
-                                'task_id' => $fixTaskId
-                            ]);
-
-                            $taskCh = curl_init($taskStatusUrl);
-                            curl_setopt_array($taskCh, [
-                                CURLOPT_RETURNTRANSFER => true,
-                                CURLOPT_POST => true,
-                                CURLOPT_POSTFIELDS => $taskPayload,
-                                CURLOPT_HTTPHEADER => [
-                                    'Access-Token: ' . $accessToken,
-                                    'Content-Type: application/json'
-                                ],
-                                CURLOPT_TIMEOUT => 30
-                            ]);
-
-                            $taskResponse = curl_exec($taskCh);
-                            curl_close($taskCh);
-
-                            $taskResult = json_decode($taskResponse);
-                            logToFile("Fix task status check: " . $taskResponse);
-
-                            if (isset($taskResult->data)) {
-                                $taskStatus = $taskResult->data->status ?? null;
-
-                                if ($taskStatus === 'SUCCESS') {
-                                    // Got the final video_id!
-                                    $videoId = $taskResult->data->video_id ?? null;
-                                    if ($videoId) {
-                                        logToFile("Fix task completed! Video ID: " . $videoId);
-                                        $responseData['video_id'] = $videoId;
-                                        break;
-                                    }
-                                } elseif ($taskStatus === 'FAILED') {
-                                    logToFile("Fix task failed");
-                                    break;
-                                }
-                                // PROCESSING - continue polling
-                            }
-
-                            sleep($pollInterval);
-                        }
-
-                        if (!$videoId) {
-                            logToFile("Fix task polling timed out or failed after " . (time() - $startTime) . " seconds");
-                        }
-                    }
                 }
 
                 // For video upload, success REQUIRES a video_id to be returned
@@ -2632,10 +2565,7 @@ try {
                     'advertiser_id' => $targetAdvertiserId,
                     'upload_type' => 'UPLOAD_BY_FILE',
                     'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
-                    'video_signature' => $videoSignature,
-                    'flaw_detect' => 'true',
-                    'auto_fix_enabled' => 'true',
-                    'auto_bind_enabled' => 'true'
+                    'video_signature' => $videoSignature
                 ];
 
                 $ch = curl_init();
@@ -2689,69 +2619,12 @@ try {
                             ?? $responseData['id']
                             ?? null;
 
-                    // Check for fix_task_id (Smart Fix async processing)
-                    $fixTaskId = $responseData['fix_task_id'] ?? null;
-
                     // Check for async processing status
                     $processingStatus = $responseData['status'] ?? $responseData['processing_status'] ?? null;
 
                     logToFile("Extracted - video_id: " . ($videoId ?? 'null') .
-                              ", fix_task_id: " . ($fixTaskId ?? 'null') .
                               ", status: " . ($processingStatus ?? 'null') .
                               ", response data: " . json_encode($responseData));
-
-                    // If we have a fix_task_id but no video_id, poll for completion
-                    if ($fixTaskId && !$videoId) {
-                        logToFile("Fix task detected for $targetAdvertiserId, polling: " . $fixTaskId);
-
-                        $maxWaitTime = 15; // Max 15 seconds - return quickly, video will process in background
-                        $pollInterval = 2; // Poll every 2 seconds for faster response
-                        $startTime = time();
-
-                        while (time() - $startTime < $maxWaitTime) {
-                            $taskStatusUrl = 'https://business-api.tiktok.com/open_api/v1.3/video/fix/task/get/';
-                            $taskPayload = json_encode([
-                                'advertiser_id' => $targetAdvertiserId,
-                                'task_id' => $fixTaskId
-                            ]);
-
-                            $taskCh = curl_init($taskStatusUrl);
-                            curl_setopt_array($taskCh, [
-                                CURLOPT_RETURNTRANSFER => true,
-                                CURLOPT_POST => true,
-                                CURLOPT_POSTFIELDS => $taskPayload,
-                                CURLOPT_HTTPHEADER => [
-                                    'Access-Token: ' . $config['access_token'],
-                                    'Content-Type: application/json'
-                                ],
-                                CURLOPT_TIMEOUT => 30
-                            ]);
-
-                            $taskResponse = curl_exec($taskCh);
-                            curl_close($taskCh);
-
-                            $taskResult = json_decode($taskResponse);
-                            logToFile("Fix task status: " . $taskResponse);
-
-                            if (isset($taskResult->data)) {
-                                $taskStatus = $taskResult->data->status ?? null;
-
-                                if ($taskStatus === 'SUCCESS') {
-                                    $videoId = $taskResult->data->video_id ?? null;
-                                    if ($videoId) {
-                                        logToFile("Fix task completed! Video ID: " . $videoId);
-                                        $responseData['video_id'] = $videoId;
-                                        break;
-                                    }
-                                } elseif ($taskStatus === 'FAILED') {
-                                    logToFile("Fix task failed");
-                                    break;
-                                }
-                            }
-
-                            sleep($pollInterval);
-                        }
-                    }
                 }
 
                 // Check for success states
@@ -2891,10 +2764,7 @@ try {
                 'file_name' => $fileName,
                 'upload_type' => 'UPLOAD_BY_FILE',
                 'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
-                'video_signature' => $videoSignature,
-                'flaw_detect' => 'true',
-                'auto_fix_enabled' => 'true',
-                'auto_bind_enabled' => 'true'
+                'video_signature' => $videoSignature
             ];
 
             $ch = curl_init();

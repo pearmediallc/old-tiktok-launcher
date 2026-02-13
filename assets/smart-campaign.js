@@ -707,12 +707,13 @@ function showBalanceWarning(balance, currency) {
         </div>
     `;
 
-    // Insert after campaign header or at top of main content
-    const insertPoint = document.querySelector('.campaign-header') ||
-                       document.querySelector('.step-section') ||
+    // Insert inside the main content area at the top
+    const insertPoint = document.querySelector('.view-panel') ||
+                       document.getElementById('main-content') ||
+                       document.querySelector('.main-content') ||
                        document.querySelector('main');
     if (insertPoint) {
-        insertPoint.insertAdjacentHTML('afterend', warningHtml);
+        insertPoint.insertAdjacentHTML('afterbegin', warningHtml);
     }
 }
 
@@ -729,12 +730,13 @@ function showPaymentError(message) {
         </div>
     `;
 
-    // Insert after campaign header or at top of main content
-    const insertPoint = document.querySelector('.campaign-header') ||
-                       document.querySelector('.step-section') ||
+    // Insert inside the main content area at the top
+    const insertPoint = document.querySelector('.view-panel') ||
+                       document.getElementById('main-content') ||
+                       document.querySelector('.main-content') ||
                        document.querySelector('main');
     if (insertPoint) {
-        insertPoint.insertAdjacentHTML('afterend', errorHtml);
+        insertPoint.insertAdjacentHTML('afterbegin', errorHtml);
     }
 }
 
@@ -1119,6 +1121,47 @@ async function useFrequentlyUsedCTAs() {
             hideLoading();
             showToast('Frequently Used CTAs portfolio ready!', 'success');
             addLog('info', `Portfolio ready: ${portfolioName} (ID: ${portfolioId})`);
+        } else {
+            hideLoading();
+            showToast('Failed to create portfolio: ' + (result.message || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        showToast('Error: ' + error.message, 'error');
+    }
+}
+
+// Quick-create a Learn_More CTA portfolio
+async function createLearnMorePortfolio() {
+    showLoading('Creating Learn_More portfolio...');
+    addLog('info', 'Creating Learn_More CTA portfolio');
+
+    try {
+        const result = await apiRequest('create_cta_portfolio', {
+            portfolio_name: 'Learn_More',
+            portfolio_content: [
+                { asset_content: 'LEARN_MORE', asset_ids: ["0"] }
+            ]
+        });
+
+        if (result.success && result.data && result.data.portfolio_id) {
+            const portfolioId = result.data.portfolio_id;
+
+            state.selectedPortfolioId = portfolioId;
+            state.selectedPortfolioName = 'Learn_More';
+
+            // Reload portfolios and select the new one
+            await loadCtaPortfolios();
+
+            const select = document.getElementById('cta-portfolio-select');
+            if (select) {
+                select.value = portfolioId;
+                onPortfolioSelect();
+            }
+
+            hideLoading();
+            showToast('Learn_More portfolio created!', 'success');
+            addLog('info', `Portfolio ready: Learn_More (ID: ${portfolioId})`);
         } else {
             hideLoading();
             showToast('Failed to create portfolio: ' + (result.message || 'Unknown error'), 'error');
@@ -1541,14 +1584,20 @@ async function uploadSingleMediaFile(file, index, total) {
                         addLog('success', `Uploaded: ${newFileName} (${result.data.video_id})`);
 
                         if (isVideo) {
-                            state.mediaLibrary.unshift({
+                            const newVideo = {
                                 type: 'video',
                                 id: result.data.video_id,
                                 url: previewUrl,
                                 name: newFileName,
                                 is_new: true
-                            });
+                            };
+                            state.mediaLibrary.unshift(newVideo);
+                            // Auto-select the uploaded video
+                            if (!state.selectedVideos.some(v => v.id === newVideo.id)) {
+                                state.selectedVideos.push(newVideo);
+                            }
                             renderVideoSelectionGrid();
+                            updateSelectedVideosSummary();
                         }
                         updateOverallProgress(index, total);
                         resolve({ success: true, video_id: result.data.video_id });
@@ -4154,11 +4203,11 @@ function openVideoPicker(advertiserId, sourceVideoId, sourceVideoName) {
         return;
     }
 
-    // Sort videos alphabetically by filename
+    // Sort videos: newly uploaded first, then preserve order (newest first from API/unshift)
     const videos = [...accountAssets.videos].sort((a, b) => {
-        const nameA = (a.file_name || '').toLowerCase();
-        const nameB = (b.file_name || '').toLowerCase();
-        return nameA.localeCompare(nameB);
+        if (a.is_new && !b.is_new) return -1;
+        if (!a.is_new && b.is_new) return 1;
+        return 0;
     });
 
     // Store state
@@ -4638,11 +4687,11 @@ async function refreshVideoPickerList() {
 
             bulkLaunchState.accountAssets[advertiserId].videos = mergedVideos;
 
-            // Update picker state
+            // Update picker state - newly uploaded first, then preserve order
             videoPickerState.videos = [...mergedVideos].sort((a, b) => {
-                const nameA = (a.file_name || '').toLowerCase();
-                const nameB = (b.file_name || '').toLowerCase();
-                return nameA.localeCompare(nameB);
+                if (a.is_new && !b.is_new) return -1;
+                if (!a.is_new && b.is_new) return 1;
+                return 0;
             });
 
             renderVideoPickerGrid();
@@ -5149,14 +5198,7 @@ async function loadAccountAssets(advertiserId) {
         console.log(`[Bulk Launch] API response for ${advertiserId}:`, result);
 
         if (result.success && result.data) {
-            // Sort videos alphabetically by filename before storing
-            if (result.data.videos && Array.isArray(result.data.videos)) {
-                result.data.videos.sort((a, b) => {
-                    const nameA = (a.file_name || '').toLowerCase();
-                    const nameB = (b.file_name || '').toLowerCase();
-                    return nameA.localeCompare(nameB);
-                });
-            }
+            // Videos come from API sorted by create_time descending (newest first) - keep that order
 
             bulkLaunchState.accountAssets[advertiserId] = result.data;
 
@@ -10417,7 +10459,7 @@ function openDupBulkVideoUpload(advertiserId) {
                         }
                     };
                 } else if (result.success || (result.message && result.message.toLowerCase().includes('processing'))) {
-                    // Video accepted but still processing (fix_task_id scenario)
+                    // Video accepted but still processing on TikTok's side
                     if (statusEl) {
                         statusEl.textContent = '⏳ Processing';
                         statusEl.style.background = '#fef3c7';

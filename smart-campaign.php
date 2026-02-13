@@ -1258,7 +1258,7 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                 <option value="">Loading portfolios...</option>
                             </select>
                             <div style="display: flex; gap: 10px; margin-top: 8px;">
-                                <button type="button" class="btn-secondary" onclick="useFrequentlyUsedCTAs()" style="flex: 1;">Use Frequently Used CTAs</button>
+                                <button type="button" class="btn-secondary" onclick="createLearnMorePortfolio()" style="flex: 1;">+ Create Learn_More</button>
                                 <button type="button" class="btn-secondary" onclick="openCreatePortfolioModal()" style="flex: 1;">+ Create Portfolio</button>
                             </div>
                             <div id="selected-portfolio-info" style="display: none; margin-top: 10px; padding: 10px; background: #e8f5e9; border-radius: 6px;">

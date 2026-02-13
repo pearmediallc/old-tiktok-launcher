@@ -1256,6 +1256,16 @@ switch ($action) {
         foreach ($data['creatives'] ?? [] as $index => $creative) {
             if (!empty($creative['video_id'])) {
                 $videoId = $creative['video_id'];
+                // Reject processing_* temporary IDs — video not yet available in TikTok
+                if (strpos($videoId, 'processing_') === 0) {
+                    logSmartPlus("REJECTED: Video still processing (temporary ID): $videoId");
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Video "' . ($creative['name'] ?? $videoId) . '" is still processing. Please wait a moment and refresh your video library before launching.',
+                        'error_code' => 'VIDEO_STILL_PROCESSING'
+                    ]);
+                    exit;
+                }
                 // Only add if no image_id provided (needs auto-fetch)
                 if (empty($creative['image_id'])) {
                     $videoIds[] = $videoId;
@@ -1677,8 +1687,20 @@ switch ($action) {
         // OPTIMIZED: Collect all video IDs first, then batch fetch covers
         $videoIds = [];
         foreach ($creativeList as $creative) {
-            if (!empty($creative['video_id']) && empty($creative['image_id'])) {
-                $videoIds[] = $creative['video_id'];
+            if (!empty($creative['video_id'])) {
+                // Reject processing_* temporary IDs
+                if (strpos($creative['video_id'], 'processing_') === 0) {
+                    logSmartPlus("REJECTED: Video still processing: " . $creative['video_id']);
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'A video is still processing. Please wait a moment and refresh your video library before launching.',
+                        'error_code' => 'VIDEO_STILL_PROCESSING'
+                    ]);
+                    exit;
+                }
+                if (empty($creative['image_id'])) {
+                    $videoIds[] = $creative['video_id'];
+                }
             }
         }
 
@@ -3015,6 +3037,10 @@ switch ($action) {
                 foreach ($campaignConfig['creatives'] ?? [] as $creative) {
                     $sourceVideoId = $creative['video_id'];
                     $targetVideoId = $videoMapping[$sourceVideoId] ?? $sourceVideoId;
+                    // Reject processing_* temporary IDs
+                    if (strpos($targetVideoId, 'processing_') === 0) {
+                        throw new Exception('Video still processing (ID: ' . $targetVideoId . '). Please refresh video library and retry.');
+                    }
                     $targetVideoIds[] = $targetVideoId;
                 }
                 logSmartPlus("Target video IDs for cover batch: " . json_encode($targetVideoIds));
