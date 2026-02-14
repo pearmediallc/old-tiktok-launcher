@@ -565,6 +565,59 @@ body.app-shell .main-content .header {
 }
 
 /* ============================================
+   MULTI-ACCOUNT CAMPAIGN TOGGLE (ON/OFF)
+   ============================================ */
+.col-toggle {
+    width: 50px;
+    text-align: center;
+}
+
+.toggle-multi {
+    width: 36px;
+    height: 20px;
+    background: #cbd5e1;
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.25s;
+    display: inline-block;
+}
+
+.toggle-multi.on {
+    background: #22c55e;
+}
+
+.toggle-multi .toggle-slider {
+    width: 16px;
+    height: 16px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.25s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.toggle-multi.on .toggle-slider {
+    transform: translateX(16px);
+}
+
+.toggle-multi.loading {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.toggle-multi.loading .toggle-slider {
+    animation: pulse-toggle 0.8s ease-in-out infinite;
+}
+
+@keyframes pulse-toggle {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* ============================================
    MULTI-ACCOUNT CAMPAIGN GROUPS
    ============================================ */
 .multi-account-campaigns-container {

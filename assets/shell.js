@@ -153,6 +153,18 @@
             selectAllCb.indeterminate = selectedIds.length > 0 && selectedIds.length < allCheckboxes.length;
         }
 
+        // Float selected accounts to the top of the dropdown
+        const optionsContainer = document.getElementById('multi-select-options');
+        if (optionsContainer) {
+            const accountOptions = Array.from(optionsContainer.querySelectorAll('.multi-select-option:not(.select-all)'));
+            accountOptions.sort((a, b) => {
+                const aChecked = a.querySelector('.account-checkbox')?.checked ? 1 : 0;
+                const bChecked = b.querySelector('.account-checkbox')?.checked ? 1 : 0;
+                return bChecked - aChecked; // checked first
+            });
+            accountOptions.forEach(opt => optionsContainer.appendChild(opt));
+        }
+
         // Decide mode: single vs multi
         if (selectedIds.length <= 1 && selectedIds.length > 0) {
             // Single account mode - use smart-campaign.js native loading
@@ -368,6 +380,7 @@
             const isActive = campaign.operation_status === 'ENABLE';
             const statusClass = isActive ? 'active' : 'inactive';
             const statusLabel = isActive ? 'Active' : 'Paused';
+            const toggleClass = isActive ? 'on' : '';
             const budget = campaign.budget ? '$' + parseFloat(campaign.budget).toFixed(2) : '-';
 
             const smartPlusBadge = campaign.is_smart_performance_campaign
@@ -376,6 +389,16 @@
 
             return `
                 <tr class="row-campaign" data-campaign-id="${escapeAttr(campaign.campaign_id)}">
+                    <td class="col-toggle">
+                        <div class="toggle-multi ${toggleClass}"
+                             data-campaign-id="${escapeAttr(campaign.campaign_id)}"
+                             data-advertiser-id="${escapeAttr(advertiserId)}"
+                             data-status="${campaign.operation_status}"
+                             onclick="toggleMultiAccountCampaign('${escapeAttr(campaign.campaign_id)}', '${campaign.operation_status}', '${escapeAttr(advertiserId)}')"
+                             title="${isActive ? 'Click to disable' : 'Click to enable'}">
+                            <div class="toggle-slider"></div>
+                        </div>
+                    </td>
                     <td class="col-name">
                         <div class="name-cell">
                             <span class="entity-icon">📢</span>
@@ -403,6 +426,7 @@
                 <table class="metrics-table">
                     <thead>
                         <tr>
+                            <th class="col-toggle">ON/OFF</th>
                             <th class="col-name">Name</th>
                             <th class="col-status">Status</th>
                             <th class="col-budget">Budget</th>
@@ -436,6 +460,73 @@
         if (countActive) countActive.textContent = activeCount;
         if (countInactive) countInactive.textContent = inactiveCount;
     }
+
+    // ============================================
+    // MULTI-ACCOUNT: Toggle individual campaign ON/OFF
+    // ============================================
+    window.toggleMultiAccountCampaign = async function(campaignId, currentStatus, advertiserId) {
+        const toggleEl = document.querySelector(`.toggle-multi[data-campaign-id="${campaignId}"][data-advertiser-id="${advertiserId}"]`);
+        const rowEl = toggleEl ? toggleEl.closest('tr') : null;
+        if (!toggleEl) return;
+
+        toggleEl.classList.add('loading');
+
+        const newStatus = currentStatus === 'ENABLE' ? 'DISABLE' : 'ENABLE';
+
+        try {
+            const response = await fetch('api-smartplus.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'update_campaign_status',
+                    campaign_id: campaignId,
+                    status: newStatus,
+                    _advertiser_id: advertiserId
+                })
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                // Update local state in multiAccountCampaigns
+                const accountData = window.shellState.multiAccountCampaigns.find(a => a.advertiserId === advertiserId);
+                if (accountData) {
+                    const campaign = accountData.campaigns.find(c => c.campaign_id === campaignId);
+                    if (campaign) campaign.operation_status = newStatus;
+                }
+
+                // Update toggle UI
+                toggleEl.classList.remove('loading');
+                toggleEl.classList.toggle('on', newStatus === 'ENABLE');
+                toggleEl.dataset.status = newStatus;
+                toggleEl.setAttribute('onclick', `toggleMultiAccountCampaign('${campaignId}', '${newStatus}', '${advertiserId}')`);
+                toggleEl.title = newStatus === 'ENABLE' ? 'Click to disable' : 'Click to enable';
+
+                // Update status badge in same row
+                if (rowEl) {
+                    const badge = rowEl.querySelector('.status-badge-table');
+                    if (badge) {
+                        badge.className = `status-badge-table ${newStatus === 'ENABLE' ? 'active' : 'inactive'}`;
+                        badge.textContent = newStatus === 'ENABLE' ? 'Active' : 'Paused';
+                    }
+                }
+
+                // Update filter counts
+                updateMultiAccountCounts(window.shellState.multiAccountCampaigns);
+
+                if (typeof showToast === 'function') {
+                    showToast(`Campaign ${newStatus === 'ENABLE' ? 'enabled' : 'disabled'} successfully`, 'success');
+                }
+            } else {
+                throw new Error(result.message || 'Failed to update status');
+            }
+        } catch (error) {
+            toggleEl.classList.remove('loading');
+            console.error('Error toggling campaign:', error);
+            if (typeof showToast === 'function') {
+                showToast('Failed to update campaign: ' + error.message, 'error');
+            }
+        }
+    };
 
     // ============================================
     // MULTI-ACCOUNT: Hook into filter/search
@@ -582,8 +673,8 @@
         if (option && option.dataset.name) return option.dataset.name;
         // Fallback: try the single-select options
         const singleOpt = document.querySelector(`.account-option[data-advertiser-id="${advertiserId}"]`);
-        if (singleOpt) return singleOpt.querySelector('.account-option-name')?.textContent || 'Account ' + advertiserId.slice(-6);
-        return 'Account ' + advertiserId.slice(-6);
+        if (singleOpt) return singleOpt.querySelector('.account-option-name')?.textContent || 'Account ' + advertiserId;
+        return 'Account ' + advertiserId;
     }
 
     function escapeHtml(text) {

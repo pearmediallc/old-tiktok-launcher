@@ -2238,7 +2238,7 @@ switch ($action) {
             $details = $advertiserDetails[$advId] ?? null;
             $accounts[] = [
                 'advertiser_id' => $advId,
-                'advertiser_name' => $details['name'] ?? 'Account ' . substr($advId, -6),
+                'advertiser_name' => $details['name'] ?? 'Account ' . $advId,
                 'is_current' => ($advId === $currentAdvertiserId),
                 'status' => $details['status'] ?? 'active'
             ];
@@ -2280,7 +2280,7 @@ switch ($action) {
             $details = $advertiserDetails[$advId] ?? null;
             $advertiserList[] = [
                 'advertiser_id' => $advId,
-                'advertiser_name' => $details['name'] ?? 'Account ' . substr($advId, -6),
+                'advertiser_name' => $details['name'] ?? 'Account ' . $advId,
                 'is_current' => ($advId === $currentAdvertiserId),
                 'status' => $details['status'] ?? 'active',
                 'company' => $details['company'] ?? null,

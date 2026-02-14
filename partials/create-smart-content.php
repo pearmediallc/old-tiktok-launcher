@@ -1015,9 +1015,9 @@
                             $details = $advertiserDetails[$advId] ?? null;
                             $advName = $details['name'] ?? '';
                             if ($advName && $advName !== 'Account') {
-                                $displayName = $advName . ' • ID: ' . substr($advId, -6);
+                                $displayName = $advName . ' • ID: ' . $advId;
                             } else {
-                                $displayName = 'Ad Account #' . $accountIndex . ' • ID: ' . substr($advId, -6);
+                                $displayName = 'Ad Account #' . $accountIndex . ' • ID: ' . $advId;
                             }
                             $isSelected = ($advId === $currentAdvertiserId);
                             $accountIndex++;
@@ -1049,7 +1049,7 @@
                     $details = $advertiserDetails[$currentAdvertiserId] ?? null;
                     $advName = $details['name'] ?? '';
                     if ($advName && $advName !== 'Account') {
-                        echo htmlspecialchars($advName . ' • ID: ' . substr($currentAdvertiserId, -6));
+                        echo htmlspecialchars($advName . ' • ID: ' . $currentAdvertiserId);
                     } else {
                         echo 'ID: ' . htmlspecialchars($currentAdvertiserId);
                     }
@@ -1215,7 +1215,7 @@
                     <span style="color: #64748b; margin-left: 5px;">Images</span>
                 </div>
                 <div style="margin-left: auto; color: #64748b; font-size: 13px;">
-                    Account: <strong id="media-account-id"><?php echo htmlspecialchars(substr($currentAdvertiserId, -6)); ?></strong>
+                    Account: <strong id="media-account-id"><?php echo htmlspecialchars($currentAdvertiserId); ?></strong>
                 </div>
             </div>
 

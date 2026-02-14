@@ -13,7 +13,7 @@
                 if ($currentAdvertiserId) {
                     $details = $advertiserDetails[$currentAdvertiserId] ?? null;
                     $name = $details['name'] ?? '';
-                    echo htmlspecialchars($name && $name !== 'Account' ? $name : 'Account ' . substr($currentAdvertiserId, -6));
+                    echo htmlspecialchars($name && $name !== 'Account' ? $name : 'Account ' . $currentAdvertiserId);
                 } else {
                     echo 'Select accounts...';
                 }
@@ -52,7 +52,7 @@
                        <?php echo $isCurrentAccount ? 'checked' : ''; ?>
                        onchange="updateMultiAccountSelection()">
                 <span class="option-name"><?php echo htmlspecialchars($advName); ?></span>
-                <span class="option-id">ID: <?php echo htmlspecialchars(substr($advId, -6)); ?></span>
+                <span class="option-id">ID: <?php echo htmlspecialchars($advId); ?></span>
             </label>
             <?php
                 $accountIndex++;
@@ -77,9 +77,9 @@
                        $details = $advertiserDetails[$currentAdvertiserId] ?? null;
                        $advName = $details['name'] ?? '';
                        if ($advName && $advName !== 'Account') {
-                           echo htmlspecialchars($advName . ' - ID: ' . substr($currentAdvertiserId, -6));
+                           echo htmlspecialchars($advName . ' - ID: ' . $currentAdvertiserId);
                        } else {
-                           echo htmlspecialchars('Account ' . substr($currentAdvertiserId, -6));
+                           echo htmlspecialchars('Account ' . $currentAdvertiserId);
                        }
                    }
                ?>"
@@ -91,9 +91,9 @@
                 $details = $advertiserDetails[$advId] ?? null;
                 $advName = $details['name'] ?? '';
                 if ($advName && $advName !== 'Account') {
-                    $displayName = $advName . ' - ID: ' . substr($advId, -6);
+                    $displayName = $advName . ' - ID: ' . $advId;
                 } else {
-                    $displayName = 'Ad Account #' . $accountIndex . ' - ID: ' . substr($advId, -6);
+                    $displayName = 'Ad Account #' . $accountIndex . ' - ID: ' . $advId;
                 }
                 $isSelected = ($advId === $currentAdvertiserId);
             ?>
