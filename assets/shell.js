@@ -657,6 +657,7 @@
                 })
             });
             const result = await response.json();
+            console.log('[Balance]', advertiserId, result);
             if (result.success && result.data) {
                 return {
                     balance: parseFloat(result.data.total_balance) || 0,
@@ -664,9 +665,11 @@
                     grantBalance: parseFloat(result.data.grant_balance) || 0,
                     currency: result.data.currency || 'USD'
                 };
+            } else {
+                console.warn('[Balance] API returned failure for', advertiserId, result.message, result.debug);
             }
         } catch (err) {
-            console.warn('Could not fetch balance for', advertiserId, err);
+            console.error('[Balance] Fetch error for', advertiserId, err);
         }
         return null;
     }

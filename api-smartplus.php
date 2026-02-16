@@ -653,6 +653,10 @@ switch ($action) {
         logSmartPlus("=== GET ACCOUNT BALANCE ===");
         logSmartPlus("Advertiser ID: $advertiserId");
 
+        // Release session lock early — balance is read-only, no session writes needed
+        // This allows parallel balance requests to execute concurrently
+        session_write_close();
+
         $balanceFound = false;
 
         // Try /advertiser/fund/get/ first (works for prepay accounts)
@@ -662,12 +666,23 @@ switch ($action) {
 
         logSmartPlus("Fund API Response: " . json_encode($result));
 
-        if ($result['code'] == 0 && isset($result['data'])) {
-            $balance = floatval($result['data']['balance'] ?? 0);
-            $grantBalance = floatval($result['data']['grant_balance'] ?? 0);
+        // Extract fund data — handle nested response formats
+        $fundData = null;
+        if (isset($result['code']) && $result['code'] == 0 && isset($result['data'])) {
+            $d = $result['data'];
+            if (isset($d['balance'])) {
+                $fundData = $d;
+            } elseif (isset($d['list'][0]['balance'])) {
+                $fundData = $d['list'][0];
+            }
+        }
+
+        if ($fundData) {
+            $balance = floatval($fundData['balance'] ?? 0);
+            $grantBalance = floatval($fundData['grant_balance'] ?? 0);
             $totalBalance = $balance + $grantBalance;
-            $currency = $result['data']['currency'] ?? 'USD';
-            $totalCost = floatval($result['data']['total_cost'] ?? 0);
+            $currency = $fundData['currency'] ?? 'USD';
+            $totalCost = floatval($fundData['total_cost'] ?? 0);
 
             echo json_encode([
                 'success' => true,
@@ -682,21 +697,41 @@ switch ($action) {
             ]);
             $balanceFound = true;
         } else {
-            logSmartPlus("Fund API failed, trying /advertiser/info/ fallback");
+            $fundError = $result['message'] ?? 'unknown error';
+            $fundCode = $result['code'] ?? -1;
+            logSmartPlus("Fund API failed (code: $fundCode): $fundError — trying /advertiser/info/ fallback");
         }
 
-        // Fallback: /advertiser/info/ (works for all account types including postpay)
+        // Fallback: /advertiser/info/ (works for all account types)
         if (!$balanceFound) {
+            // Use advertiser_ids (JSON array) — the documented parameter format
             $infoResult = makeApiCall('/advertiser/info/', [
-                'advertiser_id' => $advertiserId
+                'advertiser_ids' => json_encode([$advertiserId])
             ], $accessToken, 'GET');
 
             logSmartPlus("Advertiser Info Fallback Response: " . json_encode($infoResult));
 
-            if ($infoResult['code'] == 0 && isset($infoResult['data'])) {
-                $advData = $infoResult['data'];
+            // Extract advertiser data — handle all response formats:
+            // Format 1: data.list[0] (documented format with advertiser_ids)
+            // Format 2: data.advertiser_info (some API versions)
+            // Format 3: data directly (when using advertiser_id singular)
+            $advData = null;
+            if (isset($infoResult['code']) && $infoResult['code'] == 0 && isset($infoResult['data'])) {
+                $d = $infoResult['data'];
+                if (isset($d['list'][0])) {
+                    $advData = $d['list'][0];
+                } elseif (isset($d['advertiser_info'])) {
+                    $advData = $d['advertiser_info'];
+                } elseif (isset($d['balance']) || isset($d['currency'])) {
+                    $advData = $d;
+                }
+            }
+
+            if ($advData) {
                 $balance = floatval($advData['balance'] ?? 0);
                 $currency = $advData['currency'] ?? 'USD';
+
+                logSmartPlus("Info fallback success — balance: $balance, currency: $currency");
 
                 echo json_encode([
                     'success' => true,
@@ -712,10 +747,18 @@ switch ($action) {
             } else {
                 $errorMessage = $infoResult['message'] ?? $result['message'] ?? 'Unable to fetch account balance';
                 logSmartPlus("Both fund and info APIs failed: $errorMessage");
+                logSmartPlus("Fund raw: " . json_encode($result));
+                logSmartPlus("Info raw: " . json_encode($infoResult));
 
                 echo json_encode([
                     'success' => false,
-                    'message' => $errorMessage
+                    'message' => $errorMessage,
+                    'debug' => [
+                        'fund_code' => $result['code'] ?? null,
+                        'fund_msg' => $result['message'] ?? null,
+                        'info_code' => $infoResult['code'] ?? null,
+                        'info_msg' => $infoResult['message'] ?? null
+                    ]
                 ]);
             }
         }
