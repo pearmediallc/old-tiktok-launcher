@@ -340,15 +340,20 @@
             const activeCount = account.campaigns.filter(c => c.operation_status === 'ENABLE').length;
             const inactiveCount = account.campaigns.filter(c => c.operation_status === 'DISABLE').length;
 
-            // Get balance info if available
+            // Get balance info if available — use campaign spend as fallback for totalCost
             const balances = window.shellState.accountBalances || {};
             const bal = balances[account.advertiserId];
+            const spendAmount = bal ? (bal.totalCost > 0 ? bal.totalCost : totalSpend) : totalSpend;
+            const spendCurrency = bal ? bal.currency : 'USD';
             const balanceHtml = bal ? `
                 <div class="account-group-balance-card">
-                    <span class="agb-item agb-available">Bal: ${formatCurrency(bal.balance, bal.currency)}</span>
-                    <span class="agb-item agb-spent">Spent: ${formatCurrency(bal.totalCost, bal.currency)}</span>
-                    ${bal.grantBalance > 0 ? `<span class="agb-item agb-credits">Credits: ${formatCurrency(bal.grantBalance, bal.currency)}</span>` : ''}
-                </div>` : '';
+                    <span class="agb-item agb-available">Bal: ${formatCurrency(bal.balance, spendCurrency)}</span>
+                    <span class="agb-item agb-spent">Spent: ${formatCurrency(spendAmount, spendCurrency)}</span>
+                    ${bal.grantBalance > 0 ? `<span class="agb-item agb-credits">Credits: ${formatCurrency(bal.grantBalance, spendCurrency)}</span>` : ''}
+                </div>` : `
+                <div class="account-group-balance-card">
+                    <span class="agb-item agb-spent">Spent: $${totalSpend.toFixed(2)}</span>
+                </div>`;
 
             // Render group
             return `
@@ -358,7 +363,6 @@
                         <div class="account-group-meta">
                             ${balanceHtml}
                             <span class="account-group-count">${campaigns.length} campaign${campaigns.length !== 1 ? 's' : ''}</span>
-                            <span class="account-group-spend">Total Spend: $${totalSpend.toFixed(2)}</span>
                         </div>
                     </div>
                     <div class="account-group-body">

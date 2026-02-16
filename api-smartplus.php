@@ -653,6 +653,9 @@ switch ($action) {
         logSmartPlus("=== GET ACCOUNT BALANCE ===");
         logSmartPlus("Advertiser ID: $advertiserId");
 
+        $balanceFound = false;
+
+        // Try /advertiser/fund/get/ first (works for prepay accounts)
         $result = makeApiCall('/advertiser/fund/get/', [
             'advertiser_id' => $advertiserId
         ], $accessToken, 'GET');
@@ -674,19 +677,47 @@ switch ($action) {
                     'total_balance' => $totalBalance,
                     'total_cost' => $totalCost,
                     'currency' => $currency,
-                    'raw' => $result['data']
+                    'source' => 'fund'
                 ]
             ]);
+            $balanceFound = true;
         } else {
-            // If fund API fails, might be a payment method issue
-            $errorMessage = $result['message'] ?? 'Unable to fetch account balance';
-            logSmartPlus("Fund API Error: $errorMessage");
+            logSmartPlus("Fund API failed, trying /advertiser/info/ fallback");
+        }
 
-            echo json_encode([
-                'success' => false,
-                'message' => $errorMessage,
-                'payment_issue' => true
-            ]);
+        // Fallback: /advertiser/info/ (works for all account types including postpay)
+        if (!$balanceFound) {
+            $infoResult = makeApiCall('/advertiser/info/', [
+                'advertiser_id' => $advertiserId
+            ], $accessToken, 'GET');
+
+            logSmartPlus("Advertiser Info Fallback Response: " . json_encode($infoResult));
+
+            if ($infoResult['code'] == 0 && isset($infoResult['data'])) {
+                $advData = $infoResult['data'];
+                $balance = floatval($advData['balance'] ?? 0);
+                $currency = $advData['currency'] ?? 'USD';
+
+                echo json_encode([
+                    'success' => true,
+                    'data' => [
+                        'balance' => $balance,
+                        'grant_balance' => 0,
+                        'total_balance' => $balance,
+                        'total_cost' => 0,
+                        'currency' => $currency,
+                        'source' => 'info'
+                    ]
+                ]);
+            } else {
+                $errorMessage = $infoResult['message'] ?? $result['message'] ?? 'Unable to fetch account balance';
+                logSmartPlus("Both fund and info APIs failed: $errorMessage");
+
+                echo json_encode([
+                    'success' => false,
+                    'message' => $errorMessage
+                ]);
+            }
         }
         break;
 
