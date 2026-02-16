@@ -2399,56 +2399,64 @@ try {
                     // Release session lock before polling to prevent blocking concurrent requests
                     session_write_close();
 
-                    $config = getConfig();
-                    $pollAccessToken = $config['access_token'];
-                    $pollAdvertiserId = $upload_advertiser_id;
+                    try {
+                        $config = getConfig();
+                        $pollAccessToken = $config['access_token'];
+                        $pollAdvertiserId = $upload_advertiser_id;
 
-                    for ($attempt = 1; $attempt <= 4; $attempt++) {
-                        sleep(3); // Wait 3 seconds between attempts
-                        logToFile("Poll attempt $attempt/4 for video_id...");
+                        for ($attempt = 1; $attempt <= 4; $attempt++) {
+                            sleep(3); // Wait 3 seconds between attempts
+                            logToFile("Poll attempt $attempt/4 for video_id...");
 
-                        $searchUrl = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/search/';
-                        $searchParams = http_build_query([
-                            'advertiser_id' => $pollAdvertiserId,
-                            'page' => 1,
-                            'page_size' => 30
-                        ]);
+                            $searchUrl = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/search/';
+                            $searchParams = http_build_query([
+                                'advertiser_id' => $pollAdvertiserId,
+                                'page' => 1,
+                                'page_size' => 30
+                            ]);
 
-                        $pollCh = curl_init($searchUrl . '?' . $searchParams);
-                        curl_setopt_array($pollCh, [
-                            CURLOPT_RETURNTRANSFER => true,
-                            CURLOPT_HTTPHEADER => ['Access-Token: ' . $pollAccessToken],
-                            CURLOPT_TIMEOUT => 15,
-                            CURLOPT_SSL_VERIFYPEER => true,
-                            CURLOPT_SSL_VERIFYHOST => 2
-                        ]);
-                        $pollResponse = curl_exec($pollCh);
-                        curl_close($pollCh);
+                            $pollCh = curl_init($searchUrl . '?' . $searchParams);
+                            curl_setopt_array($pollCh, [
+                                CURLOPT_RETURNTRANSFER => true,
+                                CURLOPT_HTTPHEADER => ['Access-Token: ' . $pollAccessToken],
+                                CURLOPT_TIMEOUT => 15,
+                                CURLOPT_SSL_VERIFYPEER => true,
+                                CURLOPT_SSL_VERIFYHOST => 2
+                            ]);
+                            $pollResponse = curl_exec($pollCh);
+                            curl_close($pollCh);
 
-                        $pollData = json_decode($pollResponse, true);
-                        if (isset($pollData['data']['list']) && is_array($pollData['data']['list'])) {
-                            // Search for our video by filename (most recent first)
-                            foreach ($pollData['data']['list'] as $video) {
-                                $videoName = $video['video_name'] ?? $video['file_name'] ?? '';
-                                if ($videoName === $fileName && !empty($video['video_id'])) {
-                                    $videoId = $video['video_id'];
-                                    $hasVideoId = true;
-                                    $success = true;
-                                    if (is_array($responseData)) {
-                                        $responseData['video_id'] = $videoId;
-                                    } else {
-                                        $responseData = ['video_id' => $videoId];
+                            $pollData = json_decode($pollResponse, true);
+                            if (isset($pollData['data']['list']) && is_array($pollData['data']['list'])) {
+                                // Search for our video by filename (most recent first)
+                                foreach ($pollData['data']['list'] as $video) {
+                                    $videoName = $video['video_name'] ?? $video['file_name'] ?? '';
+                                    if ($videoName === $fileName && !empty($video['video_id'])) {
+                                        $videoId = $video['video_id'];
+                                        $hasVideoId = true;
+                                        $success = true;
+                                        if (is_array($responseData)) {
+                                            $responseData['video_id'] = $videoId;
+                                        } else {
+                                            $responseData = ['video_id' => $videoId];
+                                        }
+                                        logToFile("POLL SUCCESS: Found video_id $videoId on attempt $attempt");
+                                        break 2; // Exit both foreach and for loops
                                     }
-                                    logToFile("POLL SUCCESS: Found video_id $videoId on attempt $attempt");
-                                    break 2; // Exit both foreach and for loops
                                 }
                             }
+                            logToFile("Poll attempt $attempt: video not found yet");
                         }
-                        logToFile("Poll attempt $attempt: video not found yet");
-                    }
 
-                    if (!$hasVideoId) {
-                        logToFile("POLL EXHAUSTED: Could not resolve video_id after 4 attempts");
+                        if (!$hasVideoId) {
+                            logToFile("POLL EXHAUSTED: Could not resolve video_id after 4 attempts");
+                            // Upload was accepted by TikTok, just couldn't resolve video_id yet
+                            $accepted = true;
+                        }
+                    } catch (Exception $pollError) {
+                        // Polling failed but upload was already accepted by TikTok
+                        logToFile("POLL ERROR (non-fatal): " . $pollError->getMessage());
+                        $accepted = true; // Treat as accepted/processing
                     }
                 }
 
@@ -2705,54 +2713,60 @@ try {
                     // Release session lock before polling to prevent blocking concurrent requests
                     session_write_close();
 
-                    $pollAccessToken = $config['access_token'];
+                    try {
+                        $pollAccessToken = $config['access_token'];
 
-                    for ($attempt = 1; $attempt <= 4; $attempt++) {
-                        sleep(3);
-                        logToFile("Poll attempt $attempt/4 for video_id on $targetAdvertiserId...");
+                        for ($attempt = 1; $attempt <= 4; $attempt++) {
+                            sleep(3);
+                            logToFile("Poll attempt $attempt/4 for video_id on $targetAdvertiserId...");
 
-                        $searchUrl = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/search/';
-                        $searchParams = http_build_query([
-                            'advertiser_id' => $targetAdvertiserId,
-                            'page' => 1,
-                            'page_size' => 30
-                        ]);
+                            $searchUrl = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/search/';
+                            $searchParams = http_build_query([
+                                'advertiser_id' => $targetAdvertiserId,
+                                'page' => 1,
+                                'page_size' => 30
+                            ]);
 
-                        $pollCh = curl_init($searchUrl . '?' . $searchParams);
-                        curl_setopt_array($pollCh, [
-                            CURLOPT_RETURNTRANSFER => true,
-                            CURLOPT_HTTPHEADER => ['Access-Token: ' . $pollAccessToken],
-                            CURLOPT_TIMEOUT => 15,
-                            CURLOPT_SSL_VERIFYPEER => true,
-                            CURLOPT_SSL_VERIFYHOST => 2
-                        ]);
-                        $pollResponse = curl_exec($pollCh);
-                        curl_close($pollCh);
+                            $pollCh = curl_init($searchUrl . '?' . $searchParams);
+                            curl_setopt_array($pollCh, [
+                                CURLOPT_RETURNTRANSFER => true,
+                                CURLOPT_HTTPHEADER => ['Access-Token: ' . $pollAccessToken],
+                                CURLOPT_TIMEOUT => 15,
+                                CURLOPT_SSL_VERIFYPEER => true,
+                                CURLOPT_SSL_VERIFYHOST => 2
+                            ]);
+                            $pollResponse = curl_exec($pollCh);
+                            curl_close($pollCh);
 
-                        $pollData = json_decode($pollResponse, true);
-                        if (isset($pollData['data']['list']) && is_array($pollData['data']['list'])) {
-                            foreach ($pollData['data']['list'] as $video) {
-                                $videoName = $video['video_name'] ?? $video['file_name'] ?? '';
-                                if ($videoName === $fileName && !empty($video['video_id'])) {
-                                    $videoId = $video['video_id'];
-                                    $hasVideoId = true;
-                                    $success = true;
-                                    $accepted = false;
-                                    if (is_array($responseData)) {
-                                        $responseData['video_id'] = $videoId;
-                                    } else {
-                                        $responseData = ['video_id' => $videoId];
+                            $pollData = json_decode($pollResponse, true);
+                            if (isset($pollData['data']['list']) && is_array($pollData['data']['list'])) {
+                                foreach ($pollData['data']['list'] as $video) {
+                                    $videoName = $video['video_name'] ?? $video['file_name'] ?? '';
+                                    if ($videoName === $fileName && !empty($video['video_id'])) {
+                                        $videoId = $video['video_id'];
+                                        $hasVideoId = true;
+                                        $success = true;
+                                        $accepted = false;
+                                        if (is_array($responseData)) {
+                                            $responseData['video_id'] = $videoId;
+                                        } else {
+                                            $responseData = ['video_id' => $videoId];
+                                        }
+                                        logToFile("POLL SUCCESS: Found video_id $videoId on attempt $attempt for $targetAdvertiserId");
+                                        break 2;
                                     }
-                                    logToFile("POLL SUCCESS: Found video_id $videoId on attempt $attempt for $targetAdvertiserId");
-                                    break 2;
                                 }
                             }
+                            logToFile("Poll attempt $attempt: video not found yet for $targetAdvertiserId");
                         }
-                        logToFile("Poll attempt $attempt: video not found yet for $targetAdvertiserId");
-                    }
 
-                    if (!$hasVideoId) {
-                        logToFile("POLL EXHAUSTED: Could not resolve video_id for $targetAdvertiserId after 4 attempts");
+                        if (!$hasVideoId) {
+                            logToFile("POLL EXHAUSTED: Could not resolve video_id for $targetAdvertiserId after 4 attempts");
+                            $accepted = true;
+                        }
+                    } catch (Exception $pollError) {
+                        logToFile("POLL ERROR (non-fatal) for $targetAdvertiserId: " . $pollError->getMessage());
+                        $accepted = true;
                     }
                 }
 

@@ -8517,62 +8517,91 @@ async function uploadMediaVideo(file, index) {
         xhr.addEventListener('load', () => {
             clearTimeout(timeoutId);
 
-            if (xhr.status >= 200 && xhr.status < 300) {
+            // Try to parse response regardless of HTTP status
+            // (polling errors can return 500 even when upload succeeded)
+            try {
+                let result;
                 try {
-                    let result;
-                    try {
-                        result = JSON.parse(xhr.responseText);
-                    } catch (e) {
-                        const jsonMatch = xhr.responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
-                        if (jsonMatch) {
-                            result = JSON.parse(jsonMatch[0]);
-                        } else {
+                    result = JSON.parse(xhr.responseText);
+                } catch (e) {
+                    const jsonMatch = xhr.responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
+                    if (jsonMatch) {
+                        result = JSON.parse(jsonMatch[0]);
+                    } else {
+                        // No parseable JSON — fall back to HTTP status message
+                        if (xhr.status >= 200 && xhr.status < 300) {
                             throw new Error('Invalid server response');
+                        } else if (uploadComplete) {
+                            // Upload reached 100% — video likely accepted, server error during processing
+                            mediaLibraryState.uploadProcessing++;
+                            updateMediaUploadStatus(itemId, 'processing', '⏳ Processing (check library)', '#fef3c7', '#d97706', 100);
+                            addLog('info', `Video likely accepted but server returned ${xhr.status} during processing: ${newFileName}`);
+                            updateMediaUploadProgress();
+                            resolve({ success: true, processing: true });
+                            return;
+                        } else {
+                            handleUploadError(`Server error (${xhr.status})`);
+                            return;
                         }
                     }
+                }
 
-                    console.log('Upload response:', result);
+                console.log('Upload response:', result);
 
-                    if (result.success && result.data?.video_id) {
-                        // Immediate success with video_id
-                        mediaLibraryState.uploadCompleted++;
-                        updateMediaUploadStatus(itemId, 'success', '✓ Uploaded', '#dcfce7', '#16a34a', 100);
-                        addLog('success', `Video uploaded: ${result.data.video_id}`);
+                if (result.success && result.data?.video_id) {
+                    // Immediate success with video_id
+                    mediaLibraryState.uploadCompleted++;
+                    updateMediaUploadStatus(itemId, 'success', '✓ Uploaded', '#dcfce7', '#16a34a', 100);
+                    addLog('success', `Video uploaded: ${result.data.video_id}`);
 
-                        mediaLibraryState.videos.unshift({
-                            video_id: result.data.video_id,
-                            name: newFileName,
-                            // Use pre-generated thumbnail for instant preview
-                            thumbnail: thumbnailUrl || '',
-                            duration: 0,
-                            create_time: new Date().toISOString()
-                        });
+                    mediaLibraryState.videos.unshift({
+                        video_id: result.data.video_id,
+                        name: newFileName,
+                        // Use pre-generated thumbnail for instant preview
+                        thumbnail: thumbnailUrl || '',
+                        duration: 0,
+                        create_time: new Date().toISOString()
+                    });
 
-                        updateMediaUploadProgress();
-                        resolve({ success: true, video_id: result.data.video_id });
-                    } else if (result.success && result.processing) {
-                        // Video accepted but processing - count as SUCCESS!
-                        mediaLibraryState.uploadProcessing++;
-                        updateMediaUploadStatus(itemId, 'processing', '⏳ Processing', '#fef3c7', '#d97706', 100);
-                        addLog('info', `Video accepted, processing: ${newFileName}`);
-                        updateMediaUploadProgress();
-                        resolve({ success: true, processing: true });
-                    } else if (result.success) {
-                        // Success but no video_id (legacy response)
-                        mediaLibraryState.uploadProcessing++;
-                        updateMediaUploadStatus(itemId, 'processing', '⏳ Accepted', '#fef3c7', '#d97706', 100);
-                        addLog('info', `Video accepted: ${newFileName}`);
-                        updateMediaUploadProgress();
-                        resolve({ success: true, processing: true });
-                    } else {
-                        // Actual failure
-                        handleUploadError(result.message || 'Upload failed');
-                    }
-                } catch (e) {
+                    updateMediaUploadProgress();
+                    resolve({ success: true, video_id: result.data.video_id });
+                } else if (result.success && result.processing) {
+                    // Video accepted but processing - count as SUCCESS!
+                    mediaLibraryState.uploadProcessing++;
+                    updateMediaUploadStatus(itemId, 'processing', '⏳ Processing', '#fef3c7', '#d97706', 100);
+                    addLog('info', `Video accepted, processing: ${newFileName}`);
+                    updateMediaUploadProgress();
+                    resolve({ success: true, processing: true });
+                } else if (result.success) {
+                    // Success but no video_id (legacy response)
+                    mediaLibraryState.uploadProcessing++;
+                    updateMediaUploadStatus(itemId, 'processing', '⏳ Accepted', '#fef3c7', '#d97706', 100);
+                    addLog('info', `Video accepted: ${newFileName}`);
+                    updateMediaUploadProgress();
+                    resolve({ success: true, processing: true });
+                } else if (uploadComplete) {
+                    // Upload data was fully sent but server reported failure
+                    // Video may still have been accepted — show as processing
+                    mediaLibraryState.uploadProcessing++;
+                    updateMediaUploadStatus(itemId, 'processing', '⏳ Check library', '#fef3c7', '#d97706', 100);
+                    addLog('warning', `Upload completed but server error: ${result.message || 'Unknown'} — video may still appear in library`);
+                    updateMediaUploadProgress();
+                    resolve({ success: true, processing: true });
+                } else {
+                    // Actual failure
+                    handleUploadError(result.message || 'Upload failed');
+                }
+            } catch (e) {
+                if (uploadComplete) {
+                    // Upload reached 100% — treat as processing
+                    mediaLibraryState.uploadProcessing++;
+                    updateMediaUploadStatus(itemId, 'processing', '⏳ Processing (check library)', '#fef3c7', '#d97706', 100);
+                    addLog('warning', `Upload completed but response error — video may appear in library after refresh`);
+                    updateMediaUploadProgress();
+                    resolve({ success: true, processing: true });
+                } else {
                     handleUploadError('Invalid server response');
                 }
-            } else {
-                handleUploadError(`Server error (${xhr.status})`);
             }
         });
 
@@ -8720,6 +8749,12 @@ async function loadCampaigns() {
 
             // Apply current filter and render
             applyFiltersAndRender();
+
+            // Update shell balance display with campaign spend data
+            if (typeof window.updateBalanceFromCampaigns === 'function') {
+                const totalSpend = state.campaignsList.reduce((sum, c) => sum + (parseFloat(c.spend) || 0), 0);
+                window.updateBalanceFromCampaigns(totalSpend);
+            }
         } else {
             throw new Error(result.message || 'Failed to load campaigns');
         }

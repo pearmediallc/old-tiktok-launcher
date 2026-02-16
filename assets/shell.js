@@ -639,10 +639,39 @@
                 // Store for later use
                 window.shellState.accountBalances = window.shellState.accountBalances || {};
                 window.shellState.accountBalances[advertiserId] = { balance, totalCost, grantBalance, currency };
+            } else {
+                console.warn('[Balance] API returned failure:', result.message, result.debug);
+                // Still show the display so user knows balance couldn't be loaded
+                document.getElementById('balance-available').textContent = '--';
+                document.getElementById('balance-total-spent').textContent = '--';
+                display.style.display = 'flex';
             }
         } catch (err) {
             console.warn('Could not load account balance:', err);
         }
+    };
+
+    // Update the top-right balance display with campaign spend data
+    // Called by smart-campaign.js after campaigns are loaded
+    window.updateBalanceFromCampaigns = function(totalSpend) {
+        const display = document.getElementById('account-balance-display');
+        if (!display) return;
+
+        const advertiserId = window.TIKTOK_ADVERTISER_ID || '';
+        const balances = window.shellState.accountBalances || {};
+        const bal = balances[advertiserId];
+        const currency = bal ? bal.currency : 'USD';
+
+        // Update Total Spent: use API total_cost if available, otherwise campaign spend
+        const spentEl = document.getElementById('balance-total-spent');
+        if (spentEl) {
+            const apiTotalCost = bal ? bal.totalCost : 0;
+            const spendAmount = apiTotalCost > 0 ? apiTotalCost : totalSpend;
+            spentEl.textContent = formatCurrency(spendAmount, currency);
+        }
+
+        // Make sure the display is visible
+        display.style.display = 'flex';
     };
 
     // Fetch balance for a specific advertiser (used by multi-account view)
