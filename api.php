@@ -2233,13 +2233,11 @@ try {
             break;
 
         case 'upload_video':
+            $tiktokAccepted = false; // Safety flag: set true once TikTok API returns code 0
             try {
                 // Add memory and execution time limits for large video uploads
                 ini_set('memory_limit', '512M');
                 ini_set('max_execution_time', '300'); // 5 minutes
-                set_error_handler(function($errno, $errstr, $errfile, $errline) {
-                    throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
-                });
 
                 // Allow override of advertiser_id via POST for bulk uploads to specific accounts
                 $upload_advertiser_id = $advertiser_id; // Default from session
@@ -2385,6 +2383,11 @@ try {
                 $apiCodeSuccess = (empty($response->code) || $response->code == 0);
                 $hasVideoId = !empty($videoId);
                 $isPending = ($processingStatus === 'pending' || $processingStatus === 'processing');
+
+                // Mark that TikTok accepted the upload — used by catch block as safety net
+                if ($apiCodeSuccess) {
+                    $tiktokAccepted = true;
+                }
 
                 // True success requires BOTH: API code success AND video_id returned
                 $success = $apiCodeSuccess && $hasVideoId;
@@ -2560,18 +2563,28 @@ try {
                 outputJsonResponse($jsonResponse);
 
             } catch (\Throwable $videoError) {
-                restore_error_handler();
                 logToFile("Video Upload Error: " . $videoError->getMessage());
                 logToFile("Video Upload Stack Trace: " . $videoError->getTraceAsString());
                 logToFile("Error Type: " . get_class($videoError));
 
-                outputJsonResponse([
-                    'success' => false,
-                    'message' => 'Video upload failed: ' . $videoError->getMessage(),
-                    'error' => $videoError->getMessage()
-                ]);
+                // Safety net: if TikTok already accepted the video, don't tell frontend it failed
+                if ($tiktokAccepted) {
+                    logToFile("TikTok already accepted the upload — returning success despite post-upload error");
+                    outputJsonResponse([
+                        'success' => true,
+                        'processing' => true,
+                        'data' => isset($responseData) ? $responseData : null,
+                        'message' => 'Video accepted! Processing in background - will appear in library in 1-2 minutes.',
+                        'code' => 0
+                    ]);
+                } else {
+                    outputJsonResponse([
+                        'success' => false,
+                        'message' => 'Video upload failed: ' . $videoError->getMessage(),
+                        'error' => $videoError->getMessage()
+                    ]);
+                }
             }
-            restore_error_handler();
             break;
 
         case 'upload_video_to_advertiser':
