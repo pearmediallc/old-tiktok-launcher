@@ -2395,6 +2395,10 @@ try {
                 // POLLING: If upload accepted but no video_id, poll TikTok to resolve it
                 if ($apiCodeSuccess && !$hasVideoId && $fileName) {
                     logToFile("No video_id returned - polling TikTok library to resolve by filename: $fileName");
+
+                    // Release session lock before polling to prevent blocking concurrent requests
+                    session_write_close();
+
                     $config = getConfig();
                     $pollAccessToken = $config['access_token'];
                     $pollAdvertiserId = $upload_advertiser_id;
@@ -2697,6 +2701,10 @@ try {
                 // POLLING: If upload accepted but no video_id, poll TikTok to resolve it
                 if ($apiCodeSuccess && !$hasVideoId && $fileName) {
                     logToFile("No video_id for $targetAdvertiserId - polling to resolve by filename: $fileName");
+
+                    // Release session lock before polling to prevent blocking concurrent requests
+                    session_write_close();
+
                     $pollAccessToken = $config['access_token'];
 
                     for ($attempt = 1; $attempt <= 4; $attempt++) {

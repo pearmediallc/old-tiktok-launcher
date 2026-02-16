@@ -343,9 +343,12 @@
             // Get balance info if available
             const balances = window.shellState.accountBalances || {};
             const bal = balances[account.advertiserId];
-            const balanceHtml = bal
-                ? `<span class="account-group-balance">Balance: ${formatCurrency(bal.balance, bal.currency)}</span>`
-                : '';
+            const balanceHtml = bal ? `
+                <div class="account-group-balance-card">
+                    <span class="agb-item agb-available">Bal: ${formatCurrency(bal.balance, bal.currency)}</span>
+                    <span class="agb-item agb-spent">Spent: ${formatCurrency(bal.totalCost, bal.currency)}</span>
+                    ${bal.grantBalance > 0 ? `<span class="agb-item agb-credits">Credits: ${formatCurrency(bal.grantBalance, bal.currency)}</span>` : ''}
+                </div>` : '';
 
             // Render group
             return `

@@ -420,15 +420,30 @@ body.app-shell .main-content .header {
     color: #2563eb;
 }
 
-/* Balance in multi-account group header */
-.account-group-balance {
-    font-size: 13px;
+/* Balance card in multi-account group header */
+.account-group-balance-card {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.agb-item {
+    font-size: 12px;
     font-weight: 600;
-    color: #059669;
-    background: #ecfdf5;
     padding: 3px 10px;
     border-radius: 6px;
     white-space: nowrap;
+}
+.agb-available {
+    background: #ecfdf5;
+    color: #059669;
+}
+.agb-spent {
+    background: #fef3c7;
+    color: #b45309;
+}
+.agb-credits {
+    background: #eff6ff;
+    color: #2563eb;
 }
 
 /* ============================================
