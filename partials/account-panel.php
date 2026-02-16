@@ -116,21 +116,5 @@
         <span class="count"><?php echo count($advertiserIds); ?></span>
         accounts linked
     </div>
-
-    <!-- Account Balance / Spending Info -->
-    <div class="account-balance-display" id="account-balance-display" style="display:none;">
-        <div class="balance-item balance-available">
-            <span class="balance-label">Available Balance</span>
-            <span class="balance-value" id="balance-available">--</span>
-        </div>
-        <div class="balance-item balance-spent">
-            <span class="balance-label">Total Spent</span>
-            <span class="balance-value" id="balance-total-spent">--</span>
-        </div>
-        <div class="balance-item balance-grant" id="balance-grant-wrapper" style="display:none;">
-            <span class="balance-label">Credits</span>
-            <span class="balance-value" id="balance-grant">--</span>
-        </div>
-    </div>
 </div>
 <?php endif; ?>

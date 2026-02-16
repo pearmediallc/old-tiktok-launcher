@@ -79,6 +79,9 @@
          SINGLE ACCOUNT CAMPAIGNS
          ============================ -->
     <div id="single-account-campaigns">
+        <!-- Balance card for single account (populated by JS) -->
+        <div id="single-account-balance-card" class="single-account-balance-card" style="display:none;"></div>
+
         <div class="campaign-metrics-table-container">
             <!-- Loading State -->
             <div class="campaign-loading" id="campaign-loading">

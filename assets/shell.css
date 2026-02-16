@@ -420,6 +420,23 @@ body.app-shell .main-content .header {
     color: #2563eb;
 }
 
+/* Single account balance card (campaigns view) */
+.single-account-balance-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    margin-bottom: 16px;
+}
+.single-account-balance-card .sabc-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+}
+
 /* Balance card in multi-account group header */
 .account-group-balance-card {
     display: flex;

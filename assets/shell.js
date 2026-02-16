@@ -598,13 +598,10 @@
         return sym + amount.toFixed(2);
     }
 
-    // Fetch and display balance for the currently selected account
+    // Fetch balance for the currently selected account (stores for later use)
     window.loadAccountBalance = async function(advertiserId) {
         advertiserId = advertiserId || window.TIKTOK_ADVERTISER_ID || '';
         if (!advertiserId) return;
-
-        const display = document.getElementById('account-balance-display');
-        if (!display) return;
 
         try {
             const response = await fetch('api-smartplus.php', {
@@ -623,55 +620,46 @@
                 const grantBalance = parseFloat(result.data.grant_balance) || 0;
                 const currency = result.data.currency || 'USD';
 
-                // Update display
-                document.getElementById('balance-available').textContent = formatCurrency(balance, currency);
-                document.getElementById('balance-total-spent').textContent = formatCurrency(totalCost, currency);
-
-                if (grantBalance > 0) {
-                    document.getElementById('balance-grant').textContent = formatCurrency(grantBalance, currency);
-                    document.getElementById('balance-grant-wrapper').style.display = '';
-                } else {
-                    document.getElementById('balance-grant-wrapper').style.display = 'none';
-                }
-
-                display.style.display = 'flex';
-
-                // Store for later use
+                // Store for later use by inline balance cards
                 window.shellState.accountBalances = window.shellState.accountBalances || {};
                 window.shellState.accountBalances[advertiserId] = { balance, totalCost, grantBalance, currency };
             } else {
                 console.warn('[Balance] API returned failure:', result.message, result.debug);
-                // Still show the display so user knows balance couldn't be loaded
-                document.getElementById('balance-available').textContent = '--';
-                document.getElementById('balance-total-spent').textContent = '--';
-                display.style.display = 'flex';
             }
         } catch (err) {
             console.warn('Could not load account balance:', err);
         }
     };
 
-    // Update the top-right balance display with campaign spend data
+    // Show balance card inline above campaigns (single account mode)
     // Called by smart-campaign.js after campaigns are loaded
-    window.updateBalanceFromCampaigns = function(totalSpend) {
-        const display = document.getElementById('account-balance-display');
-        if (!display) return;
+    window.updateBalanceFromCampaigns = function(totalSpend, campaignCount) {
+        const card = document.getElementById('single-account-balance-card');
+        if (!card) return;
 
         const advertiserId = window.TIKTOK_ADVERTISER_ID || '';
         const balances = window.shellState.accountBalances || {};
         const bal = balances[advertiserId];
         const currency = bal ? bal.currency : 'USD';
 
-        // Update Total Spent: use API total_cost if available, otherwise campaign spend
-        const spentEl = document.getElementById('balance-total-spent');
-        if (spentEl) {
-            const apiTotalCost = bal ? bal.totalCost : 0;
-            const spendAmount = apiTotalCost > 0 ? apiTotalCost : totalSpend;
-            spentEl.textContent = formatCurrency(spendAmount, currency);
+        // Total Spent: use API total_cost if > 0, otherwise campaign spend
+        const apiTotalCost = bal ? bal.totalCost : 0;
+        const spendAmount = apiTotalCost > 0 ? apiTotalCost : totalSpend;
+
+        let html = '';
+        if (bal && bal.balance > 0) {
+            html += `<span class="agb-item agb-available">Bal: ${formatCurrency(bal.balance, currency)}</span>`;
+        }
+        html += `<span class="agb-item agb-spent">Spent: ${formatCurrency(spendAmount, currency)}</span>`;
+        if (bal && bal.grantBalance > 0) {
+            html += `<span class="agb-item agb-credits">Credits: ${formatCurrency(bal.grantBalance, currency)}</span>`;
+        }
+        if (campaignCount !== undefined) {
+            html += `<span class="agb-item" style="background:#f1f5f9;color:#475569;">${campaignCount} campaign${campaignCount !== 1 ? 's' : ''}</span>`;
         }
 
-        // Make sure the display is visible
-        display.style.display = 'flex';
+        card.innerHTML = html;
+        card.style.display = 'flex';
     };
 
     // Fetch balance for a specific advertiser (used by multi-account view)

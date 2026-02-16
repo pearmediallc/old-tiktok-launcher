@@ -2237,6 +2237,9 @@ try {
                 // Add memory and execution time limits for large video uploads
                 ini_set('memory_limit', '512M');
                 ini_set('max_execution_time', '300'); // 5 minutes
+                set_error_handler(function($errno, $errstr, $errfile, $errline) {
+                    throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
+                });
 
                 // Allow override of advertiser_id via POST for bulk uploads to specific accounts
                 $upload_advertiser_id = $advertiser_id; // Default from session
@@ -2404,9 +2407,9 @@ try {
                         $pollAccessToken = $config['access_token'];
                         $pollAdvertiserId = $upload_advertiser_id;
 
-                        for ($attempt = 1; $attempt <= 4; $attempt++) {
-                            sleep(3); // Wait 3 seconds between attempts
-                            logToFile("Poll attempt $attempt/4 for video_id...");
+                        for ($attempt = 1; $attempt <= 2; $attempt++) {
+                            sleep(2); // Wait 2 seconds between attempts
+                            logToFile("Poll attempt $attempt/2 for video_id...");
 
                             $searchUrl = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/search/';
                             $searchParams = http_build_query([
@@ -2556,9 +2559,11 @@ try {
 
                 outputJsonResponse($jsonResponse);
 
-            } catch (Exception $videoError) {
-                logToFile("Video Upload Exception: " . $videoError->getMessage());
+            } catch (\Throwable $videoError) {
+                restore_error_handler();
+                logToFile("Video Upload Error: " . $videoError->getMessage());
                 logToFile("Video Upload Stack Trace: " . $videoError->getTraceAsString());
+                logToFile("Error Type: " . get_class($videoError));
 
                 outputJsonResponse([
                     'success' => false,
@@ -2566,6 +2571,7 @@ try {
                     'error' => $videoError->getMessage()
                 ]);
             }
+            restore_error_handler();
             break;
 
         case 'upload_video_to_advertiser':
@@ -2844,8 +2850,8 @@ try {
                     ]);
                 }
 
-            } catch (Exception $e) {
-                logToFile("Upload to advertiser exception: " . $e->getMessage());
+            } catch (\Throwable $e) {
+                logToFile("Upload to advertiser error: " . $e->getMessage() . " [" . get_class($e) . "]");
                 outputJsonResponse([
                     'success' => false,
                     'message' => $e->getMessage(),
@@ -4819,11 +4825,12 @@ try {
             ]);
     }
 
-} catch (Exception $e) {
-    logToFile("EXCEPTION: " . $e->getMessage());
+} catch (\Throwable $e) {
+    logToFile("UNHANDLED ERROR: " . $e->getMessage() . " [" . get_class($e) . "]");
     logToFile("Stack Trace: " . $e->getTraceAsString());
 
-    http_response_code(500);
+    // Return JSON error without setting HTTP 500 — let the frontend parse the JSON response
+    // Setting 500 causes XHR to reject before parsing the body
     outputJsonResponse([
         'success' => false,
         'message' => $e->getMessage()

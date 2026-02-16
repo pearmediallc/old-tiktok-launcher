@@ -8750,10 +8750,10 @@ async function loadCampaigns() {
             // Apply current filter and render
             applyFiltersAndRender();
 
-            // Update shell balance display with campaign spend data
+            // Update shell balance card with campaign spend data
             if (typeof window.updateBalanceFromCampaigns === 'function') {
                 const totalSpend = state.campaignsList.reduce((sum, c) => sum + (parseFloat(c.spend) || 0), 0);
-                window.updateBalanceFromCampaigns(totalSpend);
+                window.updateBalanceFromCampaigns(totalSpend, state.campaignsList.length);
             }
         } else {
             throw new Error(result.message || 'Failed to load campaigns');
