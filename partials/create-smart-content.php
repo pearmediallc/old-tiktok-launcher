@@ -876,7 +876,8 @@
                         <!-- Progress items will be added here -->
                     </div>
                 </div>
-                <div class="modal-footer" id="bulk-progress-footer" style="display: none;">
+                <div class="modal-footer" id="bulk-progress-footer" style="display: none; gap: 10px;">
+                    <button class="btn-secondary" id="btn-retry-failed" onclick="retryFailedAccounts()" style="display: none; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">🔄 Retry Failed</button>
                     <button class="btn-primary" onclick="closeBulkProgressModal()">Done</button>
                 </div>
             </div>

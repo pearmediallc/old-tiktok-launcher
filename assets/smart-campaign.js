@@ -4041,6 +4041,12 @@ function renderAccountAssetsDropdowns(advertiserId, assets) {
                            multiple
                            style="display: none;"
                            onchange="handleBulkAccountVideoUpload(event, '${advertiserId}')">
+                    <button type="button" class="btn-use-original-video"
+                            onclick="useOriginalVideoForAccount('${advertiserId}')"
+                            style="padding: 4px 10px; background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;"
+                            title="Upload the original campaign videos to this account">
+                        🔄 Use Original
+                    </button>
                     <button type="button" class="btn-upload-account-video"
                             onclick="document.getElementById('account-video-upload-${advertiserId}').click()"
                             style="padding: 4px 10px; background: linear-gradient(135deg, #fe2c55, #25f4ee); color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
@@ -4655,6 +4661,211 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
 
     // Clear file input
     event.target.value = '';
+}
+
+// Use original campaign videos for a bulk launch account
+// Downloads each source video from the original account and uploads it to the target account
+async function useOriginalVideoForAccount(advertiserId) {
+    if (!state.selectedVideos || state.selectedVideos.length === 0) {
+        showToast('No videos in the original campaign to copy', 'error');
+        return;
+    }
+
+    const btn = document.querySelector(`[onclick="useOriginalVideoForAccount('${advertiserId}')"]`);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Copying...';
+    }
+
+    // Show progress area
+    const progressContainer = document.getElementById(`bulk-upload-progress-${advertiserId}`);
+    const statusEl = document.getElementById(`bulk-upload-status-${advertiserId}`);
+    const countEl = document.getElementById(`bulk-upload-count-${advertiserId}`);
+    const barEl = document.getElementById(`bulk-upload-bar-${advertiserId}`);
+
+    if (progressContainer) progressContainer.style.display = 'block';
+    if (statusEl) statusEl.textContent = 'Copying original videos...';
+    if (countEl) countEl.textContent = `0/${state.selectedVideos.length}`;
+    if (barEl) barEl.style.width = '0%';
+
+    // Build per-file progress items
+    let perFileHtml = '';
+    state.selectedVideos.forEach((video, i) => {
+        perFileHtml += `
+            <div id="bulk-item-${advertiserId}-orig-${i}" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
+                <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#334155;">${video.name || 'Video ' + (i + 1)}</span>
+                <div style="width:120px;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;">
+                    <div id="bulk-bar-${advertiserId}-orig-${i}" style="width:0%;height:100%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);border-radius:3px;transition:width 0.2s;"></div>
+                </div>
+                <span id="bulk-status-${advertiserId}-orig-${i}" style="font-size:11px;min-width:70px;text-align:right;color:#94a3b8;">Pending</span>
+            </div>
+        `;
+    });
+    let perFileContainer = document.getElementById(`bulk-per-file-${advertiserId}`);
+    if (!perFileContainer) {
+        perFileContainer = document.createElement('div');
+        perFileContainer.id = `bulk-per-file-${advertiserId}`;
+        perFileContainer.style.cssText = 'max-height:200px;overflow-y:auto;margin-top:8px;';
+        progressContainer.appendChild(perFileContainer);
+    }
+    perFileContainer.innerHTML = perFileHtml;
+
+    addLog('info', `Copying ${state.selectedVideos.length} original videos to account ${advertiserId}`);
+
+    let completed = 0;
+    let failed = 0;
+    const uploadedVideos = [];
+
+    // For each original video, fetch it from original account and upload to target
+    for (let i = 0; i < state.selectedVideos.length; i++) {
+        const sourceVideo = state.selectedVideos[i];
+        const itemBarEl = document.getElementById(`bulk-bar-${advertiserId}-orig-${i}`);
+        const itemStatusEl = document.getElementById(`bulk-status-${advertiserId}-orig-${i}`);
+
+        try {
+            if (itemStatusEl) { itemStatusEl.textContent = 'Fetching...'; itemStatusEl.style.color = '#8b5cf6'; }
+            if (itemBarEl) itemBarEl.style.width = '20%';
+
+            // Step 1: Get the video download URL from the original account
+            const infoResult = await apiRequest('get_video_download_url', {
+                video_id: sourceVideo.id,
+                _advertiser_id: window.TIKTOK_ADVERTISER_ID
+            });
+
+            if (!infoResult.success || !infoResult.data?.video_url) {
+                throw new Error(infoResult.message || 'Could not get video URL');
+            }
+
+            if (itemStatusEl) { itemStatusEl.textContent = 'Downloading...'; }
+            if (itemBarEl) itemBarEl.style.width = '40%';
+
+            // Step 2: Download the video as a blob
+            const videoResponse = await fetch(infoResult.data.video_url);
+            if (!videoResponse.ok) throw new Error('Failed to download video');
+            const videoBlob = await videoResponse.blob();
+
+            if (itemStatusEl) { itemStatusEl.textContent = 'Uploading...'; }
+            if (itemBarEl) itemBarEl.style.width = '60%';
+
+            // Step 3: Upload to target account
+            const fileName = sourceVideo.name || `video_${Date.now()}.mp4`;
+            const formData = new FormData();
+            formData.append('video', videoBlob, fileName);
+            formData.append('target_advertiser_id', advertiserId);
+
+            const uploadResult = await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                const timeoutId = setTimeout(() => xhr.abort(), 300000);
+
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percent = 60 + Math.round((e.loaded / e.total) * 35);
+                        if (itemBarEl) itemBarEl.style.width = `${percent}%`;
+                    }
+                });
+
+                xhr.addEventListener('load', () => {
+                    clearTimeout(timeoutId);
+                    try {
+                        let parsed;
+                        try { parsed = JSON.parse(xhr.responseText); } catch (e) {
+                            const m = xhr.responseText.match(/\{[\s\S]*"success"[\s\S]*\}/);
+                            parsed = m ? JSON.parse(m[0]) : null;
+                        }
+                        resolve(parsed);
+                    } catch (e) { reject(new Error('Invalid server response')); }
+                });
+
+                xhr.addEventListener('error', () => { clearTimeout(timeoutId); reject(new Error('Network error')); });
+                xhr.addEventListener('abort', () => { clearTimeout(timeoutId); reject(new Error('Upload timed out')); });
+
+                xhr.open('POST', 'api.php?action=upload_video_to_advertiser');
+                xhr.send(formData);
+            });
+
+            if (uploadResult && uploadResult.success && uploadResult.data?.video_id) {
+                completed++;
+                const newVideoId = uploadResult.data.video_id;
+                uploadedVideos.push({
+                    video_id: newVideoId, file_name: fileName,
+                    video_cover_url: sourceVideo.url || '', preview_url: sourceVideo.url || '',
+                    type: 'video', is_new: true
+                });
+
+                // Auto-map this video: sourceVideoId → newTargetVideoId
+                let selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
+                if (selectedAccount) {
+                    if (!selectedAccount.video_mapping) selectedAccount.video_mapping = {};
+                    selectedAccount.video_mapping[sourceVideo.id] = newVideoId;
+                }
+
+                if (itemStatusEl) { itemStatusEl.textContent = '✓ Done'; itemStatusEl.style.color = '#16a34a'; }
+                if (itemBarEl) { itemBarEl.style.background = '#22c55e'; itemBarEl.style.width = '100%'; }
+                addLog('success', `Copied ${fileName} to ${advertiserId} → ${newVideoId}`);
+            } else if (uploadResult && uploadResult.success && uploadResult.processing) {
+                completed++;
+                const tempId = 'processing_' + Date.now() + '_' + i;
+                uploadedVideos.push({
+                    video_id: tempId, file_name: fileName,
+                    video_cover_url: sourceVideo.url || '', preview_url: sourceVideo.url || '',
+                    type: 'video', is_new: true, is_processing: true
+                });
+                if (itemStatusEl) { itemStatusEl.textContent = '⏳ Processing'; itemStatusEl.style.color = '#d97706'; }
+                if (itemBarEl) { itemBarEl.style.background = '#f59e0b'; itemBarEl.style.width = '100%'; }
+                addLog('info', `Video accepted, processing: ${fileName} on ${advertiserId}`);
+            } else {
+                throw new Error(uploadResult?.message || 'Upload failed');
+            }
+        } catch (error) {
+            failed++;
+            if (itemStatusEl) { itemStatusEl.textContent = '✗ ' + error.message; itemStatusEl.style.color = '#dc2626'; }
+            if (itemBarEl) { itemBarEl.style.background = '#ef4444'; itemBarEl.style.width = '100%'; }
+            addLog('error', `Failed to copy video to ${advertiserId}: ${error.message}`);
+        }
+
+        // Update overall progress
+        const totalProcessed = completed + failed;
+        if (countEl) countEl.textContent = `${totalProcessed}/${state.selectedVideos.length}`;
+        if (barEl) barEl.style.width = `${(totalProcessed / state.selectedVideos.length) * 100}%`;
+    }
+
+    // Final status
+    if (statusEl) {
+        statusEl.textContent = failed === 0
+            ? `✓ Copied ${completed} videos`
+            : `Copied ${completed}, failed ${failed}`;
+    }
+
+    // Add to account assets and update video match status
+    if (uploadedVideos.length > 0) {
+        if (!bulkLaunchState.accountAssets[advertiserId]) {
+            bulkLaunchState.accountAssets[advertiserId] = {
+                videos: [], images: [], pixels: [], identities: [], portfolios: [],
+                videoMatch: { match_rate: 0 }
+            };
+        }
+        if (!bulkLaunchState.accountAssets[advertiserId].videos) {
+            bulkLaunchState.accountAssets[advertiserId].videos = [];
+        }
+        bulkLaunchState.accountAssets[advertiserId].videos.unshift(...uploadedVideos);
+
+        // Update video match status
+        updateVideoMatchStatus(advertiserId);
+
+        // Update media library UI
+        updateAccountMediaLibraryUI(advertiserId);
+
+        // Update bulk modal counts
+        updateBulkModalCounts();
+
+        showToast(`Copied ${uploadedVideos.length} original videos to account!`, 'success');
+    }
+
+    // Restore button
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '🔄 Use Original';
+    }
 }
 
 // Refresh video list in the video picker by fetching from TikTok API
@@ -5375,10 +5586,26 @@ async function matchVideosForAccount(advertiserId) {
 function autoMatchAssetsByName(advertiserId, assets) {
     // Get campaign's pixel and identity info
     const campaignPixel = state.pixels?.find(p => p.pixel_id === state.pixelId);
-    const campaignPixelName = campaignPixel?.pixel_name?.toLowerCase().trim();
+    let campaignPixelName = campaignPixel?.pixel_name?.toLowerCase().trim();
+
+    // Fallback: read pixel name from the pixel dropdown if state.pixels is empty
+    if (!campaignPixelName && state.pixelId) {
+        const pixelSelect = document.getElementById('pixel-select');
+        if (pixelSelect && pixelSelect.selectedOptions[0]) {
+            campaignPixelName = pixelSelect.selectedOptions[0].textContent?.toLowerCase().trim();
+        }
+    }
 
     const campaignIdentity = state.identities?.find(i => i.identity_id === state.globalIdentityId);
-    const campaignIdentityName = (campaignIdentity?.display_name || campaignIdentity?.identity_name)?.toLowerCase().trim();
+    let campaignIdentityName = (campaignIdentity?.display_name || campaignIdentity?.identity_name)?.toLowerCase().trim();
+
+    // Fallback: read identity name from dropdown
+    if (!campaignIdentityName && state.globalIdentityId) {
+        const identitySelect = document.getElementById('global-identity-select');
+        if (identitySelect && identitySelect.selectedOptions[0]) {
+            campaignIdentityName = identitySelect.selectedOptions[0].textContent?.toLowerCase().trim();
+        }
+    }
 
     // Note: campaign portfolios use creative_portfolio_id, target account portfolios use portfolio_id
     const campaignPortfolio = state.ctaPortfolios?.find(p => p.creative_portfolio_id === state.selectedPortfolioId || p.portfolio_id === state.selectedPortfolioId);
@@ -5404,23 +5631,59 @@ function autoMatchAssetsByName(advertiserId, assets) {
 
     let matchedAssets = [];
 
-    // Auto-match pixel by name
-    if (campaignPixelName && assets.pixels?.length > 0 && !selectedAccount.pixel_id) {
-        const matchingPixel = assets.pixels.find(p =>
-            (p.pixel_name?.toLowerCase().trim() === campaignPixelName)
-        );
+    // Auto-match pixel: exact name → partial name → single pixel fallback
+    if (assets.pixels?.length > 0 && !selectedAccount.pixel_id) {
+        let matchingPixel = null;
+
+        if (campaignPixelName) {
+            // Try exact match first
+            matchingPixel = assets.pixels.find(p =>
+                p.pixel_name?.toLowerCase().trim() === campaignPixelName
+            );
+            // Try partial/contains match
+            if (!matchingPixel) {
+                matchingPixel = assets.pixels.find(p => {
+                    const name = p.pixel_name?.toLowerCase().trim() || '';
+                    return name.includes(campaignPixelName) || campaignPixelName.includes(name);
+                });
+            }
+        }
+
+        // Fallback: if only 1 pixel exists, auto-select it
+        if (!matchingPixel && assets.pixels.length === 1) {
+            matchingPixel = assets.pixels[0];
+        }
+
         if (matchingPixel) {
             selectedAccount.pixel_id = matchingPixel.pixel_id;
             matchedAssets.push(`Pixel: ${matchingPixel.pixel_name}`);
         }
     }
 
-    // Auto-match identity by name
-    if (campaignIdentityName && assets.identities?.length > 0 && !selectedAccount.identity_id) {
-        const matchingIdentity = assets.identities.find(i => {
-            const name = (i.display_name || i.identity_name)?.toLowerCase().trim();
-            return name === campaignIdentityName;
-        });
+    // Auto-match identity: exact name → partial name → single identity fallback
+    if (assets.identities?.length > 0 && !selectedAccount.identity_id) {
+        let matchingIdentity = null;
+
+        if (campaignIdentityName) {
+            // Try exact match
+            matchingIdentity = assets.identities.find(i => {
+                const name = (i.display_name || i.identity_name)?.toLowerCase().trim();
+                return name === campaignIdentityName;
+            });
+            // Try partial match
+            if (!matchingIdentity) {
+                matchingIdentity = assets.identities.find(i => {
+                    const name = (i.display_name || i.identity_name)?.toLowerCase().trim() || '';
+                    return name.includes(campaignIdentityName) || campaignIdentityName.includes(name);
+                });
+            }
+        }
+
+        // Fallback: single identity
+        if (!matchingIdentity && assets.identities.length === 1) {
+            matchingIdentity = assets.identities[0];
+        }
+
         if (matchingIdentity) {
             selectedAccount.identity_id = matchingIdentity.identity_id;
             selectedAccount.identity_type = matchingIdentity.identity_type || 'CUSTOMIZED_USER';
@@ -5431,11 +5694,26 @@ function autoMatchAssetsByName(advertiserId, assets) {
         }
     }
 
-    // Auto-match portfolio by name
-    if (campaignPortfolioName && assets.portfolios?.length > 0 && !selectedAccount.portfolio_id) {
-        const matchingPortfolio = assets.portfolios.find(p =>
-            p.portfolio_name?.toLowerCase().trim() === campaignPortfolioName
-        );
+    // Auto-match portfolio: exact name → partial name → single portfolio fallback
+    if (assets.portfolios?.length > 0 && !selectedAccount.portfolio_id) {
+        let matchingPortfolio = null;
+
+        if (campaignPortfolioName) {
+            matchingPortfolio = assets.portfolios.find(p =>
+                p.portfolio_name?.toLowerCase().trim() === campaignPortfolioName
+            );
+            if (!matchingPortfolio) {
+                matchingPortfolio = assets.portfolios.find(p => {
+                    const name = p.portfolio_name?.toLowerCase().trim() || '';
+                    return name.includes(campaignPortfolioName) || campaignPortfolioName.includes(name);
+                });
+            }
+        }
+
+        if (!matchingPortfolio && assets.portfolios.length === 1) {
+            matchingPortfolio = assets.portfolios[0];
+        }
+
         if (matchingPortfolio) {
             selectedAccount.portfolio_id = matchingPortfolio.portfolio_id;
             matchedAssets.push(`Portfolio: ${matchingPortfolio.portfolio_name}`);
@@ -5446,6 +5724,8 @@ function autoMatchAssetsByName(advertiserId, assets) {
     if (matchedAssets.length > 0) {
         addLog('success', `Auto-matched for ${advertiserId}: ${matchedAssets.join(', ')}`);
         console.log(`[Bulk Launch] Auto-matched assets for ${advertiserId}:`, matchedAssets);
+    } else {
+        console.log(`[Bulk Launch] No auto-match for ${advertiserId}. Campaign pixel: "${campaignPixelName}", identity: "${campaignIdentityName}", Available pixels:`, assets.pixels?.map(p => p.pixel_name));
     }
 }
 
@@ -6399,6 +6679,9 @@ async function executeBulkLaunch() {
         bulkLaunchState.selectedAccounts = uniqueAccounts;
     }
 
+    // Reset failed accounts tracking for retry feature
+    bulkLaunchState.failedAccounts = [];
+
     const originalAccountId = bulkLaunchState.accounts.find(a => a.is_current)?.advertiser_id;
     const originalAccount = bulkLaunchState.accounts.find(a => a.is_current);
     let originalAccountSkipped = false;
@@ -6586,7 +6869,14 @@ async function executeBulkLaunch() {
             } else {
                 failedCount++;
                 document.getElementById('progress-failed').textContent = failedCount;
-                updateProgressItem(originalAccountId, 'failed', `✗ ${adResult.message || 'Failed to create ad'}`);
+                const origError = adResult.message || 'Failed to create ad';
+                updateProgressItem(originalAccountId, 'failed', `✗ ${origError}`);
+                bulkLaunchState.failedAccounts.push({
+                    advertiser_id: originalAccountId,
+                    advertiser_name: originalAccount.advertiser_name || originalAccountId,
+                    error: origError,
+                    is_original: true
+                });
                 addLog('error', `Failed to create ad for original account: ${adResult.message}`);
             }
         } catch (error) {
@@ -6595,6 +6885,12 @@ async function executeBulkLaunch() {
             document.getElementById('progress-completed').textContent = completedCount;
             document.getElementById('progress-failed').textContent = failedCount;
             updateProgressItem(originalAccountId, 'failed', `✗ ${error.message}`);
+            bulkLaunchState.failedAccounts.push({
+                advertiser_id: originalAccountId,
+                advertiser_name: originalAccount.advertiser_name || originalAccountId,
+                error: error.message,
+                is_original: true
+            });
             addLog('error', `Error creating ad for original account: ${error.message}`);
         }
 
@@ -6606,7 +6902,9 @@ async function executeBulkLaunch() {
 
     // If no more accounts to launch after completing original, show results
     if (bulkLaunchState.selectedAccounts.length === 0) {
-        progressFooter.style.display = 'block';
+        progressFooter.style.display = 'flex';
+        const retryBtnOrig = document.getElementById('btn-retry-failed');
+        if (retryBtnOrig) retryBtnOrig.style.display = failedCount > 0 ? 'inline-block' : 'none';
         if (successCount > 0) {
             showToast('Original account campaign completed successfully!', 'success');
         } else {
@@ -6711,16 +7009,20 @@ async function executeBulkLaunch() {
                 updateProgressItem(item.advertiser_id, 'success', `✓ Campaign: ${item.campaign_id}`);
             });
 
-            // Update failed items with detailed error logging
+            // Update failed items with full error messages
             (data.failed || []).forEach(item => {
                 completedCount++;
                 failedCount++;
-                // Truncate long error messages for display
-                const displayError = item.error && item.error.length > 50
-                    ? item.error.substring(0, 50) + '...'
-                    : (item.error || 'Unknown error');
+                const displayError = item.error || 'Unknown error';
                 updateProgressItem(item.advertiser_id, 'failed', `✗ ${displayError}`);
-                // Log full error details
+                // Store failed account info for retry
+                if (!bulkLaunchState.failedAccounts) bulkLaunchState.failedAccounts = [];
+                bulkLaunchState.failedAccounts.push({
+                    advertiser_id: item.advertiser_id,
+                    advertiser_name: item.advertiser_name || item.advertiser_id,
+                    error: item.error || 'Unknown error',
+                    step: item.step || null
+                });
                 addLog('error', `Failed: ${item.advertiser_name} (${item.advertiser_id}) - ${item.error}`);
                 console.error(`[Bulk Launch] Failed for ${item.advertiser_id}:`, item);
             });
@@ -6732,9 +7034,13 @@ async function executeBulkLaunch() {
             progressBar.style.width = '100%';
 
             // Show footer
-            progressFooter.style.display = 'block';
+            progressFooter.style.display = 'flex';
 
             addLog('info', `Bulk launch completed: ${successCount} success, ${failedCount} failed`);
+
+            // Show retry button if there are failures
+            const retryBtn = document.getElementById('btn-retry-failed');
+            if (retryBtn) retryBtn.style.display = failedCount > 0 ? 'inline-block' : 'none';
 
             if (failedCount === 0) {
                 showToast(`Successfully launched to ${successCount} account(s)!`, 'success');
@@ -6745,8 +7051,14 @@ async function executeBulkLaunch() {
             }
         } else {
             // Mark all remaining accounts as failed
+            if (!bulkLaunchState.failedAccounts) bulkLaunchState.failedAccounts = [];
             bulkLaunchState.selectedAccounts.forEach(account => {
                 updateProgressItem(account.advertiser_id, 'failed', `✗ ${result.message || 'API error'}`);
+                bulkLaunchState.failedAccounts.push({
+                    advertiser_id: account.advertiser_id,
+                    advertiser_name: account.advertiser_name,
+                    error: result.message || 'API error'
+                });
                 failedCount++;
                 completedCount++;
             });
@@ -6754,12 +7066,20 @@ async function executeBulkLaunch() {
             document.getElementById('progress-failed').textContent = failedCount;
             progressBar.style.width = '100%';
             showToast('Bulk launch failed: ' + (result.message || 'Unknown error'), 'error');
-            progressFooter.style.display = 'block';
+            progressFooter.style.display = 'flex';
+            const retryBtn2 = document.getElementById('btn-retry-failed');
+            if (retryBtn2) retryBtn2.style.display = 'inline-block';
         }
     } catch (error) {
         // Mark all remaining accounts as failed
+        if (!bulkLaunchState.failedAccounts) bulkLaunchState.failedAccounts = [];
         bulkLaunchState.selectedAccounts.forEach(account => {
             updateProgressItem(account.advertiser_id, 'failed', `✗ ${error.message}`);
+            bulkLaunchState.failedAccounts.push({
+                advertiser_id: account.advertiser_id,
+                advertiser_name: account.advertiser_name,
+                error: error.message
+            });
             failedCount++;
             completedCount++;
         });
@@ -6768,7 +7088,9 @@ async function executeBulkLaunch() {
         progressBar.style.width = '100%';
         addLog('error', 'Bulk launch error: ' + error.message);
         showToast('Error during bulk launch: ' + error.message, 'error');
-        progressFooter.style.display = 'block';
+        progressFooter.style.display = 'flex';
+        const retryBtn3 = document.getElementById('btn-retry-failed');
+        if (retryBtn3) retryBtn3.style.display = 'inline-block';
     }
 }
 
@@ -6781,8 +7103,9 @@ function updateProgressItem(advertiserId, status, message) {
     if (statusEl) {
         statusEl.className = `progress-status ${status}`;
         statusEl.textContent = message;
-        // Add tooltip for long error messages
-        if (status === 'failed' && message.length > 30) {
+        // Show full error with word-wrap for failed items
+        if (status === 'failed') {
+            statusEl.style.cssText = 'word-break: break-word; white-space: normal; max-width: 60%; text-align: right; line-height: 1.4;';
             statusEl.title = message;
         }
     }
@@ -6801,6 +7124,103 @@ function closeBulkProgressModal() {
 
     // Optionally refresh or redirect
     showSuccessModalBulk();
+}
+
+// Retry failed accounts — reopens bulk config with only failed accounts and shows errors
+function retryFailedAccounts() {
+    const failedAccounts = bulkLaunchState.failedAccounts || [];
+    if (failedAccounts.length === 0) {
+        showToast('No failed accounts to retry', 'info');
+        return;
+    }
+
+    // Close progress modal
+    document.getElementById('bulk-progress-modal').style.display = 'none';
+
+    // Filter selectedAccounts to only include failed ones
+    const failedIds = new Set(failedAccounts.map(a => String(a.advertiser_id)));
+
+    // Rebuild selectedAccounts from existing data for failed accounts only
+    bulkLaunchState.selectedAccounts = bulkLaunchState.selectedAccounts.filter(a =>
+        failedIds.has(String(a.advertiser_id))
+    );
+
+    // If selectedAccounts got cleared during launch, re-add failed accounts from stored data
+    if (bulkLaunchState.selectedAccounts.length === 0) {
+        failedAccounts.forEach(fa => {
+            const existingAssets = bulkLaunchState.accountAssets[fa.advertiser_id];
+            bulkLaunchState.selectedAccounts.push({
+                advertiser_id: fa.advertiser_id,
+                advertiser_name: fa.advertiser_name,
+                pixel_id: existingAssets?.selectedPixelId || '',
+                identity_id: existingAssets?.selectedIdentityId || '',
+                identity_type: existingAssets?.selectedIdentityType || 'CUSTOMIZED_USER',
+                portfolio_id: existingAssets?.selectedPortfolioId || '',
+                video_mapping: existingAssets?.videoMapping || {},
+                is_original: fa.is_original || false
+            });
+        });
+    }
+
+    // Store errors on each failed account for display
+    bulkLaunchState._retryErrors = {};
+    failedAccounts.forEach(fa => {
+        bulkLaunchState._retryErrors[String(fa.advertiser_id)] = fa.error;
+    });
+
+    // Reopen the bulk config modal
+    const modal = document.getElementById('bulk-launch-modal');
+    modal.style.display = 'flex';
+
+    // Re-render accounts in modal
+    renderBulkAccountsInModal().then(() => {
+        // After rendering, inject error banners into each failed account card
+        setTimeout(() => {
+            failedAccounts.forEach(fa => {
+                const card = document.getElementById(`bulk-account-${fa.advertiser_id}`);
+                if (card) {
+                    // Remove any existing error banners
+                    const existing = card.querySelector('.bulk-retry-error-banner');
+                    if (existing) existing.remove();
+
+                    const errorBanner = document.createElement('div');
+                    errorBanner.className = 'bulk-retry-error-banner';
+                    errorBanner.style.cssText = 'background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 14px; margin: 8px 16px; display: flex; align-items: flex-start; gap: 8px;';
+                    errorBanner.innerHTML = `
+                        <span style="color: #dc2626; font-size: 16px; flex-shrink: 0;">⚠️</span>
+                        <div style="flex: 1;">
+                            <div style="font-size: 11px; font-weight: 600; color: #dc2626; margin-bottom: 2px;">Previous Error:</div>
+                            <div style="font-size: 12px; color: #7f1d1d; word-break: break-word; line-height: 1.4;">${fa.error}</div>
+                        </div>
+                    `;
+
+                    // Insert after the header
+                    const header = card.querySelector('.bulk-account-header');
+                    if (header && header.nextSibling) {
+                        card.insertBefore(errorBanner, header.nextSibling);
+                    } else {
+                        card.appendChild(errorBanner);
+                    }
+
+                    // Auto-expand the account card so user sees the error
+                    const configSection = card.querySelector('.bulk-account-config');
+                    if (configSection) {
+                        configSection.style.display = 'block';
+                    }
+
+                    // Ensure checkbox is checked
+                    const checkbox = document.getElementById(`bulk-check-${fa.advertiser_id}`);
+                    if (checkbox && !checkbox.checked) {
+                        checkbox.checked = true;
+                        checkbox.dispatchEvent(new Event('change'));
+                    }
+                }
+            });
+        }, 500);
+    });
+
+    addLog('info', `Retry mode: ${failedAccounts.length} failed account(s) loaded for reconfiguration`);
+    showToast(`${failedAccounts.length} failed account(s) loaded — fix the errors and re-launch`, 'info');
 }
 
 // Show success modal for bulk launch

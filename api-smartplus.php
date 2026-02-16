@@ -1090,6 +1090,58 @@ switch ($action) {
         break;
 
     // ==========================================
+    // GET VIDEO DOWNLOAD URL (for Use Original Video feature)
+    // ==========================================
+    case 'get_video_download_url':
+        $videoId = $input['video_id'] ?? null;
+        $sourceAdvertiserId = $input['_advertiser_id'] ?? $advertiserId;
+
+        if (!$videoId) {
+            echo json_encode(['success' => false, 'message' => 'Missing video_id']);
+            break;
+        }
+
+        logSmartPlus("Getting video download URL for video: $videoId from advertiser: $sourceAdvertiserId");
+
+        $result = makeApiCall('/file/video/ad/info/', [
+            'advertiser_id' => $sourceAdvertiserId,
+            'video_ids' => json_encode([$videoId])
+        ], $accessToken, 'GET');
+
+        if ($result['code'] == 0 && !empty($result['data']['list'][0])) {
+            $videoInfo = $result['data']['list'][0];
+            $videoUrl = $videoInfo['video_url'] ?? $videoInfo['preview_url'] ?? null;
+
+            if ($videoUrl) {
+                echo json_encode([
+                    'success' => true,
+                    'data' => [
+                        'video_url' => $videoUrl,
+                        'video_id' => $videoInfo['video_id'] ?? $videoId,
+                        'file_name' => $videoInfo['file_name'] ?? '',
+                        'duration' => $videoInfo['duration'] ?? 0,
+                        'width' => $videoInfo['width'] ?? 0,
+                        'height' => $videoInfo['height'] ?? 0
+                    ]
+                ]);
+            } else {
+                logSmartPlus("Video info returned but no URL found: " . json_encode($videoInfo));
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Video URL not available from API',
+                    'data' => ['video_info' => $videoInfo]
+                ]);
+            }
+        } else {
+            logSmartPlus("Failed to get video info: " . json_encode($result));
+            echo json_encode([
+                'success' => false,
+                'message' => $result['message'] ?? 'Failed to get video info'
+            ]);
+        }
+        break;
+
+    // ==========================================
     // GET IMAGES FROM CREATIVE LIBRARY (Cached - 5 min TTL)
     // ==========================================
     case 'get_images':

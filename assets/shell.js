@@ -747,6 +747,9 @@
 
             // Load balance for current account
             loadAccountBalance(currentAdvId);
+
+            // Float the pre-checked account to top of dropdown
+            updateMultiAccountSelection();
         }
     });
 

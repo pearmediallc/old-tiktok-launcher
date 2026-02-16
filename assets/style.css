@@ -2348,11 +2348,12 @@ h3 {
 .progress-item {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     padding: 12px 15px;
     background: var(--input);
     border-radius: calc(var(--radius) - 4px);
     margin-bottom: 8px;
+    gap: 12px;
 }
 
 .progress-account-name {
@@ -2376,9 +2377,11 @@ h3 {
 .progress-status.failed {
     color: var(--destructive);
     font-weight: 600;
-    max-width: 300px;
+    max-width: 60%;
     text-align: right;
-    word-wrap: break-word;
+    word-break: break-word;
+    white-space: normal;
+    line-height: 1.4;
     font-size: 12px;
 }
 
