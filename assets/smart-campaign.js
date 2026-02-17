@@ -358,8 +358,8 @@ async function apiRequest(action, data = {}, useMainApi = false) {
     // This ensures each browser tab uses its own advertiser context, not the shared PHP session
     const requestBody = {
         action,
-        ...data,
-        _advertiser_id: state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || null
+        _advertiser_id: state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || null,
+        ...data
     };
 
     // Log full request details
@@ -9296,13 +9296,51 @@ async function toggleAdgroupExpand(adgroupId, parentCampaignId) {
 // Create ad table row element
 function createAdTableRow(ad, parentAdgroupId, parentCampaignId) {
     const isActive = ad.operation_status === 'ENABLE';
-    const statusClass = isActive ? 'active' : 'inactive';
-    const statusLabel = isActive ? 'Active' : 'Paused';
     const toggleClass = isActive ? 'on' : '';
+
+    // Determine delivery status from primary_status
+    let deliveryLabel, deliveryClass;
+    const ps = ad.primary_status || '';
+
+    if (ps === 'STATUS_DELIVERY_OK') {
+        deliveryLabel = 'Delivering';
+        deliveryClass = 'delivering';
+    } else if (ps === 'STATUS_AUDIT_DENY') {
+        deliveryLabel = 'Rejected';
+        deliveryClass = 'rejected';
+    } else if (ps === 'STATUS_PENDING_REVIEW') {
+        deliveryLabel = 'Under Review';
+        deliveryClass = 'under-review';
+    } else if (ps === 'STATUS_DISABLE') {
+        deliveryLabel = 'Disabled';
+        deliveryClass = 'inactive';
+    } else if (ps.includes('BUDGET') || ps.includes('BALANCE')) {
+        deliveryLabel = 'No Budget';
+        deliveryClass = 'no-budget';
+    } else if (ps === 'STATUS_DELETE') {
+        deliveryLabel = 'Deleted';
+        deliveryClass = 'inactive';
+    } else if (isActive) {
+        deliveryLabel = 'Active';
+        deliveryClass = 'active';
+    } else {
+        deliveryLabel = 'Paused';
+        deliveryClass = 'inactive';
+    }
+
+    // Use smart_plus_ad_id if available, fallback to ad_id
+    const effectiveAdId = ad.smart_plus_ad_id || ad.ad_id;
+    const adAdvertiserId = ad.advertiser_id || state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || '';
+
+    // Appeal button (only for rejected ads)
+    const appealBtnHtml = (ps === 'STATUS_AUDIT_DENY')
+        ? `<button class="btn-appeal" onclick="openAppealModal('${effectiveAdId}', '${escapeHtml(ad.ad_name).replace(/'/g, "\\'")}', '${adAdvertiserId}')" title="Appeal this ad">Appeal</button>`
+        : '';
 
     const row = document.createElement('tr');
     row.className = 'row-ad';
-    row.setAttribute('data-ad-id', ad.ad_id);
+    row.setAttribute('data-ad-id', effectiveAdId);
+    row.setAttribute('data-advertiser-id', adAdvertiserId);
     row.setAttribute('data-parent-adgroup', parentAdgroupId);
     row.setAttribute('data-grandparent-campaign', parentCampaignId);
 
@@ -9324,7 +9362,7 @@ function createAdTableRow(ad, parentAdgroupId, parentCampaignId) {
             </div>
         </td>
         <td class="col-status">
-            <span class="status-badge-table ${statusClass}">${statusLabel}</span>
+            <span class="ad-delivery-badge ${deliveryClass}">${deliveryLabel}</span>
         </td>
         <td class="col-budget" style="text-align: right;">-</td>
         <td class="col-spend" style="text-align: right;">${formatCurrency(ad.spend)}</td>
@@ -9335,7 +9373,7 @@ function createAdTableRow(ad, parentAdgroupId, parentCampaignId) {
         <td class="col-conversions" style="text-align: right;">${formatNumber(ad.conversions)}</td>
         <td class="col-cpr" style="text-align: right;">${formatCurrency(ad.cost_per_result)}</td>
         <td class="col-results" style="text-align: right;">${formatNumber(ad.results)}</td>
-        <td class="col-actions"></td>
+        <td class="col-actions">${appealBtnHtml}</td>
     `;
 
     return row;
@@ -9349,6 +9387,111 @@ async function toggleAdgroupStatus(adgroupId, currentStatus) {
 // Toggle ad status (placeholder - implement if needed)
 async function toggleAdStatus(adId, currentStatus) {
     showToast('Ad status toggle coming soon', 'info');
+}
+
+// Open the appeal modal for a rejected ad
+function openAppealModal(adId, adName, advertiserId) {
+    let modal = document.getElementById('appeal-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'appeal-modal';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="appeal-modal-content">
+                <div class="appeal-modal-header">
+                    <h3>Appeal Rejected Ad</h3>
+                    <button class="appeal-modal-close" onclick="closeAppealModal()">&times;</button>
+                </div>
+                <div class="appeal-modal-body">
+                    <p class="appeal-ad-name" id="appeal-ad-name"></p>
+                    <p class="appeal-ad-details" id="appeal-ad-details" style="font-size:11px;color:#94a3b8;margin-top:-8px;margin-bottom:12px;"></p>
+                    <label for="appeal-reason-input">Appeal Reason (required):</label>
+                    <textarea id="appeal-reason-input" rows="5" maxlength="2000"
+                              placeholder="Explain why this ad should be approved. Be specific about compliance with TikTok policies..."></textarea>
+                    <div class="appeal-char-count"><span id="appeal-char-count">0</span>/2000</div>
+                </div>
+                <div class="appeal-modal-footer">
+                    <button class="btn-secondary" onclick="closeAppealModal()">Cancel</button>
+                    <button class="btn-primary" id="appeal-submit-btn" onclick="submitAppeal()">Submit Appeal</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        document.getElementById('appeal-reason-input').addEventListener('input', function() {
+            document.getElementById('appeal-char-count').textContent = this.value.length;
+        });
+    }
+
+    modal.dataset.adId = adId;
+    modal.dataset.advertiserId = advertiserId || state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || '';
+    document.getElementById('appeal-ad-name').textContent = 'Ad: ' + adName;
+    document.getElementById('appeal-ad-details').textContent = 'Ad ID: ' + adId + ' | Advertiser: ' + modal.dataset.advertiserId;
+    document.getElementById('appeal-reason-input').value = '';
+    document.getElementById('appeal-char-count').textContent = '0';
+    document.getElementById('appeal-submit-btn').disabled = false;
+    document.getElementById('appeal-submit-btn').textContent = 'Submit Appeal';
+    modal.style.display = 'flex';
+}
+
+// Close the appeal modal
+function closeAppealModal() {
+    const modal = document.getElementById('appeal-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+// Submit the appeal to TikTok
+async function submitAppeal() {
+    const modal = document.getElementById('appeal-modal');
+    const adId = modal.dataset.adId;
+    const advertiserId = modal.dataset.advertiserId;
+    const reason = document.getElementById('appeal-reason-input').value.trim();
+
+    if (!reason) {
+        showToast('Please enter an appeal reason', 'warning');
+        return;
+    }
+
+    if (reason.length < 10) {
+        showToast('Appeal reason must be at least 10 characters', 'warning');
+        return;
+    }
+
+    const submitBtn = document.getElementById('appeal-submit-btn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+
+    try {
+        const result = await apiRequest('appeal_ad', {
+            ad_id: adId,
+            appeal_reason: reason,
+            _advertiser_id: advertiserId
+        });
+
+        if (result.success) {
+            showToast('Appeal submitted! TikTok will review within 24 hours.', 'success');
+            closeAppealModal();
+
+            // Update the ad row status badge to "Appeal Pending"
+            const adRow = document.querySelector(`tr[data-ad-id="${adId}"]`);
+            if (adRow) {
+                const badge = adRow.querySelector('.ad-delivery-badge');
+                if (badge) {
+                    badge.className = 'ad-delivery-badge under-review';
+                    badge.textContent = 'Appeal Pending';
+                }
+                const appealBtn = adRow.querySelector('.btn-appeal');
+                if (appealBtn) appealBtn.style.display = 'none';
+            }
+        } else {
+            showToast('Appeal failed: ' + (result.message || 'Unknown error'), 'error');
+        }
+    } catch (err) {
+        showToast('Appeal failed: ' + err.message, 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Appeal';
+    }
 }
 
 // Render single campaign card

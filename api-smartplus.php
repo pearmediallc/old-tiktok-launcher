@@ -3910,6 +3910,10 @@ switch ($action) {
         $adParams = [
             'advertiser_id' => $advertiserId,
             'filtering' => json_encode(['adgroup_ids' => [$adgroupId]]),
+            'fields' => json_encode([
+                'ad_id', 'ad_name', 'operation_status', 'primary_status',
+                'secondary_status', 'reject_reason', 'ad_format'
+            ]),
             'page' => 1,
             'page_size' => 100
         ];
@@ -3980,9 +3984,14 @@ switch ($action) {
 
             $formattedAds[] = [
                 'ad_id' => $adId,
+                'smart_plus_ad_id' => $ad['smart_plus_ad_id'] ?? '',
+                'advertiser_id' => $advertiserId,
                 'ad_name' => $ad['ad_name'] ?? 'Unnamed Ad',
                 'operation_status' => $ad['operation_status'] ?? 'UNKNOWN',
                 'ad_format' => $ad['ad_format'] ?? '',
+                'primary_status' => $ad['primary_status'] ?? '',
+                'secondary_status' => $ad['secondary_status'] ?? '',
+                'reject_reason' => $ad['reject_reason'] ?? '',
                 // Metrics
                 'spend' => $metrics['spend'] ?? '0.00',
                 'impressions' => $metrics['impressions'] ?? '0',
@@ -4003,6 +4012,44 @@ switch ($action) {
             'ads' => $formattedAds,
             'adgroup_id' => $adgroupId
         ]);
+        break;
+
+    // ==========================================
+    // APPEAL REJECTED AD
+    // ==========================================
+    case 'appeal_ad':
+        $adId = $input['ad_id'] ?? '';
+        $appealReason = $input['appeal_reason'] ?? '';
+
+        if (empty($adId) || empty($appealReason)) {
+            echo json_encode(['success' => false, 'message' => 'ad_id and appeal_reason are required']);
+            exit;
+        }
+
+        logSmartPlus("=== APPEALING AD: $adId ===");
+        logSmartPlus("Appeal reason: $appealReason");
+
+        $result = makeApiCall('/ad/review/appeal/', [
+            'advertiser_id' => $advertiserId,
+            'ad_id' => $adId,
+            'appeal_reason' => $appealReason
+        ], $accessToken);
+
+        logSmartPlus("Appeal response: " . json_encode($result));
+
+        if ($result['code'] == 0) {
+            echo json_encode([
+                'success' => true,
+                'message' => 'Appeal submitted successfully. TikTok will review within 24 hours.',
+                'data' => $result['data'] ?? null
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => $result['message'] ?? 'Failed to submit appeal',
+                'code' => $result['code'] ?? -1
+            ]);
+        }
         break;
 
     // ==========================================

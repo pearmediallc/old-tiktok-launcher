@@ -385,6 +385,144 @@ if (!in_array($view, $validViews)) {
         .status-badge-table.active { background: #dcfce7; color: #16a34a; }
         .status-badge-table.inactive { background: #fee2e2; color: #dc2626; }
         .status-badge-table.paused { background: #fef3c7; color: #d97706; }
+
+        /* Ad Delivery Status Badges */
+        .ad-delivery-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+        .ad-delivery-badge.delivering { background: #dcfce7; color: #16a34a; }
+        .ad-delivery-badge.active { background: #dcfce7; color: #16a34a; }
+        .ad-delivery-badge.rejected { background: #fef2f2; color: #dc2626; }
+        .ad-delivery-badge.under-review { background: #fef3c7; color: #d97706; }
+        .ad-delivery-badge.inactive { background: #f1f5f9; color: #64748b; }
+        .ad-delivery-badge.no-budget { background: #fef3c7; color: #b45309; }
+
+        /* Reject reason text */
+        .ad-reject-reason {
+            font-size: 11px;
+            color: #dc2626;
+            margin-top: 3px;
+            max-width: 220px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: help;
+            line-height: 1.3;
+        }
+
+        /* Appeal button */
+        .btn-appeal {
+            padding: 4px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+        .btn-appeal:hover { background: #fee2e2; border-color: #f87171; }
+
+        /* Appeal Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+        }
+        .appeal-modal-content {
+            background: white;
+            border-radius: 12px;
+            max-width: 480px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .appeal-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .appeal-modal-header h3 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        .appeal-modal-close {
+            background: none;
+            border: none;
+            font-size: 22px;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 0 4px;
+            line-height: 1;
+        }
+        .appeal-modal-close:hover { color: #475569; }
+        .appeal-modal-body {
+            padding: 20px;
+        }
+        .appeal-ad-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            background: #f8fafc;
+            border-radius: 6px;
+        }
+        .appeal-modal-body label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #334155;
+            margin-bottom: 6px;
+        }
+        .appeal-modal-body textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 13px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 100px;
+            transition: border-color 0.15s;
+        }
+        .appeal-modal-body textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+        }
+        .appeal-char-count {
+            text-align: right;
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+        .appeal-modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 16px 20px;
+            border-top: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+
         /* Toggle in Table */
         .toggle-table {
             width: 44px;
