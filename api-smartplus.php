@@ -4352,12 +4352,12 @@ switch ($action) {
             exit;
         }
 
-        logSmartPlus("=== APPEALING AD: $adId ===");
+        logSmartPlus("=== APPEALING SMART+ AD: $adId ===");
         logSmartPlus("Appeal reason: $appealReason");
 
-        $result = makeApiCall('/ad/review/appeal/', [
+        $result = makeApiCall('/smart_plus/ad/appeal/', [
             'advertiser_id' => $advertiserId,
-            'ad_id' => $adId,
+            'smart_plus_ad_id' => $adId,
             'appeal_reason' => $appealReason
         ], $accessToken);
 
