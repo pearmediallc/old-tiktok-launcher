@@ -3495,7 +3495,14 @@ async function generateVideoThumbnailSafe(file) {
 }
 
 function showToast(message, type = 'info') {
-    const toast = document.getElementById('toast');
+    let toast = document.getElementById('toast');
+    if (!toast) {
+        // Create toast element if it doesn't exist (e.g. in app-shell.php)
+        toast = document.createElement('div');
+        toast.id = 'toast';
+        toast.className = 'toast';
+        document.body.appendChild(toast);
+    }
     toast.textContent = message;
     toast.className = `toast show ${type}`;
 
@@ -8810,6 +8817,11 @@ function refreshCampaignList() {
 
 // Filter campaigns by status
 function filterCampaignsByStatus(status) {
+    // If viewing rejected ads, exit that view first
+    if (state.showingRejectedAds) {
+        hideRejectedAds();
+    }
+
     state.campaignFilter = status;
 
     // Clear selection when changing filters
@@ -9455,8 +9467,9 @@ function openAppealModal(adId, adName, advertiserId) {
     modal.dataset.advertiserId = advertiserId || state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || '';
     document.getElementById('appeal-ad-name').textContent = 'Ad: ' + adName;
     document.getElementById('appeal-ad-details').textContent = 'Ad ID: ' + adId + ' | Advertiser: ' + modal.dataset.advertiserId;
-    document.getElementById('appeal-reason-input').value = '';
-    document.getElementById('appeal-char-count').textContent = '0';
+    const defaultReason = 'Similar ads passed the review';
+    document.getElementById('appeal-reason-input').value = defaultReason;
+    document.getElementById('appeal-char-count').textContent = defaultReason.length;
     document.getElementById('appeal-submit-btn').disabled = false;
     document.getElementById('appeal-submit-btn').textContent = 'Submit Appeal';
     modal.style.display = 'flex';

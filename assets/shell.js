@@ -648,6 +648,11 @@
     // Override filter and search to also update multi-account view
     const originalFilterByStatus = window.filterCampaignsByStatus;
     window.filterCampaignsByStatusShell = function(status) {
+        // If viewing rejected ads, exit that view first
+        if (typeof state !== 'undefined' && state.showingRejectedAds && typeof hideRejectedAds === 'function') {
+            hideRejectedAds();
+        }
+
         // Call original if available (for single-account mode)
         if (typeof originalFilterByStatus === 'function' && !window.shellState.multiAccountMode) {
             originalFilterByStatus(status);
