@@ -950,10 +950,10 @@ if (!in_array($view, $validViews)) {
     <!-- Shell JS (always loaded) -->
     <script src="assets/shell.js?v=<?php echo time(); ?>"></script>
 
-    <!-- View-specific JS (only one loaded at a time to avoid conflicts) -->
-    <?php if ($view === 'campaigns' || $view === 'create-smart'): ?>
+    <!-- View-specific JS (only loaded when connected to avoid API errors) -->
+    <?php if ($isConnected && ($view === 'campaigns' || $view === 'create-smart')): ?>
         <script src="assets/smart-campaign.js?v=<?php echo time(); ?>"></script>
-    <?php elseif ($view === 'create-manual'): ?>
+    <?php elseif ($isConnected && $view === 'create-manual'): ?>
         <script src="assets/app.js?v=<?php echo time(); ?>"></script>
     <?php endif; ?>
 </body>

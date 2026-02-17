@@ -3693,6 +3693,7 @@ function toggleLaunchMode() {
 
 // Load available accounts for bulk launch
 async function loadBulkAccounts() {
+    if (!window.TIKTOK_ADVERTISER_ID) return;
     try {
         addLog('info', 'Loading available accounts for bulk launch...');
 
