@@ -2051,9 +2051,9 @@ function applyBulkStates() {
 
     const inputText = input.value.trim();
 
-    // Split by comma, semicolon, or newline
+    // Split by comma, semicolon, or newline — strip trailing punctuation (e.g. "Kentucky.")
     const stateInputs = inputText.split(/[,;\n]+/)
-        .map(s => s.trim().toLowerCase())
+        .map(s => s.trim().replace(/[.\-!?;:]+$/, '').trim().toLowerCase())
         .filter(s => s.length > 0);
 
     if (stateInputs.length === 0) {
@@ -2070,37 +2070,47 @@ function applyBulkStates() {
 
     // Match and ADD states to existing selection (don't clear!)
     stateInputs.forEach(stateInput => {
-        let found = false;
+        let matchedState = null;
 
-        // Try to match against US_STATES
+        // Pass 1: Exact name or abbreviation match (highest priority)
         for (const state of US_STATES) {
-            const nameLower = state.name.toLowerCase();
-            const abbrLower = state.abbr.toLowerCase();
+            if (state.name.toLowerCase() === stateInput || state.abbr.toLowerCase() === stateInput) {
+                matchedState = state;
+                break;
+            }
+        }
 
-            // Match by name, abbreviation, or partial name
-            if (nameLower === stateInput ||
-                abbrLower === stateInput ||
-                nameLower.startsWith(stateInput) ||
-                nameLower.includes(stateInput)) {
-
-                // Find and check the checkbox
-                const checkbox = document.querySelector(`.state-checkbox[value="${state.id}"]`);
-                if (checkbox) {
-                    if (checkbox.checked) {
-                        // Already selected
-                        alreadySelectedCount++;
-                    } else {
-                        // Newly selected
-                        checkbox.checked = true;
-                        newlySelectedCount++;
-                    }
-                    found = true;
+        // Pass 2: startsWith match (e.g. "south" → "South Carolina")
+        if (!matchedState) {
+            for (const state of US_STATES) {
+                if (state.name.toLowerCase().startsWith(stateInput)) {
+                    matchedState = state;
                     break;
                 }
             }
         }
 
-        if (!found) {
+        // Pass 3: includes match (e.g. "dakota" → "North Dakota") — last resort
+        if (!matchedState) {
+            for (const state of US_STATES) {
+                if (state.name.toLowerCase().includes(stateInput)) {
+                    matchedState = state;
+                    break;
+                }
+            }
+        }
+
+        if (matchedState) {
+            const checkbox = document.querySelector(`.state-checkbox[value="${matchedState.id}"]`);
+            if (checkbox) {
+                if (checkbox.checked) {
+                    alreadySelectedCount++;
+                } else {
+                    checkbox.checked = true;
+                    newlySelectedCount++;
+                }
+            }
+        } else {
             notFoundStates.push(stateInput);
         }
     });
