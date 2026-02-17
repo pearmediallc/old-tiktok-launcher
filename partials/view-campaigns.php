@@ -8,6 +8,9 @@
         </div>
     </div>
 
+    <!-- Business Center Balance Card (populated by JS) -->
+    <div id="bc-balance-container" class="bc-balance-container" style="display:none;"></div>
+
     <!-- Campaign Filters -->
     <div class="campaign-filters">
         <button class="campaign-filter-btn active" data-filter="all" onclick="<?php echo ($view === 'campaigns') ? 'filterCampaignsByStatusShell(\'all\')' : 'filterCampaignsByStatus(\'all\')'; ?>">

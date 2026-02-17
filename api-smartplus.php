@@ -4993,6 +4993,67 @@ switch ($action) {
         break;
 
     // ==========================================
+    // GET BUSINESS CENTER BALANCES
+    // ==========================================
+    case 'get_bc_balances':
+        logSmartPlus("=== GET BC BALANCES ===");
+
+        // Release session lock early — read-only operation
+        session_write_close();
+
+        // Step 1: Fetch all Business Centers the user has access to
+        $bcResult = makeApiCall('/bc/get/', [], $accessToken, 'GET');
+
+        if (!isset($bcResult['code']) || $bcResult['code'] != 0 || !isset($bcResult['data']['list'])) {
+            logSmartPlus("No Business Centers found: " . json_encode($bcResult));
+            echo json_encode([
+                'success' => true,
+                'data' => [],
+                'message' => 'No Business Centers found'
+            ]);
+            break;
+        }
+
+        $businessCenters = $bcResult['data']['list'];
+        logSmartPlus("Found " . count($businessCenters) . " Business Centers");
+
+        // Step 2: Fetch balance for each BC
+        $bcBalances = [];
+        foreach ($businessCenters as $bc) {
+            $bcId = $bc['bc_id'] ?? null;
+            $bcName = $bc['bc_name'] ?? ('BC ' . $bcId);
+            if (!$bcId) continue;
+
+            $balanceResult = makeApiCall('/bc/balance/get/', [
+                'bc_id' => $bcId
+            ], $accessToken, 'GET');
+
+            logSmartPlus("BC Balance for $bcId ($bcName): " . json_encode($balanceResult));
+
+            if (isset($balanceResult['code']) && $balanceResult['code'] == 0 && isset($balanceResult['data'])) {
+                $d = $balanceResult['data'];
+                $bcBalances[] = [
+                    'bc_id' => $bcId,
+                    'bc_name' => $bcName,
+                    'balance' => floatval($d['balance'] ?? $d['cash_balance'] ?? 0),
+                    'grant_balance' => floatval($d['grant_balance'] ?? 0),
+                    'total_balance' => floatval($d['balance'] ?? $d['cash_balance'] ?? 0) + floatval($d['grant_balance'] ?? 0),
+                    'currency' => $d['currency'] ?? 'USD',
+                    'transfer_balance' => floatval($d['transfer_balance'] ?? 0)
+                ];
+            } else {
+                logSmartPlus("Failed to fetch balance for BC $bcId: " . ($balanceResult['message'] ?? 'unknown'));
+            }
+        }
+
+        logSmartPlus("BC Balances result: " . count($bcBalances) . " centers with balance data");
+        echo json_encode([
+            'success' => true,
+            'data' => $bcBalances
+        ]);
+        break;
+
+    // ==========================================
     // CACHE STATS - Get cache statistics
     // ==========================================
     case 'cache_stats':

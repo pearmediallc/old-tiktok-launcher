@@ -420,6 +420,65 @@ body.app-shell .main-content .header {
     color: #2563eb;
 }
 
+/* Business Center Balance Card */
+.bc-balance-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.bc-balance-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, #eff6ff, #e0f2fe);
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    flex: 1;
+    min-width: 260px;
+}
+.bc-balance-icon {
+    font-size: 22px;
+    flex-shrink: 0;
+}
+.bc-balance-info {
+    flex: 1;
+    min-width: 0;
+}
+.bc-balance-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e40af;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.bc-balance-label {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 2px;
+}
+.bc-balance-amounts {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+}
+.bc-balance-amount {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1e40af;
+}
+.bc-balance-grant {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: #dbeafe;
+    color: #2563eb;
+}
+
 /* Single account balance card (campaigns view) */
 .single-account-balance-card {
     display: flex;
@@ -792,6 +851,12 @@ body.app-shell .main-content .header {
     .app-header {
         padding: 0 16px;
     }
+
+    .bc-balance-container { gap: 8px; }
+    .bc-balance-card { padding: 10px 14px; gap: 10px; min-width: 0; }
+    .bc-balance-icon { font-size: 18px; }
+    .bc-balance-name { font-size: 12px; }
+    .bc-balance-amount { font-size: 15px; }
 
     .app-header-left h1 {
         font-size: 15px;

@@ -710,6 +710,58 @@
         return sym + amount.toFixed(2);
     }
 
+    // ============================================
+    // BUSINESS CENTER BALANCE
+    // ============================================
+
+    // Fetch and display Business Center balances
+    window.loadBcBalances = async function() {
+        try {
+            const response = await fetch('api-smartplus.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'get_bc_balances' })
+            });
+            const result = await response.json();
+
+            if (result.success && result.data && result.data.length > 0) {
+                window.shellState.bcBalances = result.data;
+                renderBcBalances(result.data);
+            } else {
+                console.log('[BC Balance] No BCs found or no balance data');
+            }
+        } catch (err) {
+            console.warn('[BC Balance] Failed to load:', err);
+        }
+    };
+
+    function renderBcBalances(bcList) {
+        const container = document.getElementById('bc-balance-container');
+        if (!container || !bcList || bcList.length === 0) return;
+
+        container.innerHTML = bcList.map(bc => {
+            const balanceStr = formatCurrency(bc.total_balance || bc.balance || 0, bc.currency);
+            const grantHtml = (bc.grant_balance > 0)
+                ? `<span class="bc-balance-grant">Credits: ${formatCurrency(bc.grant_balance, bc.currency)}</span>`
+                : '';
+
+            return `
+                <div class="bc-balance-card">
+                    <div class="bc-balance-icon">&#127970;</div>
+                    <div class="bc-balance-info">
+                        <div class="bc-balance-name">${escapeHtml(bc.bc_name)}</div>
+                        <div class="bc-balance-label">Business Center Shared Wallet</div>
+                    </div>
+                    <div class="bc-balance-amounts">
+                        <span class="bc-balance-amount">${balanceStr}</span>
+                        ${grantHtml}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        container.style.display = 'flex';
+    }
+
     // Fetch balance for the currently selected account (stores for later use)
     window.loadAccountBalance = async function(advertiserId) {
         advertiserId = advertiserId || window.TIKTOK_ADVERTISER_ID || '';
@@ -874,8 +926,9 @@
                 window.shellState.selectedAccountIds = [currentAdvId];
             }
 
-            // Load balance for current account
+            // Load balance for current account + BC balances in parallel
             loadAccountBalance(currentAdvId);
+            loadBcBalances();
 
             // Float the pre-checked account to top of dropdown
             updateMultiAccountSelection();
