@@ -9657,13 +9657,34 @@ function renderRejectedAdsList() {
                         const effectiveAdId = ad.smart_plus_ad_id || ad.ad_id;
                         const advId = ad.advertiser_id || state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || '';
                         const rejectText = ad.reject_reason || 'No reason provided';
+                        const appealStatus = ad.appeal_status || 'NOT_APPEALED';
+                        const reviewStatus = ad.review_status || 'UNAVAILABLE';
+
+                        // Status badge
+                        let statusBadge = '';
+                        if (appealStatus === 'APPEALING') {
+                            statusBadge = '<span class="ad-delivery-badge under-review">Appeal Pending</span>';
+                        } else if (appealStatus === 'APPEAL_SUCCESSFUL') {
+                            statusBadge = '<span class="ad-delivery-badge delivering">Appeal Approved</span>';
+                        } else if (reviewStatus === 'PART_AVAILABLE') {
+                            statusBadge = '<span class="ad-delivery-badge no-budget">Partial</span>';
+                        } else {
+                            statusBadge = '<span class="ad-delivery-badge rejected">Rejected</span>';
+                        }
+
+                        // Show Appeal button only if not already appealing/approved
+                        const canAppeal = appealStatus === 'NOT_APPEALED' || appealStatus === 'APPEAL_FAILED';
+                        const appealBtn = canAppeal
+                            ? `<button class="btn-appeal" onclick="openAppealModal('${escapeHtml(effectiveAdId)}', '${escapeHtml(ad.ad_name).replace(/'/g, "\\'")}', '${escapeHtml(advId)}')" title="Appeal this ad">Appeal</button>`
+                            : '';
+
                         return `
                             <div class="rejected-ad-row" data-ad-id="${escapeHtml(effectiveAdId)}">
                                 <div class="rejected-ad-info">
-                                    <div class="rejected-ad-name">${escapeHtml(ad.ad_name)}</div>
+                                    <div class="rejected-ad-name">${escapeHtml(ad.ad_name)} ${statusBadge}</div>
                                     <div class="rejected-ad-reason">Reason: ${escapeHtml(rejectText)}</div>
                                 </div>
-                                <button class="btn-appeal" onclick="openAppealModal('${escapeHtml(effectiveAdId)}', '${escapeHtml(ad.ad_name).replace(/'/g, "\\'")}', '${escapeHtml(advId)}')" title="Appeal this ad">Appeal</button>
+                                ${appealBtn}
                             </div>
                         `;
                     }).join('')}

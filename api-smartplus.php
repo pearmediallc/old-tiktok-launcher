@@ -4060,25 +4060,22 @@ switch ($action) {
     // GET REJECTED ADS FOR ACCOUNT
     // ==========================================
     case 'get_rejected_ads':
-        logSmartPlus("=== FETCHING REJECTED ADS ===");
+        logSmartPlus("=== FETCHING REJECTED ADS (Smart+ Review Info) ===");
         logSmartPlus("Advertiser ID: $advertiserId");
 
+        // Step 1: Get ALL ads for this advertiser to collect smart_plus_ad_ids
         $adParams = [
             'advertiser_id' => $advertiserId,
-            'filtering' => json_encode([
-                'primary_status' => 'STATUS_AUDIT_DENY'
-            ]),
             'page' => 1,
             'page_size' => 100
         ];
-
         $adResult = makeApiCall('/ad/get/', $adParams, $accessToken, 'GET');
 
         if (!$adResult || ($adResult['code'] ?? -1) != 0) {
-            logSmartPlus("Failed to fetch rejected ads: " . json_encode($adResult));
+            logSmartPlus("Failed to fetch ads: " . json_encode($adResult));
             echo json_encode([
                 'success' => false,
-                'message' => 'Failed to fetch rejected ads: ' . ($adResult['message'] ?? 'Unknown error'),
+                'message' => 'Failed to fetch ads: ' . ($adResult['message'] ?? 'Unknown error'),
                 'ads' => [],
                 'count' => 0
             ]);
@@ -4086,29 +4083,104 @@ switch ($action) {
         }
 
         $ads = $adResult['data']['list'] ?? [];
-        $totalCount = $adResult['data']['page_info']['total_number'] ?? count($ads);
-        logSmartPlus("Found " . count($ads) . " rejected ads (total: $totalCount)");
+        logSmartPlus("Found " . count($ads) . " total ads");
 
-        $formattedAds = [];
+        // Build map of smart_plus_ad_id -> ad info
+        $smartPlusIds = [];
+        $adMap = [];
         foreach ($ads as $ad) {
-            $formattedAds[] = [
-                'ad_id' => $ad['ad_id'] ?? '',
-                'smart_plus_ad_id' => $ad['smart_plus_ad_id'] ?? '',
-                'advertiser_id' => $advertiserId,
-                'ad_name' => $ad['ad_name'] ?? 'Unnamed Ad',
-                'campaign_id' => $ad['campaign_id'] ?? '',
-                'campaign_name' => $ad['campaign_name'] ?? '',
-                'adgroup_id' => $ad['adgroup_id'] ?? '',
-                'primary_status' => $ad['primary_status'] ?? '',
-                'operation_status' => $ad['operation_status'] ?? '',
-                'reject_reason' => $ad['reject_reason'] ?? ''
-            ];
+            $spId = $ad['smart_plus_ad_id'] ?? '';
+            if ($spId) {
+                $smartPlusIds[] = $spId;
+                $adMap[$spId] = $ad;
+            }
         }
+
+        logSmartPlus("Found " . count($smartPlusIds) . " Smart+ ad IDs");
+
+        if (empty($smartPlusIds)) {
+            echo json_encode(['success' => true, 'ads' => [], 'count' => 0]);
+            break;
+        }
+
+        // Step 2: Get review info for all Smart+ ads
+        // Build URL manually since smart_plus_ad_ids needs JSON array format
+        $reviewUrl = "https://business-api.tiktok.com/open_api/v1.3/smart_plus/ad/review_info/";
+        $reviewQueryParams = [
+            'advertiser_id' => $advertiserId,
+            'smart_plus_ad_ids' => json_encode($smartPlusIds),
+            'extra_info_setting' => json_encode(['include_reject_info' => true])
+        ];
+        $reviewUrl .= '?' . http_build_query($reviewQueryParams);
+
+        logSmartPlus("Review info URL: $reviewUrl");
+
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $reviewUrl,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPGET => true,
+            CURLOPT_HTTPHEADER => [
+                "Access-Token: " . $accessToken,
+                "Content-Type: application/json"
+            ],
+            CURLOPT_TIMEOUT => 60
+        ]);
+        $reviewResponse = curl_exec($ch);
+        $reviewHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $reviewResult = json_decode($reviewResponse, true);
+        logSmartPlus("Review info response code: " . ($reviewResult['code'] ?? 'N/A'));
+        logSmartPlus("Review info response: " . substr($reviewResponse, 0, 1000));
+
+        if (!$reviewResult || ($reviewResult['code'] ?? -1) != 0) {
+            logSmartPlus("Failed to fetch review info: " . json_encode($reviewResult));
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to fetch review info: ' . ($reviewResult['message'] ?? 'Unknown error'),
+                'ads' => [],
+                'count' => 0
+            ]);
+            break;
+        }
+
+        // Step 3: Filter for rejected ads (UNAVAILABLE or PART_AVAILABLE)
+        $reviewInfos = $reviewResult['data']['smart_plus_ad_review_infos'] ?? [];
+        logSmartPlus("Got review info for " . count($reviewInfos) . " ads");
+
+        $rejectedAds = [];
+        foreach ($reviewInfos as $info) {
+            $reviewStatus = $info['review_status'] ?? '';
+            // UNAVAILABLE = fully rejected, PART_AVAILABLE = partially rejected
+            if ($reviewStatus === 'UNAVAILABLE' || $reviewStatus === 'PART_AVAILABLE') {
+                $spId = $info['smart_plus_ad_id'] ?? '';
+                $ad = $adMap[$spId] ?? [];
+                $rejectReasons = $info['reject_info']['reasons'] ?? [];
+                $suggestion = $info['reject_info']['suggestion'] ?? '';
+                $appealStatus = $info['appeal_status'] ?? 'NOT_APPEALED';
+
+                $rejectedAds[] = [
+                    'ad_id' => $ad['ad_id'] ?? '',
+                    'smart_plus_ad_id' => $spId,
+                    'advertiser_id' => $advertiserId,
+                    'ad_name' => $ad['ad_name'] ?? 'Unnamed Ad',
+                    'campaign_id' => $ad['campaign_id'] ?? '',
+                    'campaign_name' => $ad['campaign_name'] ?? '',
+                    'review_status' => $reviewStatus,
+                    'appeal_status' => $appealStatus,
+                    'reject_reason' => !empty($rejectReasons) ? implode('; ', $rejectReasons) : 'Policy violation',
+                    'suggestion' => $suggestion
+                ];
+            }
+        }
+
+        logSmartPlus("Found " . count($rejectedAds) . " rejected/partially rejected ads");
 
         echo json_encode([
             'success' => true,
-            'ads' => $formattedAds,
-            'count' => $totalCount
+            'ads' => $rejectedAds,
+            'count' => count($rejectedAds)
         ]);
         break;
 
