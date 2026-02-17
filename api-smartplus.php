@@ -5002,14 +5002,18 @@ switch ($action) {
         session_write_close();
 
         // Step 1: Fetch all Business Centers the user has access to
-        $bcResult = makeApiCall('/bc/get/', [], $accessToken, 'GET');
+        $bcResult = makeApiCall('/bc/get/', [
+            'page_size' => 100,
+            'page' => 1
+        ], $accessToken, 'GET');
 
         if (!isset($bcResult['code']) || $bcResult['code'] != 0 || !isset($bcResult['data']['list'])) {
             logSmartPlus("No Business Centers found: " . json_encode($bcResult));
             echo json_encode([
                 'success' => true,
                 'data' => [],
-                'message' => 'No Business Centers found'
+                'message' => 'No Business Centers found',
+                'debug' => $bcResult['message'] ?? 'No BC list in response'
             ]);
             break;
         }
@@ -5025,15 +5029,19 @@ switch ($action) {
             if (!$bcId) continue;
 
             $balanceResult = makeApiCall('/bc/balance/get/', [
-                'bc_id' => $bcId
+                'bc_id' => (string)$bcId
             ], $accessToken, 'GET');
 
             logSmartPlus("BC Balance for $bcId ($bcName): " . json_encode($balanceResult));
 
             if (isset($balanceResult['code']) && $balanceResult['code'] == 0 && isset($balanceResult['data'])) {
                 $d = $balanceResult['data'];
+                // Handle both flat and nested list response formats
+                if (isset($d['list'][0])) {
+                    $d = $d['list'][0];
+                }
                 $bcBalances[] = [
-                    'bc_id' => $bcId,
+                    'bc_id' => (string)$bcId,
                     'bc_name' => $bcName,
                     'balance' => floatval($d['balance'] ?? $d['cash_balance'] ?? 0),
                     'grant_balance' => floatval($d['grant_balance'] ?? 0),
@@ -5042,7 +5050,7 @@ switch ($action) {
                     'transfer_balance' => floatval($d['transfer_balance'] ?? 0)
                 ];
             } else {
-                logSmartPlus("Failed to fetch balance for BC $bcId: " . ($balanceResult['message'] ?? 'unknown'));
+                logSmartPlus("Failed to fetch balance for BC $bcId (code: " . ($balanceResult['code'] ?? 'null') . "): " . ($balanceResult['message'] ?? 'unknown'));
             }
         }
 
