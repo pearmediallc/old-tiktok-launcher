@@ -4057,6 +4057,62 @@ switch ($action) {
         break;
 
     // ==========================================
+    // GET REJECTED ADS FOR ACCOUNT
+    // ==========================================
+    case 'get_rejected_ads':
+        logSmartPlus("=== FETCHING REJECTED ADS ===");
+        logSmartPlus("Advertiser ID: $advertiserId");
+
+        $adParams = [
+            'advertiser_id' => $advertiserId,
+            'filtering' => json_encode([
+                'primary_status' => 'STATUS_AUDIT_DENY'
+            ]),
+            'page' => 1,
+            'page_size' => 100
+        ];
+
+        $adResult = makeApiCall('/ad/get/', $adParams, $accessToken, 'GET');
+
+        if (!$adResult || ($adResult['code'] ?? -1) != 0) {
+            logSmartPlus("Failed to fetch rejected ads: " . json_encode($adResult));
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to fetch rejected ads: ' . ($adResult['message'] ?? 'Unknown error'),
+                'ads' => [],
+                'count' => 0
+            ]);
+            break;
+        }
+
+        $ads = $adResult['data']['list'] ?? [];
+        $totalCount = $adResult['data']['page_info']['total_number'] ?? count($ads);
+        logSmartPlus("Found " . count($ads) . " rejected ads (total: $totalCount)");
+
+        $formattedAds = [];
+        foreach ($ads as $ad) {
+            $formattedAds[] = [
+                'ad_id' => $ad['ad_id'] ?? '',
+                'smart_plus_ad_id' => $ad['smart_plus_ad_id'] ?? '',
+                'advertiser_id' => $advertiserId,
+                'ad_name' => $ad['ad_name'] ?? 'Unnamed Ad',
+                'campaign_id' => $ad['campaign_id'] ?? '',
+                'campaign_name' => $ad['campaign_name'] ?? '',
+                'adgroup_id' => $ad['adgroup_id'] ?? '',
+                'primary_status' => $ad['primary_status'] ?? '',
+                'operation_status' => $ad['operation_status'] ?? '',
+                'reject_reason' => $ad['reject_reason'] ?? ''
+            ];
+        }
+
+        echo json_encode([
+            'success' => true,
+            'ads' => $formattedAds,
+            'count' => $totalCount
+        ]);
+        break;
+
+    // ==========================================
     // UPDATE CAMPAIGN STATUS (ON/OFF)
     // ==========================================
     case 'update_campaign_status':

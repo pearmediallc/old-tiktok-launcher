@@ -297,31 +297,44 @@
         const statusFilter = (typeof state !== 'undefined' && state.campaignFilter) ? state.campaignFilter : 'all';
         const searchQuery = (typeof state !== 'undefined' && state.campaignSearchQuery) ? state.campaignSearchQuery : '';
 
-        // Fetch only uncached accounts in parallel
+        // Fetch campaigns and rejected ads for uncached accounts in parallel
         const promises = uncachedIds.map(async (advertiserId) => {
             try {
-                const response = await fetch('api-smartplus.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'get_campaigns_with_metrics',
-                        _advertiser_id: advertiserId,
-                        ...dateRange
-                    })
-                });
-                const result = await response.json();
+                const [campaignResponse, rejectedResponse] = await Promise.all([
+                    fetch('api-smartplus.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'get_campaigns_with_metrics',
+                            _advertiser_id: advertiserId,
+                            ...dateRange
+                        })
+                    }).then(r => r.json()),
+                    fetch('api-smartplus.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'get_rejected_ads',
+                            _advertiser_id: advertiserId
+                        })
+                    }).then(r => r.json()).catch(() => ({ success: false }))
+                ]);
                 return {
                     advertiserId,
                     accountName: getAccountName(advertiserId),
-                    campaigns: result.success ? (result.campaigns || []) : [],
-                    error: result.success ? null : (result.message || 'Failed to load')
+                    campaigns: campaignResponse.success ? (campaignResponse.campaigns || []) : [],
+                    error: campaignResponse.success ? null : (campaignResponse.message || 'Failed to load'),
+                    rejectedAds: rejectedResponse.success ? (rejectedResponse.ads || []) : [],
+                    rejectedAdsCount: rejectedResponse.success ? (rejectedResponse.count || 0) : 0
                 };
             } catch (err) {
                 return {
                     advertiserId,
                     accountName: getAccountName(advertiserId),
                     campaigns: [],
-                    error: err.message
+                    error: err.message,
+                    rejectedAds: [],
+                    rejectedAdsCount: 0
                 };
             }
         });
@@ -398,6 +411,12 @@
                     <span class="agb-item agb-spent">Spent: $${totalSpend.toFixed(2)}</span>
                 </div>`;
 
+            // Rejected ads badge for this account
+            const rejCount = account.rejectedAdsCount || 0;
+            const rejBadgeHtml = rejCount > 0
+                ? `<span class="agb-item agb-rejected" onclick="showRejectedAdsForAccount('${escapeAttr(account.advertiserId)}')" style="cursor:pointer;">Rejected: ${rejCount}</span>`
+                : '';
+
             // Render group
             return `
                 <div class="account-group" data-advertiser-id="${escapeAttr(account.advertiserId)}">
@@ -405,6 +424,7 @@
                         <h3 class="account-group-name">${escapeHtml(account.accountName)}</h3>
                         <div class="account-group-meta">
                             ${balanceHtml}
+                            ${rejBadgeHtml}
                             <span class="account-group-count">${campaigns.length} campaign${campaigns.length !== 1 ? 's' : ''}</span>
                         </div>
                     </div>
@@ -496,20 +516,64 @@
     }
 
     function updateMultiAccountCounts(accountResults, currentFilter) {
-        let allCount = 0, activeCount = 0, inactiveCount = 0;
+        let allCount = 0, activeCount = 0, inactiveCount = 0, rejectedCount = 0;
         accountResults.forEach(acc => {
             allCount += acc.campaigns.length;
             activeCount += acc.campaigns.filter(c => c.operation_status === 'ENABLE').length;
             inactiveCount += acc.campaigns.filter(c => c.operation_status === 'DISABLE').length;
+            rejectedCount += acc.rejectedAdsCount || 0;
         });
 
         const countAll = document.getElementById('count-all');
         const countActive = document.getElementById('count-active');
         const countInactive = document.getElementById('count-inactive');
+        const countRejected = document.getElementById('count-rejected');
         if (countAll) countAll.textContent = allCount;
         if (countActive) countActive.textContent = activeCount;
         if (countInactive) countInactive.textContent = inactiveCount;
+        if (countRejected) countRejected.textContent = rejectedCount;
     }
+
+    // ============================================
+    // MULTI-ACCOUNT: Show Rejected Ads
+    // ============================================
+
+    // Show rejected ads across all selected accounts (filter bar button)
+    window.showRejectedAdsShell = function() {
+        if (window.shellState.multiAccountMode) {
+            // Aggregate rejected ads from all cached accounts
+            const allRejected = [];
+            window.shellState.multiAccountCampaigns.forEach(account => {
+                (account.rejectedAds || []).forEach(ad => {
+                    allRejected.push({ ...ad, accountName: account.accountName });
+                });
+            });
+            if (typeof state !== 'undefined') {
+                state.rejectedAds = allRejected;
+                state.rejectedAdsCount = allRejected.length;
+                state.rejectedAdsLoaded = true;
+            }
+            if (typeof showRejectedAds === 'function') showRejectedAds();
+        } else if (typeof showRejectedAds === 'function') {
+            showRejectedAds();
+        }
+    };
+
+    // Show rejected ads for a specific account (badge in account header)
+    window.showRejectedAdsForAccount = function(advertiserId) {
+        const cache = window.shellState.campaignCache;
+        const accountData = cache[advertiserId];
+        if (!accountData || !accountData.rejectedAds || accountData.rejectedAds.length === 0) {
+            if (typeof showToast === 'function') showToast('No rejected ads for this account', 'info');
+            return;
+        }
+        if (typeof state !== 'undefined') {
+            state.rejectedAds = accountData.rejectedAds;
+            state.rejectedAdsCount = accountData.rejectedAdsCount || accountData.rejectedAds.length;
+            state.rejectedAdsLoaded = true;
+        }
+        if (typeof showRejectedAds === 'function') showRejectedAds();
+    };
 
     // ============================================
     // MULTI-ACCOUNT: Toggle individual campaign ON/OFF

@@ -19,6 +19,9 @@
         <button class="campaign-filter-btn" data-filter="inactive" onclick="<?php echo ($view === 'campaigns') ? 'filterCampaignsByStatusShell(\'inactive\')' : 'filterCampaignsByStatus(\'inactive\')'; ?>">
             Inactive <span class="filter-count" id="count-inactive">0</span>
         </button>
+        <button class="campaign-filter-btn btn-rejected-filter" data-filter="rejected" onclick="<?php echo ($view === 'campaigns') ? 'showRejectedAdsShell()' : 'showRejectedAds()'; ?>">
+            Rejected Ads <span class="filter-count" id="count-rejected" style="background:rgba(220,38,38,0.15);color:#dc2626;">0</span>
+        </button>
     </div>
 
     <!-- Date Range Filter -->
@@ -130,6 +133,26 @@
             <!-- Legacy Campaign Cards Container (hidden) -->
             <div id="campaign-cards-container" style="display: none;"></div>
         </div>
+    </div>
+
+    <!-- ============================
+         REJECTED ADS PANEL
+         ============================ -->
+    <div id="rejected-ads-panel" style="display:none;">
+        <div class="rejected-ads-header">
+            <h3 style="font-size:18px;font-weight:700;color:#dc2626;margin:0;">Rejected Ads</h3>
+            <button class="btn-secondary" onclick="hideRejectedAds()" style="font-size:13px;padding:6px 14px;">Back to Campaigns</button>
+        </div>
+        <div id="rejected-ads-loading" style="display:none;text-align:center;padding:30px;">
+            <div class="spinner"></div>
+            <p style="margin-top:10px;color:#64748b;">Loading rejected ads...</p>
+        </div>
+        <div id="rejected-ads-empty" style="display:none;text-align:center;padding:40px;color:#94a3b8;">
+            <div style="font-size:48px;margin-bottom:15px;">&#10003;</div>
+            <h3 style="color:#16a34a;">No Rejected Ads</h3>
+            <p>All your ads are in good standing!</p>
+        </div>
+        <div id="rejected-ads-list"></div>
     </div>
 
     <!-- ============================

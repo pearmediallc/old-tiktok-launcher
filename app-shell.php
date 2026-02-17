@@ -523,6 +523,91 @@ if (!in_array($view, $validViews)) {
             background: #f8fafc;
         }
 
+        /* Rejected Ads Filter Button */
+        .btn-rejected-filter {
+            border-color: #fca5a5 !important;
+            color: #dc2626 !important;
+        }
+        .btn-rejected-filter.active {
+            background: #fef2f2 !important;
+            border-color: #dc2626 !important;
+        }
+
+        /* Rejected Ads Panel */
+        .rejected-ads-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .rejected-campaign-group {
+            margin-bottom: 16px;
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            overflow: hidden;
+            transition: box-shadow 0.2s;
+        }
+        .rejected-campaign-group:hover {
+            box-shadow: 0 2px 8px rgba(220, 38, 38, 0.1);
+        }
+        .rejected-group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 16px;
+            background: #fef2f2;
+            border-bottom: 1px solid #fecaca;
+        }
+        .rejected-group-name {
+            font-weight: 700;
+            color: #991b1b;
+            font-size: 14px;
+        }
+        .rejected-group-count {
+            font-size: 12px;
+            color: #dc2626;
+            font-weight: 600;
+        }
+        .rejected-group-body {
+            background: white;
+        }
+        .rejected-ad-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #fee2e2;
+        }
+        .rejected-ad-row:last-child {
+            border-bottom: none;
+        }
+        .rejected-ad-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .rejected-ad-name {
+            font-weight: 600;
+            font-size: 13px;
+            color: #1e293b;
+        }
+        .rejected-ad-reason {
+            font-size: 11px;
+            color: #dc2626;
+            margin-top: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Rejected badge in multi-account headers */
+        .agb-rejected {
+            background: rgba(220, 38, 38, 0.1);
+            color: #dc2626;
+        }
+        .agb-rejected:hover {
+            background: rgba(220, 38, 38, 0.2);
+        }
+
         /* Toggle in Table */
         .toggle-table {
             width: 44px;

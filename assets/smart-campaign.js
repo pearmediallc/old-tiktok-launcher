@@ -51,6 +51,12 @@ let state = {
     currentView: 'create',       // Current main view: 'create' or 'campaigns'
     selectedCampaigns: [],       // Array of selected campaign IDs for bulk operations
 
+    // Rejected ads state
+    rejectedAds: [],             // Array of rejected ads from API
+    rejectedAdsCount: 0,         // Count of rejected ads
+    rejectedAdsLoaded: false,    // Whether rejected ads have been fetched
+    showingRejectedAds: false,   // Whether the rejected ads panel is currently displayed
+
     // Date range for metrics
     dateRangePreset: 'today',    // Current preset: 'today', '7days', '30days', 'custom'
     dateRangeStart: null,        // Start date (YYYY-MM-DD)
@@ -8748,8 +8754,23 @@ async function loadCampaigns() {
     addLog('info', `Loading campaigns with metrics for ${dateRange.start_date} to ${dateRange.end_date}...`);
 
     try {
-        // Use the new endpoint that fetches metrics with date range
-        const result = await apiRequest('get_campaigns_with_metrics', dateRange);
+        // Fetch campaigns and rejected ads in parallel
+        const [result, rejectedResult] = await Promise.all([
+            apiRequest('get_campaigns_with_metrics', dateRange),
+            apiRequest('get_rejected_ads').catch(err => ({ success: false }))
+        ]);
+
+        // Handle rejected ads result
+        if (rejectedResult && rejectedResult.success) {
+            state.rejectedAds = rejectedResult.ads || [];
+            state.rejectedAdsCount = rejectedResult.count || state.rejectedAds.length;
+            state.rejectedAdsLoaded = true;
+        } else {
+            state.rejectedAds = [];
+            state.rejectedAdsCount = 0;
+            state.rejectedAdsLoaded = true;
+        }
+        updateRejectedAdsCount();
 
         if (result.success) {
             state.campaignsList = result.campaigns || [];
@@ -8853,6 +8874,13 @@ function updateCampaignCounts() {
     document.getElementById('count-all').textContent = allCount;
     document.getElementById('count-active').textContent = activeCount;
     document.getElementById('count-inactive').textContent = inactiveCount;
+    updateRejectedAdsCount();
+}
+
+// Update rejected ads count badge
+function updateRejectedAdsCount() {
+    const el = document.getElementById('count-rejected');
+    if (el) el.textContent = state.rejectedAdsCount || 0;
 }
 
 // Render campaign list (table-based with metrics)
@@ -9483,6 +9511,16 @@ async function submitAppeal() {
                 const appealBtn = adRow.querySelector('.btn-appeal');
                 if (appealBtn) appealBtn.style.display = 'none';
             }
+
+            // If showing rejected ads panel, remove the appealed ad and re-render
+            if (state.showingRejectedAds) {
+                state.rejectedAds = state.rejectedAds.filter(a =>
+                    (a.smart_plus_ad_id || a.ad_id) !== adId
+                );
+                state.rejectedAdsCount = Math.max(0, state.rejectedAdsCount - 1);
+                updateRejectedAdsCount();
+                renderRejectedAdsList();
+            }
         } else {
             showToast('Appeal failed: ' + (result.message || 'Unknown error'), 'error');
         }
@@ -9492,6 +9530,149 @@ async function submitAppeal() {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Submit Appeal';
     }
+}
+
+// ============================================
+// REJECTED ADS VIEW
+// ============================================
+
+// Show rejected ads panel (single-account mode)
+async function showRejectedAds() {
+    state.showingRejectedAds = true;
+
+    // Update filter button active states
+    document.querySelectorAll('.campaign-filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.filter === 'rejected') btn.classList.add('active');
+    });
+
+    // Hide campaign sections, show rejected ads panel
+    const singleCampaigns = document.getElementById('single-account-campaigns');
+    const multiContainer = document.getElementById('multi-account-campaigns-container');
+    const rejectedPanel = document.getElementById('rejected-ads-panel');
+    const bulkBar = document.getElementById('bulk-actions-bar');
+    const dateFilter = document.querySelector('.date-range-filter-container');
+    const searchBar = document.querySelector('.campaign-search-container');
+
+    if (singleCampaigns) singleCampaigns.style.display = 'none';
+    if (multiContainer) multiContainer.style.display = 'none';
+    if (bulkBar) bulkBar.style.display = 'none';
+    if (dateFilter) dateFilter.style.display = 'none';
+    if (searchBar) searchBar.style.display = 'none';
+    if (rejectedPanel) rejectedPanel.style.display = 'block';
+
+    const loadingEl = document.getElementById('rejected-ads-loading');
+    const emptyEl = document.getElementById('rejected-ads-empty');
+    const listEl = document.getElementById('rejected-ads-list');
+
+    // If not loaded yet, fetch from API
+    if (!state.rejectedAdsLoaded) {
+        if (loadingEl) loadingEl.style.display = 'block';
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (listEl) listEl.innerHTML = '';
+
+        try {
+            const result = await apiRequest('get_rejected_ads');
+            if (result.success) {
+                state.rejectedAds = result.ads || [];
+                state.rejectedAdsCount = result.count || state.rejectedAds.length;
+                state.rejectedAdsLoaded = true;
+                updateRejectedAdsCount();
+            }
+        } catch (err) {
+            showToast('Failed to load rejected ads: ' + err.message, 'error');
+        }
+        if (loadingEl) loadingEl.style.display = 'none';
+    }
+
+    renderRejectedAdsList();
+}
+
+// Hide rejected ads panel and go back to campaigns
+function hideRejectedAds() {
+    state.showingRejectedAds = false;
+
+    const singleCampaigns = document.getElementById('single-account-campaigns');
+    const multiContainer = document.getElementById('multi-account-campaigns-container');
+    const rejectedPanel = document.getElementById('rejected-ads-panel');
+    const bulkBar = document.getElementById('bulk-actions-bar');
+    const dateFilter = document.querySelector('.date-range-filter-container');
+    const searchBar = document.querySelector('.campaign-search-container');
+
+    if (rejectedPanel) rejectedPanel.style.display = 'none';
+    if (bulkBar) bulkBar.style.display = '';
+    if (dateFilter) dateFilter.style.display = '';
+    if (searchBar) searchBar.style.display = '';
+
+    // Restore the correct view (single or multi)
+    if (window.shellState && window.shellState.multiAccountMode) {
+        if (multiContainer) multiContainer.style.display = '';
+    } else {
+        if (singleCampaigns) singleCampaigns.style.display = '';
+    }
+
+    // Re-activate the previous filter
+    filterCampaignsByStatus(state.campaignFilter || 'all');
+}
+
+// Render the rejected ads list grouped by campaign
+function renderRejectedAdsList() {
+    const listEl = document.getElementById('rejected-ads-list');
+    const emptyEl = document.getElementById('rejected-ads-empty');
+
+    if (!listEl) return;
+
+    if (state.rejectedAds.length === 0) {
+        if (emptyEl) emptyEl.style.display = 'block';
+        listEl.innerHTML = '';
+        return;
+    }
+
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    // Group rejected ads by campaign
+    const byCampaign = {};
+    state.rejectedAds.forEach(ad => {
+        const key = ad.campaign_id || 'unknown';
+        if (!byCampaign[key]) {
+            byCampaign[key] = {
+                campaign_name: ad.campaign_name || 'Unknown Campaign',
+                campaign_id: key,
+                ads: []
+            };
+        }
+        byCampaign[key].ads.push(ad);
+    });
+
+    let html = '';
+    Object.values(byCampaign).forEach(group => {
+        html += `
+            <div class="rejected-campaign-group">
+                <div class="rejected-group-header">
+                    <span class="rejected-group-name">${escapeHtml(group.campaign_name)}</span>
+                    <span class="rejected-group-count">${group.ads.length} rejected ad${group.ads.length !== 1 ? 's' : ''}</span>
+                </div>
+                <div class="rejected-group-body">
+                    ${group.ads.map(ad => {
+                        const effectiveAdId = ad.smart_plus_ad_id || ad.ad_id;
+                        const advId = ad.advertiser_id || state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || '';
+                        const rejectText = ad.reject_reason || 'No reason provided';
+                        return `
+                            <div class="rejected-ad-row" data-ad-id="${escapeHtml(effectiveAdId)}">
+                                <div class="rejected-ad-info">
+                                    <div class="rejected-ad-name">${escapeHtml(ad.ad_name)}</div>
+                                    <div class="rejected-ad-reason">Reason: ${escapeHtml(rejectText)}</div>
+                                </div>
+                                <button class="btn-appeal" onclick="openAppealModal('${escapeHtml(effectiveAdId)}', '${escapeHtml(ad.ad_name).replace(/'/g, "\\'")}', '${escapeHtml(advId)}')" title="Appeal this ad">Appeal</button>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    });
+
+    listEl.innerHTML = html;
 }
 
 // Render single campaign card
