@@ -3326,6 +3326,328 @@ switch ($action) {
         break;
 
     // ==========================================
+    // BULK DUPLICATE CAMPAIGN (Smart+ API)
+    // Duplicates a campaign to a target account using Smart+ endpoints
+    // Called once per target account from frontend loop
+    // ==========================================
+    case 'bulk_duplicate_smartplus':
+        $data = $input;
+
+        logSmartPlus("============ BULK DUPLICATE SMART+ ============");
+        logSmartPlus("Target Advertiser: " . $advertiserId);
+        logSmartPlus("Request Data: " . json_encode($data, JSON_PRETTY_PRINT));
+
+        // Validate required fields
+        $campaignName = $data['campaign_name'] ?? '';
+        if (empty($campaignName)) {
+            echo json_encode(['success' => false, 'message' => 'Campaign name is required']);
+            exit;
+        }
+
+        $budget = floatval($data['budget'] ?? 50);
+        if ($budget < 20) $budget = 50;
+
+        $pixelId = $data['pixel_id'] ?? null;
+        $identityId = $data['identity_id'] ?? null;
+        $identityType = $data['identity_type'] ?? 'CUSTOMIZED_USER';
+        $identityAuthorizedBcId = $data['identity_authorized_bc_id'] ?? null;
+        $videoIds = $data['video_ids'] ?? [];
+        $landingPageUrl = $data['landing_page_url'] ?? '';
+        $adTexts = $data['ad_texts'] ?? [];
+        $adName = $data['ad_name'] ?? $campaignName . ' - Ad';
+
+        if (empty($videoIds)) {
+            echo json_encode(['success' => false, 'message' => 'At least one video is required']);
+            exit;
+        }
+        if (empty($identityId)) {
+            echo json_encode(['success' => false, 'message' => 'Identity is required']);
+            exit;
+        }
+        if (empty($landingPageUrl)) {
+            echo json_encode(['success' => false, 'message' => 'Landing page URL is required']);
+            exit;
+        }
+
+        try {
+            // ---- 1. CTA PORTFOLIO ----
+            $ctaPortfolioId = null;
+            $selectedPortfolioId = $data['portfolio_id'] ?? null;
+
+            require_once __DIR__ . '/database/Database.php';
+            $db = Database::getInstance();
+
+            if (!empty($selectedPortfolioId) && $selectedPortfolioId !== 'auto_create') {
+                $ctaPortfolioId = $selectedPortfolioId;
+                logSmartPlus("Using user-selected portfolio: $ctaPortfolioId");
+            } else {
+                // Check DB for existing portfolio
+                $existingPortfolio = $db->fetchOne(
+                    "SELECT creative_portfolio_id FROM tool_portfolios
+                     WHERE advertiser_id = :advertiser_id
+                     AND portfolio_type = 'CTA'
+                     ORDER BY created_at DESC LIMIT 1",
+                    ['advertiser_id' => $advertiserId]
+                );
+
+                if ($existingPortfolio) {
+                    $ctaPortfolioId = $existingPortfolio['creative_portfolio_id'];
+                    logSmartPlus("Using existing portfolio from DB: $ctaPortfolioId");
+                } else {
+                    // Auto-create CTA portfolio
+                    logSmartPlus("Creating new CTA portfolio for account: $advertiserId");
+                    $frequentlyUsedCTAs = [
+                        ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]],
+                        ['asset_content' => 'GET_QUOTE', 'asset_ids' => ["0"]],
+                        ['asset_content' => 'SIGN_UP', 'asset_ids' => ["0"]],
+                        ['asset_content' => 'CONTACT_US', 'asset_ids' => ["0"]],
+                        ['asset_content' => 'APPLY_NOW', 'asset_ids' => ["0"]]
+                    ];
+
+                    $portfolioResult = makeApiCall('/creative/portfolio/create/', [
+                        'advertiser_id' => $advertiserId,
+                        'creative_portfolio_type' => 'CTA',
+                        'portfolio_name' => 'Auto-Generated CTAs',
+                        'portfolio_content' => $frequentlyUsedCTAs
+                    ], $accessToken);
+
+                    if ($portfolioResult['code'] == 0 && isset($portfolioResult['data']['creative_portfolio_id'])) {
+                        $ctaPortfolioId = $portfolioResult['data']['creative_portfolio_id'];
+                        logSmartPlus("Portfolio created: $ctaPortfolioId");
+
+                        $db->insert('tool_portfolios', [
+                            'advertiser_id' => $advertiserId,
+                            'creative_portfolio_id' => $ctaPortfolioId,
+                            'portfolio_name' => 'Auto-Generated CTAs',
+                            'portfolio_type' => 'CTA',
+                            'portfolio_content' => json_encode($frequentlyUsedCTAs),
+                            'created_by_tool' => 1
+                        ]);
+                    } else {
+                        logSmartPlus("Portfolio creation failed: " . json_encode($portfolioResult));
+                    }
+                }
+            }
+
+            // Fallback: try TikTok API
+            if (empty($ctaPortfolioId)) {
+                $portfolioListResult = makeApiCall('/creative/portfolio/list/', [
+                    'advertiser_id' => $advertiserId,
+                    'page' => 1,
+                    'page_size' => 10
+                ], $accessToken, 'GET');
+
+                if ($portfolioListResult['code'] == 0 && !empty($portfolioListResult['data']['portfolios'])) {
+                    foreach ($portfolioListResult['data']['portfolios'] as $portfolio) {
+                        if (isset($portfolio['creative_portfolio_type']) && $portfolio['creative_portfolio_type'] === 'CTA') {
+                            $ctaPortfolioId = $portfolio['creative_portfolio_id'];
+                            logSmartPlus("Found existing CTA portfolio from API: $ctaPortfolioId");
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (empty($ctaPortfolioId)) {
+                throw new Exception('CTA portfolio not available. Please try again.');
+            }
+
+            // ---- 2. CREATE SMART+ CAMPAIGN ----
+            $campaignParams = [
+                'advertiser_id' => $advertiserId,
+                'campaign_name' => $campaignName,
+                'objective_type' => 'LEAD_GENERATION',
+                'request_id' => generateRequestId(),
+                'budget_mode' => 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET',
+                'budget' => $budget,
+                'budget_optimize_on' => true,
+                'operation_status' => 'DISABLE'
+            ];
+
+            logSmartPlus("Creating Smart+ campaign: " . json_encode($campaignParams));
+            $campaignResult = makeApiCall('/smart_plus/campaign/create/', $campaignParams, $accessToken);
+
+            if ($campaignResult['code'] != 0 || !isset($campaignResult['data']['campaign_id'])) {
+                throw new Exception('Campaign creation failed: ' . ($campaignResult['message'] ?? 'Unknown error'));
+            }
+
+            $newCampaignId = $campaignResult['data']['campaign_id'];
+            logSmartPlus("Smart+ Campaign created (DISABLED): $newCampaignId");
+
+            // ---- 3. CREATE SMART+ AD GROUP ----
+            $scheduleType = $data['schedule_type'] ?? 'start_now';
+            $scheduleStart = null;
+            $scheduleEnd = null;
+
+            if ($scheduleType === 'start_now' || $scheduleType === 'SCHEDULE_FROM_NOW') {
+                $scheduleType = 'SCHEDULE_FROM_NOW';
+                $scheduleStart = getUTCDateTime('+5 minutes');
+            } else {
+                if (!empty($data['schedule_start'])) {
+                    $scheduleStart = convertESTtoUTC(date('Y-m-d H:i:s', strtotime($data['schedule_start'])));
+                } else {
+                    $scheduleStart = getUTCDateTime('+5 minutes');
+                }
+                if (!empty($data['schedule_end'])) {
+                    $scheduleEnd = convertESTtoUTC(date('Y-m-d H:i:s', strtotime($data['schedule_end'])));
+                    $scheduleType = 'SCHEDULE_START_END';
+                } else {
+                    $scheduleType = 'SCHEDULE_FROM_NOW';
+                }
+            }
+
+            $adgroupParams = [
+                'advertiser_id' => $advertiserId,
+                'request_id' => generateRequestId(),
+                'campaign_id' => $newCampaignId,
+                'adgroup_name' => $campaignName . ' - Ad Group',
+                'promotion_type' => 'LEAD_GENERATION',
+                'promotion_target_type' => 'EXTERNAL_WEBSITE',
+                'optimization_goal' => 'CONVERT',
+                'billing_event' => 'OCPM',
+                'bid_type' => 'BID_TYPE_NO_BID',
+                'schedule_type' => $scheduleType,
+                'schedule_start_time' => $scheduleStart,
+                'operation_status' => 'ENABLE',
+                'budget_mode' => 'BUDGET_MODE_INFINITE',
+                'targeting_spec' => [
+                    'location_ids' => ['6252001'],
+                    'age_groups' => ['AGE_18_24', 'AGE_25_34', 'AGE_35_44', 'AGE_45_54', 'AGE_55_100']
+                ]
+            ];
+
+            if ($scheduleType === 'SCHEDULE_START_END' && $scheduleEnd) {
+                $adgroupParams['schedule_end_time'] = $scheduleEnd;
+            }
+
+            if (!empty($pixelId)) {
+                $adgroupParams['pixel_id'] = $pixelId;
+                $adgroupParams['optimization_event'] = $data['optimization_event'] ?? 'FORM';
+            }
+
+            logSmartPlus("Creating Smart+ ad group: " . json_encode($adgroupParams));
+            $adgroupResult = makeApiCall('/smart_plus/adgroup/create/', $adgroupParams, $accessToken);
+
+            if ($adgroupResult['code'] != 0 || !isset($adgroupResult['data']['adgroup_id'])) {
+                throw new Exception('Ad Group creation failed: ' . ($adgroupResult['message'] ?? 'Unknown error'));
+            }
+
+            $newAdgroupId = $adgroupResult['data']['adgroup_id'];
+            logSmartPlus("Smart+ Ad Group created: $newAdgroupId");
+
+            // ---- 4. FETCH COVER IMAGES ----
+            // Reject any processing_ temporary IDs
+            foreach ($videoIds as $vid) {
+                if (strpos($vid, 'processing_') === 0) {
+                    throw new Exception('Video still processing (ID: ' . $vid . '). Please refresh and retry.');
+                }
+            }
+
+            $coverMap = batchGetVideoCoverImages($videoIds, $advertiserId, $accessToken);
+            logSmartPlus("Cover map: " . json_encode($coverMap));
+
+            // ---- 5. CREATE SMART+ AD ----
+            $creativeList = [];
+            foreach ($videoIds as $videoId) {
+                $coverImageId = $coverMap[$videoId] ?? null;
+
+                // Fallback: direct fetch
+                if (empty($coverImageId)) {
+                    logSmartPlus("No cover in batch for $videoId, trying direct fetch");
+                    $singleCoverMap = batchGetVideoCoverImages([$videoId], $advertiserId, $accessToken);
+                    $coverImageId = $singleCoverMap[$videoId] ?? null;
+                }
+
+                if (empty($coverImageId)) {
+                    throw new Exception("Video cover image required for video $videoId. Please ensure the video has a cover.");
+                }
+
+                $creativeInfo = [
+                    'video_info' => ['video_id' => $videoId],
+                    'ad_format' => 'SINGLE_VIDEO',
+                    'image_info' => [['web_uri' => $coverImageId]]
+                ];
+
+                // For BC_AUTH_TT, add identity to each creative_info
+                if ($identityType === 'BC_AUTH_TT' && !empty($identityId)) {
+                    $creativeInfo['identity_id'] = $identityId;
+                    $creativeInfo['identity_type'] = 'BC_AUTH_TT';
+                    if (!empty($identityAuthorizedBcId)) {
+                        $creativeInfo['identity_bc_id'] = $identityAuthorizedBcId;
+                        $creativeInfo['identity_authorized_bc_id'] = $identityAuthorizedBcId;
+                    }
+                }
+
+                $creativeList[] = ['creative_info' => $creativeInfo];
+            }
+
+            // Build ad text list (deduplicated)
+            $adTextList = [];
+            $uniqueTexts = [];
+            foreach ($adTexts as $text) {
+                $text = trim($text);
+                if (!empty($text) && !in_array($text, $uniqueTexts)) {
+                    $uniqueTexts[] = $text;
+                    $adTextList[] = ['ad_text' => $text];
+                }
+            }
+            if (empty($adTextList)) {
+                $adTextList[] = ['ad_text' => 'Check it out!'];
+            }
+
+            // Build landing page URL list
+            $landingPageList = [['landing_page_url' => $landingPageUrl]];
+
+            // Build ad_configuration
+            $adConfig = [
+                'call_to_action_id' => $ctaPortfolioId
+            ];
+
+            if ($identityType === 'CUSTOMIZED_USER' && !empty($identityId)) {
+                $adConfig['identity_id'] = $identityId;
+                $adConfig['identity_type'] = 'CUSTOMIZED_USER';
+            }
+
+            $adParams = [
+                'advertiser_id' => $advertiserId,
+                'adgroup_id' => $newAdgroupId,
+                'ad_name' => $adName,
+                'creative_list' => $creativeList,
+                'landing_page_url_list' => $landingPageList,
+                'ad_text_list' => $adTextList,
+                'ad_configuration' => $adConfig
+            ];
+
+            logSmartPlus("Creating Smart+ ad: " . json_encode($adParams));
+            $adResult = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);
+
+            if ($adResult['code'] != 0 || !isset($adResult['data']['smart_plus_ad_id'])) {
+                throw new Exception('Ad creation failed: ' . ($adResult['message'] ?? 'Unknown error'));
+            }
+
+            $newAdId = $adResult['data']['smart_plus_ad_id'];
+            logSmartPlus("Smart+ Ad created: $newAdId");
+
+            echo json_encode([
+                'success' => true,
+                'data' => [
+                    'campaign_id' => $newCampaignId,
+                    'adgroup_id' => $newAdgroupId,
+                    'ad_id' => $newAdId
+                ],
+                'message' => 'Smart+ campaign duplicated successfully'
+            ]);
+
+        } catch (Exception $e) {
+            logSmartPlus("BULK DUPLICATE ERROR: " . $e->getMessage());
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+        break;
+
+    // ==========================================
     // UPDATE SMART+ CAMPAIGN
     // POST /open_api/v1.3/smart_plus/campaign/update/
     // ==========================================

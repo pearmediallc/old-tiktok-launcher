@@ -10807,9 +10807,9 @@ function renderDupBulkAccountConfig(advertiserId, assets) {
                 <label>Identity</label>
                 <div style="display: flex; gap: 6px;">
                     <select id="dup-bulk-identity-${advertiserId}" style="flex: 1;"
-                            onchange="updateDupBulkAccountConfig('${advertiserId}', 'identity_id', this.value)">
+                            onchange="updateDupBulkIdentity('${advertiserId}', this.value)">
                         <option value="">Select Identity...</option>
-                        ${identities.map(i => `<option value="${i.identity_id}" ${selectedAccount?.identity_id === i.identity_id ? 'selected' : ''}>${i.display_name || i.identity_name}</option>`).join('')}
+                        ${identities.map(i => `<option value="${i.identity_id}" data-type="${i.identity_type || 'CUSTOMIZED_USER'}" data-bc-id="${i.identity_authorized_bc_id || ''}" ${selectedAccount?.identity_id === i.identity_id ? 'selected' : ''}>${i.display_name || i.identity_name}</option>`).join('')}
                     </select>
                     <button type="button" class="refresh-btn" id="identity-refresh-btn-${advertiserId}" onclick="refreshIdentities('${advertiserId}')" title="Refresh identities">
                         <span id="identity-refresh-icon-${advertiserId}">🔄</span>
@@ -11224,6 +11224,27 @@ function updateDupBulkAccountConfig(advertiserId, field, value) {
     if (account) {
         account[field] = value;
     }
+    updateDupBulkSummary();
+}
+
+// Update identity with type info for Smart+ API
+function updateDupBulkIdentity(advertiserId, identityId) {
+    const account = duplicateState.bulkSelectedAccounts.find(a => a.advertiser_id === advertiserId);
+    if (!account) return;
+
+    account.identity_id = identityId;
+
+    // Get identity_type and bc_id from the selected option's data attributes
+    const select = document.getElementById(`dup-bulk-identity-${advertiserId}`);
+    if (select && select.selectedOptions.length > 0) {
+        const option = select.selectedOptions[0];
+        account.identity_type = option.dataset.type || 'CUSTOMIZED_USER';
+        account.identity_authorized_bc_id = option.dataset.bcId || '';
+    } else {
+        account.identity_type = 'CUSTOMIZED_USER';
+        account.identity_authorized_bc_id = '';
+    }
+
     updateDupBulkSummary();
 }
 
@@ -11923,36 +11944,30 @@ async function executeBulkDuplicateCampaign() {
                 ? account.ad_texts.filter(t => t && t.trim()) // Filter out empty texts
                 : getDupBulkOriginalAdTexts(ad);
 
-            // Prepare duplicate request
+            // Prepare Smart+ duplicate request
             const duplicateData = {
-                target_advertiser_id: account.advertiser_id,
-                source_campaign_id: campaign.campaign_id,
+                _advertiser_id: account.advertiser_id, // Target account (Smart+ API override)
                 campaign_name: account.campaign_name,
                 budget: account.budget,
                 pixel_id: account.pixel_id,
                 identity_id: account.identity_id,
-                portfolio_id: account.portfolio_id || '', // CTA Portfolio (optional)
-                video_ids: videoIds, // Send array of video IDs
-                video_id: videoIds[0] || '', // Primary video for backward compatibility
+                identity_type: account.identity_type || 'CUSTOMIZED_USER',
+                identity_authorized_bc_id: account.identity_authorized_bc_id || '',
+                portfolio_id: account.portfolio_id || '', // CTA Portfolio (auto-creates if empty)
+                video_ids: videoIds,
                 landing_page_url: landingUrl,
-                // Include original campaign data
-                objective: campaign.objective || adgroup?.objective || 'TRAFFIC',
-                optimization_goal: adgroup?.optimization_goal || campaign.optimization_goal || 'CLICK',
-                bid_type: adgroup?.bid_type || 'BID_TYPE_NO_BID',
-                billing_event: adgroup?.billing_event || 'CPC',
                 // Scheduling
                 schedule_type: account.schedule_type || 'start_now',
                 schedule_start: account.schedule_start || null,
                 schedule_end: account.schedule_end || null,
                 // Ad data
                 ad_name: ad?.ad_name || account.campaign_name + ' - Ad',
-                ad_texts: adTextsToSend, // All ad texts (not just first one)
-                call_to_action: ad?.call_to_action || 'LEARN_MORE'
+                ad_texts: adTextsToSend
             };
 
-            addLog('request', `Bulk duplicate to ${account.advertiser_id}`, duplicateData);
+            addLog('request', `Bulk duplicate (Smart+) to ${account.advertiser_id}`, duplicateData);
 
-            const result = await apiRequest('bulk_duplicate_campaign', duplicateData, true); // Use main api.php
+            const result = await apiRequest('bulk_duplicate_smartplus', duplicateData); // Use Smart+ API
 
             if (result.success) {
                 successCount++;
