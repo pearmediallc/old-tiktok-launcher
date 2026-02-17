@@ -820,6 +820,22 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                 font-size: 11px;
                 padding: 8px 10px;
             }
+            /* Campaign filter buttons responsive */
+            .campaign-filters { flex-wrap: wrap; gap: 6px; }
+            .campaign-filter-btn { padding: 7px 12px; font-size: 12px; }
+            /* Bulk actions responsive */
+            .bulk-actions-bar { flex-direction: column; gap: 8px; align-items: stretch; }
+            .bulk-action-buttons { justify-content: flex-start; }
+            /* Rejected ads panel responsive */
+            .rejected-ads-header { gap: 10px; }
+            .rejected-ads-header h3 { font-size: 16px; }
+            .rejected-group-header { padding: 8px 12px; }
+            .rejected-group-name { font-size: 13px; word-break: break-word; }
+            .rejected-ad-row { flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 12px; }
+            .rejected-ad-info { width: 100%; }
+            .rejected-ad-name { font-size: 12px; word-break: break-word; white-space: normal; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+            .rejected-ad-reason { white-space: normal; word-break: break-word; font-size: 11px; }
+            .btn-appeal { align-self: flex-start; }
         }
         @media (max-width: 380px) {
             .metrics-table {
@@ -833,6 +849,16 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
             .metrics-table .col-clicks {
                 display: none;
             }
+            /* Campaign filters extra-small */
+            .campaign-filters { gap: 4px; }
+            .campaign-filter-btn { padding: 6px 10px; font-size: 11px; gap: 4px; }
+            .filter-count { padding: 1px 6px; font-size: 10px; }
+            /* Rejected ads extra-small */
+            .rejected-ads-header { flex-wrap: wrap; }
+            .rejected-ads-header h3 { font-size: 15px; }
+            .rejected-group-header { flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px 10px; }
+            .rejected-ad-row { padding: 8px 10px; }
+            .rejected-ad-name { font-size: 11px; }
         }
 
         /* Ad Account Selector Styles */
