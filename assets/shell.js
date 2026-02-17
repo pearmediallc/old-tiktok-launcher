@@ -12,7 +12,10 @@
     window.shellState = {
         selectedAccountIds: [],
         multiAccountCampaigns: [],
-        multiAccountMode: false
+        multiAccountMode: false,
+        // Cache: stores fetched campaign data per advertiser so deselecting/reselecting doesn't re-fetch
+        campaignCache: {},       // { advertiserId: { campaigns: [...], accountName: '...', error: null, fetchedAt: timestamp } }
+        campaignCacheDateRange: null  // Tracks which date range the cache was fetched for
     };
 
     // ============================================
@@ -219,15 +222,58 @@
     // ============================================
     // MULTI-ACCOUNT CAMPAIGN LOADING
     // ============================================
-    window.loadMultiAccountCampaigns = async function() {
+    window.loadMultiAccountCampaigns = async function(forceRefresh) {
         const selectedIds = window.shellState.selectedAccountIds;
         if (selectedIds.length < 2) return;
 
         const container = document.getElementById('multi-account-campaigns-container');
         if (!container) return;
 
-        // Show loading for each account
+        // Get date range
+        let dateRange;
+        if (typeof getCurrentDateRange === 'function') {
+            dateRange = getCurrentDateRange();
+        } else {
+            const today = new Date().toISOString().split('T')[0];
+            dateRange = { start_date: today, end_date: today };
+        }
+
+        const dateKey = dateRange.start_date + '|' + dateRange.end_date;
+        const cache = window.shellState.campaignCache;
+
+        // If date range changed, invalidate entire cache
+        if (window.shellState.campaignCacheDateRange && window.shellState.campaignCacheDateRange !== dateKey) {
+            window.shellState.campaignCache = {};
+        }
+        window.shellState.campaignCacheDateRange = dateKey;
+
+        // Determine which accounts need fetching vs already cached
+        const cachedIds = [];
+        const uncachedIds = [];
+        selectedIds.forEach(id => {
+            if (!forceRefresh && cache[id]) {
+                cachedIds.push(id);
+            } else {
+                uncachedIds.push(id);
+            }
+        });
+
+        // If ALL are cached, just re-render from cache (no API calls)
+        if (uncachedIds.length === 0) {
+            const results = selectedIds.map(id => cache[id]);
+            window.shellState.multiAccountCampaigns = results;
+            const statusFilter = (typeof state !== 'undefined' && state.campaignFilter) ? state.campaignFilter : 'all';
+            const searchQuery = (typeof state !== 'undefined' && state.campaignSearchQuery) ? state.campaignSearchQuery : '';
+            renderMultiAccountCampaigns(results, statusFilter, searchQuery);
+            return;
+        }
+
+        // Show loading only for uncached accounts, show cached data immediately
         container.innerHTML = selectedIds.map(id => {
+            if (cache[id] && !forceRefresh) {
+                // Already have data — will be rendered after fetch completes
+                return '';
+            }
             const name = getAccountName(id);
             return `
                 <div class="account-group" data-advertiser-id="${escapeAttr(id)}">
@@ -247,21 +293,12 @@
             `;
         }).join('');
 
-        // Get date range from smart-campaign.js state (if available) or default to today
-        let dateRange;
-        if (typeof getCurrentDateRange === 'function') {
-            dateRange = getCurrentDateRange();
-        } else {
-            const today = new Date().toISOString().split('T')[0];
-            dateRange = { start_date: today, end_date: today };
-        }
-
-        // Get current filter and search state from smart-campaign.js
+        // Get current filter and search state
         const statusFilter = (typeof state !== 'undefined' && state.campaignFilter) ? state.campaignFilter : 'all';
         const searchQuery = (typeof state !== 'undefined' && state.campaignSearchQuery) ? state.campaignSearchQuery : '';
 
-        // Fetch campaigns for all selected accounts in parallel
-        const promises = selectedIds.map(async (advertiserId) => {
+        // Fetch only uncached accounts in parallel
+        const promises = uncachedIds.map(async (advertiserId) => {
             try {
                 const response = await fetch('api-smartplus.php', {
                     method: 'POST',
@@ -289,11 +326,13 @@
             }
         });
 
-        const results = await Promise.all(promises);
-        window.shellState.multiAccountCampaigns = results;
+        const freshResults = await Promise.all(promises);
 
-        // Fetch balances for all selected accounts in parallel
-        const balancePromises = selectedIds.map(async (id) => {
+        // Store fresh results in cache
+        freshResults.forEach(r => { cache[r.advertiserId] = r; });
+
+        // Also fetch balances for newly loaded accounts
+        const balancePromises = uncachedIds.map(async (id) => {
             const bal = await fetchAccountBalance(id);
             if (bal) {
                 window.shellState.accountBalances = window.shellState.accountBalances || {};
@@ -302,8 +341,12 @@
         });
         await Promise.all(balancePromises);
 
+        // Build final results from cache in selection order
+        const allResults = selectedIds.map(id => cache[id]).filter(Boolean);
+        window.shellState.multiAccountCampaigns = allResults;
+
         // Render
-        renderMultiAccountCampaigns(results, statusFilter, searchQuery);
+        renderMultiAccountCampaigns(allResults, statusFilter, searchQuery);
     };
 
     window.renderMultiAccountCampaigns = function(accountResults, statusFilter, searchQuery) {

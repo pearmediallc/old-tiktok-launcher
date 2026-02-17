@@ -3907,13 +3907,12 @@ switch ($action) {
         logSmartPlus("Date range: $startDate to $endDate");
 
         // Get ads
+        // Note: /ad/get/ returns all fields by default including primary_status,
+        // secondary_status, reject_reason. Do NOT pass a 'fields' parameter as it
+        // may cause the API to reject unrecognized field names.
         $adParams = [
             'advertiser_id' => $advertiserId,
             'filtering' => json_encode(['adgroup_ids' => [$adgroupId]]),
-            'fields' => json_encode([
-                'ad_id', 'ad_name', 'operation_status', 'primary_status',
-                'secondary_status', 'reject_reason', 'ad_format'
-            ]),
             'page' => 1,
             'page_size' => 100
         ];
@@ -3931,6 +3930,11 @@ switch ($action) {
 
         $ads = $adResult['data']['list'] ?? [];
         logSmartPlus("Found " . count($ads) . " ads");
+        if (!empty($ads)) {
+            $sampleAd = $ads[0];
+            logSmartPlus("Sample ad keys: " . implode(', ', array_keys($sampleAd)));
+            logSmartPlus("Sample ad primary_status: " . ($sampleAd['primary_status'] ?? 'NOT_PRESENT'));
+        }
 
         // Get metrics for ads
         $adIds = array_column($ads, 'ad_id');
