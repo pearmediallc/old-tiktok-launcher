@@ -483,7 +483,7 @@ try {
             if (!empty($data['schedule_start_time'])) {
                 $scheduleStartTime = convertESTtoUTC($data['schedule_start_time']);
             } else {
-                $scheduleStartTime = getUTCDateTime();  // Start now in UTC
+                $scheduleStartTime = getUTCDateTime('+5 minutes');  // Buffer so time is still future when TikTok validates
             }
             if (!empty($data['schedule_end_time'])) {
                 $scheduleEndTime = convertESTtoUTC($data['schedule_end_time']);
@@ -621,7 +621,7 @@ try {
                 'budget_mode' => 'BUDGET_MODE_INFINITE', // Default - budget set at ad group level
                 'budget_optimize_on' => false,
                 'schedule_type' => 'SCHEDULE_START_END',
-                'schedule_start_time' => getUTCDateTime(),  // UTC for TikTok API
+                'schedule_start_time' => getUTCDateTime('+5 minutes'),  // Buffer so time is future when TikTok validates
                 'schedule_end_time' => getUTCDateTime('+1 year'),
                 'optimization_goal' => 'LEAD_GENERATION',
                 'bid_type' => 'BID_TYPE_NO_BID',
@@ -780,9 +780,9 @@ try {
                 $params['schedule_start_time'] = convertESTtoUTC($data['schedule_start_time']);
                 logToFile("Scheduled start time (UTC): " . $params['schedule_start_time']);
             } else {
-                // Start immediately - use current UTC time
-                $params['schedule_start_time'] = getUTCDateTime();
-                logToFile("Starting immediately with UTC time: " . $params['schedule_start_time']);
+                // Start immediately — add 5-min buffer so time is still in the future when TikTok validates
+                $params['schedule_start_time'] = getUTCDateTime('+5 minutes');
+                logToFile("Starting immediately with UTC time (now+5min): " . $params['schedule_start_time']);
             }
             
             logToFile("=== SMART+ AD GROUP API CALL ===");
@@ -3871,14 +3871,14 @@ try {
             // Determine schedule based on input - TikTok API requires UTC format
             $scheduleType = $data['schedule_type'] ?? 'start_now';
             if ($scheduleType === 'start_now') {
-                // Start now, run continuously (1 year) - use UTC
-                $scheduleStartTime = getUTCDateTime();
+                // Start now, run continuously (1 year) - add buffer so time is future when TikTok validates
+                $scheduleStartTime = getUTCDateTime('+5 minutes');
                 $scheduleEndTime = getUTCDateTime('+1 year');
             } else {
                 // Use provided dates (user provides in EST, convert to UTC)
                 $scheduleStartTime = !empty($data['schedule_start'])
                     ? convertESTtoUTC(date('Y-m-d H:i:s', strtotime($data['schedule_start'])))
-                    : getUTCDateTime();
+                    : getUTCDateTime('+5 minutes');
                 $scheduleEndTime = !empty($data['schedule_end'])
                     ? convertESTtoUTC(date('Y-m-d H:i:s', strtotime($data['schedule_end'])))
                     : getUTCDateTime('+30 days');

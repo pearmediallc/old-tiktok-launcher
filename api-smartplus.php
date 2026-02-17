@@ -1275,10 +1275,11 @@ switch ($action) {
             logSmartPlus("Using SCHEDULE_FROM_NOW with scheduled start: $scheduleStart (UTC)");
         } else {
             // Default: Run continuously from now (start immediately)
-            // TikTok API REQUIRES schedule_start_time - send current UTC time
+            // TikTok API REQUIRES schedule_start_time to be in the future
+            // Add 5-minute buffer so the time is still in the future when TikTok validates it
             $scheduleType = 'SCHEDULE_FROM_NOW';
-            $scheduleStart = getUTCDateTime();  // Current UTC time
-            logSmartPlus("Using SCHEDULE_FROM_NOW - starting now with UTC time: $scheduleStart");
+            $scheduleStart = getUTCDateTime('+5 minutes');
+            logSmartPlus("Using SCHEDULE_FROM_NOW - starting with UTC time (now+5min): $scheduleStart");
         }
 
         $adgroupParams = [
@@ -1719,7 +1720,7 @@ switch ($action) {
         // Identity is set at AD level
         logSmartPlus("Step 2: Creating Ad Group...");
         // TikTok API requires UTC+0 format for schedule times
-        $scheduleStart = getUTCDateTime();  // Start immediately in UTC
+        $scheduleStart = getUTCDateTime('+5 minutes');  // Buffer so time is future when TikTok validates
 
         $adgroupParams = [
             'advertiser_id' => $advertiserId,
@@ -3081,9 +3082,9 @@ switch ($action) {
                         logSmartPlus("Converted timestamp to UTC: $scheduleStart");
                     }
                 } else {
-                    // Start immediately in UTC
-                    $scheduleStart = getUTCDateTime();
-                    logSmartPlus("Using immediate start time (UTC): $scheduleStart");
+                    // Start immediately — add 5-min buffer so time is still in the future when TikTok validates
+                    $scheduleStart = getUTCDateTime('+5 minutes');
+                    logSmartPlus("Using immediate start time (UTC, now+5min): $scheduleStart");
                 }
 
                 if (!empty($campaignConfig['schedule_end_time'])) {
