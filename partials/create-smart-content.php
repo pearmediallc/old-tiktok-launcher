@@ -405,7 +405,7 @@
                                 <button class="btn-secondary btn-sm" onclick="clearVideoSelection()">Clear</button>
                             </div>
                         </div>
-                        <div id="video-selection-grid" class="video-selection-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; max-height: 300px; overflow-y: auto; padding: 10px; background: #f9f9f9; border-radius: 8px; border: 2px solid #667eea;">
+                        <div id="video-selection-grid" class="video-selection-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; max-height: 520px; overflow-y: auto; padding: 12px; background: #f9f9f9; border-radius: 8px; border: 2px solid #667eea;">
                             <p style="text-align: center; padding: 20px; color: #666;">Loading videos...</p>
                         </div>
                     </div>
@@ -415,7 +415,7 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                             <h4 style="margin: 0; color: #4fc3f7;">🖼️ Images (<span id="images-count">0</span> available)</h4>
                         </div>
-                        <div id="image-selection-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; max-height: 200px; overflow-y: auto; padding: 10px; background: #f0f9ff; border-radius: 8px; border: 2px solid #4fc3f7;">
+                        <div id="image-selection-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; max-height: 320px; overflow-y: auto; padding: 12px; background: #f0f9ff; border-radius: 8px; border: 2px solid #4fc3f7;">
                             <p style="text-align: center; padding: 20px; color: #666;">Loading images...</p>
                         </div>
                         <small style="color: #666; display: block; margin-top: 8px;">Images are used as cover images for videos. TikTok will auto-match or you can upload matching covers.</small>

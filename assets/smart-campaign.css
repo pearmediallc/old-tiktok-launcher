@@ -370,17 +370,107 @@
     color: var(--primary-foreground);
 }
 
+/* Video Selection Grid Cards (Smart+ Media Library) */
+.video-select-item {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    background: white;
+    border: 3px solid #e2e8f0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.video-select-item:hover {
+    border-color: #667eea;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+    transform: translateY(-2px);
+}
+
+.video-select-item.selected {
+    border-color: #22c55e;
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+}
+
+.video-select-item .video-preview {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 9/16;
+    background: #0f0f0f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.video-select-item .video-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.video-select-item .video-preview .no-preview {
+    color: #94a3b8;
+    font-size: 13px;
+    text-align: center;
+    padding: 10px;
+}
+
+.video-select-item .video-preview .video-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    background: rgba(0,0,0,0.6);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+.video-select-item .video-preview .selected-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: #22c55e;
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.video-select-item .video-name {
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #334155;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: white;
+    border-top: 1px solid #f1f5f9;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .creative-assets-grid {
         grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
     }
-    
+
     .identity-per-creative {
         grid-template-columns: 1fr;
     }
-    
+
     .cta-grid {
         grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    }
+
+    .video-select-item .video-preview {
+        aspect-ratio: 9/16;
     }
 }

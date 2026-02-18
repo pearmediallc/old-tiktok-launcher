@@ -165,3 +165,362 @@
         <!-- Filled by shell.js when multiple accounts are selected -->
     </div>
 </div>
+
+<!-- ============================
+     DUPLICATE CAMPAIGN MODAL
+     (Must be outside campaigns-view for proper overlay)
+     ============================ -->
+<div id="duplicate-campaign-modal" class="modal" style="display: none;">
+    <div class="modal-content duplicate-modal-content">
+        <div class="modal-header">
+            <h3>Duplicate Campaign</h3>
+            <span class="modal-close" onclick="closeDuplicateCampaignModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <!-- Campaign Info -->
+            <div class="duplicate-campaign-info">
+                <div class="info-row">
+                    <span class="info-label">Campaign:</span>
+                    <span class="info-value" id="duplicate-campaign-name">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Campaign ID:</span>
+                    <span class="info-value" id="duplicate-campaign-id">-</span>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div id="duplicate-loading-state" style="display: none; text-align: center; padding: 30px;">
+                <div class="spinner"></div>
+                <p style="margin-top: 15px; color: #666;">Fetching campaign details...</p>
+            </div>
+
+            <!-- Duplicate Mode Selection (shown after loading) -->
+            <div id="duplicate-mode-section" style="display: none;">
+                <h4 style="margin-bottom: 15px;">Choose Duplication Mode</h4>
+                <div class="duplicate-mode-options">
+                    <label class="duplicate-mode-option selected" id="mode-option-same">
+                        <input type="radio" name="duplicate_mode" value="same" checked onchange="toggleDuplicateMode('same')">
+                        <div class="mode-option-content">
+                            <span class="mode-icon">📋</span>
+                            <div class="mode-details">
+                                <span class="mode-title">Duplicate with Same Details</span>
+                                <span class="mode-desc">Create exact copies with auto-numbered names</span>
+                            </div>
+                        </div>
+                    </label>
+                    <label class="duplicate-mode-option" id="mode-option-edit">
+                        <input type="radio" name="duplicate_mode" value="edit" onchange="toggleDuplicateMode('edit')">
+                        <div class="mode-option-content">
+                            <span class="mode-icon">✏️</span>
+                            <div class="mode-details">
+                                <span class="mode-title">Duplicate and Edit Details</span>
+                                <span class="mode-desc">Customize budget, landing page, and other settings</span>
+                            </div>
+                        </div>
+                    </label>
+                    <label class="duplicate-mode-option" id="mode-option-bulk">
+                        <input type="radio" name="duplicate_mode" value="bulk" onchange="toggleDuplicateMode('bulk')">
+                        <div class="mode-option-content">
+                            <span class="mode-icon">🚀</span>
+                            <div class="mode-details">
+                                <span class="mode-title">Bulk Launch to Other Accounts</span>
+                                <span class="mode-desc">Duplicate to multiple ad accounts with asset mapping</span>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Bulk Launch Section (for "bulk" mode) -->
+            <div id="duplicate-bulk-section" style="display: none;">
+                <h4 style="margin: 20px 0 15px;">Select Target Accounts</h4>
+                <p style="color: #64748b; font-size: 13px; margin-bottom: 15px;">
+                    Select the ad accounts where you want to duplicate this campaign. Configure each account's settings below.
+                </p>
+                <div class="dup-bulk-account-search" style="margin-bottom: 12px;">
+                    <input type="text" id="dup-bulk-account-search-input"
+                           placeholder="Search accounts by name or ID..."
+                           oninput="filterDupBulkAccounts(this.value)"
+                           style="width: 100%; padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                    <span id="dup-bulk-search-results-count" style="display: block; margin-top: 6px; font-size: 12px; color: #6b7280;"></span>
+                </div>
+                <div id="dup-bulk-accounts-container" style="max-height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 10px; padding: 15px;">
+                    <div class="loading-state" style="text-align: center; padding: 20px;">
+                        <div class="spinner"></div>
+                        <p style="margin-top: 10px; color: #64748b;">Loading accounts...</p>
+                    </div>
+                </div>
+                <div id="dup-bulk-summary" style="margin-top: 15px; padding: 12px; background: #f0f9ff; border-radius: 8px; display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 600; color: #0284c7;">
+                            <span id="dup-bulk-selected-count">0</span> accounts selected
+                        </span>
+                        <span style="font-size: 13px; color: #64748b;">
+                            Total campaigns to create: <strong id="dup-bulk-total-campaigns">0</strong>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Campaign Details (shown after loading) -->
+            <div id="duplicate-details-section" style="display: none;">
+                <div class="duplicate-details-summary">
+                    <h4>Campaign Structure</h4>
+                    <div class="structure-item">
+                        <span class="structure-icon">📢</span>
+                        <span class="structure-label">Campaign:</span>
+                        <span class="structure-value" id="dup-detail-campaign">-</span>
+                    </div>
+                    <div class="structure-item">
+                        <span class="structure-icon">📦</span>
+                        <span class="structure-label">Ad Group:</span>
+                        <span class="structure-value" id="dup-detail-adgroup">-</span>
+                    </div>
+                    <div class="structure-item">
+                        <span class="structure-icon">🎬</span>
+                        <span class="structure-label">Ad:</span>
+                        <span class="structure-value" id="dup-detail-ad">-</span>
+                    </div>
+                </div>
+
+                <!-- Video/Creative Change Section (for "same" mode) -->
+                <div id="duplicate-same-videos-section" class="form-group" style="margin-bottom: 15px; margin-top: 15px; padding: 15px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <label style="font-weight: 600; margin-bottom: 8px; display: block;">
+                        🎬 Videos/Creatives
+                    </label>
+                    <p style="color: #64748b; font-size: 13px; margin-bottom: 12px;">
+                        Current videos from the original campaign. You can add or remove videos for the copies.
+                    </p>
+                    <div id="duplicate-same-current-videos" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+                        <!-- Videos will be rendered here -->
+                    </div>
+                    <button type="button" onclick="openVideoSelectionModal('duplicate')" class="btn-secondary" style="width: 100%; padding: 12px; font-size: 14px;">
+                        🔄 Change Videos
+                    </button>
+                </div>
+
+                <!-- Number of Copies Input (for "same" mode) -->
+                <div class="duplicate-count-section" id="duplicate-count-section">
+                    <label for="duplicate-copy-count">Number of copies to create:</label>
+                    <div class="count-input-wrapper">
+                        <button type="button" class="count-btn minus" onclick="adjustDuplicateCount(-1)">−</button>
+                        <input type="number" id="duplicate-copy-count" min="1" max="20" value="1"
+                               onchange="updateDuplicatePreviewList()" oninput="updateDuplicatePreviewList()">
+                        <button type="button" class="count-btn plus" onclick="adjustDuplicateCount(1)">+</button>
+                    </div>
+                    <small>Maximum 20 copies at a time</small>
+                </div>
+
+                <!-- Edit Details Section (for "edit" mode) -->
+                <div id="duplicate-edit-section" style="display: none;">
+                    <h4 style="margin-top: 20px; margin-bottom: 15px;">Edit Campaign Details</h4>
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">Campaign Name</label>
+                        <input type="text" id="dup-edit-campaign-name" placeholder="Enter campaign name"
+                               style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+                               oninput="updateDuplicatePreviewList()">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">Daily Budget ($)</label>
+                        <input type="number" id="dup-edit-budget" placeholder="50" min="20"
+                               style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                        <small style="color: #666; margin-top: 4px; display: block;">Minimum $20 daily budget</small>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">Landing Page URL</label>
+                        <input type="url" id="dup-edit-landing-url" placeholder="https://example.com/landing-page"
+                               style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">Ad Text</label>
+                        <textarea id="dup-edit-ad-text" placeholder="Enter ad text" rows="3"
+                                  style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; resize: vertical;"></textarea>
+                    </div>
+
+                    <!-- Schedule Options -->
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">Ad Group Schedule</label>
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+                            <label class="dup-schedule-option" style="display: flex; align-items: flex-start; gap: 10px; padding: 10px; background: white; border: 2px solid #1a1a1a; border-radius: 6px; cursor: pointer; margin-bottom: 8px;">
+                                <input type="radio" name="dup_schedule_type" value="continuous" checked onchange="toggleDupScheduleType()" style="margin-top: 3px;">
+                                <div>
+                                    <strong style="color: #1e293b; font-size: 13px;">Start now and run continuously</strong>
+                                    <p style="margin: 2px 0 0; color: #64748b; font-size: 12px;">Ad group will start immediately</p>
+                                </div>
+                            </label>
+                            <label class="dup-schedule-option" style="display: flex; align-items: flex-start; gap: 10px; padding: 10px; background: white; border: 2px solid #e2e8f0; border-radius: 6px; cursor: pointer; margin-bottom: 8px;">
+                                <input type="radio" name="dup_schedule_type" value="scheduled_start_only" onchange="toggleDupScheduleType()" style="margin-top: 3px;">
+                                <div>
+                                    <strong style="color: #1e293b; font-size: 13px;">Schedule start time (run continuously)</strong>
+                                    <p style="margin: 2px 0 0; color: #64748b; font-size: 12px;">Start at a specific date/time</p>
+                                </div>
+                            </label>
+                            <label class="dup-schedule-option" style="display: flex; align-items: flex-start; gap: 10px; padding: 10px; background: white; border: 2px solid #e2e8f0; border-radius: 6px; cursor: pointer;">
+                                <input type="radio" name="dup_schedule_type" value="scheduled" onchange="toggleDupScheduleType()" style="margin-top: 3px;">
+                                <div>
+                                    <strong style="color: #1e293b; font-size: 13px;">Set start and end time</strong>
+                                    <p style="margin: 2px 0 0; color: #64748b; font-size: 12px;">Run during a specific time period</p>
+                                </div>
+                            </label>
+                            <div id="dup-schedule-start-only-container" style="display: none; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 6px;">
+                                <div class="form-group" style="margin-bottom: 10px;">
+                                    <label style="font-weight: 500; color: #475569; font-size: 13px;">Start Date & Time <span style="font-weight: 400; color: #3b82f6;">(EST)</span></label>
+                                    <input type="datetime-local" id="dup-schedule-start-only-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                                </div>
+                            </div>
+                            <div id="dup-schedule-datetime-container" style="display: none; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 6px;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label style="font-weight: 500; color: #475569; font-size: 13px;">Start <span style="font-weight: 400; color: #3b82f6;">(EST)</span></label>
+                                        <input type="datetime-local" id="dup-schedule-start-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label style="font-weight: 500; color: #475569; font-size: 13px;">End <span style="font-weight: 400; color: #3b82f6;">(EST)</span></label>
+                                        <input type="datetime-local" id="dup-schedule-end-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">Number of copies to create</label>
+                        <div class="count-input-wrapper">
+                            <button type="button" class="count-btn minus" onclick="adjustDuplicateCount(-1)">−</button>
+                            <input type="number" id="duplicate-edit-copy-count" min="1" max="20" value="1"
+                                   onchange="updateDuplicatePreviewList()" oninput="updateDuplicatePreviewList()">
+                            <button type="button" class="count-btn plus" onclick="adjustDuplicateCount(1)">+</button>
+                        </div>
+                        <small style="color: #666;">Maximum 20 copies at a time</small>
+                    </div>
+
+                    <!-- Video/Creative Change Section (for "edit" mode) -->
+                    <div class="form-group" style="margin-bottom: 15px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">
+                            🎬 Videos/Creatives
+                        </label>
+                        <p style="color: #64748b; font-size: 13px; margin-bottom: 12px;">
+                            Current videos from the original campaign. You can change them for the duplicates.
+                        </p>
+                        <div id="duplicate-current-videos" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+                        </div>
+                        <button type="button" onclick="openVideoSelectionModal('duplicate')" class="btn-secondary" style="width: 100%; padding: 12px; font-size: 14px;">
+                            🔄 Change Videos
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Preview of Names -->
+                <div class="duplicate-preview-section">
+                    <h4>Preview</h4>
+                    <p class="preview-description">The following campaigns will be created:</p>
+                    <div class="duplicate-preview-list" id="duplicate-preview-list">
+                    </div>
+                </div>
+
+                <!-- What will be duplicated -->
+                <div class="duplicate-includes-section" id="duplicate-includes-section">
+                    <h4>Each copy will include:</h4>
+                    <ul class="includes-list">
+                        <li><span class="check-icon">✓</span> Campaign settings (budget, objective)</li>
+                        <li><span class="check-icon">✓</span> Ad Group (targeting, pixel, schedule)</li>
+                        <li><span class="check-icon">✓</span> Ad (videos, identity, CTA, landing URL)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Progress Section -->
+            <div id="duplicate-progress-section" style="display: none;">
+                <div class="duplicate-progress-header">
+                    <span>Creating duplicates...</span>
+                    <span id="duplicate-progress-text">0 / 0</span>
+                </div>
+                <div class="duplicate-progress-bar-container">
+                    <div class="duplicate-progress-bar" id="duplicate-progress-bar" style="width: 0%;"></div>
+                </div>
+                <div class="duplicate-progress-log" id="duplicate-progress-log">
+                </div>
+            </div>
+
+            <!-- Success Section -->
+            <div id="duplicate-success-section" style="display: none;">
+                <div class="duplicate-success-icon">✅</div>
+                <h4>Duplication Complete!</h4>
+                <p id="duplicate-success-message">Successfully created 0 campaigns.</p>
+                <div class="duplicate-results-summary" id="duplicate-results-summary">
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer" id="duplicate-modal-footer">
+            <button class="btn-secondary" onclick="closeDuplicateCampaignModal()">Cancel</button>
+            <button class="btn-primary" id="duplicate-create-btn" onclick="executeDuplicateCampaign()" disabled>
+                📋 Create Copies
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ============================
+     VIDEO SELECTION MODAL
+     (Used by duplicate campaign to change videos)
+     ============================ -->
+<div id="video-selection-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 900px; max-height: 85vh;">
+        <div class="modal-header">
+            <h3>🎬 Select Videos</h3>
+            <button class="modal-close" onclick="closeVideoSelectionModal()">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 20px;">
+            <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                <input type="text" id="video-modal-search" placeholder="🔍 Search videos by name..."
+                       oninput="filterVideosInModal()"
+                       style="flex: 1; min-width: 200px; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                <button onclick="document.getElementById('video-modal-upload-input').click()"
+                        style="display: flex; align-items: center; gap: 8px; padding: 12px 20px; background: #22c55e; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background 0.2s;"
+                        onmouseover="this.style.background='#16a34a'" onmouseout="this.style.background='#22c55e'">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    Upload Videos
+                </button>
+                <input type="file" id="video-modal-upload-input" accept="video/*" multiple style="display: none;" onchange="handleBulkVideoUpload(event)">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 0 15px; background: #f8fafc; border-radius: 8px;">
+                    <span style="font-weight: 600; color: #475569;">Selected:</span>
+                    <span id="video-modal-count" style="font-size: 18px; font-weight: 700; color: #1e9df1;">0</span>
+                </div>
+            </div>
+            <div id="video-modal-upload-progress" style="display: none; margin-bottom: 20px; padding: 15px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
+                <div class="bulk-upload-header">
+                    <span id="bulk-upload-title">Uploading videos...</span>
+                    <span id="bulk-upload-count">0/0</span>
+                </div>
+                <div class="bulk-upload-bar-container">
+                    <div id="bulk-upload-bar" class="bulk-upload-bar"></div>
+                </div>
+                <div id="bulk-upload-list" class="bulk-upload-list">
+                </div>
+            </div>
+            <div id="video-modal-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; max-height: 450px; overflow-y: auto; padding: 5px;">
+            </div>
+            <div id="video-modal-empty" style="display: none; text-align: center; padding: 40px;">
+                <div style="font-size: 48px; margin-bottom: 15px;">📹</div>
+                <p style="color: #64748b; font-size: 16px;">No videos found in your media library.</p>
+                <p style="color: #94a3b8; font-size: 14px;">Upload videos via TikTok Ads Manager first.</p>
+            </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-top: 1px solid #e2e8f0;">
+            <div style="color: #64748b; font-size: 14px;">
+                <span id="video-modal-total">0</span> videos available
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-secondary" onclick="closeVideoSelectionModal()">Cancel</button>
+                <button class="btn-primary" id="video-modal-confirm" onclick="confirmVideoSelection()">
+                    ✓ Confirm Selection
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

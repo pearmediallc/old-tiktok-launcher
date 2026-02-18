@@ -1671,11 +1671,9 @@ switch ($action) {
 
         $adParams['ad_configuration'] = $adConfig;
 
-        // Build call_to_action_list at top level (required by Smart+ API for CTA to appear)
-        $ctaList = buildCtaListFromPortfolio($callToActionId, $advertiserId);
-        if (!empty($ctaList)) {
-            $adParams['call_to_action_list'] = $ctaList;
-        }
+        // Per TikTok docs: when using call_to_action_id (portfolio), call_to_action_list should NOT be passed.
+        // Docs say: call_to_action_id = "Specify a valid value", call_to_action_list = "Not passed"
+        logSmartPlus("Using call_to_action_id in ad_configuration (portfolio: $callToActionId). NOT sending call_to_action_list per TikTok API docs.");
 
         logSmartPlus("Ad params: " . json_encode($adParams));
         logSmartPlus("=== SENDING TO TIKTOK API ===");
@@ -2013,11 +2011,9 @@ switch ($action) {
 
         $adParams['ad_configuration'] = $adConfig;
 
-        // Build call_to_action_list at top level (required by Smart+ API for CTA to appear)
-        $ctaList = buildCtaListFromPortfolio($callToActionId, $advertiserId);
-        if (!empty($ctaList)) {
-            $adParams['call_to_action_list'] = $ctaList;
-        }
+        // Per TikTok docs: when using call_to_action_id (portfolio), call_to_action_list should NOT be passed.
+        // Docs say: call_to_action_id = "Specify a valid value", call_to_action_list = "Not passed"
+        logSmartPlus("Using call_to_action_id in ad_configuration (portfolio: $callToActionId). NOT sending call_to_action_list per TikTok API docs.");
 
         logSmartPlus("Ad params: " . json_encode($adParams));
 
@@ -3345,11 +3341,8 @@ switch ($action) {
                     'ad_configuration' => $adConfig
                 ];
 
-                // Build call_to_action_list at top level (required by Smart+ API for CTA to appear)
-                $ctaList = buildCtaListFromPortfolio($ctaPortfolioId, $targetAdvertiserId);
-                if (!empty($ctaList)) {
-                    $adParams['call_to_action_list'] = $ctaList;
-                }
+                // Per TikTok docs: when using call_to_action_id (portfolio), call_to_action_list should NOT be passed.
+                logSmartPlus("Using call_to_action_id in ad_configuration (portfolio: $ctaPortfolioId). NOT sending call_to_action_list per TikTok API docs.");
 
                 $adResult = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);
 
@@ -3698,11 +3691,8 @@ switch ($action) {
                 'ad_configuration' => $adConfig
             ];
 
-            // Build call_to_action_list at top level (required by Smart+ API for CTA to appear)
-            $ctaList = buildCtaListFromPortfolio($ctaPortfolioId, $advertiserId);
-            if (!empty($ctaList)) {
-                $adParams['call_to_action_list'] = $ctaList;
-            }
+            // Per TikTok docs: when using call_to_action_id (portfolio), call_to_action_list should NOT be passed.
+            logSmartPlus("Using call_to_action_id in ad_configuration (portfolio: $ctaPortfolioId). NOT sending call_to_action_list per TikTok API docs.");
 
             logSmartPlus("Creating Smart+ ad: " . json_encode($adParams));
             $adResult = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);

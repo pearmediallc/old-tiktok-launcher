@@ -1366,15 +1366,16 @@ function renderImageGrid() {
 
     images.forEach(image => {
         const item = document.createElement('div');
-        item.style.cssText = 'border: 2px solid #4fc3f7; border-radius: 8px; overflow: hidden; background: white;';
+        item.style.cssText = 'border: 2px solid #4fc3f7; border-radius: 10px; overflow: hidden; background: white; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.08); cursor: default;';
 
         item.innerHTML = `
-            <div style="position: relative; height: 80px; background: #f5f5f5;">
-                ${image.url ? `<img src="${image.url}" alt="${image.name}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\\'background: linear-gradient(135deg, #4fc3f7, #29b6f6); width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px;\\'>🖼️</div>'">` : '<div style="background: linear-gradient(135deg, #4fc3f7, #29b6f6); width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px;">🖼️</div>'}
-                <span style="position: absolute; top: 3px; right: 3px; background: #4fc3f7; color: white; padding: 2px 5px; border-radius: 3px; font-size: 9px; font-weight: bold;">IMG</span>
+            <div style="position: relative; aspect-ratio: 1; background: #f5f5f5;">
+                ${image.url ? `<img src="${image.url}" alt="${image.name}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div style="display:none; background: linear-gradient(135deg, #4fc3f7, #29b6f6); width: 100%; height: 100%; align-items: center; justify-content: center; color: white; font-size: 28px;">🖼️</div>` : '<div style="background: linear-gradient(135deg, #4fc3f7, #29b6f6); width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 28px;">🖼️</div>'}
+                <span style="position: absolute; top: 4px; right: 4px; background: #4fc3f7; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold;">IMG</span>
             </div>
-            <div style="padding: 5px; font-size: 10px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #333;">
-                ${(image.name || 'Image').substring(0, 15)}${image.name && image.name.length > 15 ? '...' : ''}
+            <div style="padding: 8px 10px; font-size: 11px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #334155;" title="${image.name || 'Image'}">
+                ${(image.name || 'Image').substring(0, 20)}${image.name && image.name.length > 20 ? '...' : ''}
             </div>
         `;
 
@@ -2739,11 +2740,11 @@ function renderVideoSelectionGrid() {
 
         item.innerHTML = `
             <div class="video-preview">
-                ${video.url ? `<img src="${video.url}" alt="${video.name}">` : '<div class="no-preview">No Preview</div>'}
-                <span class="video-badge">🎬</span>
+                ${video.url ? `<img src="${video.url}" alt="${video.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="no-preview" style="display:none;">No Preview</div>` : '<div class="no-preview">No Preview</div>'}
                 ${isSelected ? '<span class="selected-badge">✓</span>' : ''}
             </div>
-            <div class="video-name">${(video.name || '').substring(0, 20)}${video.name && video.name.length > 20 ? '...' : ''}</div>
+            <div class="video-name" title="${video.name || ''}">${(video.name || '').substring(0, 25)}${video.name && video.name.length > 25 ? '...' : ''}</div>
         `;
 
         container.appendChild(item);
@@ -10390,15 +10391,22 @@ function toggleDuplicateMode(mode) {
     if (includesSection) includesSection.style.display = 'none';
     if (bulkSection) bulkSection.style.display = 'none';
 
+    // Show/hide same-mode video section
+    const sameVideosSection = document.getElementById('duplicate-same-videos-section');
+
     if (mode === 'same') {
         sameOption?.classList.add('selected');
         if (countSection) countSection.style.display = 'block';
         if (includesSection) includesSection.style.display = 'block';
         if (detailsSection) detailsSection.style.display = 'block';
+        if (sameVideosSection) sameVideosSection.style.display = 'block';
+        // Refresh the video display for same mode
+        renderDuplicateCurrentVideos();
     } else if (mode === 'edit') {
         editOption?.classList.add('selected');
         if (editSection) editSection.style.display = 'block';
         if (detailsSection) detailsSection.style.display = 'block';
+        if (sameVideosSection) sameVideosSection.style.display = 'none';
     } else if (mode === 'bulk') {
         bulkOption?.classList.add('selected');
         if (bulkSection) bulkSection.style.display = 'block';
@@ -12433,8 +12441,8 @@ async function executeDuplicateCampaign() {
                     image_ids: ad.image_ids
                 });
 
-                // Check if user changed videos in duplicate modal (edit mode)
-                if (duplicateState.mode === 'edit' && duplicateState.changedVideos && duplicateState.changedVideos.length > 0) {
+                // Check if user changed videos in duplicate modal (edit or same mode)
+                if ((duplicateState.mode === 'edit' || duplicateState.mode === 'same') && duplicateState.changedVideos && duplicateState.changedVideos.length > 0) {
                     // Use the changed videos instead of original
                     creatives = duplicateState.changedVideos.map(v => ({
                         video_id: v.video_id || v.id
@@ -13449,7 +13457,7 @@ function finishBulkUpload() {
 // Render current videos in duplicate modal
 function renderDuplicateCurrentVideos() {
     const container = document.getElementById('duplicate-current-videos');
-    if (!container) return;
+    const sameContainer = document.getElementById('duplicate-same-current-videos');
 
     let videos = [];
 
@@ -13486,12 +13494,19 @@ function renderDuplicateCurrentVideos() {
         }
     }
 
-    if (videos.length === 0) {
-        container.innerHTML = '<p style="color: #94a3b8; font-style: italic;">No videos found</p>';
+    const videoCount = videos.length;
+    const emptyHtml = '<p style="color: #94a3b8; font-style: italic;">No videos found</p>';
+
+    if (videoCount === 0) {
+        if (container) container.innerHTML = emptyHtml;
+        if (sameContainer) sameContainer.innerHTML = emptyHtml;
         return;
     }
 
-    container.innerHTML = videos.map(video => `
+    const isChanged = duplicateState.changedVideos && duplicateState.changedVideos.length > 0;
+    const changedLabel = isChanged ? `<span style="display: inline-block; margin-left: 8px; padding: 2px 8px; background: #fef3c7; color: #92400e; border-radius: 4px; font-size: 11px; font-weight: 600;">Modified (${videoCount} videos)</span>` : '';
+
+    const videosHtml = videos.map(video => `
         <div class="duplicate-video-item" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; min-width: 150px;">
             ${video.thumbnail_url ?
                 `<img src="${video.thumbnail_url}" style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover;" onerror="this.outerHTML='<div style=\\'width:40px;height:40px;background:#e2e8f0;border-radius:4px;display:flex;align-items:center;justify-content:center;\\'>🎬</div>'" />`
@@ -13503,6 +13518,9 @@ function renderDuplicateCurrentVideos() {
             </div>
         </div>
     `).join('');
+
+    if (container) container.innerHTML = changedLabel + videosHtml;
+    if (sameContainer) sameContainer.innerHTML = changedLabel + videosHtml;
 }
 
 // Format duration in MM:SS
