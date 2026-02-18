@@ -2191,7 +2191,6 @@ switch ($action) {
             $params = [
                 'advertiser_id' => $advertiserId,
                 'creative_portfolio_type' => 'CTA',
-                'portfolio_name' => 'Frequently Used CTAs',
                 'portfolio_content' => $frequentlyUsedCTAs
             ];
 
@@ -2201,17 +2200,21 @@ switch ($action) {
                 $newPortfolioId = $result['data']['creative_portfolio_id'];
                 logSmartPlus("Created new portfolio: $newPortfolioId");
 
-                // Save to database
-                $portfolioData = [
-                    'advertiser_id' => $advertiserId,
-                    'creative_portfolio_id' => $newPortfolioId,
-                    'portfolio_name' => 'Frequently Used CTAs',
-                    'portfolio_type' => 'CTA',
-                    'portfolio_content' => json_encode($frequentlyUsedCTAs),
-                    'created_by_tool' => 1
-                ];
+                // Save to database (non-blocking — portfolio already exists in TikTok)
+                try {
+                    $portfolioData = [
+                        'advertiser_id' => $advertiserId,
+                        'creative_portfolio_id' => $newPortfolioId,
+                        'portfolio_name' => 'Frequently Used CTAs',
+                        'portfolio_type' => 'CTA',
+                        'portfolio_content' => json_encode($frequentlyUsedCTAs),
+                        'created_by_tool' => 1
+                    ];
 
-                $db->upsert('tool_portfolios', $portfolioData, ['advertiser_id', 'creative_portfolio_id']);
+                    $db->upsert('tool_portfolios', $portfolioData, ['advertiser_id', 'creative_portfolio_id']);
+                } catch (Exception $dbErr) {
+                    logSmartPlus("Warning: DB save failed for portfolio: " . $dbErr->getMessage());
+                }
 
                 echo json_encode([
                     'success' => true,
@@ -2682,7 +2685,6 @@ switch ($action) {
             $createParams = [
                 'advertiser_id' => $targetAdvertiserId,
                 'creative_portfolio_type' => 'CTA',
-                'portfolio_name' => $portfolioName,
                 'portfolio_content' => $portfolioContent
             ];
 
@@ -2905,10 +2907,15 @@ switch ($action) {
             'failed' => []
         ];
 
-        // Process each account
+        // Process each account (skip primary advertiser — already handled by single-account flow)
         foreach ($accounts as $index => $account) {
             $targetAdvertiserId = $account['advertiser_id'];
             $accountName = $account['advertiser_name'] ?? 'Account ' . ($index + 1);
+
+            if ($targetAdvertiserId === $primaryAdvertiserId) {
+                logSmartPlus("Skipping primary advertiser $targetAdvertiserId in bulk loop (already launched)");
+                continue;
+            }
             $pixelId = $account['pixel_id'] ?? null;
             $identityId = $account['identity_id'] ?? null;
             $identityType = $account['identity_type'] ?? 'CUSTOMIZED_USER';
@@ -2971,7 +2978,6 @@ switch ($action) {
                         $portfolioResult = makeApiCall('/creative/portfolio/create/', [
                             'advertiser_id' => $targetAdvertiserId,
                             'creative_portfolio_type' => 'CTA',
-                            'portfolio_name' => 'Auto-Generated CTAs',
                             'portfolio_content' => $frequentlyUsedCTAs
                         ], $accessToken);
 

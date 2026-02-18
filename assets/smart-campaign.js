@@ -6965,32 +6965,11 @@ async function executeBulkLaunch() {
         schedule_end_time: bulkScheduleData.schedule_end_time
     };
 
-    // Prepare accounts with video mappings
-    const accountsToLaunch = bulkLaunchState.selectedAccounts.map(account => {
-        // For original account, use the main campaign state values
-        if (account.is_original) {
-            const accountData = {
-                advertiser_id: account.advertiser_id,
-                advertiser_name: account.advertiser_name,
-                is_original: true,
-                pixel_id: state.pixelId,
-                identity_id: state.globalIdentityId,
-                identity_type: state.globalIdentityType || 'CUSTOMIZED_USER',
-                portfolio_id: state.selectedPortfolioId,
-                // For original account, videos don't need mapping (same account)
-                video_mapping: {},
-                // Landing page URL override (null = use campaign default)
-                landing_page_url: account.landing_page_url || null,
-                // Campaign name override (null = use campaign default)
-                campaign_name: account.campaign_name || null
-            };
-            // Include identity_authorized_bc_id for BC_AUTH_TT identities
-            if (state.globalIdentityType === 'BC_AUTH_TT' && state.globalIdentityAuthorizedBcId) {
-                accountData.identity_authorized_bc_id = state.globalIdentityAuthorizedBcId;
-            }
-            return accountData;
-        }
-
+    // Prepare accounts with video mappings — exclude original account
+    // Original account's campaign is handled separately (step 4b above), never send to bulk backend
+    const accountsToLaunch = bulkLaunchState.selectedAccounts
+        .filter(account => !account.is_original)
+        .map(account => {
         // For other accounts
         const accountData = {
             advertiser_id: account.advertiser_id,

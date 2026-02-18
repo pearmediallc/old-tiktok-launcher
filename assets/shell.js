@@ -716,6 +716,7 @@
 
     // Fetch and display Business Center balances
     window.loadBcBalances = async function() {
+        console.log('[BC Balance] Fetching BC balances...');
         try {
             const response = await fetch('api-smartplus.php', {
                 method: 'POST',
@@ -723,12 +724,13 @@
                 body: JSON.stringify({ action: 'get_bc_balances' })
             });
             const result = await response.json();
+            console.log('[BC Balance] API response:', result);
 
             if (result.success && result.data && result.data.length > 0) {
                 window.shellState.bcBalances = result.data;
                 renderBcBalances(result.data);
             } else {
-                console.log('[BC Balance] No BCs found or no balance data');
+                console.log('[BC Balance] No BCs found or no balance data:', result.message || 'empty');
             }
         } catch (err) {
             console.warn('[BC Balance] Failed to load:', err);

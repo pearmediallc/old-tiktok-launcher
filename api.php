@@ -2603,8 +2603,8 @@ try {
                 }
 
                 // Validate target advertiser is in the authorized list
-                $authorizedAdvertisers = $_SESSION['oauth_advertiser_ids'] ?? [];
-                if (!in_array($targetAdvertiserId, $authorizedAdvertisers)) {
+                $authorizedAdvertisers = array_map('strval', $_SESSION['oauth_advertiser_ids'] ?? []);
+                if (!in_array((string)$targetAdvertiserId, $authorizedAdvertisers, true)) {
                     logToFile("ERROR: Advertiser $targetAdvertiserId is not in authorized list: " . json_encode($authorizedAdvertisers));
                     throw new Exception('You do not have permission to upload to this advertiser account. Please re-authorize with this account included.');
                 }
