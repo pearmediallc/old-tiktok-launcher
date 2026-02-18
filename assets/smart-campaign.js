@@ -12532,10 +12532,43 @@ async function executeDuplicateCampaign() {
                     ? editedValues.adTexts
                     : (ad.ad_texts || []);
 
+                // Resolve identity_id - check multiple fallback sources
+                let identityId = ad.identity_id;
+                let identityType = ad.identity_type || 'CUSTOMIZED_USER';
+
+                // Fallback: check ad_configuration
+                if (!identityId && ad.ad_configuration?.identity_id) {
+                    identityId = ad.ad_configuration.identity_id;
+                    identityType = ad.ad_configuration.identity_type || identityType;
+                    addLog('info', `Using identity from ad_configuration: ${identityId}`);
+                }
+
+                // Fallback: check creative_list for identity
+                if (!identityId && ad.creative_list?.length > 0) {
+                    for (const creative of ad.creative_list) {
+                        const cInfo = creative.creative_info || {};
+                        if (cInfo.identity_id) {
+                            identityId = cInfo.identity_id;
+                            identityType = cInfo.identity_type || identityType;
+                            addLog('info', `Using identity from creative_info: ${identityId}`);
+                            break;
+                        }
+                    }
+                }
+
+                // Validate identity_id
+                if (!identityId) {
+                    addLog('error', 'No identity_id found in campaign data');
+                    throw new Error('No identity found for this campaign. The ad requires an identity (TikTok page or custom identity).');
+                }
+
+                addLog('info', `Using identity: ${identityId} (${identityType})`);
+
                 const adData = {
                     adgroup_id: newAdGroupId,
                     ad_name: newName,
-                    identity_id: ad.identity_id,
+                    identity_id: identityId,
+                    identity_type: identityType,
                     call_to_action_id: callToActionId,
                     creatives: creatives,
                     ad_texts: adTextsToUse
