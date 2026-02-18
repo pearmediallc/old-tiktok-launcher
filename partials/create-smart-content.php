@@ -1651,26 +1651,35 @@
                 <button class="modal-close" onclick="closeVideoSelectionModal()">&times;</button>
             </div>
             <div class="modal-body" style="padding: 20px;">
-                <!-- Search, Upload and Filter -->
-                <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
-                    <input type="text" id="video-modal-search" placeholder="🔍 Search videos by name..."
+                <!-- Search, Upload, Refresh and Filter -->
+                <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; align-items: center;">
+                    <input type="text" id="video-modal-search" placeholder="Search videos by name..."
                            oninput="filterVideosInModal()"
-                           style="flex: 1; min-width: 200px; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
+                           style="flex: 1; min-width: 200px; padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
                     <button onclick="document.getElementById('video-modal-upload-input').click()"
-                            style="display: flex; align-items: center; gap: 8px; padding: 12px 20px; background: #22c55e; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background 0.2s;"
+                            style="display: flex; align-items: center; gap: 6px; padding: 10px 16px; background: #22c55e; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px;"
                             onmouseover="this.style.background='#16a34a'" onmouseout="this.style.background='#22c55e'">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
-                        Upload Videos
+                        Upload
+                    </button>
+                    <button id="video-modal-refresh-btn" onclick="refreshVideoModalLibrary()"
+                            style="display: flex; align-items: center; gap: 6px; padding: 10px 16px; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px;"
+                            onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
+                        <span id="video-modal-refresh-icon">&#x21bb;</span> Refresh
                     </button>
                     <input type="file" id="video-modal-upload-input" accept="video/*" multiple style="display: none;" onchange="handleBulkVideoUpload(event)">
-                    <div style="display: flex; align-items: center; gap: 10px; padding: 0 15px; background: #f8fafc; border-radius: 8px;">
+                    <div style="display: flex; align-items: center; gap: 10px; padding: 0 15px; background: #f8fafc; border-radius: 8px; height: 40px;">
                         <span style="font-weight: 600; color: #475569;">Selected:</span>
                         <span id="video-modal-count" style="font-size: 18px; font-weight: 700; color: #1e9df1;">0</span>
                     </div>
+                </div>
+                <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+                    <button onclick="selectAllVideosInModal()" style="padding: 6px 14px; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;">Select All</button>
+                    <button onclick="clearAllVideosInModal()" style="padding: 6px 14px; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;">Clear All</button>
                 </div>
 
                 <!-- Bulk Upload Progress (hidden by default) -->

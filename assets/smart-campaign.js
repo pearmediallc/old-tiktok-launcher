@@ -12841,6 +12841,84 @@ function filterVideosInModal() {
     });
 }
 
+// Refresh video library in modal
+async function refreshVideoModalLibrary() {
+    const btn = document.getElementById('video-modal-refresh-btn');
+    const icon = document.getElementById('video-modal-refresh-icon');
+    const grid = document.getElementById('video-modal-grid');
+
+    // Show loading state
+    if (btn) btn.disabled = true;
+    if (icon) icon.style.animation = 'spin 1s linear infinite';
+
+    // Show loading in grid
+    if (grid) {
+        grid.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8; grid-column: 1/-1;"><div style="display:inline-block; animation: spin 1s linear infinite;">&#x21bb;</div> Refreshing videos...</div>';
+        grid.style.display = 'grid';
+    }
+    const emptyState = document.getElementById('video-modal-empty');
+    if (emptyState) emptyState.style.display = 'none';
+
+    try {
+        await loadMediaLibrary(true);
+
+        const videos = state.mediaLibrary.filter(m => m.type === 'video');
+        videoModalState.allVideos = videos;
+        renderVideoModalGrid(videos);
+
+        // Update total count
+        const totalEl = document.getElementById('video-modal-total');
+        if (totalEl) totalEl.textContent = videos.length;
+
+        // Update selected count (keep current selections)
+        document.getElementById('video-modal-count').textContent = videoModalState.selectedVideos.length;
+
+        showToast(`Refreshed: ${videos.length} video(s) found`, 'success');
+        addLog('success', `Video library refreshed: ${videos.length} videos`);
+    } catch (e) {
+        console.error('Error refreshing video library:', e);
+        showToast('Failed to refresh videos', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+        if (icon) icon.style.animation = 'none';
+    }
+}
+
+// Select all videos in modal
+function selectAllVideosInModal() {
+    const videos = videoModalState.allVideos;
+    if (videos.length === 0) return;
+
+    // Add all videos that aren't already selected
+    videoModalState.selectedVideos = videos.map(v => ({
+        id: v.id,
+        video_id: v.video_id || v.id,
+        name: v.name || v.file_name,
+        thumbnail_url: v.thumbnail_url || v.cover_image_url || v.url || v.preview_url
+    }));
+
+    // Update all items in UI
+    document.querySelectorAll('.video-modal-item').forEach(item => {
+        item.classList.add('selected');
+    });
+
+    document.getElementById('video-modal-count').textContent = videoModalState.selectedVideos.length;
+    showToast(`Selected all ${videoModalState.selectedVideos.length} video(s)`, 'success');
+}
+
+// Clear all video selections in modal
+function clearAllVideosInModal() {
+    videoModalState.selectedVideos = [];
+
+    // Update all items in UI
+    document.querySelectorAll('.video-modal-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+
+    document.getElementById('video-modal-count').textContent = '0';
+    showToast('Cleared all selections', 'info');
+}
+
 // Confirm video selection
 function confirmVideoSelection() {
     const context = videoModalState.context;
