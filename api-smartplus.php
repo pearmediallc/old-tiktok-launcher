@@ -584,6 +584,8 @@ function buildCtaListFromPortfolio($portfolioId, $advertiserId) {
                         $ctaList[] = ['call_to_action' => $item['asset_content']];
                     }
                 }
+                // TikTok Smart+ API allows maxItems: 3 for call_to_action_list
+                $ctaList = array_slice($ctaList, 0, 3);
                 if (!empty($ctaList)) {
                     logSmartPlus("Built call_to_action_list from DB portfolio: " . json_encode($ctaList));
                     return $ctaList;
@@ -595,13 +597,12 @@ function buildCtaListFromPortfolio($portfolioId, $advertiserId) {
     }
 
     // Fallback: return default CTAs so ads always have CTA values
+    // TikTok Smart+ API allows maxItems: 3 for call_to_action_list
     logSmartPlus("Using default call_to_action_list (portfolio content not found in DB)");
     return [
         ['call_to_action' => 'LEARN_MORE'],
-        ['call_to_action' => 'GET_QUOTE'],
         ['call_to_action' => 'SIGN_UP'],
-        ['call_to_action' => 'CONTACT_US'],
-        ['call_to_action' => 'APPLY_NOW']
+        ['call_to_action' => 'CONTACT_US']
     ];
 }
 
