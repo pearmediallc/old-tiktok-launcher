@@ -10270,6 +10270,20 @@ async function openDuplicateCampaignModal(campaignId, campaignName) {
         </button>
     `;
 
+    // Load media library in background if empty (needed for video thumbnails)
+    if (state.mediaLibrary.filter(m => m.type === 'video').length === 0) {
+        addLog('info', 'Loading media library for video thumbnails...');
+        loadMediaLibrary(true).then(() => {
+            addLog('success', `Media library loaded: ${state.mediaLibrary.filter(m => m.type === 'video').length} videos`);
+            // Re-render current videos once media library is loaded (for thumbnails)
+            if (duplicateState.campaignDetails?.ad) {
+                renderDuplicateCurrentVideos();
+            }
+        }).catch(err => {
+            console.error('Failed to load media library:', err);
+        });
+    }
+
     // Fetch campaign details
     addLog('info', `Fetching details for campaign ${campaignId}...`);
 
@@ -12625,17 +12639,32 @@ let videoModalState = {
 };
 
 // Open video selection modal
-function openVideoSelectionModal(context, preselectedVideos = []) {
+async function openVideoSelectionModal(context, preselectedVideos = []) {
     videoModalState.context = context;
     videoModalState.selectedVideos = [...preselectedVideos];
+
+    // Show modal immediately
+    const modal = document.getElementById('video-selection-modal');
+    modal.style.display = 'flex';
+
+    // If media library is empty (e.g. on View Campaigns page), load it first
+    if (state.mediaLibrary.filter(m => m.type === 'video').length === 0) {
+        // Show loading state in the modal grid
+        const grid = document.getElementById('video-modal-grid');
+        const emptyState = document.getElementById('video-modal-empty');
+        if (grid) grid.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8; grid-column: 1/-1;"><div class="spinner" style="display:inline-block; animation: spin 1s linear infinite;">🔄</div> Loading videos from media library...</div>';
+        if (grid) grid.style.display = 'grid';
+        if (emptyState) emptyState.style.display = 'none';
+        document.getElementById('video-modal-total').textContent = '...';
+
+        addLog('info', 'Media library empty - loading videos...');
+        await loadMediaLibrary(true);
+        addLog('success', `Loaded ${state.mediaLibrary.filter(m => m.type === 'video').length} videos`);
+    }
 
     // Get videos from media library
     const videos = state.mediaLibrary.filter(m => m.type === 'video');
     videoModalState.allVideos = videos;
-
-    // Show modal
-    const modal = document.getElementById('video-selection-modal');
-    modal.style.display = 'flex';
 
     // Render videos
     renderVideoModalGrid(videos);
