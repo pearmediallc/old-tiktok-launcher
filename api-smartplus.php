@@ -561,6 +561,61 @@ function makeApiCall($endpoint, $params, $accessToken, $method = 'POST') {
     return $result ?? ['code' => -1, 'message' => 'Empty response', 'data' => null];
 }
 
+// Build call_to_action_list from portfolio content for Smart+ ad creation
+// TikTok Smart+ API requires call_to_action_list at the top level (array of {call_to_action: "LEARN_MORE"})
+// This is separate from call_to_action_id in ad_configuration (portfolio ID)
+function buildCtaListFromPortfolio($portfolioId, $advertiserId) {
+    if (empty($portfolioId)) return [];
+
+    try {
+        require_once __DIR__ . '/database/Database.php';
+        $db = Database::getInstance();
+        $portfolio = $db->fetchOne(
+            "SELECT portfolio_content FROM tool_portfolios WHERE creative_portfolio_id = :pid AND advertiser_id = :aid",
+            ['pid' => $portfolioId, 'aid' => $advertiserId]
+        );
+
+        if ($portfolio && !empty($portfolio['portfolio_content'])) {
+            $content = json_decode($portfolio['portfolio_content'], true);
+            if (is_array($content)) {
+                $ctaList = [];
+                foreach ($content as $item) {
+                    if (!empty($item['asset_content'])) {
+                        $ctaList[] = ['call_to_action' => $item['asset_content']];
+                    }
+                }
+                if (!empty($ctaList)) {
+                    logSmartPlus("Built call_to_action_list from DB portfolio: " . json_encode($ctaList));
+                    return $ctaList;
+                }
+            }
+        }
+    } catch (Exception $e) {
+        logSmartPlus("Warning: Could not look up portfolio content from DB: " . $e->getMessage());
+    }
+
+    // Fallback: return default CTAs so ads always have CTA values
+    logSmartPlus("Using default call_to_action_list (portfolio content not found in DB)");
+    return [
+        ['call_to_action' => 'LEARN_MORE'],
+        ['call_to_action' => 'GET_QUOTE'],
+        ['call_to_action' => 'SIGN_UP'],
+        ['call_to_action' => 'CONTACT_US'],
+        ['call_to_action' => 'APPLY_NOW']
+    ];
+}
+
+// Build call_to_action_list directly from portfolio content array (no DB lookup needed)
+function buildCtaListFromContent($portfolioContent) {
+    $ctaList = [];
+    foreach ($portfolioContent as $item) {
+        if (!empty($item['asset_content'])) {
+            $ctaList[] = ['call_to_action' => $item['asset_content']];
+        }
+    }
+    return $ctaList;
+}
+
 // Handle request
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
 $action = $input['action'] ?? '';
@@ -1528,8 +1583,8 @@ switch ($action) {
             exit;
         }
 
-        // For Lead Gen Smart+ Ads: use call_to_action_id (Dynamic CTA Portfolio)
-        // Lead Gen objective REQUIRES portfolio-based CTA, not call_to_action_list
+        // For Lead Gen Smart+ Ads: use call_to_action_id (Dynamic CTA Portfolio) in ad_configuration
+        // AND call_to_action_list at top level with actual CTA values
         $callToActionId = $data['call_to_action_id'] ?? null;
 
         if (empty($callToActionId)) {
@@ -1614,6 +1669,12 @@ switch ($action) {
         }
 
         $adParams['ad_configuration'] = $adConfig;
+
+        // Build call_to_action_list at top level (required by Smart+ API for CTA to appear)
+        $ctaList = buildCtaListFromPortfolio($callToActionId, $advertiserId);
+        if (!empty($ctaList)) {
+            $adParams['call_to_action_list'] = $ctaList;
+        }
 
         logSmartPlus("Ad params: " . json_encode($adParams));
         logSmartPlus("=== SENDING TO TIKTOK API ===");
@@ -1898,8 +1959,8 @@ switch ($action) {
             $landingPageUrlList[] = ['landing_page_url' => $data['landing_page_url']];
         }
 
-        // For Lead Gen Smart+ Ads: Use call_to_action_id (portfolio ID) instead of call_to_action_list
-        // This is REQUIRED - call_to_action_list is NOT supported for Lead Gen objective
+        // For Lead Gen Smart+ Ads: Use call_to_action_id (portfolio ID) in ad_configuration
+        // AND call_to_action_list at top level with actual CTA values
         $callToActionId = $data['call_to_action_id'] ?? null;
 
         if (empty($callToActionId)) {
@@ -1950,6 +2011,12 @@ switch ($action) {
         }
 
         $adParams['ad_configuration'] = $adConfig;
+
+        // Build call_to_action_list at top level (required by Smart+ API for CTA to appear)
+        $ctaList = buildCtaListFromPortfolio($callToActionId, $advertiserId);
+        if (!empty($ctaList)) {
+            $adParams['call_to_action_list'] = $ctaList;
+        }
 
         logSmartPlus("Ad params: " . json_encode($adParams));
 
@@ -3277,6 +3344,12 @@ switch ($action) {
                     'ad_configuration' => $adConfig
                 ];
 
+                // Build call_to_action_list at top level (required by Smart+ API for CTA to appear)
+                $ctaList = buildCtaListFromPortfolio($ctaPortfolioId, $targetAdvertiserId);
+                if (!empty($ctaList)) {
+                    $adParams['call_to_action_list'] = $ctaList;
+                }
+
                 $adResult = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);
 
                 if ($adResult['code'] != 0 || !isset($adResult['data']['smart_plus_ad_id'])) {
@@ -3623,6 +3696,12 @@ switch ($action) {
                 'ad_text_list' => $adTextList,
                 'ad_configuration' => $adConfig
             ];
+
+            // Build call_to_action_list at top level (required by Smart+ API for CTA to appear)
+            $ctaList = buildCtaListFromPortfolio($ctaPortfolioId, $advertiserId);
+            if (!empty($ctaList)) {
+                $adParams['call_to_action_list'] = $ctaList;
+            }
 
             logSmartPlus("Creating Smart+ ad: " . json_encode($adParams));
             $adResult = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);

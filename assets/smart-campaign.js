@@ -1150,8 +1150,8 @@ async function createLearnMorePortfolio() {
             ]
         });
 
-        if (result.success && result.data && result.data.portfolio_id) {
-            const portfolioId = result.data.portfolio_id;
+        if (result.success && result.portfolio_id) {
+            const portfolioId = result.portfolio_id;
 
             state.selectedPortfolioId = portfolioId;
             state.selectedPortfolioName = 'Learn_More';
