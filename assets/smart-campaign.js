@@ -12532,14 +12532,16 @@ async function executeDuplicateCampaign() {
                     ? editedValues.adTexts
                     : (ad.ad_texts || []);
 
-                // Resolve identity_id - check multiple fallback sources
+                // Resolve identity - check multiple fallback sources
                 let identityId = ad.identity_id;
                 let identityType = ad.identity_type || 'CUSTOMIZED_USER';
+                let identityBcId = ad.identity_authorized_bc_id || '';
 
                 // Fallback: check ad_configuration
                 if (!identityId && ad.ad_configuration?.identity_id) {
                     identityId = ad.ad_configuration.identity_id;
                     identityType = ad.ad_configuration.identity_type || identityType;
+                    identityBcId = ad.ad_configuration.identity_authorized_bc_id || ad.ad_configuration.identity_bc_id || identityBcId;
                     addLog('info', `Using identity from ad_configuration: ${identityId}`);
                 }
 
@@ -12550,6 +12552,7 @@ async function executeDuplicateCampaign() {
                         if (cInfo.identity_id) {
                             identityId = cInfo.identity_id;
                             identityType = cInfo.identity_type || identityType;
+                            identityBcId = cInfo.identity_authorized_bc_id || cInfo.identity_bc_id || identityBcId;
                             addLog('info', `Using identity from creative_info: ${identityId}`);
                             break;
                         }
@@ -12562,7 +12565,7 @@ async function executeDuplicateCampaign() {
                     throw new Error('No identity found for this campaign. The ad requires an identity (TikTok page or custom identity).');
                 }
 
-                addLog('info', `Using identity: ${identityId} (${identityType})`);
+                addLog('info', `Using identity: ${identityId} (type=${identityType}, bc_id=${identityBcId || 'none'})`);
 
                 const adData = {
                     adgroup_id: newAdGroupId,
@@ -12573,6 +12576,11 @@ async function executeDuplicateCampaign() {
                     creatives: creatives,
                     ad_texts: adTextsToUse
                 };
+
+                // Add BC ID for BC_AUTH_TT identities
+                if (identityType === 'BC_AUTH_TT' && identityBcId) {
+                    adData.identity_authorized_bc_id = identityBcId;
+                }
 
                 // Add destination
                 if (landingPageUrl) {

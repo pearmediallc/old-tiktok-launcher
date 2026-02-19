@@ -4840,54 +4840,45 @@ switch ($action) {
                 // Extract identity - check multiple locations in TikTok API response
                 $identityId = '';
                 $identityType = 'CUSTOMIZED_USER';
+                $identityAuthorizedBcId = '';
 
-                // 1. Check ad_configuration (where we put it during creation)
-                if (!empty($ad['ad_configuration']['identity_id'])) {
-                    $identityId = $ad['ad_configuration']['identity_id'];
-                    $identityType = $ad['ad_configuration']['identity_type'] ?? 'CUSTOMIZED_USER';
-                    logSmartPlus("Found identity in ad_configuration: $identityId ($identityType)");
-                }
+                // Helper to extract identity fields from an array
+                $extractIdentity = function($source, $label) use (&$identityId, &$identityType, &$identityAuthorizedBcId) {
+                    if (empty($identityId) && !empty($source['identity_id'])) {
+                        $identityId = $source['identity_id'];
+                        $identityType = $source['identity_type'] ?? 'CUSTOMIZED_USER';
+                        $identityAuthorizedBcId = $source['identity_authorized_bc_id'] ?? $source['identity_bc_id'] ?? '';
+                        logSmartPlus("Found identity in $label: id=$identityId, type=$identityType, bc_id=$identityAuthorizedBcId");
+                        return true;
+                    }
+                    return false;
+                };
+
+                // 1. Check ad_configuration
+                $extractIdentity($ad['ad_configuration'] ?? [], 'ad_configuration');
                 // 2. Check ad root level
-                if (empty($identityId) && !empty($ad['identity_id'])) {
-                    $identityId = $ad['identity_id'];
-                    $identityType = $ad['identity_type'] ?? 'CUSTOMIZED_USER';
-                    logSmartPlus("Found identity at ad root level: $identityId ($identityType)");
-                }
-                // 3. Check creative_list -> creative_info for identity (media_info structure)
+                $extractIdentity($ad, 'ad root level');
+                // 3. Check creative_list -> creative_info
                 if (empty($identityId) && !empty($creativeList)) {
                     foreach ($creativeList as $creative) {
                         $cInfo = $creative['creative_info'] ?? [];
-                        if (!empty($cInfo['identity_id'])) {
-                            $identityId = $cInfo['identity_id'];
-                            $identityType = $cInfo['identity_type'] ?? 'CUSTOMIZED_USER';
-                            logSmartPlus("Found identity in creative_info: $identityId ($identityType)");
-                            break;
-                        }
-                        // Also check media_info inside creative_info
-                        $mInfo = $cInfo['media_info'] ?? [];
-                        if (!empty($mInfo['identity_id'])) {
-                            $identityId = $mInfo['identity_id'];
-                            $identityType = $mInfo['identity_type'] ?? 'CUSTOMIZED_USER';
-                            logSmartPlus("Found identity in media_info: $identityId ($identityType)");
-                            break;
-                        }
+                        if ($extractIdentity($cInfo, 'creative_info')) break;
+                        if ($extractIdentity($cInfo['media_info'] ?? [], 'creative_info.media_info')) break;
                     }
                 }
                 // 4. Check media_info_list at ad level
                 if (empty($identityId) && !empty($ad['media_info_list'])) {
                     foreach ($ad['media_info_list'] as $mediaItem) {
                         $mInfo = $mediaItem['media_info'] ?? $mediaItem;
-                        if (!empty($mInfo['identity_id'])) {
-                            $identityId = $mInfo['identity_id'];
-                            $identityType = $mInfo['identity_type'] ?? 'CUSTOMIZED_USER';
-                            logSmartPlus("Found identity in media_info_list: $identityId ($identityType)");
-                            break;
-                        }
+                        if ($extractIdentity($mInfo, 'media_info_list')) break;
                     }
                 }
 
                 if (empty($identityId)) {
                     logSmartPlus("WARNING: No identity_id found in any location for this ad");
+                }
+                if ($identityType === 'BC_AUTH_TT' && empty($identityAuthorizedBcId)) {
+                    logSmartPlus("WARNING: BC_AUTH_TT identity found but missing identity_authorized_bc_id");
                 }
 
                 // Check page_id for instant forms (Lead Gen)
@@ -4904,6 +4895,7 @@ switch ($action) {
                     'ad_name' => $ad['ad_name'] ?? '',
                     'identity_id' => $identityId,
                     'identity_type' => $identityType,
+                    'identity_authorized_bc_id' => $identityAuthorizedBcId,
                     'ad_format' => $ad['ad_format'] ?? '',
                     'ad_texts' => $adTexts,
                     'ad_text_list' => $ad['ad_text_list'] ?? [],
