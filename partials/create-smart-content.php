@@ -949,7 +949,7 @@
                                 <input type="checkbox" class="portfolio-cta-checkbox" value="LEARN_MORE" checked> Learn More
                             </label>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                <input type="checkbox" class="portfolio-cta-checkbox" value="GET_QUOTE" checked> Get Quote
+                                <input type="checkbox" class="portfolio-cta-checkbox" value="GET_QUOTE"> Get Quote
                             </label>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
                                 <input type="checkbox" class="portfolio-cta-checkbox" value="SIGN_UP"> Sign Up
@@ -1656,7 +1656,7 @@
                     <input type="text" id="video-modal-search" placeholder="Search videos by name..."
                            oninput="filterVideosInModal()"
                            style="flex: 1; min-width: 200px; padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
-                    <button onclick="document.getElementById('video-modal-upload-input').click()"
+                    <button onclick="showUploadOptions()"
                             style="display: flex; align-items: center; gap: 6px; padding: 10px 16px; background: #22c55e; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px;"
                             onmouseover="this.style.background='#16a34a'" onmouseout="this.style.background='#22c55e'">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1717,6 +1717,48 @@
                     <button class="btn-primary" id="video-modal-confirm" onclick="confirmVideoSelection()">
                         ✓ Confirm Selection
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Options Modal (Single vs Multi Account) -->
+    <div id="upload-options-modal" class="modal" style="display: none; z-index: 10001;">
+        <div class="modal-content" style="max-width: 520px;">
+            <div class="modal-header">
+                <h3>Upload Videos</h3>
+                <button class="modal-close" onclick="closeUploadOptions()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <p style="color: #475569; margin-bottom: 20px;">Choose where to upload your videos:</p>
+                <div onclick="uploadSingleAccount()" style="display: flex; align-items: center; gap: 15px; padding: 16px; background: #f0fdf4; border: 2px solid #bbf7d0; border-radius: 10px; cursor: pointer; margin-bottom: 12px; transition: all 0.2s;"
+                     onmouseover="this.style.borderColor='#22c55e'" onmouseout="this.style.borderColor='#bbf7d0'">
+                    <div style="width: 44px; height: 44px; background: #22c55e; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; flex-shrink: 0;">1</div>
+                    <div>
+                        <div style="font-weight: 700; font-size: 15px; color: #166534;">Current Account</div>
+                        <div style="font-size: 13px; color: #4ade80;">Upload to the currently selected ad account</div>
+                    </div>
+                </div>
+                <div style="padding: 16px; background: #eff6ff; border: 2px solid #bfdbfe; border-radius: 10px;">
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 12px;">
+                        <div style="width: 44px; height: 44px; background: #2563eb; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 18px; flex-shrink: 0;">+N</div>
+                        <div>
+                            <div style="font-weight: 700; font-size: 15px; color: #1e40af;">Multiple Accounts</div>
+                            <div style="font-size: 13px; color: #60a5fa;">Upload same videos to multiple ad accounts</div>
+                        </div>
+                    </div>
+                    <div style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;" id="upload-account-list">
+                        <p style="color: #94a3b8; text-align: center; padding: 15px;">Loading accounts...</p>
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                        <button onclick="toggleAllUploadAccounts(true)" style="padding: 5px 12px; background: #dbeafe; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 6px; cursor: pointer; font-size: 12px;">Select All</button>
+                        <button onclick="toggleAllUploadAccounts(false)" style="padding: 5px 12px; background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; border-radius: 6px; cursor: pointer; font-size: 12px;">Clear All</button>
+                        <div style="flex: 1;"></div>
+                        <button onclick="uploadMultipleAccounts()" style="padding: 8px 20px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px;"
+                                onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">
+                            Upload to Selected
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

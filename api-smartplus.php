@@ -2241,15 +2241,11 @@ switch ($action) {
                 }
             }
 
-            // Create new portfolio with frequently used CTAs
-            logSmartPlus("Creating new frequently used CTA portfolio");
+            // Create new portfolio - default to LEARN_MORE only
+            logSmartPlus("Creating new CTA portfolio (LEARN_MORE only)");
 
             $frequentlyUsedCTAs = [
-                ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]],
-                ['asset_content' => 'GET_QUOTE', 'asset_ids' => ["0"]],
-                ['asset_content' => 'SIGN_UP', 'asset_ids' => ["0"]],
-                ['asset_content' => 'CONTACT_US', 'asset_ids' => ["0"]],
-                ['asset_content' => 'APPLY_NOW', 'asset_ids' => ["0"]]
+                ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]]
             ];
 
             $params = [
@@ -3029,15 +3025,28 @@ switch ($action) {
                         $ctaPortfolioId = $existingPortfolio['creative_portfolio_id'];
                         logSmartPlus("Using existing portfolio from DB: $ctaPortfolioId");
                     } else {
-                        // Create new portfolio
+                        // Create new portfolio using the primary account's CTA selections if available
                         logSmartPlus("Creating new CTA portfolio for account: $targetAdvertiserId");
-                        $frequentlyUsedCTAs = [
-                            ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]],
-                            ['asset_content' => 'GET_QUOTE', 'asset_ids' => ["0"]],
-                            ['asset_content' => 'SIGN_UP', 'asset_ids' => ["0"]],
-                            ['asset_content' => 'CONTACT_US', 'asset_ids' => ["0"]],
-                            ['asset_content' => 'APPLY_NOW', 'asset_ids' => ["0"]]
-                        ];
+                        $ctaSelections = $account['cta_selections'] ?? null;
+                        $frequentlyUsedCTAs = [];
+                        if (!empty($ctaSelections) && is_array($ctaSelections)) {
+                            // Use the user's actual CTA selections from the primary account
+                            foreach ($ctaSelections as $cta) {
+                                if (is_array($cta) && isset($cta['asset_content'])) {
+                                    $frequentlyUsedCTAs[] = $cta;
+                                } elseif (is_string($cta)) {
+                                    $frequentlyUsedCTAs[] = ['asset_content' => $cta, 'asset_ids' => ["0"]];
+                                }
+                            }
+                            logSmartPlus("Using user's CTA selections: " . json_encode($frequentlyUsedCTAs));
+                        }
+                        if (empty($frequentlyUsedCTAs)) {
+                            // Default to LEARN_MORE only (not 5 CTAs)
+                            $frequentlyUsedCTAs = [
+                                ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]]
+                            ];
+                            logSmartPlus("No CTA selections provided, defaulting to LEARN_MORE only");
+                        }
 
                         $portfolioResult = makeApiCall('/creative/portfolio/create/', [
                             'advertiser_id' => $targetAdvertiserId,
@@ -3467,14 +3476,10 @@ switch ($action) {
                     $ctaPortfolioId = $existingPortfolio['creative_portfolio_id'];
                     logSmartPlus("Using existing portfolio from DB: $ctaPortfolioId");
                 } else {
-                    // Auto-create CTA portfolio
-                    logSmartPlus("Creating new CTA portfolio for account: $advertiserId");
+                    // Auto-create CTA portfolio - default to LEARN_MORE only
+                    logSmartPlus("Creating new CTA portfolio for account: $advertiserId (LEARN_MORE only)");
                     $frequentlyUsedCTAs = [
-                        ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]],
-                        ['asset_content' => 'GET_QUOTE', 'asset_ids' => ["0"]],
-                        ['asset_content' => 'SIGN_UP', 'asset_ids' => ["0"]],
-                        ['asset_content' => 'CONTACT_US', 'asset_ids' => ["0"]],
-                        ['asset_content' => 'APPLY_NOW', 'asset_ids' => ["0"]]
+                        ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]]
                     ];
 
                     $portfolioResult = makeApiCall('/creative/portfolio/create/', [
@@ -4991,9 +4996,7 @@ switch ($action) {
                 logSmartPlus("No CTA portfolio found, creating one...");
                 try {
                     $frequentlyUsedCTAs = [
-                        ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]],
-                        ['asset_content' => 'GET_QUOTE', 'asset_ids' => ["0"]],
-                        ['asset_content' => 'SIGN_UP', 'asset_ids' => ["0"]]
+                        ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]]
                     ];
 
                     $createParams = [

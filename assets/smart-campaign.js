@@ -13020,6 +13020,246 @@ function closeVideoSelectionModal() {
     if (uploadInput) uploadInput.value = '';
 }
 
+// ============================================
+// UPLOAD OPTIONS: Single vs Multi-Account
+// ============================================
+
+// Show upload options modal (single or multi account)
+function showUploadOptions() {
+    const modal = document.getElementById('upload-options-modal');
+    if (!modal) {
+        // Fallback: directly trigger single-account upload
+        document.getElementById('video-modal-upload-input').click();
+        return;
+    }
+
+    // Load accounts if not already loaded
+    if (bulkLaunchState.accounts.length === 0) {
+        loadBulkAccounts().then(() => renderUploadAccountList());
+    } else {
+        renderUploadAccountList();
+    }
+
+    modal.style.display = 'flex';
+}
+
+// Render the account list in multi-account upload modal
+function renderUploadAccountList() {
+    const container = document.getElementById('upload-account-list');
+    if (!container) return;
+
+    const accounts = bulkLaunchState.accounts;
+    if (accounts.length === 0) {
+        container.innerHTML = '<p style="color: #94a3b8; text-align: center; padding: 20px;">No accounts found. Connect ad accounts first.</p>';
+        return;
+    }
+
+    container.innerHTML = accounts.map(acc => `
+        <label style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: ${acc.is_current ? '#f0f9ff' : '#f8fafc'}; border: 1px solid ${acc.is_current ? '#bae6fd' : '#e2e8f0'}; border-radius: 8px; cursor: pointer; transition: all 0.2s;"
+               onmouseover="this.style.borderColor='#93c5fd'" onmouseout="this.style.borderColor='${acc.is_current ? '#bae6fd' : '#e2e8f0'}'">
+            <input type="checkbox" class="upload-account-checkbox" value="${acc.advertiser_id}"
+                   data-name="${acc.advertiser_name}" ${acc.is_current ? 'checked' : ''}
+                   style="width: 18px; height: 18px; accent-color: #2563eb;">
+            <div style="flex: 1;">
+                <div style="font-weight: 600; font-size: 14px; color: #1e293b;">${acc.advertiser_name}</div>
+                <div style="font-size: 12px; color: #94a3b8;">${acc.advertiser_id}${acc.is_current ? ' (current)' : ''}</div>
+            </div>
+        </label>
+    `).join('');
+}
+
+// Select/deselect all upload accounts
+function toggleAllUploadAccounts(selectAll) {
+    document.querySelectorAll('.upload-account-checkbox').forEach(cb => {
+        cb.checked = selectAll;
+    });
+}
+
+// Close upload options modal
+function closeUploadOptions() {
+    const modal = document.getElementById('upload-options-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+// User chose "Single Account" upload
+function uploadSingleAccount() {
+    closeUploadOptions();
+    document.getElementById('video-modal-upload-input').click();
+}
+
+// User chose "Multiple Accounts" upload - trigger file selection then upload to all
+function uploadMultipleAccounts() {
+    const checkedBoxes = document.querySelectorAll('.upload-account-checkbox:checked');
+    if (checkedBoxes.length === 0) {
+        showToast('Please select at least one account', 'error');
+        return;
+    }
+
+    const selectedAccounts = Array.from(checkedBoxes).map(cb => ({
+        advertiser_id: cb.value,
+        name: cb.dataset.name
+    }));
+
+    // Store selected accounts for use after file selection
+    window._multiUploadAccounts = selectedAccounts;
+    closeUploadOptions();
+
+    // Create a temporary file input for multi-account upload
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'video/*';
+    input.multiple = true;
+    input.style.display = 'none';
+    input.onchange = (e) => handleMultiAccountUpload(e, selectedAccounts);
+    document.body.appendChild(input);
+    input.click();
+    // Clean up after selection
+    setTimeout(() => input.remove(), 60000);
+}
+
+// Handle uploading videos to multiple accounts
+async function handleMultiAccountUpload(event, accounts) {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    // Validate files
+    const maxSize = 500 * 1024 * 1024;
+    const validFiles = files.filter(f => f.type.startsWith('video/') && f.size <= maxSize);
+    if (validFiles.length === 0) {
+        showToast('No valid video files selected', 'error');
+        return;
+    }
+
+    const totalUploads = validFiles.length * accounts.length;
+    addLog('info', `Multi-account upload: ${validFiles.length} video(s) to ${accounts.length} account(s) = ${totalUploads} uploads`);
+
+    // Show progress in the video modal
+    const progressContainer = document.getElementById('video-modal-upload-progress');
+    const progressBar = document.getElementById('bulk-upload-bar');
+    const progressTitle = document.getElementById('bulk-upload-title');
+    const progressCount = document.getElementById('bulk-upload-count');
+    const progressList = document.getElementById('bulk-upload-list');
+
+    if (progressContainer) {
+        progressContainer.style.display = 'block';
+        if (progressTitle) progressTitle.textContent = `Uploading ${validFiles.length} video(s) to ${accounts.length} account(s)...`;
+        if (progressCount) progressCount.textContent = `0/${totalUploads}`;
+        if (progressBar) progressBar.style.width = '0%';
+    }
+
+    // Build per-account progress items
+    if (progressList) {
+        progressList.innerHTML = accounts.map((acc, idx) => `
+            <div class="upload-item" id="multi-upload-acc-${idx}" style="margin-bottom: 6px;">
+                <span class="upload-item-name" style="font-weight: 600;">${acc.name}</span>
+                <span class="upload-item-status uploading" id="multi-upload-status-${idx}">0/${validFiles.length}</span>
+            </div>
+        `).join('');
+    }
+
+    let completed = 0;
+    let failed = 0;
+
+    // Pre-generate thumbnails
+    const thumbnails = new Map();
+    for (const file of validFiles) {
+        const thumb = await generateVideoThumbnailSafe(file);
+        thumbnails.set(file, thumb);
+    }
+
+    // Upload to each account sequentially (to avoid rate limits)
+    for (let accIdx = 0; accIdx < accounts.length; accIdx++) {
+        const account = accounts[accIdx];
+        let accCompleted = 0;
+
+        addLog('info', `Uploading to ${account.name} (${account.advertiser_id})...`);
+
+        for (const file of validFiles) {
+            // Rename with timestamp
+            const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+            const originalName = file.name;
+            const lastDot = originalName.lastIndexOf('.');
+            const baseName = lastDot > 0 ? originalName.slice(0, lastDot) : originalName;
+            const ext = lastDot > 0 ? originalName.slice(lastDot) : '';
+            const newFileName = `${baseName}_${timestamp}${ext}`;
+
+            const formData = new FormData();
+            formData.append('video', file, newFileName);
+            formData.append('target_advertiser_id', account.advertiser_id);
+
+            try {
+                const response = await fetch('api.php?action=upload_video_to_advertiser', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    accCompleted++;
+                    completed++;
+
+                    // Add to media library if it's the current account
+                    const currentAccId = state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID;
+                    if (account.advertiser_id === currentAccId && result.data?.video_id) {
+                        const thumbUrl = thumbnails.get(file) || '';
+                        state.mediaLibrary.unshift({
+                            type: 'video',
+                            id: result.data.video_id,
+                            url: thumbUrl,
+                            name: newFileName,
+                            is_new: true
+                        });
+                    }
+                } else {
+                    failed++;
+                    addLog('error', `Failed ${file.name} -> ${account.name}: ${result.message}`);
+                }
+            } catch (e) {
+                failed++;
+                addLog('error', `Error ${file.name} -> ${account.name}: ${e.message}`);
+            }
+
+            // Update progress
+            const statusEl = document.getElementById(`multi-upload-status-${accIdx}`);
+            if (statusEl) statusEl.textContent = `${accCompleted}/${validFiles.length}`;
+            if (progressCount) progressCount.textContent = `${completed + failed}/${totalUploads}`;
+            if (progressBar) progressBar.style.width = `${((completed + failed) / totalUploads) * 100}%`;
+        }
+
+        // Mark account as done
+        const statusEl = document.getElementById(`multi-upload-status-${accIdx}`);
+        if (statusEl) {
+            statusEl.textContent = `Done (${accCompleted}/${validFiles.length})`;
+            statusEl.className = 'upload-item-status success';
+        }
+
+        // Small delay between accounts
+        if (accIdx < accounts.length - 1) {
+            await new Promise(r => setTimeout(r, 500));
+        }
+    }
+
+    // Final status
+    if (progressTitle) progressTitle.textContent = `Upload complete! ${completed} succeeded, ${failed} failed`;
+    addLog('success', `Multi-account upload done: ${completed} success, ${failed} failed`);
+    showToast(`Uploaded ${completed}/${totalUploads} videos across ${accounts.length} account(s)`, completed > 0 ? 'success' : 'error');
+
+    // Refresh video grid for current account
+    const videos = state.mediaLibrary.filter(m => m.type === 'video');
+    videoModalState.allVideos = videos;
+    renderVideoModalGrid(videos);
+    const totalEl = document.getElementById('video-modal-total');
+    if (totalEl) totalEl.textContent = videos.length;
+
+    // Hide progress after delay
+    setTimeout(() => {
+        if (progressContainer) progressContainer.style.display = 'none';
+    }, 3000);
+
+    // Background refresh
+    setTimeout(() => loadMediaLibrary(true), 2000);
+}
+
 // Handle single video upload from video selection modal
 async function handleVideoModalUpload(event) {
     const file = event.target.files[0];
