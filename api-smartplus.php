@@ -2733,12 +2733,9 @@ switch ($action) {
         // Default CTAs if none provided
         if (empty($portfolioContent)) {
             $portfolioContent = [
-                ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]],
-                ['asset_content' => 'GET_QUOTE', 'asset_ids' => ["0"]],
-                ['asset_content' => 'SIGN_UP', 'asset_ids' => ["0"]],
-                ['asset_content' => 'CONTACT_US', 'asset_ids' => ["0"]],
-                ['asset_content' => 'APPLY_NOW', 'asset_ids' => ["0"]]
+                ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]]
             ];
+            logSmartPlus("No CTA selections provided for account portfolio, defaulting to LEARN_MORE only");
         }
 
         try {

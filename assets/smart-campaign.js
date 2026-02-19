@@ -1183,7 +1183,7 @@ function openCreatePortfolioModal() {
     document.getElementById('portfolio-name-input').value = '';
     // Uncheck all except default
     document.querySelectorAll('.portfolio-cta-checkbox').forEach(cb => {
-        cb.checked = cb.value === 'LEARN_MORE' || cb.value === 'GET_QUOTE';
+        cb.checked = cb.value === 'LEARN_MORE';
     });
     document.getElementById('create-portfolio-modal').style.display = 'flex';
 }
@@ -6020,10 +6020,10 @@ function openBulkPortfolioCreate(advertiserId) {
                         <label>Select CTAs to Include</label>
                         <div class="cta-checkbox-list" style="max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px;">
                             <label class="cta-checkbox"><input type="checkbox" value="LEARN_MORE" checked> Learn More</label>
-                            <label class="cta-checkbox"><input type="checkbox" value="GET_QUOTE" checked> Get Quote</label>
-                            <label class="cta-checkbox"><input type="checkbox" value="SIGN_UP" checked> Sign Up</label>
-                            <label class="cta-checkbox"><input type="checkbox" value="CONTACT_US" checked> Contact Us</label>
-                            <label class="cta-checkbox"><input type="checkbox" value="APPLY_NOW" checked> Apply Now</label>
+                            <label class="cta-checkbox"><input type="checkbox" value="GET_QUOTE"> Get Quote</label>
+                            <label class="cta-checkbox"><input type="checkbox" value="SIGN_UP"> Sign Up</label>
+                            <label class="cta-checkbox"><input type="checkbox" value="CONTACT_US"> Contact Us</label>
+                            <label class="cta-checkbox"><input type="checkbox" value="APPLY_NOW"> Apply Now</label>
                             <label class="cta-checkbox"><input type="checkbox" value="SHOP_NOW"> Shop Now</label>
                             <label class="cta-checkbox"><input type="checkbox" value="DOWNLOAD"> Download</label>
                             <label class="cta-checkbox"><input type="checkbox" value="BOOK_NOW"> Book Now</label>
