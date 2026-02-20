@@ -1426,7 +1426,7 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                 <button class="btn-secondary btn-sm" onclick="clearVideoSelection()">Clear</button>
                             </div>
                         </div>
-                        <div id="video-selection-grid" class="video-selection-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; max-height: 300px; overflow-y: auto; padding: 10px; background: #f9f9f9; border-radius: 8px; border: 2px solid #667eea;">
+                        <div id="video-selection-grid" class="video-selection-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; max-height: 500px; overflow-y: auto; padding: 10px; background: #f9f9f9; border-radius: 8px; border: 2px solid #667eea;">
                             <p style="text-align: center; padding: 20px; color: #666;">Loading videos...</p>
                         </div>
                     </div>

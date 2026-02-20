@@ -1396,6 +1396,12 @@ async function refreshMediaLibrary() {
 let currentUploadType = 'video';
 
 function openUploadModal(type) {
+    // For video uploads, route through upload options (single vs multi-account)
+    if (type === 'video') {
+        showUploadOptions();
+        return;
+    }
+
     currentUploadType = type;
     const modal = document.getElementById('upload-modal');
     const title = document.getElementById('upload-modal-title');
@@ -1408,17 +1414,10 @@ function openUploadModal(type) {
     document.getElementById('upload-progress').style.display = 'none';
     document.getElementById('upload-success').style.display = 'none';
 
-    if (type === 'video') {
-        title.textContent = '📹 Upload Video';
-        icon.textContent = '🎬';
-        hint.textContent = 'Supported: MP4, MOV, AVI (Max 500MB)';
-        fileInput.accept = 'video/*';
-    } else {
-        title.textContent = '🖼️ Upload Image';
-        icon.textContent = '📷';
-        hint.textContent = 'Supported: JPG, PNG, GIF (Max 10MB)';
-        fileInput.accept = 'image/*';
-    }
+    title.textContent = '🖼️ Upload Image';
+    icon.textContent = '📷';
+    hint.textContent = 'Supported: JPG, PNG, GIF (Max 10MB)';
+    fileInput.accept = 'image/*';
 
     modal.style.display = 'flex';
 }
