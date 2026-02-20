@@ -48,22 +48,28 @@ $db = Database::getInstance();
 try {
     $db->query("SELECT 1 FROM optimizer_rules LIMIT 1");
 } catch (Exception $e) {
-    // Tables don't exist — create them
-    $schemaFile = __DIR__ . '/database/schema-optimizer.sql';
+    // Tables don't exist — create them using the right schema for the DB driver
+    $driver = getenv('DB_DRIVER') ?: ($_ENV['DB_DRIVER'] ?? 'mysql');
+    $schemaFile = ($driver === 'pgsql')
+        ? __DIR__ . '/database/schema-optimizer-pgsql.sql'
+        : __DIR__ . '/database/schema-optimizer.sql';
+
     if (file_exists($schemaFile)) {
         $sql = file_get_contents($schemaFile);
         // Split by semicolons and execute each statement
         $statements = array_filter(array_map('trim', explode(';', $sql)));
         foreach ($statements as $stmt) {
-            if (!empty($stmt) && stripos($stmt, '--') !== 0) {
-                try {
-                    $db->query($stmt);
-                } catch (Exception $ex) {
-                    error_log("Optimizer table init error: " . $ex->getMessage());
-                }
+            // Skip empty lines and comment-only lines
+            $clean = trim($stmt);
+            if (empty($clean)) continue;
+            if (strpos($clean, '--') === 0 && strpos($clean, "\n") === false) continue;
+            try {
+                $db->query($stmt);
+            } catch (Exception $ex) {
+                error_log("Optimizer table init: " . $ex->getMessage());
             }
         }
-        logOptimizer("Auto-created optimizer database tables");
+        logOptimizer("Auto-created optimizer database tables (driver: $driver)");
     }
 }
 
@@ -312,8 +318,8 @@ switch ($action) {
     case 'get_dashboard_stats':
         $totalMonitored = $db->fetchOne("SELECT COUNT(*) as cnt FROM optimizer_monitored_campaigns WHERE monitoring_enabled = 1");
         $totalPaused = $db->fetchOne("SELECT COUNT(*) as cnt FROM optimizer_monitored_campaigns WHERE paused_by_optimizer = 1");
-        $todayPauses = $db->fetchOne("SELECT COUNT(*) as cnt FROM optimizer_logs WHERE action = 'pause' AND DATE(created_at) = CURDATE()");
-        $todayResumes = $db->fetchOne("SELECT COUNT(*) as cnt FROM optimizer_logs WHERE action = 'resume' AND DATE(created_at) = CURDATE()");
+        $todayPauses = $db->fetchOne("SELECT COUNT(*) as cnt FROM optimizer_logs WHERE action = 'pause' AND DATE(created_at) = CURRENT_DATE");
+        $todayResumes = $db->fetchOne("SELECT COUNT(*) as cnt FROM optimizer_logs WHERE action = 'resume' AND DATE(created_at) = CURRENT_DATE");
         $totalRules = $db->fetchOne("SELECT COUNT(*) as cnt FROM optimizer_rules WHERE enabled = 1");
 
         echo json_encode(['success' => true, 'data' => [
