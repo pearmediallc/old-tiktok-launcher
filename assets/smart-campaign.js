@@ -8911,6 +8911,9 @@ function renderCampaignList() {
 
     // Render totals footer
     renderCampaignTotals();
+
+    // Load optimizer monitoring status for badges
+    loadOptimizerMonitoringStatus();
 }
 
 // Calculate and render campaign totals in table footer
@@ -9078,13 +9081,21 @@ function renderCampaignTableRow(campaign) {
             <td class="col-conversions" style="text-align: right;">${formatNumber(campaign.conversions)}</td>
             <td class="col-cpr" style="text-align: right;">${formatCurrency(campaign.cost_per_result)}</td>
             <td class="col-results" style="text-align: right;">${formatNumber(campaign.results)}</td>
-            <td class="col-actions">
+            <td class="col-actions" style="display:flex;gap:4px;align-items:center;">
                 <button class="action-btn-table duplicate-btn"
                         onclick="openDuplicateCampaignModal('${campaign.campaign_id}', '${escapeHtml(campaign.campaign_name).replace(/'/g, "\\'")}'); event.stopPropagation();"
                         title="Duplicate Campaign">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                </button>
+                <button class="action-btn-table optimizer-monitor-btn" id="opt-btn-${campaign.campaign_id}"
+                        onclick="toggleOptimizerMonitoring('${campaign.campaign_id}', '${escapeHtml(campaign.campaign_name).replace(/'/g, "\\'")}'); event.stopPropagation();"
+                        title="Toggle Optimizer Monitoring"
+                        style="position:relative;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                     </svg>
                 </button>
             </td>
@@ -9124,6 +9135,102 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ============================================
+// OPTIMIZER MONITORING (View Campaigns integration)
+// ============================================
+
+/**
+ * Loads monitoring status for all visible campaigns and updates button styles.
+ * Called after campaign rows are rendered.
+ */
+async function loadOptimizerMonitoringStatus() {
+    try {
+        const advId = state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || '';
+        const response = await fetch(`api-optimizer.php?action=get_monitoring_status&advertiser_id=${encodeURIComponent(advId)}`);
+        const result = await response.json();
+
+        if (!result.success) return;
+
+        const statusMap = result.data; // { campaign_id: { monitoring: true, paused_by_optimizer: false }, ... }
+
+        // Update all optimizer monitor buttons
+        document.querySelectorAll('.optimizer-monitor-btn').forEach(btn => {
+            const campaignId = btn.id.replace('opt-btn-', '');
+            const status = statusMap[campaignId];
+
+            // Reset classes
+            btn.classList.remove('monitoring', 'paused-by-opt');
+
+            if (status && status.monitoring) {
+                if (status.paused_by_optimizer) {
+                    btn.classList.add('paused-by-opt');
+                    btn.title = 'Paused by Optimizer (click to remove from monitoring)';
+                } else {
+                    btn.classList.add('monitoring');
+                    btn.title = 'Monitoring Active (click to remove from monitoring)';
+                }
+            } else {
+                btn.title = 'Click to enable Optimizer Monitoring';
+            }
+        });
+    } catch (e) {
+        console.error('Error loading optimizer monitoring status:', e);
+    }
+}
+
+/**
+ * Toggles optimizer monitoring for a campaign.
+ * If not monitored → adds to monitoring.
+ * If monitored → removes from monitoring.
+ */
+async function toggleOptimizerMonitoring(campaignId, campaignName) {
+    const btn = document.getElementById(`opt-btn-${campaignId}`);
+    if (!btn) return;
+
+    const isMonitoring = btn.classList.contains('monitoring') || btn.classList.contains('paused-by-opt');
+
+    // Confirm before removing
+    if (isMonitoring) {
+        if (!confirm(`Remove "${campaignName}" from optimizer monitoring?`)) return;
+    }
+
+    // Disable button while processing
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+
+    try {
+        const response = await fetch('api-optimizer.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'toggle_monitoring',
+                campaign_id: campaignId,
+                campaign_name: campaignName,
+                advertiser_id: state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || ''
+            })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            const msg = isMonitoring
+                ? `"${campaignName}" removed from monitoring`
+                : `"${campaignName}" added to optimizer monitoring`;
+            showToast(msg, 'success');
+
+            // Refresh monitoring status for all buttons
+            await loadOptimizerMonitoringStatus();
+        } else {
+            showToast(result.message || 'Failed to toggle monitoring', 'error');
+        }
+    } catch (e) {
+        showToast('Error toggling optimizer monitoring', 'error');
+        console.error('Error toggling optimizer monitoring:', e);
+    } finally {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+    }
 }
 
 // Toggle campaign expansion to show ad groups

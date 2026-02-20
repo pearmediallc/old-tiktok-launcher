@@ -39,6 +39,21 @@
             </span>
             <span class="sidebar-label">Create Manual</span>
         </a>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-label">Optimization</div>
+
+        <a href="app-shell.php?view=optimizer"
+           class="sidebar-item <?php echo $view === 'optimizer' ? 'active' : ''; ?>">
+            <span class="sidebar-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 20V10"></path>
+                    <path d="M18 20V4"></path>
+                    <path d="M6 20v-4"></path>
+                </svg>
+            </span>
+            <span class="sidebar-label">Optimizer</span>
+        </a>
     </div>
 
     <div class="sidebar-footer">

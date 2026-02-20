@@ -121,7 +121,7 @@
                             <th class="col-conversions">Conversions</th>
                             <th class="col-cpr">Cost/Result</th>
                             <th class="col-results">Results</th>
-                            <th class="col-actions">Duplicate</th>
+                            <th class="col-actions" style="min-width:120px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="campaign-table-body">

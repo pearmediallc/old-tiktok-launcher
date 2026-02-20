@@ -27,7 +27,7 @@ $advertiserDetails = $_SESSION['oauth_advertiser_details'] ?? [];
 $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
 
 // Determine current view from query param
-$validViews = ['campaigns', 'create-smart', 'create-manual'];
+$validViews = ['campaigns', 'create-smart', 'create-manual', 'optimizer'];
 $view = $_GET['view'] ?? 'campaigns';
 if (!in_array($view, $validViews)) {
     $view = 'campaigns';
@@ -652,6 +652,15 @@ if (!in_array($view, $validViews)) {
         .action-btn-table.duplicate-btn { background: #f0f9ff; border-color: #bae6fd; }
         .action-btn-table.duplicate-btn:hover { background: #1e9df1; border-color: #1e9df1; color: white; }
         .action-btn-table.duplicate-btn:hover svg { stroke: white; }
+        .action-btn-table.optimizer-monitor-btn { background: #f8fafc; border-color: #e2e8f0; }
+        .action-btn-table.optimizer-monitor-btn:hover { background: #ecfdf5; border-color: #6ee7b7; color: #059669; }
+        .action-btn-table.optimizer-monitor-btn:hover svg { stroke: #059669; }
+        .action-btn-table.optimizer-monitor-btn.monitoring { background: #ecfdf5; border-color: #6ee7b7; color: #059669; }
+        .action-btn-table.optimizer-monitor-btn.monitoring svg { stroke: #059669; fill: #d1fae5; }
+        .action-btn-table.optimizer-monitor-btn.paused-by-opt { background: #fef2f2; border-color: #fca5a5; color: #dc2626; }
+        .action-btn-table.optimizer-monitor-btn.paused-by-opt svg { stroke: #dc2626; fill: #fee2e2; }
+        @keyframes optPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .action-btn-table.optimizer-monitor-btn.paused-by-opt { animation: optPulse 2s ease-in-out infinite; }
         /* Budget Cell */
         .budget-cell { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
         .edit-budget-btn {
@@ -935,6 +944,11 @@ if (!in_array($view, $validViews)) {
                     <div class="view-panel" id="view-create-manual">
                         <?php include __DIR__ . '/partials/create-manual-content.php'; ?>
                     </div>
+
+                <?php elseif ($view === 'optimizer'): ?>
+                    <div class="view-panel" id="view-optimizer">
+                        <?php include __DIR__ . '/partials/optimizer.php'; ?>
+                    </div>
                 <?php endif; ?>
 
             <?php endif; ?>
@@ -955,6 +969,8 @@ if (!in_array($view, $validViews)) {
         <script src="assets/smart-campaign.js?v=<?php echo time(); ?>"></script>
     <?php elseif ($isConnected && $view === 'create-manual'): ?>
         <script src="assets/app.js?v=<?php echo time(); ?>"></script>
+    <?php elseif ($isConnected && $view === 'optimizer'): ?>
+        <script src="assets/optimizer.js?v=<?php echo time(); ?>"></script>
     <?php endif; ?>
 </body>
 </html>
