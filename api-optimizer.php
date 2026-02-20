@@ -44,6 +44,29 @@ $advertiserId = $_SESSION['selected_advertiser_id'] ?? '';
 
 $db = Database::getInstance();
 
+// Auto-create optimizer tables if they don't exist
+try {
+    $db->query("SELECT 1 FROM optimizer_rules LIMIT 1");
+} catch (Exception $e) {
+    // Tables don't exist — create them
+    $schemaFile = __DIR__ . '/database/schema-optimizer.sql';
+    if (file_exists($schemaFile)) {
+        $sql = file_get_contents($schemaFile);
+        // Split by semicolons and execute each statement
+        $statements = array_filter(array_map('trim', explode(';', $sql)));
+        foreach ($statements as $stmt) {
+            if (!empty($stmt) && stripos($stmt, '--') !== 0) {
+                try {
+                    $db->query($stmt);
+                } catch (Exception $ex) {
+                    error_log("Optimizer table init error: " . $ex->getMessage());
+                }
+            }
+        }
+        logOptimizer("Auto-created optimizer database tables");
+    }
+}
+
 // Get action
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
