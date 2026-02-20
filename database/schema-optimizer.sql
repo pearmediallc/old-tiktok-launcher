@@ -26,7 +26,7 @@ VALUES
     ('spend_no_conversion', 'Spend without Conversion', 'tiktok', 'spend', 'gte', 30.0000, 'conversions', 'eq', 0.0000, 1),
     ('high_cpc', 'High CPC', 'tiktok', 'cpc', 'gt', 3.0000, NULL, NULL, NULL, 1),
     ('low_lpctr', 'Low LP CTR', 'redtrack', 'lp_ctr', 'lt', 20.0000, NULL, NULL, NULL, 1),
-    ('low_ctr', 'Low CTR', 'redtrack', 'ctr', 'lt', 0.7000, NULL, NULL, NULL, 1)
+    ('low_ctr', 'Low CTR', 'tiktok', 'ctr', 'lt', 0.7000, NULL, NULL, NULL, 1)
 ON DUPLICATE KEY UPDATE rule_name = VALUES(rule_name);
 
 -- ============================================

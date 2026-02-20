@@ -73,6 +73,11 @@ try {
     }
 }
 
+// Fix: CTR rule should use tiktok source, not redtrack
+try {
+    $db->query("UPDATE optimizer_rules SET metric_source = 'tiktok' WHERE rule_key = 'low_ctr' AND metric_source = 'redtrack'");
+} catch (Exception $e) {}
+
 // Get action
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
