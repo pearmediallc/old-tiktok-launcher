@@ -10376,6 +10376,15 @@ function populateDuplicateEditFields(result) {
     document.getElementById('dup-edit-ad-text').value =
         Array.isArray(adTexts) ? adTexts.join('\n') : (adTexts || '');
 
+    // Store original schedule data for "same" mode duplication
+    duplicateState.originalSchedule = {
+        schedule_type: adgroup?.schedule_type || 'SCHEDULE_FROM_NOW',
+        schedule_start_time: adgroup?.schedule_start_time || null,
+        schedule_end_time: adgroup?.schedule_end_time || null,
+        dayparting: adgroup?.dayparting || null
+    };
+    console.log('Stored original schedule for duplication:', duplicateState.originalSchedule);
+
     // Initialize videos display
     initDuplicateVideosDisplay();
 }
@@ -11975,6 +11984,8 @@ async function executeBulkDuplicateCampaign() {
                 schedule_type: account.schedule_type || 'start_now',
                 schedule_start: account.schedule_start || null,
                 schedule_end: account.schedule_end || null,
+                // Carry over dayparting from original campaign
+                dayparting: duplicateState.originalSchedule?.dayparting || null,
                 // Ad data
                 ad_name: ad?.ad_name || account.campaign_name + ' - Ad',
                 ad_texts: adTextsToSend
@@ -12383,19 +12394,37 @@ async function executeDuplicateCampaign() {
                     age_groups: adgroup.age_groups || []
                 };
 
-                // Add schedule params if in edit mode with custom schedule
+                // Determine schedule to use: edit mode uses form values, same mode uses original
+                let scheduleToUse = null;
+                let timesAlreadyUTC = false;
                 if (editedValues && editedValues.schedule) {
-                    adgroupParams.schedule_type = editedValues.schedule.schedule_type;
-                    if (editedValues.schedule.schedule_start_time) {
-                        adgroupParams.schedule_start_time = editedValues.schedule.schedule_start_time;
+                    // Edit mode: use user-customized schedule from form (times in EST)
+                    scheduleToUse = editedValues.schedule;
+                } else if (mode === 'same' && duplicateState.originalSchedule) {
+                    // Same mode: preserve original campaign schedule (times already in UTC from TikTok API)
+                    scheduleToUse = duplicateState.originalSchedule;
+                    timesAlreadyUTC = true;
+                }
+
+                if (scheduleToUse) {
+                    adgroupParams.schedule_type = scheduleToUse.schedule_type;
+                    if (scheduleToUse.schedule_start_time) {
+                        adgroupParams.schedule_start_time = scheduleToUse.schedule_start_time;
                     }
-                    if (editedValues.schedule.schedule_end_time) {
-                        adgroupParams.schedule_end_time = editedValues.schedule.schedule_end_time;
+                    if (scheduleToUse.schedule_end_time) {
+                        adgroupParams.schedule_end_time = scheduleToUse.schedule_end_time;
                     }
-                    if (editedValues.schedule.schedule_timezone) {
-                        adgroupParams.schedule_timezone = editedValues.schedule.schedule_timezone;
+                    if (scheduleToUse.schedule_timezone) {
+                        adgroupParams.schedule_timezone = scheduleToUse.schedule_timezone;
                     }
-                    addLog('info', `Schedule: ${editedValues.schedule.schedule_type}${editedValues.schedule.schedule_start_time ? ' from ' + editedValues.schedule.schedule_start_time : ''}`);
+                    if (scheduleToUse.dayparting) {
+                        adgroupParams.dayparting = scheduleToUse.dayparting;
+                    }
+                    // Tell backend times are already in UTC (from TikTok API response)
+                    if (timesAlreadyUTC) {
+                        adgroupParams.times_already_utc = true;
+                    }
+                    addLog('info', `Schedule: ${scheduleToUse.schedule_type}${scheduleToUse.schedule_start_time ? ' from ' + scheduleToUse.schedule_start_time : ''}${scheduleToUse.dayparting ? ' (with dayparting)' : ''}${timesAlreadyUTC ? ' [UTC]' : ' [EST→UTC]'}`);
                 }
 
                 const adgroupResult = await apiRequest('create_smartplus_adgroup', adgroupParams);

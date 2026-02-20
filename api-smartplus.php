@@ -1318,17 +1318,45 @@ switch ($action) {
         $scheduleType = $data['schedule_type'] ?? 'SCHEDULE_FROM_NOW';
         $scheduleStart = null;
         $scheduleEnd = null;
+        $timesAlreadyUTC = !empty($data['times_already_utc']); // For duplicating: times from TikTok API are already UTC
 
         if ($scheduleType === 'SCHEDULE_START_END' && !empty($data['schedule_start_time']) && !empty($data['schedule_end_time'])) {
-            // User specified start and end times (provided in EST, convert to UTC for API)
-            $scheduleStart = convertESTtoUTC($data['schedule_start_time']);
-            $scheduleEnd = convertESTtoUTC($data['schedule_end_time']);
-            logSmartPlus("Using SCHEDULE_START_END: $scheduleStart to $scheduleEnd (UTC)");
+            if ($timesAlreadyUTC) {
+                // Times from TikTok API are already in UTC - use directly
+                $scheduleStart = $data['schedule_start_time'];
+                $scheduleEnd = $data['schedule_end_time'];
+                logSmartPlus("Using SCHEDULE_START_END (already UTC): $scheduleStart to $scheduleEnd");
+
+                // If start time is in the past, adjust to now+5min (for duplicate campaigns)
+                $nowUTC = new DateTime('now', new DateTimeZone('UTC'));
+                $startUTC = new DateTime($scheduleStart, new DateTimeZone('UTC'));
+                if ($startUTC < $nowUTC) {
+                    $scheduleStart = getUTCDateTime('+5 minutes');
+                    logSmartPlus("Original start time was in the past, adjusted to: $scheduleStart");
+                }
+            } else {
+                // User specified start and end times (provided in EST, convert to UTC for API)
+                $scheduleStart = convertESTtoUTC($data['schedule_start_time']);
+                $scheduleEnd = convertESTtoUTC($data['schedule_end_time']);
+                logSmartPlus("Using SCHEDULE_START_END: $scheduleStart to $scheduleEnd (UTC)");
+            }
         } elseif ($scheduleType === 'SCHEDULE_FROM_NOW' && !empty($data['schedule_start_time'])) {
-            // User specified a future start time but wants to run continuously (no end time)
-            // Convert from EST to UTC
-            $scheduleStart = convertESTtoUTC($data['schedule_start_time']);
-            logSmartPlus("Using SCHEDULE_FROM_NOW with scheduled start: $scheduleStart (UTC)");
+            if ($timesAlreadyUTC) {
+                $scheduleStart = $data['schedule_start_time'];
+                logSmartPlus("Using SCHEDULE_FROM_NOW (already UTC) with start: $scheduleStart");
+                // If start time is in the past, adjust to now+5min
+                $nowUTC = new DateTime('now', new DateTimeZone('UTC'));
+                $startUTC = new DateTime($scheduleStart, new DateTimeZone('UTC'));
+                if ($startUTC < $nowUTC) {
+                    $scheduleStart = getUTCDateTime('+5 minutes');
+                    logSmartPlus("Original start time was in the past, adjusted to: $scheduleStart");
+                }
+            } else {
+                // User specified a future start time but wants to run continuously (no end time)
+                // Convert from EST to UTC
+                $scheduleStart = convertESTtoUTC($data['schedule_start_time']);
+                logSmartPlus("Using SCHEDULE_FROM_NOW with scheduled start: $scheduleStart (UTC)");
+            }
         } else {
             // Default: Run continuously from now (start immediately)
             // TikTok API REQUIRES schedule_start_time to be in the future
@@ -3598,6 +3626,12 @@ switch ($action) {
             if (!empty($pixelId)) {
                 $adgroupParams['pixel_id'] = $pixelId;
                 $adgroupParams['optimization_event'] = $data['optimization_event'] ?? 'FORM';
+            }
+
+            // Add dayparting if provided (carried over from original campaign)
+            if (!empty($data['dayparting'])) {
+                $adgroupParams['dayparting'] = $data['dayparting'];
+                logSmartPlus("Adding dayparting from original campaign");
             }
 
             logSmartPlus("Creating Smart+ ad group: " . json_encode($adgroupParams));
