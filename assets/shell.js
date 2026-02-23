@@ -895,6 +895,155 @@
     }
 
     // ============================================
+    // OPTIMIZER PAUSE NOTIFICATIONS
+    // ============================================
+
+    window.loadOptimizerNotifications = async function() {
+        const container = document.getElementById('optimizer-notifications');
+        if (!container) return;
+
+        try {
+            const response = await fetch('api-optimizer.php?action=get_pause_notifications');
+            const result = await response.json();
+
+            if (!result.success || !result.data || result.data.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+
+            renderOptimizerNotifications(result.data, container);
+        } catch (err) {
+            console.warn('[Notifications] Failed to load optimizer notifications:', err);
+        }
+    };
+
+    function renderOptimizerNotifications(notifications, container) {
+        const count = notifications.length;
+
+        const headerHtml = `
+            <div class="optimizer-notifications-header">
+                <div class="notif-header-title">
+                    Optimizer Alerts
+                    <span class="notif-count-badge">${count}</span>
+                </div>
+                <button class="btn-dismiss-all" onclick="dismissAllOptimizerNotifications()">
+                    Dismiss All
+                </button>
+            </div>
+        `;
+
+        const notificationsHtml = notifications.map(n => {
+            const campaignName = n.campaign_name || ('Campaign ' + n.campaign_id);
+            const ruleName = formatRuleKeyForDisplay(n.rule_key);
+            const details = n.rule_details || '';
+            const timeAgo = formatNotifTimeAgo(n.created_at);
+
+            return `
+                <div class="optimizer-notification-banner" data-notif-id="${n.id}">
+                    <div class="notif-icon">&#9888;</div>
+                    <div class="notif-body">
+                        <div class="notif-title">${escapeHtml(campaignName)} was paused</div>
+                        <div class="notif-detail">Rule: ${escapeHtml(ruleName)} &mdash; ${escapeHtml(details)}</div>
+                        <div class="notif-time">${timeAgo}</div>
+                    </div>
+                    <button class="notif-dismiss" onclick="dismissOptimizerNotification(${n.id})" title="Dismiss">&times;</button>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = headerHtml + notificationsHtml;
+        container.style.display = 'block';
+    }
+
+    window.dismissOptimizerNotification = async function(logId) {
+        const banner = document.querySelector(`.optimizer-notification-banner[data-notif-id="${logId}"]`);
+        if (banner) {
+            banner.style.opacity = '0';
+            banner.style.transform = 'translateY(-10px)';
+            banner.style.transition = 'all 0.3s';
+            setTimeout(() => banner.remove(), 300);
+        }
+
+        try {
+            await fetch('api-optimizer.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'dismiss_notification', log_id: logId })
+            });
+        } catch (err) {
+            console.warn('[Notifications] Failed to dismiss:', err);
+        }
+
+        // Check remaining notifications
+        setTimeout(() => {
+            const container = document.getElementById('optimizer-notifications');
+            const remaining = container ? container.querySelectorAll('.optimizer-notification-banner') : [];
+            if (remaining.length === 0 && container) {
+                container.style.display = 'none';
+            } else if (container) {
+                const badge = container.querySelector('.notif-count-badge');
+                if (badge) badge.textContent = remaining.length;
+            }
+            // Update sidebar badge
+            const sidebarBadge = document.querySelector('.sidebar-notif-badge');
+            if (sidebarBadge) {
+                if (remaining.length === 0) {
+                    sidebarBadge.style.display = 'none';
+                } else {
+                    sidebarBadge.textContent = remaining.length;
+                }
+            }
+        }, 350);
+    };
+
+    window.dismissAllOptimizerNotifications = async function() {
+        const container = document.getElementById('optimizer-notifications');
+        if (container) {
+            container.style.opacity = '0';
+            container.style.transition = 'opacity 0.3s';
+            setTimeout(() => {
+                container.style.display = 'none';
+                container.innerHTML = '';
+                container.style.opacity = '1';
+            }, 300);
+        }
+
+        // Hide sidebar badge
+        const sidebarBadge = document.querySelector('.sidebar-notif-badge');
+        if (sidebarBadge) sidebarBadge.style.display = 'none';
+
+        try {
+            await fetch('api-optimizer.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'dismiss_notification', dismiss_all: true })
+            });
+        } catch (err) {
+            console.warn('[Notifications] Failed to dismiss all:', err);
+        }
+    };
+
+    function formatRuleKeyForDisplay(ruleKey) {
+        if (!ruleKey) return 'Unknown Rule';
+        const withoutPrefix = ruleKey.replace(/^(hi_|med_)/, '');
+        return withoutPrefix
+            .split('_')
+            .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(' ');
+    }
+
+    function formatNotifTimeAgo(dateStr) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr + 'Z'); // Treat as UTC
+        const now = new Date();
+        const diffMin = Math.round((now - d) / 60000);
+        if (diffMin < 1) return 'Just now';
+        if (diffMin < 60) return diffMin + ' min ago';
+        if (diffMin < 1440) return Math.floor(diffMin / 60) + 'h ago';
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    // ============================================
     // INITIALIZATION
     // ============================================
     document.addEventListener('DOMContentLoaded', function() {
@@ -928,9 +1077,10 @@
                 window.shellState.selectedAccountIds = [currentAdvId];
             }
 
-            // Load balance for current account + BC balances in parallel
+            // Load balance for current account + BC balances + notifications in parallel
             loadAccountBalance(currentAdvId);
             loadBcBalances();
+            loadOptimizerNotifications();
 
             // Float the pre-checked account to top of dropdown
             updateMultiAccountSelection();

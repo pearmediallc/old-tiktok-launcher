@@ -53,6 +53,9 @@
                 </svg>
             </span>
             <span class="sidebar-label">Optimizer</span>
+            <?php if (!empty($optimizerNotifCount) && $optimizerNotifCount > 0): ?>
+                <span class="sidebar-notif-badge"><?php echo $optimizerNotifCount; ?></span>
+            <?php endif; ?>
         </a>
     </div>
 

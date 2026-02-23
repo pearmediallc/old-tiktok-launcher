@@ -32,6 +32,25 @@ $view = $_GET['view'] ?? 'campaigns';
 if (!in_array($view, $validViews)) {
     $view = 'campaigns';
 }
+
+// Check for undismissed optimizer pause notifications (for sidebar badge)
+$optimizerNotifCount = 0;
+if ($isConnected) {
+    try {
+        require_once __DIR__ . '/database/Database.php';
+        $dbShell = Database::getInstance();
+        $driver = getenv('DB_DRIVER') ?: ($_ENV['DB_DRIVER'] ?? 'mysql');
+        $intervalClause = ($driver === 'pgsql')
+            ? "created_at >= NOW() - INTERVAL '24 hours'"
+            : "created_at >= NOW() - INTERVAL 24 HOUR";
+        $notifRow = $dbShell->fetchOne(
+            "SELECT COUNT(*) as cnt FROM optimizer_logs WHERE action = 'pause' AND success = 1 AND (rule_key IS NULL OR rule_key != 'manual') AND dismissed_at IS NULL AND $intervalClause"
+        );
+        $optimizerNotifCount = intval($notifRow['cnt'] ?? 0);
+    } catch (Exception $e) {
+        // Optimizer tables may not exist yet
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -889,6 +908,64 @@ if (!in_array($view, $validViews)) {
             .rejected-ad-row { padding: 8px 10px; }
             .rejected-ad-name { font-size: 11px; }
         }
+
+        /* ============================================
+           OPTIMIZER PAUSE NOTIFICATIONS
+           ============================================ */
+        .optimizer-notifications-container { margin-bottom: 16px; }
+        .optimizer-notifications-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+        }
+        .optimizer-notifications-header .notif-header-title {
+            font-size: 13px; font-weight: 700; color: #991b1b;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .optimizer-notifications-header .notif-count-badge {
+            background: #dc2626; color: white; font-size: 11px;
+            padding: 2px 7px; border-radius: 10px; font-weight: 700;
+        }
+        .optimizer-notifications-header .btn-dismiss-all {
+            font-size: 12px; color: #b91c1c; background: none;
+            border: 1px solid #fecaca; border-radius: 6px;
+            padding: 4px 12px; cursor: pointer; font-weight: 600; transition: all 0.2s;
+        }
+        .optimizer-notifications-header .btn-dismiss-all:hover {
+            background: #fef2f2; border-color: #f87171;
+        }
+        .optimizer-notification-banner {
+            background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%);
+            border: 1px solid #fecaca; border-left: 4px solid #dc2626;
+            border-radius: 10px; padding: 14px 16px; margin-bottom: 8px;
+            display: flex; align-items: flex-start; gap: 12px;
+            animation: notifSlideIn 0.3s ease-out;
+        }
+        @keyframes notifSlideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .optimizer-notification-banner .notif-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+        .optimizer-notification-banner .notif-body { flex: 1; min-width: 0; }
+        .optimizer-notification-banner .notif-title { font-weight: 700; font-size: 14px; color: #991b1b; margin-bottom: 2px; }
+        .optimizer-notification-banner .notif-detail { font-size: 13px; color: #7f1d1d; line-height: 1.4; }
+        .optimizer-notification-banner .notif-time { font-size: 11px; color: #b91c1c; margin-top: 4px; }
+        .optimizer-notification-banner .notif-dismiss {
+            background: none; border: none; color: #b91c1c; cursor: pointer;
+            font-size: 18px; padding: 0 4px; line-height: 1;
+            opacity: 0.6; transition: opacity 0.2s; flex-shrink: 0;
+        }
+        .optimizer-notification-banner .notif-dismiss:hover { opacity: 1; }
+
+        /* Sidebar notification badge */
+        .sidebar-notif-badge {
+            background: #dc2626; color: white; font-size: 10px; font-weight: 700;
+            padding: 2px 6px; border-radius: 10px; margin-left: auto;
+        }
+
+        @media (max-width: 768px) {
+            .optimizer-notification-banner { padding: 10px 12px; gap: 8px; }
+            .optimizer-notification-banner .notif-title { font-size: 13px; }
+            .optimizer-notification-banner .notif-detail { font-size: 12px; }
+        }
     </style>
 </head>
 <body class="app-shell">
@@ -929,6 +1006,9 @@ if (!in_array($view, $validViews)) {
             <?php else: ?>
                 <!-- Connected + account selected: show account panel + active view -->
                 <?php include __DIR__ . '/partials/account-panel.php'; ?>
+
+                <!-- Optimizer Pause Notifications (populated by shell.js) -->
+                <div id="optimizer-notifications" class="optimizer-notifications-container" style="display:none;"></div>
 
                 <?php if ($view === 'campaigns'): ?>
                     <div class="view-panel" id="view-campaigns">

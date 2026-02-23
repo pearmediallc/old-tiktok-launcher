@@ -120,6 +120,22 @@ try {
     error_log("Optimizer migration error: " . $e->getMessage());
 }
 
+// Migration: Add dismissed_at column to optimizer_logs (for pause notifications)
+try {
+    $testLog = $db->fetchOne("SELECT * FROM optimizer_logs LIMIT 1");
+    if ($testLog && !array_key_exists('dismissed_at', $testLog)) {
+        $db->query("ALTER TABLE optimizer_logs ADD COLUMN dismissed_at TIMESTAMP NULL DEFAULT NULL");
+        logOptimizer("Migration: Added dismissed_at column to optimizer_logs");
+    }
+} catch (Exception $e) {
+    // Table might be empty — try ALTER directly
+    try {
+        $db->query("ALTER TABLE optimizer_logs ADD COLUMN dismissed_at TIMESTAMP NULL DEFAULT NULL");
+    } catch (Exception $ex) {
+        // Column likely already exists
+    }
+}
+
 // Get action
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
@@ -385,6 +401,59 @@ switch ($action) {
             'resumes_today' => intval($todayResumes['cnt'] ?? 0),
             'active_rules' => intval($totalRules['cnt'] ?? 0),
         ]]);
+        break;
+
+    // ============================================
+    // PAUSE NOTIFICATIONS (shown on login)
+    // ============================================
+
+    case 'get_pause_notifications':
+        $driver = getenv('DB_DRIVER') ?: ($_ENV['DB_DRIVER'] ?? 'mysql');
+        $intervalClause = ($driver === 'pgsql')
+            ? "ol.created_at >= NOW() - INTERVAL '24 hours'"
+            : "ol.created_at >= NOW() - INTERVAL 24 HOUR";
+
+        $notifications = $db->fetchAll(
+            "SELECT ol.id, ol.campaign_id, ol.advertiser_id, ol.rule_key, ol.rule_details,
+                    ol.metrics_snapshot, ol.created_at, ol.success,
+                    mc.campaign_name
+             FROM optimizer_logs ol
+             LEFT JOIN optimizer_monitored_campaigns mc
+               ON ol.campaign_id = mc.campaign_id AND ol.advertiser_id = mc.advertiser_id
+             WHERE ol.action = 'pause'
+               AND ol.success = 1
+               AND (ol.rule_key IS NULL OR ol.rule_key != 'manual')
+               AND ol.dismissed_at IS NULL
+               AND $intervalClause
+             ORDER BY ol.created_at DESC
+             LIMIT 50"
+        );
+
+        foreach ($notifications as &$n) {
+            $n['metrics_snapshot'] = json_decode($n['metrics_snapshot'] ?? '{}', true);
+        }
+
+        echo json_encode(['success' => true, 'data' => $notifications, 'count' => count($notifications)]);
+        break;
+
+    case 'dismiss_notification':
+        $logId = intval($input['log_id'] ?? 0);
+        $dismissAll = !empty($input['dismiss_all']);
+
+        if ($dismissAll) {
+            $db->query(
+                "UPDATE optimizer_logs SET dismissed_at = NOW() WHERE action = 'pause' AND dismissed_at IS NULL AND success = 1 AND (rule_key IS NULL OR rule_key != 'manual')"
+            );
+            echo json_encode(['success' => true, 'message' => 'All notifications dismissed']);
+        } elseif ($logId) {
+            $db->query(
+                "UPDATE optimizer_logs SET dismissed_at = NOW() WHERE id = ?",
+                [$logId]
+            );
+            echo json_encode(['success' => true, 'message' => 'Notification dismissed']);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'log_id or dismiss_all required']);
+        }
         break;
 
     default:
