@@ -63,6 +63,10 @@ const METRIC_LABELS = {
     spend: 'Spend ($)', cpc: 'CPC ($)', ctr: 'CTR (%)', conversions: 'Conversions',
     lp_ctr: 'LP CTR (%)', impressions: 'Impressions', clicks: 'Clicks',
 };
+const RULE_GROUP_LABELS = {
+    home_insurance: 'Home Insurance',
+    medicare: 'Medicare',
+};
 
 async function loadRules() {
     try {
@@ -83,38 +87,57 @@ async function loadRules() {
 function renderRules(rules) {
     const tbody = document.getElementById('opt-rules-body');
 
-    tbody.innerHTML = rules.map(rule => {
-        const opLabel = OPERATOR_LABELS[rule.operator] || rule.operator;
-        const metricLabel = METRIC_LABELS[rule.metric_field] || rule.metric_field;
-        const source = rule.metric_source;
+    // Group rules by rule_group
+    const groups = {};
+    rules.forEach(rule => {
+        const group = rule.rule_group || 'home_insurance';
+        if (!groups[group]) groups[group] = [];
+        groups[group].push(rule);
+    });
 
-        let conditionText = `${metricLabel} ${opLabel}`;
-        let thresholdHtml = `<input type="number" class="opt-threshold-input" value="${rule.threshold}" step="0.01" onchange="updateRuleThreshold(${rule.id}, this.value)" title="Edit threshold">`;
+    let html = '';
+    for (const [group, groupRules] of Object.entries(groups)) {
+        const groupLabel = RULE_GROUP_LABELS[group] || group;
+        const groupColor = group === 'medicare' ? '#7c3aed' : '#0369a1';
 
-        // If has secondary condition
-        if (rule.secondary_metric) {
-            const secMetric = METRIC_LABELS[rule.secondary_metric] || rule.secondary_metric;
-            const secOp = OPERATOR_LABELS[rule.secondary_operator] || rule.secondary_operator;
-            conditionText += ` <span style="color:#94a3b8">AND</span> ${secMetric} ${secOp}`;
-            thresholdHtml += `<br><input type="number" class="opt-threshold-input" value="${rule.secondary_threshold}" step="0.01" onchange="updateRuleSecondaryThreshold(${rule.id}, this.value)" title="Edit secondary threshold" style="margin-top:4px;">`;
-        }
+        // Group header row
+        html += `<tr><td colspan="6" style="background:#f8fafc;padding:10px 16px;font-weight:700;font-size:13px;color:${groupColor};border-bottom:2px solid ${groupColor}20;letter-spacing:0.5px;">${groupLabel} Rules</td></tr>`;
 
-        const isOn = parseInt(rule.enabled);
+        html += groupRules.map(rule => {
+            const opLabel = OPERATOR_LABELS[rule.operator] || rule.operator;
+            const metricLabel = METRIC_LABELS[rule.metric_field] || rule.metric_field;
+            const source = rule.metric_source;
 
-        return `
-            <tr>
-                <td style="font-weight:600;">${escapeHtmlOpt(rule.rule_name)}</td>
-                <td><span class="opt-source-badge ${source}">${source === 'tiktok' ? 'TikTok' : 'RedTrack'}</span></td>
-                <td>${conditionText}</td>
-                <td>${thresholdHtml}</td>
-                <td>
-                    <div class="opt-toggle ${isOn ? 'on' : ''}" onclick="toggleRule(${rule.id})" title="${isOn ? 'Click to disable' : 'Click to enable'}">
-                        <div class="opt-toggle-dot"></div>
-                    </div>
-                </td>
-            </tr>
-        `;
-    }).join('');
+            let conditionText = `${metricLabel} ${opLabel}`;
+            let thresholdHtml = `<input type="number" class="opt-threshold-input" value="${rule.threshold}" step="0.01" onchange="updateRuleThreshold(${rule.id}, this.value)" title="Edit threshold">`;
+
+            // If has secondary condition
+            if (rule.secondary_metric) {
+                const secMetric = METRIC_LABELS[rule.secondary_metric] || rule.secondary_metric;
+                const secOp = OPERATOR_LABELS[rule.secondary_operator] || rule.secondary_operator;
+                conditionText += ` <span style="color:#94a3b8">AND</span> ${secMetric} ${secOp}`;
+                thresholdHtml += `<br><input type="number" class="opt-threshold-input" value="${rule.secondary_threshold}" step="0.01" onchange="updateRuleSecondaryThreshold(${rule.id}, this.value)" title="Edit secondary threshold" style="margin-top:4px;">`;
+            }
+
+            const isOn = parseInt(rule.enabled);
+
+            return `
+                <tr>
+                    <td style="font-weight:600;">${escapeHtmlOpt(rule.rule_name)}</td>
+                    <td><span class="opt-source-badge ${source}">${source === 'tiktok' ? 'TikTok' : 'RedTrack'}</span></td>
+                    <td>${conditionText}</td>
+                    <td>${thresholdHtml}</td>
+                    <td>
+                        <div class="opt-toggle ${isOn ? 'on' : ''}" onclick="toggleRule(${rule.id})" title="${isOn ? 'Click to disable' : 'Click to enable'}">
+                            <div class="opt-toggle-dot"></div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    tbody.innerHTML = html;
 }
 
 async function updateRuleThreshold(ruleId, value) {
@@ -184,7 +207,7 @@ async function loadMonitoredCampaigns() {
             renderMonitoredCampaigns(result.data);
         } else {
             document.getElementById('opt-monitored-body').innerHTML =
-                '<tr><td colspan="5" class="opt-empty"><div class="opt-empty-icon">No campaigns being monitored</div><p>Go to View Campaigns and click the shield icon to start monitoring.</p></td></tr>';
+                '<tr><td colspan="6" class="opt-empty"><div class="opt-empty-icon">No campaigns being monitored</div><p>Go to View Campaigns and click the shield icon to start monitoring.</p></td></tr>';
         }
     } catch (e) {
         console.error('Error loading monitored campaigns:', e);
@@ -215,12 +238,17 @@ function renderMonitoredCampaigns(campaigns) {
             `;
         }
 
+        const ruleGroup = mc.rule_group || 'home_insurance';
+        const groupLabel = ruleGroup === 'medicare' ? 'Medicare' : 'Home Insurance';
+        const groupColor = ruleGroup === 'medicare' ? '#7c3aed' : '#0369a1';
+
         return `
             <tr>
                 <td>
                     <div style="font-weight:600;">${escapeHtmlOpt(mc.campaign_name || mc.campaign_id)}</div>
                     <div style="font-size:11px;color:#94a3b8;">${mc.campaign_id}</div>
                 </td>
+                <td><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:${groupColor}15;color:${groupColor};">${groupLabel}</span></td>
                 <td><span class="opt-status-dot ${statusDot}"></span>${statusText}</td>
                 <td style="font-size:12px;color:#64748b;">${lastChecked}</td>
                 <td>${violation !== '-' ? `<span class="opt-severity-badge warning">${violation}</span>` : '-'}</td>

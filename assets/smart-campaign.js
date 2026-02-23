@@ -9153,23 +9153,26 @@ async function loadOptimizerMonitoringStatus() {
 
         if (!result.success) return;
 
-        const statusMap = result.data; // { campaign_id: { monitoring: true, paused_by_optimizer: false }, ... }
+        const statusMap = result.data;
 
         // Update all optimizer monitor buttons
         document.querySelectorAll('.optimizer-monitor-btn').forEach(btn => {
             const campaignId = btn.id.replace('opt-btn-', '');
             const status = statusMap[campaignId];
 
-            // Reset classes
+            // Reset classes and data
             btn.classList.remove('monitoring', 'paused-by-opt');
+            btn.removeAttribute('data-rule-group');
 
             if (status && status.monitoring) {
+                btn.setAttribute('data-rule-group', status.rule_group || 'home_insurance');
+                const groupLabel = status.rule_group === 'medicare' ? 'Medicare' : 'Home Insurance';
                 if (status.paused_by_optimizer) {
                     btn.classList.add('paused-by-opt');
-                    btn.title = 'Paused by Optimizer (click to remove from monitoring)';
+                    btn.title = `Paused by Optimizer [${groupLabel}] (click to remove)`;
                 } else {
                     btn.classList.add('monitoring');
-                    btn.title = 'Monitoring Active (click to remove from monitoring)';
+                    btn.title = `Monitoring [${groupLabel}] (click to remove)`;
                 }
             } else {
                 btn.title = 'Click to enable Optimizer Monitoring';
@@ -9182,7 +9185,7 @@ async function loadOptimizerMonitoringStatus() {
 
 /**
  * Toggles optimizer monitoring for a campaign.
- * If not monitored → adds to monitoring.
+ * If not monitored → shows rule group picker.
  * If monitored → removes from monitoring.
  */
 async function toggleOptimizerMonitoring(campaignId, campaignName) {
@@ -9191,35 +9194,100 @@ async function toggleOptimizerMonitoring(campaignId, campaignName) {
 
     const isMonitoring = btn.classList.contains('monitoring') || btn.classList.contains('paused-by-opt');
 
-    // Confirm before removing
     if (isMonitoring) {
+        // Remove from monitoring
         if (!confirm(`Remove "${campaignName}" from optimizer monitoring?`)) return;
+        await sendToggleMonitoring(campaignId, campaignName, null, btn);
+    } else {
+        // Show rule group picker dropdown
+        showRuleGroupPicker(btn, campaignId, campaignName);
     }
+}
 
-    // Disable button while processing
+/**
+ * Shows a small dropdown to pick rule group (Home Insurance / Medicare)
+ */
+function showRuleGroupPicker(btn, campaignId, campaignName) {
+    // Remove any existing picker
+    const existing = document.getElementById('opt-rule-group-picker');
+    if (existing) existing.remove();
+
+    const rect = btn.getBoundingClientRect();
+
+    const picker = document.createElement('div');
+    picker.id = 'opt-rule-group-picker';
+    picker.style.cssText = `
+        position: fixed; top: ${rect.bottom + 4}px; left: ${rect.left - 60}px; z-index: 99999;
+        background: white; border: 1px solid #e2e8f0; border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.15); min-width: 180px; overflow: hidden;
+    `;
+
+    picker.innerHTML = `
+        <div style="padding:8px 12px;font-size:11px;font-weight:700;color:#64748b;border-bottom:1px solid #f1f5f9;text-transform:uppercase;">Select Rule Group</div>
+        <div class="opt-picker-option" data-group="home_insurance" style="padding:10px 12px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;transition:background 0.15s;">
+            <span style="width:8px;height:8px;border-radius:50%;background:#0369a1;display:inline-block;"></span>
+            Home Insurance
+            <span style="font-size:11px;color:#94a3b8;font-weight:400;">CPC &gt; $3, CTR &lt; 0.7%</span>
+        </div>
+        <div class="opt-picker-option" data-group="medicare" style="padding:10px 12px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;transition:background 0.15s;border-top:1px solid #f1f5f9;">
+            <span style="width:8px;height:8px;border-radius:50%;background:#7c3aed;display:inline-block;"></span>
+            Medicare
+            <span style="font-size:11px;color:#94a3b8;font-weight:400;">CPC &gt; $0.7, CTR &gt; 1%</span>
+        </div>
+    `;
+
+    document.body.appendChild(picker);
+
+    // Handle option clicks
+    picker.querySelectorAll('.opt-picker-option').forEach(opt => {
+        opt.addEventListener('mouseenter', () => opt.style.background = '#f8fafc');
+        opt.addEventListener('mouseleave', () => opt.style.background = 'white');
+        opt.addEventListener('click', async () => {
+            picker.remove();
+            const ruleGroup = opt.dataset.group;
+            await sendToggleMonitoring(campaignId, campaignName, ruleGroup, btn);
+        });
+    });
+
+    // Close picker on outside click
+    setTimeout(() => {
+        const closeHandler = (e) => {
+            if (!picker.contains(e.target) && e.target !== btn) {
+                picker.remove();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        document.addEventListener('click', closeHandler);
+    }, 10);
+}
+
+/**
+ * Sends the toggle_monitoring API call
+ */
+async function sendToggleMonitoring(campaignId, campaignName, ruleGroup, btn) {
     btn.disabled = true;
     btn.style.opacity = '0.5';
 
+    const isMonitoring = btn.classList.contains('monitoring') || btn.classList.contains('paused-by-opt');
+
     try {
+        const body = {
+            action: 'toggle_monitoring',
+            campaign_id: campaignId,
+            campaign_name: campaignName,
+            advertiser_id: state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || ''
+        };
+        if (ruleGroup) body.rule_group = ruleGroup;
+
         const response = await fetch('api-optimizer.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'toggle_monitoring',
-                campaign_id: campaignId,
-                campaign_name: campaignName,
-                advertiser_id: state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || ''
-            })
+            body: JSON.stringify(body)
         });
         const result = await response.json();
 
         if (result.success) {
-            const msg = isMonitoring
-                ? `"${campaignName}" removed from monitoring`
-                : `"${campaignName}" added to optimizer monitoring`;
-            showToast(msg, 'success');
-
-            // Refresh monitoring status for all buttons
+            showToast(result.message || (isMonitoring ? 'Removed from monitoring' : 'Added to monitoring'), 'success');
             await loadOptimizerMonitoringStatus();
         } else {
             showToast(result.message || 'Failed to toggle monitoring', 'error');

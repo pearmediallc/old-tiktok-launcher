@@ -299,11 +299,18 @@ function resumeCampaignViaApi($advertiserId, $campaignId, $accessToken) {
 function runOptimizerCheck($db, $accessToken) {
     logOptimizer("=== Starting optimizer check ===");
 
-    // Get all enabled rules
-    $rules = $db->fetchAll("SELECT * FROM optimizer_rules WHERE enabled = 1");
-    if (empty($rules)) {
+    // Get all enabled rules grouped by rule_group
+    $allRules = $db->fetchAll("SELECT * FROM optimizer_rules WHERE enabled = 1");
+    if (empty($allRules)) {
         logOptimizer("No enabled rules, skipping");
         return ['checked' => 0, 'paused' => 0, 'resumed' => 0];
+    }
+
+    // Index rules by rule_group for fast lookup
+    $rulesByGroup = [];
+    foreach ($allRules as $rule) {
+        $group = $rule['rule_group'] ?? 'home_insurance';
+        $rulesByGroup[$group][] = $rule;
     }
 
     $stats = ['checked' => 0, 'paused' => 0, 'resumed' => 0];
@@ -335,13 +342,22 @@ function runOptimizerCheck($db, $accessToken) {
         $stats['resumed']++;
     }
 
-    // 2. Check active monitored campaigns against rules
+    // 2. Check active monitored campaigns against their assigned rule group
     $monitored = $db->fetchAll(
         "SELECT * FROM optimizer_monitored_campaigns WHERE monitoring_enabled = 1 AND paused_by_optimizer = 0"
     );
 
     foreach ($monitored as $mc) {
         $stats['checked']++;
+
+        // Get rules for this campaign's rule_group
+        $campaignGroup = $mc['rule_group'] ?? 'home_insurance';
+        $rules = $rulesByGroup[$campaignGroup] ?? [];
+
+        if (empty($rules)) {
+            logOptimizer("No enabled rules for group '$campaignGroup', skipping campaign {$mc['campaign_id']}");
+            continue;
+        }
 
         // Fetch TikTok metrics
         $tiktokMetrics = fetchTikTokCampaignMetrics($mc['advertiser_id'], $mc['campaign_id'], $accessToken);
@@ -355,7 +371,7 @@ function runOptimizerCheck($db, $accessToken) {
             'redtrack' => $redtrackMetrics,
         ];
 
-        // Evaluate rules
+        // Evaluate rules for this campaign's group only
         $violations = evaluateCampaignRules($tiktokMetrics, $redtrackMetrics, $rules);
 
         // Update last checked
@@ -363,7 +379,7 @@ function runOptimizerCheck($db, $accessToken) {
 
         if (!empty($violations)) {
             $firstViolation = $violations[0];
-            logOptimizer("Campaign {$mc['campaign_id']} violated rule: {$firstViolation['rule_key']}", $violations);
+            logOptimizer("Campaign {$mc['campaign_id']} [$campaignGroup] violated rule: {$firstViolation['rule_key']}", $violations);
 
             // Pause the campaign
             $pauseResult = pauseCampaignViaApi($mc['advertiser_id'], $mc['campaign_id'], $accessToken);
@@ -397,7 +413,7 @@ function runOptimizerCheck($db, $accessToken) {
                 'advertiser_id' => $mc['advertiser_id'],
                 'action' => 'rule_check',
                 'rule_key' => null,
-                'rule_details' => 'All rules passed',
+                'rule_details' => "All $campaignGroup rules passed",
                 'metrics_snapshot' => json_encode($metricsSnapshot),
                 'success' => 1,
             ]);

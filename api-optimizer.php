@@ -73,10 +73,52 @@ try {
     }
 }
 
-// Fix: CTR rule should use tiktok source, not redtrack
+// Migration: Add rule_group column + Medicare rules
 try {
-    $db->query("UPDATE optimizer_rules SET metric_source = 'tiktok' WHERE rule_key = 'low_ctr' AND metric_source = 'redtrack'");
-} catch (Exception $e) {}
+    // Check if rule_group column exists
+    $testRow = $db->fetchOne("SELECT * FROM optimizer_rules LIMIT 1");
+    if ($testRow && !array_key_exists('rule_group', $testRow)) {
+        // Add rule_group column to optimizer_rules
+        $db->query("ALTER TABLE optimizer_rules ADD COLUMN rule_group VARCHAR(50) NOT NULL DEFAULT 'home_insurance'");
+        // Add rule_group column to optimizer_monitored_campaigns
+        $db->query("ALTER TABLE optimizer_monitored_campaigns ADD COLUMN rule_group VARCHAR(50) NOT NULL DEFAULT 'home_insurance'");
+
+        // Rename old rule_keys to have hi_ prefix
+        $db->query("UPDATE optimizer_rules SET rule_key = 'hi_spend_no_conversion' WHERE rule_key = 'spend_no_conversion'");
+        $db->query("UPDATE optimizer_rules SET rule_key = 'hi_high_cpc' WHERE rule_key = 'high_cpc'");
+        $db->query("UPDATE optimizer_rules SET rule_key = 'hi_low_lpctr' WHERE rule_key = 'low_lpctr'");
+        $db->query("UPDATE optimizer_rules SET rule_key = 'hi_low_ctr' WHERE rule_key = 'low_ctr'");
+
+        // Fix CTR rule source
+        $db->query("UPDATE optimizer_rules SET metric_source = 'tiktok' WHERE rule_key = 'hi_low_ctr' AND metric_source = 'redtrack'");
+
+        logOptimizer("Migration: Added rule_group column and renamed rule keys");
+    }
+
+    // Insert Medicare rules if they don't exist
+    $medCheck = $db->fetchOne("SELECT id FROM optimizer_rules WHERE rule_key = 'med_high_cpc'");
+    if (!$medCheck) {
+        $driver = getenv('DB_DRIVER') ?: ($_ENV['DB_DRIVER'] ?? 'mysql');
+        if ($driver === 'pgsql') {
+            $db->query("INSERT INTO optimizer_rules (rule_key, rule_name, rule_group, metric_source, metric_field, operator, threshold, secondary_metric, secondary_operator, secondary_threshold, enabled) VALUES
+                ('med_spend_no_conversion', 'Spend without Conversion', 'medicare', 'tiktok', 'spend', 'gte', 30.0000, 'conversions', 'eq', 0.0000, 1),
+                ('med_high_cpc', 'High CPC', 'medicare', 'tiktok', 'cpc', 'gt', 0.7000, NULL, NULL, NULL, 1),
+                ('med_low_lpctr', 'Low LP CTR', 'medicare', 'redtrack', 'lp_ctr', 'lt', 20.0000, NULL, NULL, NULL, 1),
+                ('med_high_ctr', 'High CTR', 'medicare', 'tiktok', 'ctr', 'gt', 1.0000, NULL, NULL, NULL, 1)
+                ON CONFLICT (rule_key) DO UPDATE SET rule_name = EXCLUDED.rule_name");
+        } else {
+            $db->query("INSERT INTO optimizer_rules (rule_key, rule_name, rule_group, metric_source, metric_field, operator, threshold, secondary_metric, secondary_operator, secondary_threshold, enabled) VALUES
+                ('med_spend_no_conversion', 'Spend without Conversion', 'medicare', 'tiktok', 'spend', 'gte', 30.0000, 'conversions', 'eq', 0.0000, 1),
+                ('med_high_cpc', 'High CPC', 'medicare', 'tiktok', 'cpc', 'gt', 0.7000, NULL, NULL, NULL, 1),
+                ('med_low_lpctr', 'Low LP CTR', 'medicare', 'redtrack', 'lp_ctr', 'lt', 20.0000, NULL, NULL, NULL, 1),
+                ('med_high_ctr', 'High CTR', 'medicare', 'tiktok', 'ctr', 'gt', 1.0000, NULL, NULL, NULL, 1)
+                ON DUPLICATE KEY UPDATE rule_name = VALUES(rule_name)");
+        }
+        logOptimizer("Migration: Inserted Medicare rules");
+    }
+} catch (Exception $e) {
+    error_log("Optimizer migration error: " . $e->getMessage());
+}
 
 // Get action
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
@@ -92,7 +134,12 @@ switch ($action) {
     // ============================================
 
     case 'get_rules':
-        $rules = $db->fetchAll("SELECT * FROM optimizer_rules ORDER BY id ASC");
+        $groupFilter = $_GET['rule_group'] ?? '';
+        if ($groupFilter) {
+            $rules = $db->fetchAll("SELECT * FROM optimizer_rules WHERE rule_group = ? ORDER BY id ASC", [$groupFilter]);
+        } else {
+            $rules = $db->fetchAll("SELECT * FROM optimizer_rules ORDER BY rule_group ASC, id ASC");
+        }
         echo json_encode(['success' => true, 'data' => $rules]);
         break;
 
@@ -160,6 +207,7 @@ switch ($action) {
         $campaignId = $input['campaign_id'] ?? '';
         $campaignName = $input['campaign_name'] ?? '';
         $advId = $input['advertiser_id'] ?? $advertiserId;
+        $ruleGroup = $input['rule_group'] ?? 'home_insurance';
 
         if (empty($campaignId) || empty($advId)) {
             echo json_encode(['success' => false, 'message' => 'Campaign ID and advertiser ID required']);
@@ -178,16 +226,18 @@ switch ($action) {
             logOptimizer("Removed campaign $campaignId from monitoring");
             echo json_encode(['success' => true, 'monitoring' => false, 'message' => 'Campaign removed from monitoring']);
         } else {
-            // Toggle on - add to monitoring
+            // Toggle on - add to monitoring with chosen rule group
             $db->insert('optimizer_monitored_campaigns', [
                 'campaign_id' => $campaignId,
                 'advertiser_id' => $advId,
                 'campaign_name' => $campaignName,
+                'rule_group' => $ruleGroup,
                 'monitoring_enabled' => 1,
                 'paused_by_optimizer' => 0,
             ]);
-            logOptimizer("Added campaign $campaignId to monitoring");
-            echo json_encode(['success' => true, 'monitoring' => true, 'message' => 'Campaign is now being monitored']);
+            $groupLabel = str_replace('_', ' ', ucwords($ruleGroup, '_'));
+            logOptimizer("Added campaign $campaignId to monitoring with $ruleGroup rules");
+            echo json_encode(['success' => true, 'monitoring' => true, 'rule_group' => $ruleGroup, 'message' => "Campaign monitored with $groupLabel rules"]);
         }
         break;
 
@@ -195,7 +245,7 @@ switch ($action) {
         // Returns which campaign IDs are being monitored (for badge display)
         $advId = $_GET['advertiser_id'] ?? $advertiserId;
         $monitored = $db->fetchAll(
-            "SELECT campaign_id, paused_by_optimizer, paused_at, resume_at, last_violation_rule, last_checked_at FROM optimizer_monitored_campaigns WHERE advertiser_id = ? AND monitoring_enabled = 1",
+            "SELECT campaign_id, rule_group, paused_by_optimizer, paused_at, resume_at, last_violation_rule, last_checked_at FROM optimizer_monitored_campaigns WHERE advertiser_id = ? AND monitoring_enabled = 1",
             [$advId]
         );
 
@@ -203,6 +253,7 @@ switch ($action) {
         foreach ($monitored as $mc) {
             $statusMap[$mc['campaign_id']] = [
                 'monitoring' => true,
+                'rule_group' => $mc['rule_group'] ?? 'home_insurance',
                 'paused_by_optimizer' => (bool)$mc['paused_by_optimizer'],
                 'paused_at' => $mc['paused_at'],
                 'resume_at' => $mc['resume_at'],

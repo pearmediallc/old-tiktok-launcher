@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS optimizer_rules (
     id SERIAL PRIMARY KEY,
     rule_key VARCHAR(50) NOT NULL UNIQUE,
     rule_name VARCHAR(255) NOT NULL,
+    rule_group VARCHAR(50) NOT NULL DEFAULT 'home_insurance',
     metric_source VARCHAR(20) NOT NULL CHECK (metric_source IN ('tiktok','redtrack')),
     metric_field VARCHAR(50) NOT NULL,
     operator VARCHAR(10) NOT NULL CHECK (operator IN ('gt','lt','gte','lte','eq')),
@@ -21,12 +22,21 @@ CREATE TABLE IF NOT EXISTS optimizer_rules (
 );
 
 -- Insert default Home Insurance rules
-INSERT INTO optimizer_rules (rule_key, rule_name, metric_source, metric_field, operator, threshold, secondary_metric, secondary_operator, secondary_threshold, enabled)
+INSERT INTO optimizer_rules (rule_key, rule_name, rule_group, metric_source, metric_field, operator, threshold, secondary_metric, secondary_operator, secondary_threshold, enabled)
 VALUES
-    ('spend_no_conversion', 'Spend without Conversion', 'tiktok', 'spend', 'gte', 30.0000, 'conversions', 'eq', 0.0000, 1),
-    ('high_cpc', 'High CPC', 'tiktok', 'cpc', 'gt', 3.0000, NULL, NULL, NULL, 1),
-    ('low_lpctr', 'Low LP CTR', 'redtrack', 'lp_ctr', 'lt', 20.0000, NULL, NULL, NULL, 1),
-    ('low_ctr', 'Low CTR', 'tiktok', 'ctr', 'lt', 0.7000, NULL, NULL, NULL, 1)
+    ('hi_spend_no_conversion', 'Spend without Conversion', 'home_insurance', 'tiktok', 'spend', 'gte', 30.0000, 'conversions', 'eq', 0.0000, 1),
+    ('hi_high_cpc', 'High CPC', 'home_insurance', 'tiktok', 'cpc', 'gt', 3.0000, NULL, NULL, NULL, 1),
+    ('hi_low_lpctr', 'Low LP CTR', 'home_insurance', 'redtrack', 'lp_ctr', 'lt', 20.0000, NULL, NULL, NULL, 1),
+    ('hi_low_ctr', 'Low CTR', 'home_insurance', 'tiktok', 'ctr', 'lt', 0.7000, NULL, NULL, NULL, 1)
+ON CONFLICT (rule_key) DO UPDATE SET rule_name = EXCLUDED.rule_name;
+
+-- Insert default Medicare rules
+INSERT INTO optimizer_rules (rule_key, rule_name, rule_group, metric_source, metric_field, operator, threshold, secondary_metric, secondary_operator, secondary_threshold, enabled)
+VALUES
+    ('med_spend_no_conversion', 'Spend without Conversion', 'medicare', 'tiktok', 'spend', 'gte', 30.0000, 'conversions', 'eq', 0.0000, 1),
+    ('med_high_cpc', 'High CPC', 'medicare', 'tiktok', 'cpc', 'gt', 0.7000, NULL, NULL, NULL, 1),
+    ('med_low_lpctr', 'Low LP CTR', 'medicare', 'redtrack', 'lp_ctr', 'lt', 20.0000, NULL, NULL, NULL, 1),
+    ('med_high_ctr', 'High CTR', 'medicare', 'tiktok', 'ctr', 'gt', 1.0000, NULL, NULL, NULL, 1)
 ON CONFLICT (rule_key) DO UPDATE SET rule_name = EXCLUDED.rule_name;
 
 -- ============================================
@@ -37,6 +47,7 @@ CREATE TABLE IF NOT EXISTS optimizer_monitored_campaigns (
     campaign_id VARCHAR(64) NOT NULL,
     advertiser_id VARCHAR(64) NOT NULL,
     campaign_name VARCHAR(500),
+    rule_group VARCHAR(50) NOT NULL DEFAULT 'home_insurance',
     monitoring_enabled SMALLINT DEFAULT 1,
     paused_by_optimizer SMALLINT DEFAULT 0,
     paused_at TIMESTAMP NULL,
