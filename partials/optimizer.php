@@ -155,6 +155,7 @@
                 <tr>
                     <th>Campaign</th>
                     <th>Rules</th>
+                    <th>RedTrack Campaign</th>
                     <th>Status</th>
                     <th>Last Checked</th>
                     <th>Last Violation</th>
@@ -162,7 +163,7 @@
                 </tr>
             </thead>
             <tbody id="opt-monitored-body">
-                <tr><td colspan="6" class="opt-empty"><div class="opt-empty-icon">Loading...</div></td></tr>
+                <tr><td colspan="7" class="opt-empty"><div class="opt-empty-icon">Loading...</div></td></tr>
             </tbody>
         </table>
     </div>

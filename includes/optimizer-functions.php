@@ -78,6 +78,9 @@ function redtrackApiCall($endpoint, $params = []) {
         return null;
     }
 
+    // RedTrack uses api_key as a query parameter for authentication
+    $params['api_key'] = $apiToken;
+
     $url = rtrim($apiUrl, '/') . $endpoint;
     if (!empty($params)) {
         $url .= '?' . http_build_query($params);
@@ -88,7 +91,6 @@ function redtrackApiCall($endpoint, $params = []) {
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HTTPHEADER => [
-            "Authorization: Bearer $apiToken",
             "Content-Type: application/json"
         ],
         CURLOPT_TIMEOUT => 60
@@ -104,6 +106,43 @@ function redtrackApiCall($endpoint, $params = []) {
     curl_close($ch);
 
     return json_decode($response, true);
+}
+
+// Look up a RedTrack campaign ID by campaign name/title
+function lookupRedTrackCampaignId($campaignName) {
+    if (empty($campaignName)) return null;
+
+    $result = redtrackApiCall('/campaigns', [
+        'title' => $campaignName,
+    ]);
+
+    if (empty($result)) {
+        logOptimizer("RedTrack: No response when looking up campaign '$campaignName'");
+        return null;
+    }
+
+    // Response can be array of campaigns or {items: [...]}
+    $campaigns = isset($result['items']) ? $result['items'] : (is_array($result) ? $result : []);
+
+    foreach ($campaigns as $campaign) {
+        $title = $campaign['title'] ?? $campaign['name'] ?? '';
+        if (strcasecmp($title, $campaignName) === 0) {
+            $id = $campaign['id'] ?? null;
+            logOptimizer("RedTrack: Found campaign '$campaignName' with ID: $id");
+            return $id;
+        }
+    }
+
+    // If exact match not found, use first result (partial match)
+    if (!empty($campaigns[0]['id'])) {
+        $id = $campaigns[0]['id'];
+        $title = $campaigns[0]['title'] ?? $campaigns[0]['name'] ?? 'unknown';
+        logOptimizer("RedTrack: Using closest match for '$campaignName': '$title' (ID: $id)");
+        return $id;
+    }
+
+    logOptimizer("RedTrack: Campaign '$campaignName' not found");
+    return null;
 }
 
 // ============================================
@@ -149,10 +188,40 @@ function fetchTikTokCampaignMetrics($advertiserId, $campaignId, $accessToken) {
 // FETCH REDTRACK METRICS FOR CAMPAIGN
 // ============================================
 
-function fetchRedTrackCampaignMetrics($campaignId) {
+function fetchRedTrackCampaignMetrics($campaignId, $redtrackCampaignName = null) {
     $today = date('Y-m-d');
+    $defaultMetrics = ['lp_ctr' => 0, 'ctr' => 0, 'conversions' => 0, 'revenue' => 0, 'lp_clicks' => 0, 'lp_views' => 0];
 
-    // RedTrack uses sub2 = TikTok campaign ID
+    // If a RedTrack campaign name is provided, look up by campaign name
+    if (!empty($redtrackCampaignName)) {
+        $rtCampaignId = lookupRedTrackCampaignId($redtrackCampaignName);
+        if ($rtCampaignId) {
+            $result = redtrackApiCall('/reports/conversions', [
+                'from' => $today,
+                'to' => $today,
+                'campaign_id' => $rtCampaignId,
+            ]);
+
+            if (!empty($result['data']) && is_array($result['data'])) {
+                // Use first row or aggregate
+                $row = $result['data'][0];
+                logOptimizer("RedTrack metrics for campaign '$redtrackCampaignName' (ID: $rtCampaignId)", $row);
+                return [
+                    'lp_ctr' => floatval($row['lp_ctr'] ?? 0),
+                    'ctr' => floatval($row['ctr'] ?? 0),
+                    'conversions' => intval($row['conversions'] ?? 0),
+                    'revenue' => floatval($row['revenue'] ?? 0),
+                    'lp_clicks' => intval($row['lp_clicks'] ?? 0),
+                    'lp_views' => intval($row['lp_views'] ?? 0),
+                ];
+            }
+            logOptimizer("No RedTrack data for campaign '$redtrackCampaignName' (ID: $rtCampaignId)");
+            return $defaultMetrics;
+        }
+        logOptimizer("Could not find RedTrack campaign '$redtrackCampaignName', falling back to sub2 lookup");
+    }
+
+    // Fallback: RedTrack uses sub2 = TikTok campaign ID
     $result = redtrackApiCall('/reports/conversions', [
         'from' => $today,
         'to' => $today,
@@ -162,7 +231,7 @@ function fetchRedTrackCampaignMetrics($campaignId) {
 
     if (empty($result['data'])) {
         logOptimizer("No RedTrack data for campaign $campaignId");
-        return ['lp_ctr' => 0, 'ctr' => 0, 'conversions' => 0, 'revenue' => 0, 'lp_clicks' => 0, 'lp_views' => 0];
+        return $defaultMetrics;
     }
 
     // Find matching campaign row
@@ -179,7 +248,7 @@ function fetchRedTrackCampaignMetrics($campaignId) {
         }
     }
 
-    return ['lp_ctr' => 0, 'ctr' => 0, 'conversions' => 0, 'revenue' => 0, 'lp_clicks' => 0, 'lp_views' => 0];
+    return $defaultMetrics;
 }
 
 // ============================================
@@ -362,8 +431,8 @@ function runOptimizerCheck($db, $accessToken) {
         // Fetch TikTok metrics
         $tiktokMetrics = fetchTikTokCampaignMetrics($mc['advertiser_id'], $mc['campaign_id'], $accessToken);
 
-        // Fetch RedTrack metrics
-        $redtrackMetrics = fetchRedTrackCampaignMetrics($mc['campaign_id']);
+        // Fetch RedTrack metrics (use RedTrack campaign name if configured)
+        $redtrackMetrics = fetchRedTrackCampaignMetrics($mc['campaign_id'], $mc['redtrack_campaign_name'] ?? null);
 
         // Combine for snapshot
         $metricsSnapshot = [

@@ -9166,13 +9166,17 @@ async function loadOptimizerMonitoringStatus() {
 
             if (status && status.monitoring) {
                 btn.setAttribute('data-rule-group', status.rule_group || 'home_insurance');
+                if (status.redtrack_campaign_name) {
+                    btn.setAttribute('data-redtrack-campaign', status.redtrack_campaign_name);
+                }
                 const groupLabel = status.rule_group === 'medicare' ? 'Medicare' : 'Home Insurance';
+                const rtLabel = status.redtrack_campaign_name ? ` | RT: ${status.redtrack_campaign_name}` : '';
                 if (status.paused_by_optimizer) {
                     btn.classList.add('paused-by-opt');
-                    btn.title = `Paused by Optimizer [${groupLabel}] (click to remove)`;
+                    btn.title = `Paused by Optimizer [${groupLabel}${rtLabel}] (click to remove)`;
                 } else {
                     btn.classList.add('monitoring');
-                    btn.title = `Monitoring [${groupLabel}] (click to remove)`;
+                    btn.title = `Monitoring [${groupLabel}${rtLabel}] (click to remove)`;
                 }
             } else {
                 btn.title = 'Click to enable Optimizer Monitoring';
@@ -9205,7 +9209,7 @@ async function toggleOptimizerMonitoring(campaignId, campaignName) {
 }
 
 /**
- * Shows a small dropdown to pick rule group (Home Insurance / Medicare)
+ * Shows a small dropdown to pick rule group (Home Insurance / Medicare) + RedTrack campaign name
  */
 function showRuleGroupPicker(btn, campaignId, campaignName) {
     // Remove any existing picker
@@ -9219,20 +9223,27 @@ function showRuleGroupPicker(btn, campaignId, campaignName) {
     picker.style.cssText = `
         position: fixed; top: ${rect.bottom + 4}px; left: ${rect.left - 60}px; z-index: 99999;
         background: white; border: 1px solid #e2e8f0; border-radius: 8px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.15); min-width: 180px; overflow: hidden;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.15); min-width: 220px; overflow: hidden;
     `;
 
     picker.innerHTML = `
         <div style="padding:8px 12px;font-size:11px;font-weight:700;color:#64748b;border-bottom:1px solid #f1f5f9;text-transform:uppercase;">Select Rule Group</div>
         <div class="opt-picker-option" data-group="home_insurance" style="padding:10px 12px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;transition:background 0.15s;">
-            <span style="width:8px;height:8px;border-radius:50%;background:#0369a1;display:inline-block;"></span>
+            <span style="width:8px;height:8px;border-radius:50%;background:#0369a1;display:inline-block;flex-shrink:0;"></span>
             Home Insurance
             <span style="font-size:11px;color:#94a3b8;font-weight:400;">CPC &gt; $3, CTR &lt; 0.7%</span>
         </div>
         <div class="opt-picker-option" data-group="medicare" style="padding:10px 12px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;transition:background 0.15s;border-top:1px solid #f1f5f9;">
-            <span style="width:8px;height:8px;border-radius:50%;background:#7c3aed;display:inline-block;"></span>
+            <span style="width:8px;height:8px;border-radius:50%;background:#7c3aed;display:inline-block;flex-shrink:0;"></span>
             Medicare
             <span style="font-size:11px;color:#94a3b8;font-weight:400;">CPC &gt; $0.7, CTR &gt; 1%</span>
+        </div>
+        <div style="padding:8px 12px;border-top:1px solid #e2e8f0;">
+            <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;display:block;margin-bottom:4px;">RedTrack Campaign Name</label>
+            <input type="text" id="opt-redtrack-campaign-input" placeholder="Enter RedTrack campaign name"
+                style="width:100%;padding:6px 8px;font-size:12px;border:1px solid #e2e8f0;border-radius:6px;box-sizing:border-box;outline:none;transition:border-color 0.2s;"
+                onfocus="this.style.borderColor='#0369a1'" onblur="this.style.borderColor='#e2e8f0'" />
+            <div style="font-size:10px;color:#94a3b8;margin-top:3px;">Used to fetch LP CTR from RedTrack</div>
         </div>
     `;
 
@@ -9243,9 +9254,11 @@ function showRuleGroupPicker(btn, campaignId, campaignName) {
         opt.addEventListener('mouseenter', () => opt.style.background = '#f8fafc');
         opt.addEventListener('mouseleave', () => opt.style.background = 'white');
         opt.addEventListener('click', async () => {
-            picker.remove();
             const ruleGroup = opt.dataset.group;
-            await sendToggleMonitoring(campaignId, campaignName, ruleGroup, btn);
+            const redtrackInput = document.getElementById('opt-redtrack-campaign-input');
+            const redtrackCampaignName = redtrackInput ? redtrackInput.value.trim() : '';
+            picker.remove();
+            await sendToggleMonitoring(campaignId, campaignName, ruleGroup, btn, redtrackCampaignName);
         });
     });
 
@@ -9264,7 +9277,7 @@ function showRuleGroupPicker(btn, campaignId, campaignName) {
 /**
  * Sends the toggle_monitoring API call
  */
-async function sendToggleMonitoring(campaignId, campaignName, ruleGroup, btn) {
+async function sendToggleMonitoring(campaignId, campaignName, ruleGroup, btn, redtrackCampaignName) {
     btn.disabled = true;
     btn.style.opacity = '0.5';
 
@@ -9278,6 +9291,7 @@ async function sendToggleMonitoring(campaignId, campaignName, ruleGroup, btn) {
             advertiser_id: state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || ''
         };
         if (ruleGroup) body.rule_group = ruleGroup;
+        if (redtrackCampaignName) body.redtrack_campaign_name = redtrackCampaignName;
 
         const response = await fetch('api-optimizer.php', {
             method: 'POST',

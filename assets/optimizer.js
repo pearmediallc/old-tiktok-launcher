@@ -241,6 +241,7 @@ function renderMonitoredCampaigns(campaigns) {
         const ruleGroup = mc.rule_group || 'home_insurance';
         const groupLabel = ruleGroup === 'medicare' ? 'Medicare' : 'Home Insurance';
         const groupColor = ruleGroup === 'medicare' ? '#7c3aed' : '#0369a1';
+        const rtCampaign = mc.redtrack_campaign_name || '-';
 
         return `
             <tr>
@@ -249,6 +250,7 @@ function renderMonitoredCampaigns(campaigns) {
                     <div style="font-size:11px;color:#94a3b8;">${mc.campaign_id}</div>
                 </td>
                 <td><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:${groupColor}15;color:${groupColor};">${groupLabel}</span></td>
+                <td style="font-size:12px;color:#475569;">${escapeHtmlOpt(rtCampaign)}</td>
                 <td><span class="opt-status-dot ${statusDot}"></span>${statusText}</td>
                 <td style="font-size:12px;color:#64748b;">${lastChecked}</td>
                 <td>${violation !== '-' ? `<span class="opt-severity-badge warning">${violation}</span>` : '-'}</td>

@@ -136,6 +136,21 @@ try {
     }
 }
 
+// Migration: Add redtrack_campaign_name column to optimizer_monitored_campaigns
+try {
+    $testMc = $db->fetchOne("SELECT * FROM optimizer_monitored_campaigns LIMIT 1");
+    if ($testMc && !array_key_exists('redtrack_campaign_name', $testMc)) {
+        $db->query("ALTER TABLE optimizer_monitored_campaigns ADD COLUMN redtrack_campaign_name VARCHAR(500) DEFAULT NULL");
+        logOptimizer("Migration: Added redtrack_campaign_name column to optimizer_monitored_campaigns");
+    }
+} catch (Exception $e) {
+    try {
+        $db->query("ALTER TABLE optimizer_monitored_campaigns ADD COLUMN redtrack_campaign_name VARCHAR(500) DEFAULT NULL");
+    } catch (Exception $ex) {
+        // Column likely already exists
+    }
+}
+
 // Get action
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
@@ -224,6 +239,7 @@ switch ($action) {
         $campaignName = $input['campaign_name'] ?? '';
         $advId = $input['advertiser_id'] ?? $advertiserId;
         $ruleGroup = $input['rule_group'] ?? 'home_insurance';
+        $redtrackCampaignName = trim($input['redtrack_campaign_name'] ?? '');
 
         if (empty($campaignId) || empty($advId)) {
             echo json_encode(['success' => false, 'message' => 'Campaign ID and advertiser ID required']);
@@ -242,18 +258,21 @@ switch ($action) {
             logOptimizer("Removed campaign $campaignId from monitoring");
             echo json_encode(['success' => true, 'monitoring' => false, 'message' => 'Campaign removed from monitoring']);
         } else {
-            // Toggle on - add to monitoring with chosen rule group
-            $db->insert('optimizer_monitored_campaigns', [
+            // Toggle on - add to monitoring with chosen rule group + RedTrack campaign
+            $insertData = [
                 'campaign_id' => $campaignId,
                 'advertiser_id' => $advId,
                 'campaign_name' => $campaignName,
                 'rule_group' => $ruleGroup,
+                'redtrack_campaign_name' => $redtrackCampaignName ?: null,
                 'monitoring_enabled' => 1,
                 'paused_by_optimizer' => 0,
-            ]);
+            ];
+            $db->insert('optimizer_monitored_campaigns', $insertData);
             $groupLabel = str_replace('_', ' ', ucwords($ruleGroup, '_'));
-            logOptimizer("Added campaign $campaignId to monitoring with $ruleGroup rules");
-            echo json_encode(['success' => true, 'monitoring' => true, 'rule_group' => $ruleGroup, 'message' => "Campaign monitored with $groupLabel rules"]);
+            $rtLabel = $redtrackCampaignName ? " (RedTrack: $redtrackCampaignName)" : '';
+            logOptimizer("Added campaign $campaignId to monitoring with $ruleGroup rules$rtLabel");
+            echo json_encode(['success' => true, 'monitoring' => true, 'rule_group' => $ruleGroup, 'redtrack_campaign_name' => $redtrackCampaignName ?: null, 'message' => "Campaign monitored with $groupLabel rules$rtLabel"]);
         }
         break;
 
@@ -261,7 +280,7 @@ switch ($action) {
         // Returns which campaign IDs are being monitored (for badge display)
         $advId = $_GET['advertiser_id'] ?? $advertiserId;
         $monitored = $db->fetchAll(
-            "SELECT campaign_id, rule_group, paused_by_optimizer, paused_at, resume_at, last_violation_rule, last_checked_at FROM optimizer_monitored_campaigns WHERE advertiser_id = ? AND monitoring_enabled = 1",
+            "SELECT campaign_id, rule_group, redtrack_campaign_name, paused_by_optimizer, paused_at, resume_at, last_violation_rule, last_checked_at FROM optimizer_monitored_campaigns WHERE advertiser_id = ? AND monitoring_enabled = 1",
             [$advId]
         );
 
@@ -270,6 +289,7 @@ switch ($action) {
             $statusMap[$mc['campaign_id']] = [
                 'monitoring' => true,
                 'rule_group' => $mc['rule_group'] ?? 'home_insurance',
+                'redtrack_campaign_name' => $mc['redtrack_campaign_name'] ?? null,
                 'paused_by_optimizer' => (bool)$mc['paused_by_optimizer'],
                 'paused_at' => $mc['paused_at'],
                 'resume_at' => $mc['resume_at'],

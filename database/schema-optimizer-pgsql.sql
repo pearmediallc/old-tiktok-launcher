@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS optimizer_monitored_campaigns (
     advertiser_id VARCHAR(64) NOT NULL,
     campaign_name VARCHAR(500),
     rule_group VARCHAR(50) NOT NULL DEFAULT 'home_insurance',
+    redtrack_campaign_name VARCHAR(500) DEFAULT NULL,
     monitoring_enabled SMALLINT DEFAULT 1,
     paused_by_optimizer SMALLINT DEFAULT 0,
     paused_at TIMESTAMP NULL,
