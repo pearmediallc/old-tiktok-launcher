@@ -82,3 +82,14 @@ CREATE TABLE IF NOT EXISTS optimizer_logs (
 CREATE INDEX IF NOT EXISTS idx_opt_logs_campaign ON optimizer_logs(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_opt_logs_created ON optimizer_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_opt_logs_action ON optimizer_logs(action);
+
+-- RedTrack campaign name mapping for LP CTR display
+CREATE TABLE IF NOT EXISTS campaign_redtrack_map (
+    id SERIAL PRIMARY KEY,
+    campaign_id VARCHAR(64) NOT NULL,
+    advertiser_id VARCHAR(64) NOT NULL,
+    redtrack_campaign_name VARCHAR(500) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(campaign_id, advertiser_id)
+);

@@ -80,3 +80,14 @@ CREATE TABLE IF NOT EXISTS optimizer_logs (
     INDEX idx_created (created_at),
     INDEX idx_action (action)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- RedTrack campaign name mapping for LP CTR display
+CREATE TABLE IF NOT EXISTS campaign_redtrack_map (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    campaign_id VARCHAR(64) NOT NULL,
+    advertiser_id VARCHAR(64) NOT NULL,
+    redtrack_campaign_name VARCHAR(500) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_campaign_rt (campaign_id, advertiser_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -5224,6 +5224,100 @@ switch ($action) {
         break;
 
     // ==========================================
+    // REDTRACK LP CTR MAPPING
+    // ==========================================
+
+    case 'save_redtrack_mapping':
+        $db = Database::getInstance();
+
+        // Auto-create table if missing
+        try {
+            $db->query("SELECT 1 FROM campaign_redtrack_map LIMIT 1");
+        } catch (Exception $e) {
+            $driver = getenv('DB_DRIVER') ?: ($_ENV['DB_DRIVER'] ?? 'mysql');
+            if ($driver === 'pgsql') {
+                $db->query("CREATE TABLE IF NOT EXISTS campaign_redtrack_map (
+                    id SERIAL PRIMARY KEY,
+                    campaign_id VARCHAR(64) NOT NULL,
+                    advertiser_id VARCHAR(64) NOT NULL,
+                    redtrack_campaign_name VARCHAR(500) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(campaign_id, advertiser_id)
+                )");
+            } else {
+                $db->query("CREATE TABLE IF NOT EXISTS campaign_redtrack_map (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    campaign_id VARCHAR(64) NOT NULL,
+                    advertiser_id VARCHAR(64) NOT NULL,
+                    redtrack_campaign_name VARCHAR(500) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_campaign_rt (campaign_id, advertiser_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            }
+        }
+
+        $campaignId = $input['campaign_id'] ?? '';
+        $rtName = trim($input['redtrack_campaign_name'] ?? '');
+
+        if (empty($campaignId) || empty($rtName)) {
+            echo json_encode(['success' => false, 'message' => 'campaign_id and redtrack_campaign_name are required']);
+            break;
+        }
+
+        $db->upsert('campaign_redtrack_map', [
+            'campaign_id' => $campaignId,
+            'advertiser_id' => $advertiserId,
+            'redtrack_campaign_name' => $rtName,
+        ], ['campaign_id', 'advertiser_id']);
+
+        echo json_encode(['success' => true]);
+        break;
+
+    case 'get_redtrack_mappings':
+        $db = Database::getInstance();
+
+        // Auto-create table if missing
+        try {
+            $db->query("SELECT 1 FROM campaign_redtrack_map LIMIT 1");
+        } catch (Exception $e) {
+            echo json_encode(['success' => true, 'mappings' => []]);
+            break;
+        }
+
+        $rows = $db->fetchAll(
+            "SELECT campaign_id, redtrack_campaign_name FROM campaign_redtrack_map WHERE advertiser_id = ?",
+            [$advertiserId]
+        );
+
+        $mappings = [];
+        foreach ($rows as $row) {
+            $mappings[$row['campaign_id']] = $row['redtrack_campaign_name'];
+        }
+
+        echo json_encode(['success' => true, 'mappings' => $mappings]);
+        break;
+
+    case 'fetch_redtrack_lpctr':
+        $rtName = trim($input['redtrack_campaign_name'] ?? '');
+        if (empty($rtName)) {
+            echo json_encode(['success' => false, 'message' => 'redtrack_campaign_name is required']);
+            break;
+        }
+
+        require_once __DIR__ . '/includes/optimizer-functions.php';
+
+        $metrics = fetchRedTrackCampaignMetrics('', $rtName);
+        echo json_encode([
+            'success' => true,
+            'lp_ctr' => $metrics['lp_ctr'] ?? 0,
+            'lp_clicks' => $metrics['lp_clicks'] ?? 0,
+            'lp_views' => $metrics['lp_views'] ?? 0,
+        ]);
+        break;
+
+    // ==========================================
     // DEFAULT
     // ==========================================
     default:

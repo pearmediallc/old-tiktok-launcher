@@ -64,7 +64,11 @@ let state = {
 
     // Expanded rows state
     expandedCampaigns: {},       // { campaignId: { adgroups: [...], loaded: true } }
-    expandedAdgroups: {}         // { adgroupId: { ads: [...], loaded: true } }
+    expandedAdgroups: {},        // { adgroupId: { ads: [...], loaded: true } }
+
+    // RedTrack LP CTR mappings
+    redtrackMappings: {},        // { campaignId: 'redtrack_campaign_name' }
+    redtrackLpCtrs: {}           // { campaignId: lp_ctr_value }
 };
 
 // ============================================
@@ -8914,6 +8918,12 @@ function renderCampaignList() {
 
     // Load optimizer monitoring status for badges
     loadOptimizerMonitoringStatus();
+
+    // Load RedTrack LP CTR mappings (only on first render)
+    if (!state._redtrackMappingsLoaded) {
+        state._redtrackMappingsLoaded = true;
+        loadRedTrackMappings();
+    }
 }
 
 // Calculate and render campaign totals in table footer
@@ -8978,6 +8988,7 @@ function renderCampaignTotals() {
                 <td style="text-align: right;">${formatNumberWithCommas(totals.impressions)}</td>
                 <td style="text-align: right;">${formatNumberWithCommas(totals.clicks)}</td>
                 <td style="text-align: right;">${averages.ctr.toFixed(2)}%</td>
+                <td></td>
                 <td style="text-align: right;">${formatNumberWithCommas(totals.conversions)}</td>
                 <td style="text-align: right;">$${averages.costPerResult.toFixed(2)}</td>
                 <td style="text-align: right;">${formatNumberWithCommas(totals.results)}</td>
@@ -9078,6 +9089,7 @@ function renderCampaignTableRow(campaign) {
             <td class="col-impressions" style="text-align: right;">${formatNumber(campaign.impressions)}</td>
             <td class="col-clicks" style="text-align: right;">${formatNumber(campaign.clicks)}</td>
             <td class="col-ctr" style="text-align: right;">${formatPercent(campaign.ctr)}</td>
+            <td class="col-lpctr" style="text-align: right;" id="lpctr-cell-${campaign.campaign_id}">${renderLpCtrCell(campaign.campaign_id)}</td>
             <td class="col-conversions" style="text-align: right;">${formatNumber(campaign.conversions)}</td>
             <td class="col-cpr" style="text-align: right;">${formatCurrency(campaign.cost_per_result)}</td>
             <td class="col-results" style="text-align: right;">${formatNumber(campaign.results)}</td>
@@ -9127,6 +9139,104 @@ function formatPercent(value) {
     }
     // Otherwise multiply by 100 to convert decimal to percentage
     return (num * 100).toFixed(2) + '%';
+}
+
+// ============================================
+// REDTRACK LP CTR FUNCTIONS
+// ============================================
+
+function renderLpCtrCell(campaignId) {
+    const rtName = state.redtrackMappings[campaignId];
+    const lpCtr = state.redtrackLpCtrs[campaignId];
+
+    if (!rtName) {
+        return `<button onclick="showRedTrackInput('${campaignId}'); event.stopPropagation();"
+                    style="font-size:10px;padding:2px 6px;border:1px dashed #94a3b8;border-radius:4px;background:none;color:#64748b;cursor:pointer;white-space:nowrap;"
+                    title="Link RedTrack campaign to show LP CTR">Link RT</button>`;
+    }
+
+    if (lpCtr === undefined || lpCtr === null) {
+        return `<span style="color:#94a3b8;font-size:11px;" title="${escapeHtml(rtName)}">...</span>`;
+    }
+
+    const displayVal = parseFloat(lpCtr) || 0;
+    const formatted = displayVal > 1 ? displayVal.toFixed(2) + '%' : (displayVal * 100).toFixed(2) + '%';
+    return `<span style="cursor:pointer;font-weight:500;" title="RT: ${escapeHtml(rtName)} (click to edit)"
+                onclick="showRedTrackInput('${campaignId}'); event.stopPropagation();">${formatted}</span>`;
+}
+
+function showRedTrackInput(campaignId) {
+    const cell = document.getElementById('lpctr-cell-' + campaignId);
+    if (!cell) return;
+
+    const currentName = state.redtrackMappings[campaignId] || '';
+    cell.innerHTML = `
+        <input type="text" value="${escapeHtml(currentName)}"
+            placeholder="RT campaign name"
+            style="width:100px;font-size:11px;padding:2px 4px;border:1px solid #0ea5e9;border-radius:4px;outline:none;box-sizing:border-box;"
+            onkeydown="if(event.key==='Enter'){saveRedTrackMapping('${campaignId}',this.value);} if(event.key==='Escape'){cancelRedTrackInput('${campaignId}');}"
+            onblur="setTimeout(()=>cancelRedTrackInput('${campaignId}'),200)"
+            autofocus />
+        <button onclick="saveRedTrackMapping('${campaignId}', this.previousElementSibling.value); event.stopPropagation();"
+            style="font-size:10px;padding:1px 4px;border:none;background:#0ea5e9;color:white;border-radius:3px;cursor:pointer;margin-left:2px;">Go</button>
+    `;
+    cell.querySelector('input').focus();
+}
+
+function cancelRedTrackInput(campaignId) {
+    const cell = document.getElementById('lpctr-cell-' + campaignId);
+    if (!cell) return;
+    cell.innerHTML = renderLpCtrCell(campaignId);
+}
+
+async function saveRedTrackMapping(campaignId, rtName) {
+    rtName = (rtName || '').trim();
+    if (!rtName) return;
+
+    const cell = document.getElementById('lpctr-cell-' + campaignId);
+    if (cell) cell.innerHTML = '<span style="color:#94a3b8;font-size:11px;">Saving...</span>';
+
+    const result = await apiRequest('save_redtrack_mapping', {
+        campaign_id: campaignId,
+        redtrack_campaign_name: rtName,
+    });
+
+    if (result.success) {
+        state.redtrackMappings[campaignId] = rtName;
+        fetchLpCtrForCampaign(campaignId, rtName);
+    } else {
+        if (cell) cell.innerHTML = renderLpCtrCell(campaignId);
+    }
+}
+
+async function fetchLpCtrForCampaign(campaignId, rtName) {
+    const cell = document.getElementById('lpctr-cell-' + campaignId);
+    if (cell) cell.innerHTML = '<span style="color:#94a3b8;font-size:11px;">Loading...</span>';
+
+    const result = await apiRequest('fetch_redtrack_lpctr', {
+        redtrack_campaign_name: rtName,
+    });
+
+    if (result.success) {
+        state.redtrackLpCtrs[campaignId] = result.lp_ctr;
+    } else {
+        state.redtrackLpCtrs[campaignId] = 0;
+    }
+
+    if (cell) cell.innerHTML = renderLpCtrCell(campaignId);
+}
+
+async function loadRedTrackMappings() {
+    const result = await apiRequest('get_redtrack_mappings');
+    if (result.success && result.mappings) {
+        state.redtrackMappings = result.mappings;
+
+        // Fetch LP CTR for all mapped campaigns in parallel
+        const fetches = Object.entries(result.mappings).map(([campaignId, rtName]) =>
+            fetchLpCtrForCampaign(campaignId, rtName)
+        );
+        await Promise.all(fetches);
+    }
 }
 
 // Escape HTML to prevent XSS
