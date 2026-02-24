@@ -646,7 +646,6 @@
     // MULTI-ACCOUNT: Hook into filter/search
     // ============================================
     // Override filter and search to also update multi-account view
-    const originalFilterByStatus = window.filterCampaignsByStatus;
     window.filterCampaignsByStatusShell = function(status) {
         // If viewing rejected ads, exit that view first
         if (typeof state !== 'undefined' && state.showingRejectedAds && typeof hideRejectedAds === 'function') {
@@ -654,8 +653,9 @@
         }
 
         // Call original if available (for single-account mode)
-        if (typeof originalFilterByStatus === 'function' && !window.shellState.multiAccountMode) {
-            originalFilterByStatus(status);
+        // Look up at call time since smart-campaign.js loads after shell.js
+        if (typeof window.filterCampaignsByStatus === 'function' && !window.shellState.multiAccountMode) {
+            window.filterCampaignsByStatus(status);
         }
 
         // Update multi-account if in that mode

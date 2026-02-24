@@ -1327,11 +1327,11 @@ switch ($action) {
                 $scheduleEnd = $data['schedule_end_time'];
                 logSmartPlus("Using SCHEDULE_START_END (already UTC): $scheduleStart to $scheduleEnd");
 
-                // If start time is in the past, adjust to now+10min (for duplicate campaigns)
+                // If start time is in the past, adjust to now+5min (for duplicate campaigns)
                 $nowUTC = new DateTime('now', new DateTimeZone('UTC'));
                 $startUTC = new DateTime($scheduleStart, new DateTimeZone('UTC'));
                 if ($startUTC < $nowUTC) {
-                    $scheduleStart = getUTCDateTime('+10 minutes');
+                    $scheduleStart = getUTCDateTime('+5 minutes');
                     logSmartPlus("Original start time was in the past, adjusted to: $scheduleStart");
                 }
             } else {
@@ -1344,11 +1344,11 @@ switch ($action) {
             if ($timesAlreadyUTC) {
                 $scheduleStart = $data['schedule_start_time'];
                 logSmartPlus("Using SCHEDULE_FROM_NOW (already UTC) with start: $scheduleStart");
-                // If start time is in the past, adjust to now+10min
+                // If start time is in the past, adjust to now+5min
                 $nowUTC = new DateTime('now', new DateTimeZone('UTC'));
                 $startUTC = new DateTime($scheduleStart, new DateTimeZone('UTC'));
                 if ($startUTC < $nowUTC) {
-                    $scheduleStart = getUTCDateTime('+10 minutes');
+                    $scheduleStart = getUTCDateTime('+5 minutes');
                     logSmartPlus("Original start time was in the past, adjusted to: $scheduleStart");
                 }
             } else {
@@ -1360,11 +1360,10 @@ switch ($action) {
         } else {
             // Default: Run continuously from now (start immediately)
             // TikTok API REQUIRES schedule_start_time to be in the future
-            // Add 10-minute buffer so the time is still in the future when TikTok validates it
-            // (5 min was too tight — network latency + API processing can consume the buffer)
+            // Add 5-minute buffer so the time is still in the future when TikTok validates it
             $scheduleType = 'SCHEDULE_FROM_NOW';
-            $scheduleStart = getUTCDateTime('+10 minutes');
-            logSmartPlus("Using SCHEDULE_FROM_NOW - starting with UTC time (now+10min): $scheduleStart");
+            $scheduleStart = getUTCDateTime('+5 minutes');
+            logSmartPlus("Using SCHEDULE_FROM_NOW - starting with UTC time (now+5min): $scheduleStart");
         }
 
         $adgroupParams = [
@@ -1809,7 +1808,7 @@ switch ($action) {
         // Identity is set at AD level
         logSmartPlus("Step 2: Creating Ad Group...");
         // TikTok API requires UTC+0 format for schedule times
-        $scheduleStart = getUTCDateTime('+10 minutes');  // Buffer so time is future when TikTok validates
+        $scheduleStart = getUTCDateTime('+5 minutes');  // Buffer so time is future when TikTok validates
 
         $adgroupParams = [
             'advertiser_id' => $advertiserId,
@@ -3187,9 +3186,9 @@ switch ($action) {
                         logSmartPlus("Converted timestamp to UTC: $scheduleStart");
                     }
                 } else {
-                    // Start immediately — add 10-min buffer so time is still in the future when TikTok validates
-                    $scheduleStart = getUTCDateTime('+10 minutes');
-                    logSmartPlus("Using immediate start time (UTC, now+10min): $scheduleStart");
+                    // Start immediately — add 5-min buffer so time is still in the future when TikTok validates
+                    $scheduleStart = getUTCDateTime('+5 minutes');
+                    logSmartPlus("Using immediate start time (UTC, now+5min): $scheduleStart");
                 }
 
                 if (!empty($campaignConfig['schedule_end_time'])) {
@@ -3585,12 +3584,12 @@ switch ($action) {
 
             if ($scheduleType === 'start_now' || $scheduleType === 'SCHEDULE_FROM_NOW') {
                 $scheduleType = 'SCHEDULE_FROM_NOW';
-                $scheduleStart = getUTCDateTime('+10 minutes');
+                $scheduleStart = getUTCDateTime('+5 minutes');
             } else {
                 if (!empty($data['schedule_start'])) {
                     $scheduleStart = convertESTtoUTC(date('Y-m-d H:i:s', strtotime($data['schedule_start'])));
                 } else {
-                    $scheduleStart = getUTCDateTime('+10 minutes');
+                    $scheduleStart = getUTCDateTime('+5 minutes');
                 }
                 if (!empty($data['schedule_end'])) {
                     $scheduleEnd = convertESTtoUTC(date('Y-m-d H:i:s', strtotime($data['schedule_end'])));

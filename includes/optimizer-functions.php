@@ -86,10 +86,12 @@ function redtrackApiCall($endpoint, $params = []) {
         $url .= '?' . http_build_query($params);
     }
 
+    // IMPORTANT: RedTrack API must only use GET requests — no POST allowed
     $ch = curl_init();
     curl_setopt_array($ch, [
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPGET => true,
         CURLOPT_HTTPHEADER => [
             "Content-Type: application/json"
         ],
@@ -346,6 +348,101 @@ function pauseCampaignViaApi($advertiserId, $campaignId, $accessToken) {
 }
 
 // ============================================
+// SEND SLACK PAUSE NOTIFICATION
+// ============================================
+
+function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $violationDetails, $ruleGroup, $resumeAt) {
+    $slackToken = getenv('SLACK_BOT_TOKEN') ?: ($_ENV['SLACK_BOT_TOKEN'] ?? '');
+    $channelId = 'C0AC3899K6C';
+
+    if (empty($slackToken)) {
+        logOptimizer("Slack notification skipped: SLACK_BOT_TOKEN not configured");
+        return false;
+    }
+
+    // Format rule group for display
+    $ruleGroupDisplay = match($ruleGroup) {
+        'home_insurance' => 'Home Insurance',
+        'medicare' => 'Medicare',
+        default => ucwords(str_replace('_', ' ', $ruleGroup))
+    };
+
+    // Format rule key for display
+    $ruleKeyDisplay = preg_replace('/^(hi|med)_/', '', $ruleKey);
+    $ruleKeyDisplay = ucwords(str_replace('_', ' ', $ruleKeyDisplay));
+
+    $fallbackText = "Campaign Paused: $campaignName ($campaignId) — Rule: $ruleKeyDisplay — $violationDetails";
+
+    $blocks = [
+        [
+            'type' => 'header',
+            'text' => ['type' => 'plain_text', 'text' => '🚨 Campaign Paused by Optimizer']
+        ],
+        [
+            'type' => 'section',
+            'fields' => [
+                ['type' => 'mrkdwn', 'text' => "*Campaign:*\n$campaignName"],
+                ['type' => 'mrkdwn', 'text' => "*Campaign ID:*\n$campaignId"],
+            ]
+        ],
+        [
+            'type' => 'section',
+            'fields' => [
+                ['type' => 'mrkdwn', 'text' => "*Rule Group:*\n$ruleGroupDisplay"],
+                ['type' => 'mrkdwn', 'text' => "*Rule Violated:*\n$ruleKeyDisplay"],
+            ]
+        ],
+        [
+            'type' => 'section',
+            'text' => ['type' => 'mrkdwn', 'text' => "*Details:*\n$violationDetails"]
+        ],
+        ['type' => 'divider'],
+        [
+            'type' => 'context',
+            'elements' => [
+                ['type' => 'mrkdwn', 'text' => "⏱ Auto-resume at: *$resumeAt UTC*"]
+            ]
+        ]
+    ];
+
+    $payload = json_encode([
+        'channel' => $channelId,
+        'text' => $fallbackText,
+        'blocks' => $blocks,
+    ]);
+
+    $ch = curl_init('https://slack.com/api/chat.postMessage');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            "Content-Type: application/json",
+            "Authorization: Bearer $slackToken",
+        ],
+        CURLOPT_TIMEOUT => 15,
+    ]);
+
+    $response = curl_exec($ch);
+    if ($response === false) {
+        $err = curl_error($ch);
+        curl_close($ch);
+        logOptimizer("Slack CURL Error: $err");
+        return false;
+    }
+    curl_close($ch);
+
+    $result = json_decode($response, true);
+    if (empty($result['ok'])) {
+        logOptimizer("Slack API Error: " . ($result['error'] ?? 'unknown'), $result);
+        return false;
+    }
+
+    logOptimizer("Slack notification sent for campaign $campaignId");
+    return true;
+}
+
+// ============================================
 // RESUME CAMPAIGN VIA TIKTOK API
 // ============================================
 
@@ -473,6 +570,18 @@ function runOptimizerCheck($db, $accessToken) {
                 'api_response' => json_encode($pauseResult['response']),
                 'success' => $pauseResult['success'] ? 1 : 0,
             ]);
+
+            // Send Slack notification if pause was successful
+            if ($pauseResult['success']) {
+                sendSlackPauseNotification(
+                    $mc['campaign_name'] ?? $mc['campaign_id'],
+                    $mc['campaign_id'],
+                    $firstViolation['rule_key'],
+                    $violationDetails,
+                    $campaignGroup,
+                    $resumeAt
+                );
+            }
 
             $stats['paused']++;
         } else {
