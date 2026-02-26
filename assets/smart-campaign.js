@@ -7,6 +7,34 @@
 const USER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
 console.log('[Timezone] Browser timezone detected:', USER_TIMEZONE);
 
+// Convert a datetime-local value to EST display string for preview
+function getESTPreview(dateTimeLocalValue) {
+    if (!dateTimeLocalValue) return '';
+    const localDate = new Date(dateTimeLocalValue);
+    if (isNaN(localDate.getTime())) return '';
+    const estStr = localDate.toLocaleString('en-US', {
+        timeZone: 'America/New_York',
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: 'numeric', minute: '2-digit', hour12: true
+    });
+    return estStr + ' EST';
+}
+
+// Show EST preview next to a datetime input
+function updateESTPreview(inputId, previewId) {
+    const input = document.getElementById(inputId);
+    const preview = document.getElementById(previewId);
+    if (!input || !preview) return;
+    const val = input.value;
+    if (val) {
+        const estTime = getESTPreview(val);
+        preview.innerHTML = `<strong>TikTok will show:</strong> ${estTime}`;
+        preview.style.display = 'block';
+    } else {
+        preview.style.display = 'none';
+    }
+}
+
 // Global state
 let state = {
     currentStep: 1,
