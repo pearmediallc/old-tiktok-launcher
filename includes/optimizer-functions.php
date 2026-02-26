@@ -69,7 +69,13 @@ function optimizerTikTokApi($endpoint, $params, $accessToken, $method = 'GET') {
 // REDTRACK API HELPER
 // ============================================
 
-function redtrackApiCall($endpoint, $params = []) {
+function redtrackApiCall($endpoint, $params = [], $method = 'GET') {
+    // SAFETY: RedTrack is READ-ONLY — only GET requests allowed
+    if (strtoupper($method) !== 'GET') {
+        logOptimizer("BLOCKED: RedTrack only allows GET requests. Attempted: $method $endpoint");
+        return null;
+    }
+
     $apiToken = getenv('REDTRACK_API_TOKEN') ?: ($_ENV['REDTRACK_API_TOKEN'] ?? '');
     $apiUrl = getenv('REDTRACK_API_URL') ?: ($_ENV['REDTRACK_API_URL'] ?? 'https://api.redtrack.io');
 
@@ -86,12 +92,13 @@ function redtrackApiCall($endpoint, $params = []) {
         $url .= '?' . http_build_query($params);
     }
 
-    // IMPORTANT: RedTrack API must only use GET requests — no POST allowed
+    // GET only — no POST/PUT/DELETE/PATCH allowed
     $ch = curl_init();
     curl_setopt_array($ch, [
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HTTPGET => true,
+        CURLOPT_CUSTOMREQUEST => 'GET',
         CURLOPT_HTTPHEADER => [
             "Content-Type: application/json"
         ],
@@ -400,7 +407,7 @@ function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $viola
         [
             'type' => 'context',
             'elements' => [
-                ['type' => 'mrkdwn', 'text' => "⏱ Auto-resume at: *$resumeAt UTC*"]
+                ['type' => 'mrkdwn', 'text' => "⏱ Metrics review at: *$resumeAt UTC* — resume manually from Slack"]
             ]
         ]
     ];
@@ -443,6 +450,186 @@ function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $viola
 }
 
 // ============================================
+// SEND SLACK REVIEW NOTIFICATION (after 30 min cooldown)
+// Includes fresh metrics + interactive Resume button
+// ============================================
+
+function sendSlackReviewNotification($campaign, $tiktokMetrics, $redtrackMetrics) {
+    $slackToken = getenv('SLACK_BOT_TOKEN') ?: ($_ENV['SLACK_BOT_TOKEN'] ?? '');
+    $channelId = 'C0AC3899K6C';
+
+    if (empty($slackToken)) {
+        logOptimizer("Slack review notification skipped: SLACK_BOT_TOKEN not configured");
+        return false;
+    }
+
+    $campaignName = $campaign['campaign_name'] ?? $campaign['campaign_id'];
+    $campaignId = $campaign['campaign_id'];
+    $advertiserId = $campaign['advertiser_id'];
+    $ruleGroup = $campaign['rule_group'] ?? 'home_insurance';
+    $lastRule = $campaign['last_violation_rule'] ?? 'unknown';
+
+    // Format rule group for display
+    $ruleGroupDisplay = match($ruleGroup) {
+        'home_insurance' => 'Home Insurance',
+        'medicare' => 'Medicare',
+        default => ucwords(str_replace('_', ' ', $ruleGroup))
+    };
+
+    // Format rule key for display
+    $ruleKeyDisplay = preg_replace('/^(hi|med)_/', '', $lastRule);
+    $ruleKeyDisplay = ucwords(str_replace('_', ' ', $ruleKeyDisplay));
+
+    // Format TikTok metrics
+    $spend = number_format($tiktokMetrics['spend'] ?? 0, 2);
+    $cpc = number_format($tiktokMetrics['cpc'] ?? 0, 2);
+    $ctr = number_format($tiktokMetrics['ctr'] ?? 0, 2);
+    $impressions = number_format($tiktokMetrics['impressions'] ?? 0);
+    $clicks = number_format($tiktokMetrics['clicks'] ?? 0);
+    $conversions = $tiktokMetrics['conversions'] ?? 0;
+
+    // Build blocks
+    $blocks = [
+        [
+            'type' => 'header',
+            'text' => ['type' => 'plain_text', 'text' => "📊 Campaign Review — Ready to Resume?"]
+        ],
+        [
+            'type' => 'section',
+            'fields' => [
+                ['type' => 'mrkdwn', 'text' => "*Campaign:*\n$campaignName"],
+                ['type' => 'mrkdwn', 'text' => "*Campaign ID:*\n$campaignId"],
+            ]
+        ],
+        [
+            'type' => 'section',
+            'fields' => [
+                ['type' => 'mrkdwn', 'text' => "*Rule Group:*\n$ruleGroupDisplay"],
+                ['type' => 'mrkdwn', 'text' => "*Paused For:*\n$ruleKeyDisplay"],
+            ]
+        ],
+        ['type' => 'divider'],
+        [
+            'type' => 'section',
+            'text' => ['type' => 'mrkdwn', 'text' => "*📈 TikTok Metrics (Today)*"]
+        ],
+        [
+            'type' => 'section',
+            'fields' => [
+                ['type' => 'mrkdwn', 'text' => "*Spend:*\n\$$spend"],
+                ['type' => 'mrkdwn', 'text' => "*CPC:*\n\$$cpc"],
+                ['type' => 'mrkdwn', 'text' => "*CTR:*\n{$ctr}%"],
+                ['type' => 'mrkdwn', 'text' => "*Conversions:*\n$conversions"],
+            ]
+        ],
+        [
+            'type' => 'section',
+            'fields' => [
+                ['type' => 'mrkdwn', 'text' => "*Impressions:*\n$impressions"],
+                ['type' => 'mrkdwn', 'text' => "*Clicks:*\n$clicks"],
+            ]
+        ],
+    ];
+
+    // Add RedTrack metrics if available
+    $hasRedtrack = !empty($campaign['redtrack_campaign_name']);
+    $rtConversions = $redtrackMetrics['conversions'] ?? 0;
+    $rtLpCtr = number_format($redtrackMetrics['lp_ctr'] ?? 0, 2);
+    $rtLpClicks = $redtrackMetrics['lp_clicks'] ?? 0;
+    $rtLpViews = $redtrackMetrics['lp_views'] ?? 0;
+    $rtRevenue = number_format($redtrackMetrics['revenue'] ?? 0, 2);
+
+    if ($hasRedtrack) {
+        $blocks[] = ['type' => 'divider'];
+        $blocks[] = [
+            'type' => 'section',
+            'text' => ['type' => 'mrkdwn', 'text' => "*🔗 RedTrack Metrics (Today)* — _{$campaign['redtrack_campaign_name']}_"]
+        ];
+        $blocks[] = [
+            'type' => 'section',
+            'fields' => [
+                ['type' => 'mrkdwn', 'text' => "*LP CTR:*\n{$rtLpCtr}%"],
+                ['type' => 'mrkdwn', 'text' => "*LP Clicks:*\n$rtLpClicks"],
+                ['type' => 'mrkdwn', 'text' => "*Conversions:*\n$rtConversions"],
+                ['type' => 'mrkdwn', 'text' => "*Revenue:*\n\$$rtRevenue"],
+            ]
+        ];
+    }
+
+    $blocks[] = ['type' => 'divider'];
+
+    // Add interactive Resume button
+    $buttonValue = json_encode([
+        'campaign_id' => $campaignId,
+        'advertiser_id' => $advertiserId,
+    ]);
+
+    $blocks[] = [
+        'type' => 'actions',
+        'elements' => [
+            [
+                'type' => 'button',
+                'text' => ['type' => 'plain_text', 'text' => '▶️ Resume Campaign'],
+                'style' => 'primary',
+                'action_id' => 'resume_campaign',
+                'value' => $buttonValue,
+                'confirm' => [
+                    'title' => ['type' => 'plain_text', 'text' => 'Resume Campaign?'],
+                    'text' => ['type' => 'mrkdwn', 'text' => "This will re-enable *$campaignName* on TikTok."],
+                    'confirm' => ['type' => 'plain_text', 'text' => 'Resume'],
+                    'deny' => ['type' => 'plain_text', 'text' => 'Cancel'],
+                ]
+            ]
+        ]
+    ];
+
+    $blocks[] = [
+        'type' => 'context',
+        'elements' => [
+            ['type' => 'mrkdwn', 'text' => "⏱ Campaign will stay paused until you click Resume"]
+        ]
+    ];
+
+    $fallbackText = "Campaign Review: $campaignName — Spend: \$$spend, CPC: \$$cpc, CTR: {$ctr}%, Conv: $conversions — Click to resume";
+
+    $payload = json_encode([
+        'channel' => $channelId,
+        'text' => $fallbackText,
+        'blocks' => $blocks,
+    ]);
+
+    $ch = curl_init('https://slack.com/api/chat.postMessage');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            "Content-Type: application/json",
+            "Authorization: Bearer $slackToken",
+        ],
+        CURLOPT_TIMEOUT => 15,
+    ]);
+
+    $response = curl_exec($ch);
+    if ($response === false) {
+        $err = curl_error($ch);
+        curl_close($ch);
+        logOptimizer("Slack review CURL Error: $err");
+        return false;
+    }
+    curl_close($ch);
+
+    $result = json_decode($response, true);
+    if (empty($result['ok'])) {
+        logOptimizer("Slack review API Error: " . ($result['error'] ?? 'unknown'), $result);
+        return false;
+    }
+
+    logOptimizer("Slack review notification sent for campaign $campaignId");
+    return true;
+}
+
+// ============================================
 // RESUME CAMPAIGN VIA TIKTOK API
 // ============================================
 
@@ -481,31 +668,40 @@ function runOptimizerCheck($db, $accessToken) {
 
     $stats = ['checked' => 0, 'paused' => 0, 'resumed' => 0];
 
-    // 1. Check campaigns that need to be RESUMED (paused 30+ min ago)
-    $toResume = $db->fetchAll(
-        "SELECT * FROM optimizer_monitored_campaigns WHERE paused_by_optimizer = 1 AND resume_at IS NOT NULL AND resume_at <= NOW()"
+    // 1. Check campaigns that need REVIEW (paused 30+ min ago, not yet notified)
+    // Instead of auto-resuming, fetch fresh metrics and send Slack review notification
+    $toReview = $db->fetchAll(
+        "SELECT * FROM optimizer_monitored_campaigns WHERE paused_by_optimizer = 1 AND resume_at IS NOT NULL AND resume_at <= NOW() AND review_notified = 0"
     );
 
-    foreach ($toResume as $mc) {
-        logOptimizer("Resuming campaign {$mc['campaign_id']} (30 min cooldown passed)");
-        $result = resumeCampaignViaApi($mc['advertiser_id'], $mc['campaign_id'], $accessToken);
+    foreach ($toReview as $mc) {
+        logOptimizer("Sending review notification for campaign {$mc['campaign_id']} (30 min cooldown passed)");
 
+        // Fetch fresh metrics for the review
+        $tiktokMetrics = fetchTikTokCampaignMetrics($mc['advertiser_id'], $mc['campaign_id'], $accessToken);
+        $redtrackMetrics = fetchRedTrackCampaignMetrics($mc['campaign_id'], $mc['redtrack_campaign_name'] ?? null);
+
+        // Send Slack review notification with Resume button
+        $sent = sendSlackReviewNotification($mc, $tiktokMetrics, $redtrackMetrics);
+
+        // Mark as notified so we don't send again
         $db->query(
-            "UPDATE optimizer_monitored_campaigns SET paused_by_optimizer = 0, paused_at = NULL, resume_at = NULL, last_checked_at = NOW(), last_violation_rule = NULL WHERE id = ?",
+            "UPDATE optimizer_monitored_campaigns SET review_notified = 1, last_checked_at = NOW() WHERE id = ?",
             [$mc['id']]
         );
 
+        // Log the review notification
         $db->insert('optimizer_logs', [
             'campaign_id' => $mc['campaign_id'],
             'advertiser_id' => $mc['advertiser_id'],
-            'action' => 'resume',
+            'action' => 'review',
             'rule_key' => $mc['last_violation_rule'],
-            'rule_details' => 'Auto-resumed after 30 min cooldown',
-            'api_response' => json_encode($result['response']),
-            'success' => $result['success'] ? 1 : 0,
+            'rule_details' => 'Review notification sent to Slack (awaiting manual resume)',
+            'metrics_snapshot' => json_encode(['tiktok' => $tiktokMetrics, 'redtrack' => $redtrackMetrics]),
+            'success' => $sent ? 1 : 0,
         ]);
 
-        $stats['resumed']++;
+        $stats['reviewed'] = ($stats['reviewed'] ?? 0) + 1;
     }
 
     // 2. Check active monitored campaigns against their assigned rule group

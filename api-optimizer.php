@@ -151,6 +151,32 @@ try {
     }
 }
 
+// Migration: Add review_notified column to optimizer_monitored_campaigns
+try {
+    $testMc2 = $db->fetchOne("SELECT * FROM optimizer_monitored_campaigns LIMIT 1");
+    if ($testMc2 && !array_key_exists('review_notified', $testMc2)) {
+        $db->query("ALTER TABLE optimizer_monitored_campaigns ADD COLUMN review_notified SMALLINT DEFAULT 0");
+        logOptimizer("Migration: Added review_notified column to optimizer_monitored_campaigns");
+    }
+} catch (Exception $e) {
+    try {
+        $db->query("ALTER TABLE optimizer_monitored_campaigns ADD COLUMN review_notified SMALLINT DEFAULT 0");
+    } catch (Exception $ex) {}
+}
+
+// Migration: Add 'review' to optimizer_logs action enum (MySQL only)
+try {
+    $driver = getenv('DB_DRIVER') ?: ($_ENV['DB_DRIVER'] ?? 'mysql');
+    if ($driver !== 'pgsql') {
+        $db->query("ALTER TABLE optimizer_logs MODIFY COLUMN action ENUM('pause','resume','rule_check','review') NOT NULL");
+    } else {
+        $db->query("ALTER TABLE optimizer_logs DROP CONSTRAINT IF EXISTS optimizer_logs_action_check");
+        $db->query("ALTER TABLE optimizer_logs ADD CONSTRAINT optimizer_logs_action_check CHECK (action IN ('pause','resume','rule_check','review'))");
+    }
+} catch (Exception $e) {
+    // Already updated or constraint already correct
+}
+
 // Get action
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
