@@ -2,6 +2,11 @@
 // Flow: Step 1 CREATES Campaign -> Step 2 CREATES AdGroup -> Step 4 CREATES Ad
 // Supports UPDATE when going back to modify existing resources
 
+// Detect browser timezone (e.g., "Asia/Kolkata", "America/New_York")
+// Sent to backend so it can convert user's local time to UTC correctly
+const USER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
+console.log('[Timezone] Browser timezone detected:', USER_TIMEZONE);
+
 // Global state
 let state = {
     currentStep: 1,
@@ -1900,18 +1905,12 @@ function getScheduleData() {
     const scheduleType = document.querySelector('input[name="schedule_type"]:checked')?.value || 'continuous';
 
     // Format datetime for TikTok API
-    // User enters time in EST (as labeled in UI)
-    // TikTok interprets schedule times in advertiser's account timezone (EST)
-    // So times pass through directly - what user enters is what appears in Ad Manager
+    // Send raw browser local time as-is; backend converts using user_timezone
     const formatScheduleTime = (dateTimeLocalValue) => {
         if (!dateTimeLocalValue) return null;
-
-        // Parse the datetime-local value (e.g., "2025-01-28T14:00")
         const [datePart, timePart] = dateTimeLocalValue.split('T');
-
-        // Format for API: "YYYY-MM-DD HH:MM:SS" - pass through as EST
         const result = `${datePart} ${timePart}:00`;
-        console.log(`[Schedule] Formatted for API (EST): ${dateTimeLocalValue} -> ${result}`);
+        console.log(`[Schedule] Formatted for API: ${dateTimeLocalValue} -> ${result} (timezone: ${USER_TIMEZONE})`);
         return result;
     };
 
@@ -1932,8 +1931,9 @@ function getScheduleData() {
         }
 
         return {
-            schedule_type: 'SCHEDULE_FROM_NOW',  // TikTok API uses SCHEDULE_FROM_NOW with a future start time
-            schedule_start_time: formatScheduleTime(startDateTime)
+            schedule_type: 'SCHEDULE_FROM_NOW',
+            schedule_start_time: formatScheduleTime(startDateTime),
+            user_timezone: USER_TIMEZONE
         };
     }
 
@@ -1950,7 +1950,8 @@ function getScheduleData() {
     return {
         schedule_type: 'SCHEDULE_START_END',
         schedule_start_time: formatScheduleTime(startDateTime),
-        schedule_end_time: formatScheduleTime(endDateTime)
+        schedule_end_time: formatScheduleTime(endDateTime),
+        user_timezone: USER_TIMEZONE
     };
 }
 
@@ -2623,7 +2624,7 @@ async function createAdGroup() {
             schedule_type: scheduleData.schedule_type,
             schedule_start_time: scheduleData.schedule_start_time || null,
             schedule_end_time: scheduleData.schedule_end_time || null,
-            schedule_timezone: scheduleData.schedule_timezone || null
+            user_timezone: scheduleData.user_timezone || USER_TIMEZONE
         });
 
         hideLoading();
@@ -6966,7 +6967,8 @@ async function executeBulkLaunch() {
         // Schedule data from bulk launch modal
         schedule_type: bulkScheduleData.schedule_type,
         schedule_start_time: bulkScheduleData.schedule_start_time,
-        schedule_end_time: bulkScheduleData.schedule_end_time
+        schedule_end_time: bulkScheduleData.schedule_end_time,
+        user_timezone: bulkScheduleData.user_timezone || USER_TIMEZONE
     };
 
     // Prepare accounts with video mappings — exclude original account
@@ -7455,12 +7457,7 @@ function toggleBulkScheduleType() {
 // Same format as single account flow - times are interpreted as EST
 function formatBulkScheduleTime(dateTimeLocalValue) {
     if (!dateTimeLocalValue) return null;
-
-    // Parse the datetime-local value (e.g., "2025-01-28T14:00")
     const [datePart, timePart] = dateTimeLocalValue.split('T');
-
-    // Return in API format: "YYYY-MM-DD HH:MM:SS"
-    // Time is passed as-is since user enters EST and TikTok interprets as account timezone (EST)
     return `${datePart} ${timePart}:00`;
 }
 
@@ -7488,12 +7485,12 @@ function getBulkScheduleData() {
     if (scheduleType === 'scheduled_start_only') {
         const startInput = document.getElementById('bulk-schedule-start-only-datetime');
         if (startInput && startInput.value) {
-            // Use string format like single account flow (EST time)
             const formattedTime = formatBulkScheduleTime(startInput.value);
             return {
                 schedule_type: 'SCHEDULE_FROM_NOW',
                 schedule_start_time: formattedTime,
-                schedule_end_time: null
+                schedule_end_time: null,
+                user_timezone: USER_TIMEZONE
             };
         }
     }
@@ -7509,7 +7506,8 @@ function getBulkScheduleData() {
         return {
             schedule_type: 'SCHEDULE_START_END',
             schedule_start_time: startTime,
-            schedule_end_time: endTime
+            schedule_end_time: endTime,
+            user_timezone: USER_TIMEZONE
         };
     }
 
@@ -12282,6 +12280,7 @@ async function executeBulkDuplicateCampaign() {
                 schedule_type: account.schedule_type || 'start_now',
                 schedule_start: account.schedule_start || null,
                 schedule_end: account.schedule_end || null,
+                user_timezone: USER_TIMEZONE,
                 // Carry over dayparting from original campaign
                 dayparting: duplicateState.originalSchedule?.dayparting || null,
                 // Ad data
@@ -12400,18 +12399,12 @@ function getDupScheduleData() {
     const scheduleType = document.querySelector('input[name="dup_schedule_type"]:checked')?.value || 'continuous';
 
     // Format datetime for TikTok API
-    // User enters time in EST (as labeled in UI)
-    // TikTok interprets schedule times in advertiser's account timezone (EST)
-    // So times pass through directly - what user enters is what appears in Ad Manager
+    // Send raw browser local time as-is; backend converts using user_timezone
     const formatScheduleTime = (dateTimeLocalValue) => {
         if (!dateTimeLocalValue) return null;
-
-        // Parse the datetime-local value (e.g., "2025-01-28T14:00")
         const [datePart, timePart] = dateTimeLocalValue.split('T');
-
-        // Format for API: "YYYY-MM-DD HH:MM:SS" - pass through as EST
         const result = `${datePart} ${timePart}:00`;
-        console.log(`[Dup Schedule] Formatted for API (EST): ${dateTimeLocalValue} -> ${result}`);
+        console.log(`[Dup Schedule] Formatted for API: ${dateTimeLocalValue} -> ${result} (timezone: ${USER_TIMEZONE})`);
         return result;
     };
 
@@ -12428,7 +12421,8 @@ function getDupScheduleData() {
 
         return {
             schedule_type: 'SCHEDULE_FROM_NOW',
-            schedule_start_time: formatScheduleTime(startDateTime)
+            schedule_start_time: formatScheduleTime(startDateTime),
+            user_timezone: USER_TIMEZONE
         };
     }
 
@@ -12443,7 +12437,8 @@ function getDupScheduleData() {
     return {
         schedule_type: 'SCHEDULE_START_END',
         schedule_start_time: formatScheduleTime(startDateTime),
-        schedule_end_time: formatScheduleTime(endDateTime)
+        schedule_end_time: formatScheduleTime(endDateTime),
+        user_timezone: USER_TIMEZONE
     };
 }
 
