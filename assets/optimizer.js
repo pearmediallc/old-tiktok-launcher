@@ -9,6 +9,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     loadOptimizerData();
+    loadAccountRtCampaign();
 });
 
 async function loadOptimizerData() {
@@ -229,7 +230,7 @@ function renderMonitoredCampaigns(campaigns) {
         if (isPaused) {
             actions = `
                 <button class="opt-btn opt-btn-success" onclick="manualResume('${mc.campaign_id}', '${mc.advertiser_id}')">Resume Now</button>
-                <span style="font-size:11px;color:#64748b;display:block;margin-top:4px;">Auto-resume: ${resumeAt}</span>
+                <span style="font-size:11px;color:#64748b;display:block;margin-top:4px;">Review at: ${resumeAt}</span>
             `;
         } else {
             actions = `
@@ -417,6 +418,97 @@ function escapeHtmlOpt(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+// ============================================
+// ACCOUNT-LEVEL REDTRACK CAMPAIGN
+// ============================================
+
+function getOptAdvertiserId() {
+    // Try multiple sources for advertiser ID
+    return (typeof state !== 'undefined' && state.currentAdvertiserId)
+        || window.TIKTOK_ADVERTISER_ID
+        || '';
+}
+
+async function loadAccountRtCampaign() {
+    const advId = getOptAdvertiserId();
+    if (!advId) return;
+
+    try {
+        const response = await fetch(`api-optimizer.php?action=get_account_rt_campaign&advertiser_id=${advId}`);
+        const result = await response.json();
+
+        const input = document.getElementById('opt-account-rt-input');
+        if (input && result.success && result.redtrack_campaign_name) {
+            input.value = result.redtrack_campaign_name;
+        }
+    } catch (e) {
+        console.error('Error loading account RT campaign:', e);
+    }
+}
+
+async function saveAccountRtCampaign() {
+    const input = document.getElementById('opt-account-rt-input');
+    const rtName = input ? input.value.trim() : '';
+    const advId = getOptAdvertiserId();
+
+    if (!rtName) {
+        showOptToast('Enter a RedTrack campaign name', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('api-optimizer.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'set_account_rt_campaign',
+                advertiser_id: advId,
+                redtrack_campaign_name: rtName
+            })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            showOptToast(result.message || 'Account RT campaign saved', 'success');
+            const status = document.getElementById('opt-account-rt-status');
+            if (status) {
+                status.textContent = 'Saved!';
+                status.style.display = 'block';
+                setTimeout(() => status.style.display = 'none', 3000);
+            }
+        } else {
+            showOptToast(result.message || 'Failed to save', 'error');
+        }
+    } catch (e) {
+        showOptToast('Error saving account RT campaign', 'error');
+    }
+}
+
+async function clearAccountRtCampaign() {
+    const advId = getOptAdvertiserId();
+
+    try {
+        const response = await fetch('api-optimizer.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'set_account_rt_campaign',
+                advertiser_id: advId,
+                redtrack_campaign_name: ''
+            })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            const input = document.getElementById('opt-account-rt-input');
+            if (input) input.value = '';
+            showOptToast('Account RT campaign cleared', 'success');
+        }
+    } catch (e) {
+        showOptToast('Error clearing account RT campaign', 'error');
+    }
 }
 
 function showOptToast(message, type = 'success') {

@@ -127,7 +127,7 @@
     <!-- Rules Panel -->
     <div class="opt-panel active" id="opt-panel-rules">
         <div class="opt-info-banner">
-            Campaigns that violate any enabled rule will be automatically paused. After 30 minutes, they are turned back on for re-evaluation.
+            Campaigns that violate any enabled rule will be automatically paused. After 30 minutes, a Slack review notification with metrics is sent — resume manually from Slack.
         </div>
         <table class="opt-rules-table">
             <thead>
@@ -149,6 +149,22 @@
     <div class="opt-panel" id="opt-panel-monitored">
         <div class="opt-info-banner">
             Add campaigns to monitoring from the "View Campaigns" page using the shield button on each campaign row.
+        </div>
+
+        <!-- Account-Level RedTrack Campaign -->
+        <div style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="flex-shrink:0;">
+                <span style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Account RedTrack Campaign</span>
+                <div style="font-size:11px;color:#94a3b8;margin-top:2px;">Auto-applied to all new monitored campaigns</div>
+            </div>
+            <div style="flex:1;min-width:200px;display:flex;gap:8px;align-items:center;">
+                <input type="text" id="opt-account-rt-input" placeholder="Enter RedTrack campaign name for entire account"
+                    style="flex:1;padding:8px 12px;font-size:13px;border:1px solid #e2e8f0;border-radius:6px;outline:none;transition:border-color 0.2s;"
+                    onfocus="this.style.borderColor='#0369a1'" onblur="this.style.borderColor='#e2e8f0'" />
+                <button class="opt-btn opt-btn-primary" onclick="saveAccountRtCampaign()" style="white-space:nowrap;">Save</button>
+                <button class="opt-btn opt-btn-danger" onclick="clearAccountRtCampaign()" style="white-space:nowrap;" title="Clear account default">Clear</button>
+            </div>
+            <div id="opt-account-rt-status" style="font-size:12px;color:#16a34a;font-weight:600;display:none;"></div>
         </div>
         <table class="opt-monitored-table">
             <thead>

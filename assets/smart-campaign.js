@@ -9342,10 +9342,21 @@ async function toggleOptimizerMonitoring(campaignId, campaignName) {
 /**
  * Shows a small dropdown to pick rule group (Home Insurance / Medicare) + RedTrack campaign name
  */
-function showRuleGroupPicker(btn, campaignId, campaignName) {
+async function showRuleGroupPicker(btn, campaignId, campaignName) {
     // Remove any existing picker
     const existing = document.getElementById('opt-rule-group-picker');
     if (existing) existing.remove();
+
+    // Fetch account-level RT campaign default
+    let accountRtCampaign = '';
+    try {
+        const advId = state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || '';
+        const resp = await fetch(`api-optimizer.php?action=get_account_rt_campaign&advertiser_id=${advId}`);
+        const data = await resp.json();
+        if (data.success && data.redtrack_campaign_name) {
+            accountRtCampaign = data.redtrack_campaign_name;
+        }
+    } catch (e) {}
 
     const rect = btn.getBoundingClientRect();
 
@@ -9356,6 +9367,13 @@ function showRuleGroupPicker(btn, campaignId, campaignName) {
         background: white; border: 1px solid #e2e8f0; border-radius: 8px;
         box-shadow: 0 8px 24px rgba(0,0,0,0.15); min-width: 220px; overflow: hidden;
     `;
+
+    const rtPlaceholder = accountRtCampaign
+        ? `Account default: ${accountRtCampaign}`
+        : 'Enter RedTrack campaign name';
+    const rtHint = accountRtCampaign
+        ? `<div style="font-size:10px;color:#16a34a;margin-top:3px;">Account default will be used if left empty</div>`
+        : `<div style="font-size:10px;color:#94a3b8;margin-top:3px;">Set account default in Optimizer &gt; Monitored Campaigns</div>`;
 
     picker.innerHTML = `
         <div style="padding:8px 12px;font-size:11px;font-weight:700;color:#64748b;border-bottom:1px solid #f1f5f9;text-transform:uppercase;">Select Rule Group</div>
@@ -9371,10 +9389,10 @@ function showRuleGroupPicker(btn, campaignId, campaignName) {
         </div>
         <div style="padding:8px 12px;border-top:1px solid #e2e8f0;">
             <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;display:block;margin-bottom:4px;">RedTrack Campaign Name</label>
-            <input type="text" id="opt-redtrack-campaign-input" placeholder="Enter RedTrack campaign name"
+            <input type="text" id="opt-redtrack-campaign-input" placeholder="${rtPlaceholder}"
                 style="width:100%;padding:6px 8px;font-size:12px;border:1px solid #e2e8f0;border-radius:6px;box-sizing:border-box;outline:none;transition:border-color 0.2s;"
                 onfocus="this.style.borderColor='#0369a1'" onblur="this.style.borderColor='#e2e8f0'" />
-            <div style="font-size:10px;color:#94a3b8;margin-top:3px;">Used to fetch LP CTR from RedTrack</div>
+            ${rtHint}
         </div>
     `;
 

@@ -106,6 +106,7 @@ function redtrackApiCall($endpoint, $params = [], $method = 'GET') {
     ]);
 
     $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     if ($response === false) {
         $err = curl_error($ch);
         curl_close($ch);
@@ -114,7 +115,14 @@ function redtrackApiCall($endpoint, $params = [], $method = 'GET') {
     }
     curl_close($ch);
 
-    return json_decode($response, true);
+    $decoded = json_decode($response, true);
+
+    // Log non-200 responses or API errors for debugging
+    if ($httpCode !== 200) {
+        logOptimizer("RedTrack API HTTP $httpCode for $endpoint", ['response' => substr($response, 0, 500)]);
+    }
+
+    return $decoded;
 }
 
 // Look up a RedTrack campaign ID by campaign name/title
@@ -205,59 +213,84 @@ function fetchRedTrackCampaignMetrics($campaignId, $redtrackCampaignName = null)
     if (!empty($redtrackCampaignName)) {
         $rtCampaignId = lookupRedTrackCampaignId($redtrackCampaignName);
         if ($rtCampaignId) {
-            $result = redtrackApiCall('/reports/conversions', [
-                'from' => $today,
-                'to' => $today,
+            // Use /campaigns with total_stat to get aggregated campaign metrics (LP CTR, clicks, etc.)
+            $result = redtrackApiCall('/campaigns', [
+                'ids' => $rtCampaignId,
+                'total_stat' => 'true',
+                'date_from' => $today,
+                'date_to' => $today,
+            ]);
+
+            logOptimizer("RedTrack /campaigns response for '$redtrackCampaignName' (ID: $rtCampaignId)", $result);
+
+            // total_stat=true returns {total, items} format
+            $items = $result['items'] ?? $result ?? [];
+            if (!empty($items) && is_array($items)) {
+                $campaign = is_array($items[0] ?? null) ? $items[0] : $items;
+                $stats = $campaign['stats'] ?? $campaign;
+                return [
+                    'lp_ctr' => floatval($stats['lp_ctr'] ?? 0),
+                    'ctr' => floatval($stats['ctr'] ?? 0),
+                    'conversions' => intval($stats['conversions'] ?? 0),
+                    'revenue' => floatval($stats['revenue'] ?? 0),
+                    'lp_clicks' => intval($stats['lp_clicks'] ?? 0),
+                    'lp_views' => intval($stats['lp_views'] ?? 0),
+                ];
+            }
+
+            // Fallback: try /conversions endpoint for conversion-level data
+            $convResult = redtrackApiCall('/conversions', [
+                'date_from' => $today,
+                'date_to' => $today,
                 'campaign_id' => $rtCampaignId,
             ]);
 
-            if (!empty($result['data']) && is_array($result['data'])) {
-                // Use first row or aggregate
-                $row = $result['data'][0];
-                logOptimizer("RedTrack metrics for campaign '$redtrackCampaignName' (ID: $rtCampaignId)", $row);
-                return [
-                    'lp_ctr' => floatval($row['lp_ctr'] ?? 0),
-                    'ctr' => floatval($row['ctr'] ?? 0),
-                    'conversions' => intval($row['conversions'] ?? 0),
-                    'revenue' => floatval($row['revenue'] ?? 0),
-                    'lp_clicks' => intval($row['lp_clicks'] ?? 0),
-                    'lp_views' => intval($row['lp_views'] ?? 0),
-                ];
+            logOptimizer("RedTrack /conversions response for '$redtrackCampaignName' (ID: $rtCampaignId)", $convResult);
+
+            $convItems = $convResult['items'] ?? $convResult['data'] ?? [];
+            if (!empty($convItems) && is_array($convItems)) {
+                // Aggregate conversion data
+                $totalConversions = count($convItems);
+                $totalRevenue = 0;
+                foreach ($convItems as $conv) {
+                    $totalRevenue += floatval($conv['revenue'] ?? $conv['amount'] ?? 0);
+                }
+                return array_merge($defaultMetrics, [
+                    'conversions' => $totalConversions,
+                    'revenue' => $totalRevenue,
+                ]);
             }
+
             logOptimizer("No RedTrack data for campaign '$redtrackCampaignName' (ID: $rtCampaignId)");
             return $defaultMetrics;
         }
         logOptimizer("Could not find RedTrack campaign '$redtrackCampaignName', falling back to sub2 lookup");
     }
 
-    // Fallback: RedTrack uses sub2 = TikTok campaign ID
-    $result = redtrackApiCall('/reports/conversions', [
-        'from' => $today,
-        'to' => $today,
-        'group_by' => 'sub2',
+    // Fallback: try /conversions filtered by sub2 = TikTok campaign ID
+    $result = redtrackApiCall('/conversions', [
+        'date_from' => $today,
+        'date_to' => $today,
         'sub2' => $campaignId,
     ]);
 
-    if (empty($result['data'])) {
-        logOptimizer("No RedTrack data for campaign $campaignId");
+    $items = $result['items'] ?? $result['data'] ?? [];
+    if (empty($items)) {
+        logOptimizer("No RedTrack data for campaign $campaignId (sub2 fallback)");
         return $defaultMetrics;
     }
 
-    // Find matching campaign row
-    foreach ($result['data'] as $row) {
-        if (($row['sub2'] ?? '') == $campaignId) {
-            return [
-                'lp_ctr' => floatval($row['lp_ctr'] ?? 0),
-                'ctr' => floatval($row['ctr'] ?? 0),
-                'conversions' => intval($row['conversions'] ?? 0),
-                'revenue' => floatval($row['revenue'] ?? 0),
-                'lp_clicks' => intval($row['lp_clicks'] ?? 0),
-                'lp_views' => intval($row['lp_views'] ?? 0),
-            ];
-        }
+    // Aggregate conversion data from sub2 fallback
+    $totalConversions = count($items);
+    $totalRevenue = 0;
+    foreach ($items as $conv) {
+        $totalRevenue += floatval($conv['revenue'] ?? $conv['amount'] ?? 0);
     }
 
-    return $defaultMetrics;
+    return array_merge($defaultMetrics, [
+        'conversions' => $totalConversions,
+        'revenue' => $totalRevenue,
+    ]);
 }
 
 // ============================================

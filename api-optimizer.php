@@ -272,6 +272,21 @@ switch ($action) {
             break;
         }
 
+        // If no RT campaign specified, fall back to account-level default
+        if (empty($redtrackCampaignName)) {
+            try {
+                $defaultRt = $db->fetchOne(
+                    "SELECT setting_value FROM optimizer_settings WHERE advertiser_id = ? AND setting_key = 'default_redtrack_campaign'",
+                    [$advId]
+                );
+                if ($defaultRt && !empty($defaultRt['setting_value'])) {
+                    $redtrackCampaignName = $defaultRt['setting_value'];
+                }
+            } catch (Exception $e) {
+                // optimizer_settings table might not exist yet
+            }
+        }
+
         // Check if already monitored
         $existing = $db->fetchOne(
             "SELECT * FROM optimizer_monitored_campaigns WHERE campaign_id = ? AND advertiser_id = ?",
@@ -500,6 +515,84 @@ switch ($action) {
         } else {
             echo json_encode(['success' => false, 'message' => 'log_id or dismiss_all required']);
         }
+        break;
+
+    // ============================================
+    // ACCOUNT-LEVEL REDTRACK CAMPAIGN
+    // ============================================
+
+    case 'set_account_rt_campaign':
+        $advId = $input['advertiser_id'] ?? $advertiserId;
+        $rtName = trim($input['redtrack_campaign_name'] ?? '');
+
+        if (empty($advId)) {
+            echo json_encode(['success' => false, 'message' => 'Advertiser ID required']);
+            break;
+        }
+
+        // Create settings table if missing
+        try {
+            $db->query("SELECT 1 FROM optimizer_settings LIMIT 1");
+        } catch (Exception $e) {
+            $driver = getenv('DB_DRIVER') ?: ($_ENV['DB_DRIVER'] ?? 'mysql');
+            if ($driver === 'pgsql') {
+                $db->query("CREATE TABLE IF NOT EXISTS optimizer_settings (
+                    id SERIAL PRIMARY KEY,
+                    advertiser_id VARCHAR(64) NOT NULL,
+                    setting_key VARCHAR(100) NOT NULL,
+                    setting_value TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(advertiser_id, setting_key)
+                )");
+            } else {
+                $db->query("CREATE TABLE IF NOT EXISTS optimizer_settings (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    advertiser_id VARCHAR(64) NOT NULL,
+                    setting_key VARCHAR(100) NOT NULL,
+                    setting_value TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_adv_key (advertiser_id, setting_key)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            }
+        }
+
+        if (empty($rtName)) {
+            // Clear account-level RT campaign
+            try {
+                $db->query(
+                    "DELETE FROM optimizer_settings WHERE advertiser_id = ? AND setting_key = 'default_redtrack_campaign'",
+                    [$advId]
+                );
+            } catch (Exception $e) {}
+            logOptimizer("Cleared account-level RedTrack campaign for advertiser $advId");
+            echo json_encode(['success' => true, 'message' => 'Account RedTrack campaign cleared']);
+        } else {
+            // Upsert account-level RT campaign
+            $db->upsert('optimizer_settings', [
+                'advertiser_id' => $advId,
+                'setting_key' => 'default_redtrack_campaign',
+                'setting_value' => $rtName,
+            ], ['advertiser_id', 'setting_key']);
+            logOptimizer("Set account-level RedTrack campaign for advertiser $advId: $rtName");
+            echo json_encode(['success' => true, 'message' => "Account RedTrack campaign set to: $rtName"]);
+        }
+        break;
+
+    case 'get_account_rt_campaign':
+        $advId = $_GET['advertiser_id'] ?? $advertiserId;
+        $rtName = '';
+
+        try {
+            $row = $db->fetchOne(
+                "SELECT setting_value FROM optimizer_settings WHERE advertiser_id = ? AND setting_key = 'default_redtrack_campaign'",
+                [$advId]
+            );
+            $rtName = $row['setting_value'] ?? '';
+        } catch (Exception $e) {
+            // Table might not exist yet
+        }
+
+        echo json_encode(['success' => true, 'redtrack_campaign_name' => $rtName]);
         break;
 
     default:
