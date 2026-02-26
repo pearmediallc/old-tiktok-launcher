@@ -8176,6 +8176,11 @@ async function switchAdAccount(advertiserId) {
             state.adGroupId = null;
             state.adId = null;
 
+            // Clear RedTrack state for new account
+            state.redtrackMappings = {};
+            state.redtrackLpCtrs = {};
+            state._redtrackMappingsLoaded = false;
+
             // ========================================
             // CLEAR UI DROPDOWNS (show loading state)
             // ========================================
@@ -8940,6 +8945,9 @@ function renderCampaignList() {
     // Load optimizer monitoring status for badges
     loadOptimizerMonitoringStatus();
 
+    // Load account-level RT campaign banner
+    loadCampaignsAccountRt();
+
     // Load RedTrack LP CTR mappings (only on first render)
     if (!state._redtrackMappingsLoaded) {
         state._redtrackMappingsLoaded = true;
@@ -9266,6 +9274,82 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ============================================
+// ACCOUNT-LEVEL REDTRACK CAMPAIGN (Campaigns View Banner)
+// ============================================
+
+async function loadCampaignsAccountRt() {
+    const banner = document.getElementById('account-rt-banner');
+    if (!banner) return;
+
+    const advId = state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || '';
+    if (!advId) { banner.style.display = 'none'; return; }
+
+    banner.style.display = 'flex';
+
+    try {
+        const response = await fetch(`api-optimizer.php?action=get_account_rt_campaign&advertiser_id=${encodeURIComponent(advId)}`);
+        const result = await response.json();
+        const input = document.getElementById('campaigns-account-rt-input');
+        if (input && result.success && result.redtrack_campaign_name) {
+            input.value = result.redtrack_campaign_name;
+        } else if (input) {
+            input.value = '';
+        }
+    } catch (e) {
+        console.error('Error loading account RT campaign:', e);
+    }
+}
+
+async function saveCampaignsAccountRt() {
+    const input = document.getElementById('campaigns-account-rt-input');
+    const rtName = input ? input.value.trim() : '';
+    const advId = state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || '';
+
+    if (!rtName) {
+        showToast('Enter a RedTrack campaign name', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('api-optimizer.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'set_account_rt_campaign', advertiser_id: advId, redtrack_campaign_name: rtName })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showToast('Account RedTrack campaign saved', 'success');
+            const status = document.getElementById('campaigns-account-rt-status');
+            if (status) { status.textContent = 'Saved!'; status.style.display = 'inline'; setTimeout(() => status.style.display = 'none', 3000); }
+        } else {
+            showToast(result.message || 'Failed to save', 'error');
+        }
+    } catch (e) {
+        showToast('Error saving account RT campaign', 'error');
+    }
+}
+
+async function clearCampaignsAccountRt() {
+    const advId = state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID || '';
+
+    try {
+        const response = await fetch('api-optimizer.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'set_account_rt_campaign', advertiser_id: advId, redtrack_campaign_name: '' })
+        });
+        const result = await response.json();
+        if (result.success) {
+            const input = document.getElementById('campaigns-account-rt-input');
+            if (input) input.value = '';
+            showToast('Account RedTrack campaign cleared', 'success');
+        }
+    } catch (e) {
+        showToast('Error clearing account RT campaign', 'error');
+    }
 }
 
 // ============================================

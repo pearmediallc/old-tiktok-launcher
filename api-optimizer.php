@@ -44,6 +44,20 @@ $advertiserId = $_SESSION['selected_advertiser_id'] ?? '';
 
 $db = Database::getInstance();
 
+// Fallback: get token from database if session/env is empty (same as cron-optimizer.php)
+if (empty($accessToken)) {
+    try {
+        $conn = $db->fetchOne(
+            "SELECT access_token FROM tiktok_connections WHERE connection_status = 'active' ORDER BY updated_at DESC LIMIT 1"
+        );
+        if ($conn && !empty($conn['access_token'])) {
+            $accessToken = $conn['access_token'];
+        }
+    } catch (Exception $e) {
+        // tiktok_connections table might not exist yet
+    }
+}
+
 // Auto-create optimizer tables if they don't exist
 try {
     $db->query("SELECT 1 FROM optimizer_rules LIMIT 1");

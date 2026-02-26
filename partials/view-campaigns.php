@@ -11,6 +11,22 @@
     <!-- Business Center Balance Card (populated by JS) -->
     <div id="bc-balance-container" class="bc-balance-container" style="display:none;"></div>
 
+    <!-- Account-Level RedTrack Campaign Banner -->
+    <div id="account-rt-banner" style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:12px;display:none;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div style="flex-shrink:0;">
+            <span style="font-size:12px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:0.5px;">RedTrack Campaign</span>
+            <div style="font-size:11px;color:#94a3b8;margin-top:1px;">Auto-applied to all monitored campaigns</div>
+        </div>
+        <div style="flex:1;min-width:200px;display:flex;gap:8px;align-items:center;">
+            <input type="text" id="campaigns-account-rt-input" placeholder="Enter RedTrack campaign name"
+                style="flex:1;padding:7px 12px;font-size:13px;border:1px solid #e2e8f0;border-radius:6px;outline:none;transition:border-color 0.2s;"
+                onfocus="this.style.borderColor='#0369a1'" onblur="this.style.borderColor='#e2e8f0'" />
+            <button class="btn-secondary" onclick="saveCampaignsAccountRt()" style="font-size:12px;padding:7px 14px;">Save</button>
+            <button class="btn-secondary" onclick="clearCampaignsAccountRt()" style="font-size:12px;padding:7px 10px;color:#dc2626;" title="Clear account default">Clear</button>
+        </div>
+        <span id="campaigns-account-rt-status" style="font-size:12px;color:#16a34a;font-weight:600;display:none;"></span>
+    </div>
+
     <!-- Campaign Filters -->
     <div class="campaign-filters">
         <button class="campaign-filter-btn active" data-filter="all" onclick="<?php echo ($view === 'campaigns') ? 'filterCampaignsByStatusShell(\'all\')' : 'filterCampaignsByStatus(\'all\')'; ?>">
