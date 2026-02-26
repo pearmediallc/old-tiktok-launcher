@@ -1855,29 +1855,43 @@ function toggleScheduleType() {
         }
     });
 
-    // Set default start time if not set (now + 1 hour)
+    // Set default start time if not set (EST now + 1 hour)
     if (scheduleType === 'scheduled_start_only') {
         const startInput = document.getElementById('schedule-start-only-datetime');
 
-        if (startInput && !startInput.value) {
-            const now = new Date();
-            now.setHours(now.getHours() + 1);
-            now.setMinutes(0, 0, 0);
-            startInput.value = formatDateTimeLocal(now);
+        if (startInput) {
+            // Set min to EST now + 7 minutes
+            const minTime = getESTNow();
+            minTime.setMinutes(minTime.getMinutes() + 7);
+            startInput.min = formatDateTimeLocal(minTime);
+
+            if (!startInput.value) {
+                const estNow = getESTNow();
+                estNow.setHours(estNow.getHours() + 1);
+                estNow.setMinutes(0, 0, 0);
+                startInput.value = formatDateTimeLocal(estNow);
+            }
         }
     } else if (scheduleType === 'scheduled') {
         const startInput = document.getElementById('schedule-start-datetime');
         const endInput = document.getElementById('schedule-end-datetime');
 
-        if (startInput && !startInput.value) {
-            const now = new Date();
-            now.setHours(now.getHours() + 1);
-            now.setMinutes(0, 0, 0);
-            startInput.value = formatDateTimeLocal(now);
+        if (startInput) {
+            // Set min to EST now + 7 minutes
+            const minTime = getESTNow();
+            minTime.setMinutes(minTime.getMinutes() + 7);
+            startInput.min = formatDateTimeLocal(minTime);
+
+            if (!startInput.value) {
+                const estNow = getESTNow();
+                estNow.setHours(estNow.getHours() + 1);
+                estNow.setMinutes(0, 0, 0);
+                startInput.value = formatDateTimeLocal(estNow);
+            }
         }
 
         if (endInput && !endInput.value) {
-            const endDate = new Date();
+            const endDate = getESTNow();
             endDate.setDate(endDate.getDate() + 7); // Default: 1 week from now
             endDate.setHours(23, 59, 0, 0);
             endInput.value = formatDateTimeLocal(endDate);
@@ -1893,6 +1907,14 @@ function formatDateTimeLocal(date) {
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
     return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+// Get current time in EST (America/New_York) as a Date object
+// Used for defaults and validation so calendar shows EST date, not browser local date
+function getESTNow() {
+    const now = new Date();
+    const estString = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+    return new Date(estString);
 }
 
 // Get schedule data for API
@@ -1956,7 +1978,7 @@ function validateScheduleDates() {
         return { valid: true };
     }
 
-    const now = new Date();
+    const now = getESTNow();
 
     // Validate scheduled_start_only option
     if (scheduleType === 'scheduled_start_only') {
@@ -7410,29 +7432,41 @@ function toggleBulkScheduleType() {
         }
     });
 
-    // Set default start time if not set (now + 1 hour)
+    // Set default start time if not set (EST now + 1 hour)
     if (scheduleType === 'scheduled_start_only') {
         const startInput = document.getElementById('bulk-schedule-start-only-datetime');
 
-        if (startInput && !startInput.value) {
-            const now = new Date();
-            now.setHours(now.getHours() + 1);
-            now.setMinutes(0, 0, 0);
-            startInput.value = formatDateTimeLocal(now);
+        if (startInput) {
+            const minTime = getESTNow();
+            minTime.setMinutes(minTime.getMinutes() + 7);
+            startInput.min = formatDateTimeLocal(minTime);
+
+            if (!startInput.value) {
+                const estNow = getESTNow();
+                estNow.setHours(estNow.getHours() + 1);
+                estNow.setMinutes(0, 0, 0);
+                startInput.value = formatDateTimeLocal(estNow);
+            }
         }
     } else if (scheduleType === 'scheduled') {
         const startInput = document.getElementById('bulk-schedule-start-datetime');
         const endInput = document.getElementById('bulk-schedule-end-datetime');
 
-        if (startInput && !startInput.value) {
-            const now = new Date();
-            now.setHours(now.getHours() + 1);
-            now.setMinutes(0, 0, 0);
-            startInput.value = formatDateTimeLocal(now);
+        if (startInput) {
+            const minTime = getESTNow();
+            minTime.setMinutes(minTime.getMinutes() + 7);
+            startInput.min = formatDateTimeLocal(minTime);
+
+            if (!startInput.value) {
+                const estNow = getESTNow();
+                estNow.setHours(estNow.getHours() + 1);
+                estNow.setMinutes(0, 0, 0);
+                startInput.value = formatDateTimeLocal(estNow);
+            }
         }
 
         if (endInput && !endInput.value) {
-            const endDate = new Date();
+            const endDate = getESTNow();
             endDate.setDate(endDate.getDate() + 7); // Default: 1 week from now
             endDate.setHours(23, 59, 0, 0);
             endInput.value = formatDateTimeLocal(endDate);
@@ -12348,27 +12382,37 @@ function toggleDupScheduleType() {
     // Show appropriate container
     if (scheduleType === 'scheduled_start_only' && startOnlyContainer) {
         startOnlyContainer.style.display = 'block';
-        // Set default start time
         const startInput = document.getElementById('dup-schedule-start-only-datetime');
-        if (startInput && !startInput.value) {
-            const now = new Date();
-            now.setHours(now.getHours() + 1);
-            now.setMinutes(0, 0, 0);
-            startInput.value = formatDateTimeLocal(now);
+        if (startInput) {
+            const minTime = getESTNow();
+            minTime.setMinutes(minTime.getMinutes() + 7);
+            startInput.min = formatDateTimeLocal(minTime);
+
+            if (!startInput.value) {
+                const estNow = getESTNow();
+                estNow.setHours(estNow.getHours() + 1);
+                estNow.setMinutes(0, 0, 0);
+                startInput.value = formatDateTimeLocal(estNow);
+            }
         }
     } else if (scheduleType === 'scheduled' && dateTimeContainer) {
         dateTimeContainer.style.display = 'block';
-        // Set default times
         const startInput = document.getElementById('dup-schedule-start-datetime');
         const endInput = document.getElementById('dup-schedule-end-datetime');
-        if (startInput && !startInput.value) {
-            const now = new Date();
-            now.setHours(now.getHours() + 1);
-            now.setMinutes(0, 0, 0);
-            startInput.value = formatDateTimeLocal(now);
+        if (startInput) {
+            const minTime = getESTNow();
+            minTime.setMinutes(minTime.getMinutes() + 7);
+            startInput.min = formatDateTimeLocal(minTime);
+
+            if (!startInput.value) {
+                const estNow = getESTNow();
+                estNow.setHours(estNow.getHours() + 1);
+                estNow.setMinutes(0, 0, 0);
+                startInput.value = formatDateTimeLocal(estNow);
+            }
         }
         if (endInput && !endInput.value) {
-            const endDate = new Date();
+            const endDate = getESTNow();
             endDate.setDate(endDate.getDate() + 7);
             endDate.setHours(23, 59, 0, 0);
             endInput.value = formatDateTimeLocal(endDate);
@@ -12436,7 +12480,7 @@ function validateDupScheduleDates() {
         return { valid: true };
     }
 
-    const now = new Date();
+    const now = getESTNow();
 
     if (scheduleType === 'scheduled_start_only') {
         const startDateTime = document.getElementById('dup-schedule-start-only-datetime')?.value;
