@@ -1129,12 +1129,11 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                             <!-- Start Time Only Picker (for scheduled_start_only) -->
                             <div id="schedule-start-only-container" style="display: none; margin-top: 15px; padding: 15px; background: white; border: 1px solid #e2e8f0; border-radius: 8px;">
                                 <div class="form-group" style="margin-bottom: 15px;">
-                                    <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time <span style="font-weight: 400; color: #3b82f6;">(Your Local Time)</span></label>
-                                    <input type="datetime-local" id="schedule-start-only-datetime" onchange="updateESTPreview('schedule-start-only-datetime','est-preview-start-only')" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
-                                    <div id="est-preview-start-only" style="display: none; margin-top: 6px; padding: 8px 12px; background: #fef3c7; border-radius: 6px; font-size: 13px; color: #92400e;"></div>
+                                    <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time <span style="font-weight: 400; color: #3b82f6;">(EST)</span></label>
+                                    <input type="datetime-local" id="schedule-start-only-datetime" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                     <div style="margin-top: 6px; padding: 8px 12px; background: #eff6ff; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
                                         <span style="font-size: 16px;">🕐</span>
-                                        <span style="font-size: 12px; color: #1e40af; font-weight: 500;">Pick your local time - auto-converted to EST for TikTok Ads Manager</span>
+                                        <span style="font-size: 12px; color: #1e40af; font-weight: 500;">Eastern Time (EST/EDT) - Times appear exactly as entered in TikTok Ads Manager</span>
                                     </div>
                                 </div>
 
@@ -1148,21 +1147,19 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                             <div id="schedule-datetime-container" style="display: none; margin-top: 15px; padding: 15px; background: white; border: 1px solid #e2e8f0; border-radius: 8px;">
                                 <div style="margin-bottom: 12px; padding: 8px 12px; background: #eff6ff; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
                                     <span style="font-size: 16px;">🕐</span>
-                                    <span style="font-size: 12px; color: #1e40af; font-weight: 500;">Pick your local time - auto-converted to EST for TikTok Ads Manager</span>
+                                    <span style="font-size: 12px; color: #1e40af; font-weight: 500;">Eastern Time (EST/EDT) - Times appear exactly as entered in TikTok Ads Manager</span>
                                 </div>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                                     <!-- Start Date/Time -->
                                     <div class="form-group" style="margin-bottom: 0;">
-                                        <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time <span style="font-weight: 400; color: #3b82f6;">(Your Local Time)</span></label>
-                                        <input type="datetime-local" id="schedule-start-datetime" onchange="updateESTPreview('schedule-start-datetime','est-preview-start')" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
-                                        <div id="est-preview-start" style="display: none; margin-top: 4px; padding: 6px 10px; background: #fef3c7; border-radius: 4px; font-size: 12px; color: #92400e;"></div>
+                                        <label style="font-weight: 500; color: #475569; font-size: 14px;">Start Date & Time <span style="font-weight: 400; color: #3b82f6;">(EST)</span></label>
+                                        <input type="datetime-local" id="schedule-start-datetime" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                     </div>
 
                                     <!-- End Date/Time -->
                                     <div class="form-group" style="margin-bottom: 0;">
-                                        <label style="font-weight: 500; color: #475569; font-size: 14px;">End Date & Time <span style="font-weight: 400; color: #3b82f6;">(Your Local Time)</span></label>
-                                        <input type="datetime-local" id="schedule-end-datetime" onchange="updateESTPreview('schedule-end-datetime','est-preview-end')" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
-                                        <div id="est-preview-end" style="display: none; margin-top: 4px; padding: 6px 10px; background: #fef3c7; border-radius: 4px; font-size: 12px; color: #92400e;"></div>
+                                        <label style="font-weight: 500; color: #475569; font-size: 14px;">End Date & Time <span style="font-weight: 400; color: #3b82f6;">(EST)</span></label>
+                                        <input type="datetime-local" id="schedule-end-datetime" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                                     </div>
                                 </div>
 
@@ -1802,9 +1799,8 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
 
                             <!-- Start Time Only Picker -->
                             <div id="bulk-schedule-start-only-container" style="display: none; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 6px;">
-                                <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px;">Start Date & Time (Your Local Time):</label>
-                                <input type="datetime-local" id="bulk-schedule-start-only-datetime" onchange="updateESTPreview('bulk-schedule-start-only-datetime','est-preview-bulk-start-only')" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
-                                <div id="est-preview-bulk-start-only" style="display: none; margin-top: 4px; padding: 6px 10px; background: #fef3c7; border-radius: 4px; font-size: 12px; color: #92400e;"></div>
+                                <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px;">Start Date & Time (EST):</label>
+                                <input type="datetime-local" id="bulk-schedule-start-only-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
                                 <p style="margin: 6px 0 0; font-size: 11px; color: #64748b;">Campaign will start at this time and run indefinitely</p>
                             </div>
 
@@ -1812,17 +1808,15 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                             <div id="bulk-schedule-datetime-container" style="display: none; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 6px;">
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                                     <div>
-                                        <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px;">Start Date & Time (Your Local Time):</label>
-                                        <input type="datetime-local" id="bulk-schedule-start-datetime" onchange="updateESTPreview('bulk-schedule-start-datetime','est-preview-bulk-start')" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
-                                        <div id="est-preview-bulk-start" style="display: none; margin-top: 4px; padding: 6px 10px; background: #fef3c7; border-radius: 4px; font-size: 11px; color: #92400e;"></div>
+                                        <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px;">Start Date & Time (EST):</label>
+                                        <input type="datetime-local" id="bulk-schedule-start-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
                                     </div>
                                     <div>
-                                        <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px;">End Date & Time (Your Local Time):</label>
-                                        <input type="datetime-local" id="bulk-schedule-end-datetime" onchange="updateESTPreview('bulk-schedule-end-datetime','est-preview-bulk-end')" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
-                                        <div id="est-preview-bulk-end" style="display: none; margin-top: 4px; padding: 6px 10px; background: #fef3c7; border-radius: 4px; font-size: 11px; color: #92400e;"></div>
+                                        <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px;">End Date & Time (EST):</label>
+                                        <input type="datetime-local" id="bulk-schedule-end-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
                                     </div>
                                 </div>
-                                <p style="margin: 6px 0 0; font-size: 11px; color: #64748b;">Campaign will run between these dates (auto-converted to EST for TikTok)</p>
+                                <p style="margin: 6px 0 0; font-size: 11px; color: #64748b;">Campaign will run between these dates (all times in EST)</p>
                             </div>
                         </div>
                     </div>
@@ -2563,12 +2557,12 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                 <!-- Start Only DateTime Picker -->
                                 <div id="dup-schedule-start-only-container" style="display: none; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 6px;">
                                     <div class="form-group" style="margin-bottom: 10px;">
-                                        <label style="font-weight: 500; color: #475569; font-size: 13px;">Start Date & Time <span style="font-weight: 400; color: #3b82f6;">(Your Local Time)</span></label>
+                                        <label style="font-weight: 500; color: #475569; font-size: 13px;">Start Date & Time <span style="font-weight: 400; color: #3b82f6;">(EST)</span></label>
                                         <input type="datetime-local" id="dup-schedule-start-only-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
                                     </div>
                                     <div style="padding: 6px 10px; background: #eff6ff; border-radius: 4px; display: flex; align-items: center; gap: 6px;">
                                         <span style="font-size: 14px;">🕐</span>
-                                        <span style="font-size: 11px; color: #1e40af; font-weight: 500;">Your Local Time - auto-converted to EST for TikTok Ads Manager</span>
+                                        <span style="font-size: 11px; color: #1e40af; font-weight: 500;">Eastern Time (EST/EDT) - Times appear exactly as entered in TikTok Ads Manager</span>
                                     </div>
                                 </div>
 
@@ -2576,15 +2570,15 @@ $currentAdvertiserId = $_SESSION['selected_advertiser_id'] ?? '';
                                 <div id="dup-schedule-datetime-container" style="display: none; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 6px;">
                                     <div style="margin-bottom: 10px; padding: 6px 10px; background: #eff6ff; border-radius: 4px; display: flex; align-items: center; gap: 6px;">
                                         <span style="font-size: 14px;">🕐</span>
-                                        <span style="font-size: 11px; color: #1e40af; font-weight: 500;">Your Local Time - auto-converted to EST for TikTok Ads Manager</span>
+                                        <span style="font-size: 11px; color: #1e40af; font-weight: 500;">Eastern Time (EST/EDT) - Times appear exactly as entered in TikTok Ads Manager</span>
                                     </div>
                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                                         <div class="form-group" style="margin-bottom: 0;">
-                                            <label style="font-weight: 500; color: #475569; font-size: 13px;">Start <span style="font-weight: 400; color: #3b82f6;">(Local Time)</span></label>
+                                            <label style="font-weight: 500; color: #475569; font-size: 13px;">Start <span style="font-weight: 400; color: #3b82f6;">(EST)</span></label>
                                             <input type="datetime-local" id="dup-schedule-start-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
                                         </div>
                                         <div class="form-group" style="margin-bottom: 0;">
-                                            <label style="font-weight: 500; color: #475569; font-size: 13px;">End <span style="font-weight: 400; color: #3b82f6;">(Local Time)</span></label>
+                                            <label style="font-weight: 500; color: #475569; font-size: 13px;">End <span style="font-weight: 400; color: #3b82f6;">(EST)</span></label>
                                             <input type="datetime-local" id="dup-schedule-end-datetime" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
                                         </div>
                                     </div>

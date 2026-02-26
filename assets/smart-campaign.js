@@ -2,39 +2,6 @@
 // Flow: Step 1 CREATES Campaign -> Step 2 CREATES AdGroup -> Step 4 CREATES Ad
 // Supports UPDATE when going back to modify existing resources
 
-// Detect browser timezone (e.g., "Asia/Kolkata", "America/New_York")
-// Sent to backend so it can convert user's local time to UTC correctly
-const USER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
-console.log('[Timezone] Browser timezone detected:', USER_TIMEZONE);
-
-// Convert a datetime-local value to EST display string for preview
-function getESTPreview(dateTimeLocalValue) {
-    if (!dateTimeLocalValue) return '';
-    const localDate = new Date(dateTimeLocalValue);
-    if (isNaN(localDate.getTime())) return '';
-    const estStr = localDate.toLocaleString('en-US', {
-        timeZone: 'America/New_York',
-        month: 'short', day: 'numeric', year: 'numeric',
-        hour: 'numeric', minute: '2-digit', hour12: true
-    });
-    return estStr + ' EST';
-}
-
-// Show EST preview next to a datetime input
-function updateESTPreview(inputId, previewId) {
-    const input = document.getElementById(inputId);
-    const preview = document.getElementById(previewId);
-    if (!input || !preview) return;
-    const val = input.value;
-    if (val) {
-        const estTime = getESTPreview(val);
-        preview.innerHTML = `<strong>TikTok will show:</strong> ${estTime}`;
-        preview.style.display = 'block';
-    } else {
-        preview.style.display = 'none';
-    }
-}
-
 // Global state
 let state = {
     currentStep: 1,
@@ -1933,12 +1900,12 @@ function getScheduleData() {
     const scheduleType = document.querySelector('input[name="schedule_type"]:checked')?.value || 'continuous';
 
     // Format datetime for TikTok API
-    // Send raw browser local time as-is; backend converts using user_timezone
+    // Format datetime for TikTok API — user enters EST time
     const formatScheduleTime = (dateTimeLocalValue) => {
         if (!dateTimeLocalValue) return null;
         const [datePart, timePart] = dateTimeLocalValue.split('T');
         const result = `${datePart} ${timePart}:00`;
-        console.log(`[Schedule] Formatted for API: ${dateTimeLocalValue} -> ${result} (timezone: ${USER_TIMEZONE})`);
+        console.log(`[Schedule] Formatted for API (EST): ${dateTimeLocalValue} -> ${result}`);
         return result;
     };
 
@@ -1961,7 +1928,6 @@ function getScheduleData() {
         return {
             schedule_type: 'SCHEDULE_FROM_NOW',
             schedule_start_time: formatScheduleTime(startDateTime),
-            user_timezone: USER_TIMEZONE
         };
     }
 
@@ -1979,7 +1945,6 @@ function getScheduleData() {
         schedule_type: 'SCHEDULE_START_END',
         schedule_start_time: formatScheduleTime(startDateTime),
         schedule_end_time: formatScheduleTime(endDateTime),
-        user_timezone: USER_TIMEZONE
     };
 }
 
@@ -2651,8 +2616,7 @@ async function createAdGroup() {
             // Schedule parameters
             schedule_type: scheduleData.schedule_type,
             schedule_start_time: scheduleData.schedule_start_time || null,
-            schedule_end_time: scheduleData.schedule_end_time || null,
-            user_timezone: scheduleData.user_timezone || USER_TIMEZONE
+            schedule_end_time: scheduleData.schedule_end_time || null
         });
 
         hideLoading();
@@ -6995,8 +6959,7 @@ async function executeBulkLaunch() {
         // Schedule data from bulk launch modal
         schedule_type: bulkScheduleData.schedule_type,
         schedule_start_time: bulkScheduleData.schedule_start_time,
-        schedule_end_time: bulkScheduleData.schedule_end_time,
-        user_timezone: bulkScheduleData.user_timezone || USER_TIMEZONE
+        schedule_end_time: bulkScheduleData.schedule_end_time
     };
 
     // Prepare accounts with video mappings — exclude original account
@@ -7517,8 +7480,7 @@ function getBulkScheduleData() {
             return {
                 schedule_type: 'SCHEDULE_FROM_NOW',
                 schedule_start_time: formattedTime,
-                schedule_end_time: null,
-                user_timezone: USER_TIMEZONE
+                schedule_end_time: null
             };
         }
     }
@@ -7535,7 +7497,6 @@ function getBulkScheduleData() {
             schedule_type: 'SCHEDULE_START_END',
             schedule_start_time: startTime,
             schedule_end_time: endTime,
-            user_timezone: USER_TIMEZONE
         };
     }
 
@@ -12308,7 +12269,6 @@ async function executeBulkDuplicateCampaign() {
                 schedule_type: account.schedule_type || 'start_now',
                 schedule_start: account.schedule_start || null,
                 schedule_end: account.schedule_end || null,
-                user_timezone: USER_TIMEZONE,
                 // Carry over dayparting from original campaign
                 dayparting: duplicateState.originalSchedule?.dayparting || null,
                 // Ad data
@@ -12427,12 +12387,12 @@ function getDupScheduleData() {
     const scheduleType = document.querySelector('input[name="dup_schedule_type"]:checked')?.value || 'continuous';
 
     // Format datetime for TikTok API
-    // Send raw browser local time as-is; backend converts using user_timezone
+    // Format datetime for TikTok API — user enters EST time
     const formatScheduleTime = (dateTimeLocalValue) => {
         if (!dateTimeLocalValue) return null;
         const [datePart, timePart] = dateTimeLocalValue.split('T');
         const result = `${datePart} ${timePart}:00`;
-        console.log(`[Dup Schedule] Formatted for API: ${dateTimeLocalValue} -> ${result} (timezone: ${USER_TIMEZONE})`);
+        console.log(`[Dup Schedule] Formatted for API (EST): ${dateTimeLocalValue} -> ${result}`);
         return result;
     };
 
@@ -12450,7 +12410,6 @@ function getDupScheduleData() {
         return {
             schedule_type: 'SCHEDULE_FROM_NOW',
             schedule_start_time: formatScheduleTime(startDateTime),
-            user_timezone: USER_TIMEZONE
         };
     }
 
@@ -12466,7 +12425,6 @@ function getDupScheduleData() {
         schedule_type: 'SCHEDULE_START_END',
         schedule_start_time: formatScheduleTime(startDateTime),
         schedule_end_time: formatScheduleTime(endDateTime),
-        user_timezone: USER_TIMEZONE
     };
 }
 

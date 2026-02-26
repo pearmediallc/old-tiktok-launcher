@@ -112,36 +112,27 @@ function getUTCDateTime($modifier = null) {
     return $dt->format('Y-m-d H:i:s');
 }
 
-// Convert user's scheduled time to UTC
-// Accepts the user's browser timezone (e.g., "Asia/Kolkata", "America/New_York")
-// Parses the time in that timezone and converts to UTC for TikTok API
-function convertScheduledTimeToUTC($scheduledTimeString, $userTimezone = 'America/New_York') {
+// Convert EST time to UTC for TikTok API
+// All schedule times are entered in EST (America/New_York)
+function convertScheduledTimeToUTC($scheduledTimeString) {
+    $est = new DateTimeZone('America/New_York');
     $utc = new DateTimeZone('UTC');
 
-    // Validate the timezone string; fall back to America/New_York if invalid
-    try {
-        $tz = new DateTimeZone($userTimezone);
-    } catch (Exception $e) {
-        logSmartPlus("Invalid timezone '$userTimezone', falling back to America/New_York");
-        $tz = new DateTimeZone('America/New_York');
-    }
-
-    // Parse the time in the user's actual browser timezone
-    $userTime = new DateTime($scheduledTimeString, $tz);
+    // Parse the time in EST
+    $estTime = new DateTime($scheduledTimeString, $est);
 
     // Convert to UTC
-    $userTime->setTimezone($utc);
-    $result = $userTime->format('Y-m-d H:i:s');
+    $estTime->setTimezone($utc);
+    $result = $estTime->format('Y-m-d H:i:s');
 
-    // Log for debugging
-    logSmartPlus("Schedule conversion: Input: $scheduledTimeString ($userTimezone) -> UTC: $result");
+    logSmartPlus("Schedule conversion: Input: $scheduledTimeString (EST) -> UTC: $result");
 
     return $result;
 }
 
-// Legacy function - passes through timezone parameter
-function convertESTtoUTC($estTimeString, $userTimezone = 'America/New_York') {
-    return convertScheduledTimeToUTC($estTimeString, $userTimezone);
+// Alias for convertScheduledTimeToUTC
+function convertESTtoUTC($estTimeString) {
+    return convertScheduledTimeToUTC($estTimeString);
 }
 
 // Get fresh image URL by searching the image library
@@ -1312,10 +1303,7 @@ switch ($action) {
         $scheduleType = $data['schedule_type'] ?? 'SCHEDULE_FROM_NOW';
         $scheduleStart = null;
         $scheduleEnd = null;
-        $userTimezone = $data['user_timezone'] ?? 'America/New_York';
         $timesAlreadyUTC = !empty($data['times_already_utc']); // For duplicating: times from TikTok API are already UTC
-
-        logSmartPlus("Schedule: user_timezone=$userTimezone, timesAlreadyUTC=" . ($timesAlreadyUTC ? 'true' : 'false'));
 
         if ($scheduleType === 'SCHEDULE_START_END' && !empty($data['schedule_start_time']) && !empty($data['schedule_end_time'])) {
             if ($timesAlreadyUTC) {
@@ -1332,9 +1320,9 @@ switch ($action) {
                     logSmartPlus("Original start time was in the past, adjusted to: $scheduleStart");
                 }
             } else {
-                // User specified start and end times — convert from user's browser timezone to UTC
-                $scheduleStart = convertESTtoUTC($data['schedule_start_time'], $userTimezone);
-                $scheduleEnd = convertESTtoUTC($data['schedule_end_time'], $userTimezone);
+                // User specified start and end times — convert from EST to UTC
+                $scheduleStart = convertESTtoUTC($data['schedule_start_time']);
+                $scheduleEnd = convertESTtoUTC($data['schedule_end_time']);
                 logSmartPlus("Using SCHEDULE_START_END: $scheduleStart to $scheduleEnd (UTC)");
             }
         } elseif ($scheduleType === 'SCHEDULE_FROM_NOW' && !empty($data['schedule_start_time'])) {
@@ -1349,8 +1337,8 @@ switch ($action) {
                     logSmartPlus("Original start time was in the past, adjusted to: $scheduleStart");
                 }
             } else {
-                // User specified a future start time — convert from user's browser timezone to UTC
-                $scheduleStart = convertESTtoUTC($data['schedule_start_time'], $userTimezone);
+                // User specified a future start time — convert from EST to UTC
+                $scheduleStart = convertESTtoUTC($data['schedule_start_time']);
                 logSmartPlus("Using SCHEDULE_FROM_NOW with scheduled start: $scheduleStart (UTC)");
             }
         } else {
@@ -3166,16 +3154,14 @@ switch ($action) {
                 $scheduleType = $campaignConfig['schedule_type'] ?? 'SCHEDULE_FROM_NOW';
                 $scheduleStart = null;
                 $scheduleEnd = null;
-                $bulkUserTimezone = $campaignConfig['user_timezone'] ?? 'America/New_York';
-
                 if (!empty($campaignConfig['schedule_start_time'])) {
                     $rawStartTime = $campaignConfig['schedule_start_time'];
-                    logSmartPlus("Raw schedule_start_time received: " . (is_string($rawStartTime) ? $rawStartTime : "timestamp: $rawStartTime") . " (tz: $bulkUserTimezone)");
+                    logSmartPlus("Raw schedule_start_time received: " . (is_string($rawStartTime) ? $rawStartTime : "timestamp: $rawStartTime"));
 
                     // Check if it's a string (new format "YYYY-MM-DD HH:MM:SS") or number (legacy timestamp)
                     if (is_string($rawStartTime) && strpos($rawStartTime, '-') !== false) {
-                        // String format - convert from user's timezone to UTC
-                        $scheduleStart = convertESTtoUTC($rawStartTime, $bulkUserTimezone);
+                        // String format - convert from EST to UTC
+                        $scheduleStart = convertESTtoUTC($rawStartTime);
                         logSmartPlus("Converted to UTC: $scheduleStart");
                     } else {
                         // Legacy timestamp format - convert to UTC datetime string
@@ -3194,8 +3180,8 @@ switch ($action) {
 
                     // Check if it's a string or number
                     if (is_string($rawEndTime) && strpos($rawEndTime, '-') !== false) {
-                        // String format - convert from user's timezone to UTC
-                        $scheduleEnd = convertESTtoUTC($rawEndTime, $bulkUserTimezone);
+                        // String format - convert from EST to UTC
+                        $scheduleEnd = convertESTtoUTC($rawEndTime);
                         logSmartPlus("Converted end time to UTC: $scheduleEnd");
                     } else {
                         // Legacy timestamp format
@@ -3578,19 +3564,17 @@ switch ($action) {
             $scheduleType = $data['schedule_type'] ?? 'start_now';
             $scheduleStart = null;
             $scheduleEnd = null;
-            $dupBulkTimezone = $data['user_timezone'] ?? 'America/New_York';
-
             if ($scheduleType === 'start_now' || $scheduleType === 'SCHEDULE_FROM_NOW') {
                 $scheduleType = 'SCHEDULE_FROM_NOW';
                 $scheduleStart = getUTCDateTime('+5 minutes');
             } else {
                 if (!empty($data['schedule_start'])) {
-                    $scheduleStart = convertESTtoUTC(date('Y-m-d H:i:s', strtotime($data['schedule_start'])), $dupBulkTimezone);
+                    $scheduleStart = convertESTtoUTC(date('Y-m-d H:i:s', strtotime($data['schedule_start'])));
                 } else {
                     $scheduleStart = getUTCDateTime('+5 minutes');
                 }
                 if (!empty($data['schedule_end'])) {
-                    $scheduleEnd = convertESTtoUTC(date('Y-m-d H:i:s', strtotime($data['schedule_end'])), $dupBulkTimezone);
+                    $scheduleEnd = convertESTtoUTC(date('Y-m-d H:i:s', strtotime($data['schedule_end'])));
                     $scheduleType = 'SCHEDULE_START_END';
                 } else {
                     $scheduleType = 'SCHEDULE_FROM_NOW';
