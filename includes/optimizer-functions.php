@@ -207,7 +207,7 @@ function fetchTikTokCampaignMetrics($advertiserId, $campaignId, $accessToken) {
 
 function fetchRedTrackCampaignMetrics($campaignId, $redtrackCampaignName = null) {
     $today = date('Y-m-d');
-    $defaultMetrics = ['lp_ctr' => 0, 'ctr' => 0, 'conversions' => 0, 'revenue' => 0, 'lp_clicks' => 0, 'lp_views' => 0];
+    $defaultMetrics = ['lp_ctr' => 0, 'ctr' => 0, 'conversions' => 0, 'revenue' => 0, 'cost' => 0, 'profit' => 0, 'lp_clicks' => 0, 'lp_views' => 0];
 
     // If a RedTrack campaign name is provided, look up by campaign name
     if (!empty($redtrackCampaignName)) {
@@ -227,12 +227,15 @@ function fetchRedTrackCampaignMetrics($campaignId, $redtrackCampaignName = null)
             $items = $result['items'] ?? $result ?? [];
             if (!empty($items) && is_array($items)) {
                 $campaign = is_array($items[0] ?? null) ? $items[0] : $items;
-                $stats = $campaign['stats'] ?? $campaign;
+                // RedTrack may use "stat" (singular) or "stats" (plural) or metrics at root level
+                $stats = $campaign['stat'] ?? $campaign['stats'] ?? $campaign;
                 return [
                     'lp_ctr' => floatval($stats['lp_ctr'] ?? 0),
                     'ctr' => floatval($stats['ctr'] ?? 0),
                     'conversions' => intval($stats['conversions'] ?? 0),
                     'revenue' => floatval($stats['revenue'] ?? 0),
+                    'cost' => floatval($stats['cost'] ?? 0),
+                    'profit' => floatval($stats['profit'] ?? 0),
                     'lp_clicks' => intval($stats['lp_clicks'] ?? 0),
                     'lp_views' => intval($stats['lp_views'] ?? 0),
                 ];
@@ -252,12 +255,16 @@ function fetchRedTrackCampaignMetrics($campaignId, $redtrackCampaignName = null)
                 // Aggregate conversion data
                 $totalConversions = count($convItems);
                 $totalRevenue = 0;
+                $totalCost = 0;
                 foreach ($convItems as $conv) {
                     $totalRevenue += floatval($conv['revenue'] ?? $conv['amount'] ?? 0);
+                    $totalCost += floatval($conv['cost'] ?? 0);
                 }
                 return array_merge($defaultMetrics, [
                     'conversions' => $totalConversions,
                     'revenue' => $totalRevenue,
+                    'cost' => $totalCost,
+                    'profit' => $totalRevenue - $totalCost,
                 ]);
             }
 
@@ -283,13 +290,17 @@ function fetchRedTrackCampaignMetrics($campaignId, $redtrackCampaignName = null)
     // Aggregate conversion data from sub2 fallback
     $totalConversions = count($items);
     $totalRevenue = 0;
+    $totalCost = 0;
     foreach ($items as $conv) {
         $totalRevenue += floatval($conv['revenue'] ?? $conv['amount'] ?? 0);
+        $totalCost += floatval($conv['cost'] ?? 0);
     }
 
     return array_merge($defaultMetrics, [
         'conversions' => $totalConversions,
         'revenue' => $totalRevenue,
+        'cost' => $totalCost,
+        'profit' => $totalRevenue - $totalCost,
     ]);
 }
 

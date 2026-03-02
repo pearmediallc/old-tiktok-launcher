@@ -9260,8 +9260,29 @@ async function loadRedTrackMappings() {
     if (result.success && result.mappings) {
         state.redtrackMappings = result.mappings;
 
-        // Fetch LP CTR for all mapped campaigns in parallel
-        const fetches = Object.entries(result.mappings).map(([campaignId, rtName]) =>
+        // Only fetch LP CTR for campaigns with their own individual RT mapping
+        // (campaigns using account-level RT are handled by fetchAccountRtMetrics)
+        const accountRt = state.accountRtCampaignName || '';
+        const uniqueRtNames = new Set();
+        const toFetch = [];
+
+        for (const [campaignId, rtName] of Object.entries(result.mappings)) {
+            // Skip if this mapping is the same as the account-level RT (already fetched once)
+            if (accountRt && rtName === accountRt) {
+                // Use the account-level metrics already fetched
+                if (state.accountRtMetrics) {
+                    state.redtrackLpCtrs[campaignId] = state.accountRtMetrics.lp_ctr || 0;
+                }
+                continue;
+            }
+            // Deduplicate: only fetch once per unique RT campaign name
+            if (!uniqueRtNames.has(rtName)) {
+                uniqueRtNames.add(rtName);
+                toFetch.push([campaignId, rtName]);
+            }
+        }
+
+        const fetches = toFetch.map(([campaignId, rtName]) =>
             fetchLpCtrForCampaign(campaignId, rtName)
         );
         await Promise.all(fetches);
@@ -9288,6 +9309,7 @@ async function loadCampaignsAccountRt() {
     if (!advId) { banner.style.display = 'none'; return; }
 
     banner.style.display = 'flex';
+    state.accountRtCampaignName = '';
 
     try {
         const response = await fetch(`api-optimizer.php?action=get_account_rt_campaign&advertiser_id=${encodeURIComponent(advId)}`);
@@ -9295,12 +9317,73 @@ async function loadCampaignsAccountRt() {
         const input = document.getElementById('campaigns-account-rt-input');
         if (input && result.success && result.redtrack_campaign_name) {
             input.value = result.redtrack_campaign_name;
+            state.accountRtCampaignName = result.redtrack_campaign_name;
+            // Fetch RT metrics once for the account-level campaign
+            fetchAccountRtMetrics(result.redtrack_campaign_name);
         } else if (input) {
             input.value = '';
+            // Hide metrics row if no account RT campaign
+            const metricsRow = document.getElementById('account-rt-metrics');
+            if (metricsRow) metricsRow.style.display = 'none';
         }
     } catch (e) {
         console.error('Error loading account RT campaign:', e);
     }
+}
+
+async function fetchAccountRtMetrics(rtName) {
+    const metricsRow = document.getElementById('account-rt-metrics');
+    if (metricsRow) metricsRow.innerHTML = '<span style="color:#94a3b8;font-size:12px;">Loading RedTrack data...</span>';
+    if (metricsRow) metricsRow.style.display = 'flex';
+
+    try {
+        const result = await apiRequest('fetch_redtrack_lpctr', { redtrack_campaign_name: rtName });
+        if (result.success && metricsRow) {
+            const lpCtr = parseFloat(result.lp_ctr) || 0;
+            const lpCtrFmt = lpCtr > 1 ? lpCtr.toFixed(2) + '%' : (lpCtr * 100).toFixed(2) + '%';
+            const rev = parseFloat(result.revenue) || 0;
+            const cost = parseFloat(result.cost) || 0;
+            const profit = parseFloat(result.profit) || 0;
+            const convs = parseInt(result.conversions) || 0;
+            const lpClicks = parseInt(result.lp_clicks) || 0;
+            const lpViews = parseInt(result.lp_views) || 0;
+            const profitColor = profit >= 0 ? '#16a34a' : '#dc2626';
+
+            // Store for LP CTR column display
+            state.accountRtMetrics = result;
+
+            metricsRow.innerHTML = `
+                <span style="font-size:12px;color:#475569;"><b>LP CTR:</b> ${lpCtrFmt}</span>
+                <span style="font-size:12px;color:#475569;"><b>LP Clicks:</b> ${lpClicks}</span>
+                <span style="font-size:12px;color:#475569;"><b>LP Views:</b> ${lpViews}</span>
+                <span style="font-size:12px;color:#475569;"><b>Conversions:</b> ${convs}</span>
+                <span style="font-size:12px;color:#475569;"><b>Revenue:</b> $${rev.toFixed(2)}</span>
+                <span style="font-size:12px;color:#475569;"><b>Cost:</b> $${cost.toFixed(2)}</span>
+                <span style="font-size:12px;color:${profitColor};font-weight:700;"><b>Profit:</b> $${profit.toFixed(2)}</span>
+            `;
+
+            // Update all campaign LP CTR cells with account-level data
+            updateAllLpCtrFromAccount(lpCtr, rtName);
+        } else if (metricsRow) {
+            metricsRow.innerHTML = '<span style="color:#94a3b8;font-size:12px;">No RedTrack data found for this campaign</span>';
+        }
+    } catch (e) {
+        if (metricsRow) metricsRow.innerHTML = '<span style="color:#dc2626;font-size:12px;">Error fetching RedTrack data</span>';
+    }
+}
+
+function updateAllLpCtrFromAccount(lpCtr, rtName) {
+    // When account RT is set, apply the same LP CTR to all campaigns that don't have their own mapping
+    document.querySelectorAll('[id^="lpctr-cell-"]').forEach(cell => {
+        const campaignId = cell.id.replace('lpctr-cell-', '');
+        // Only update if campaign doesn't have its own individual RT mapping
+        if (!state.redtrackMappings[campaignId]) {
+            state.redtrackLpCtrs[campaignId] = lpCtr;
+            const displayVal = parseFloat(lpCtr) || 0;
+            const formatted = displayVal > 1 ? displayVal.toFixed(2) + '%' : (displayVal * 100).toFixed(2) + '%';
+            cell.innerHTML = `<span style="font-weight:500;color:#b45309;" title="Account RT: ${escapeHtml(rtName)}">${formatted}</span>`;
+        }
+    });
 }
 
 async function saveCampaignsAccountRt() {
@@ -9322,8 +9405,9 @@ async function saveCampaignsAccountRt() {
         const result = await response.json();
         if (result.success) {
             showToast('Account RedTrack campaign saved', 'success');
-            const status = document.getElementById('campaigns-account-rt-status');
-            if (status) { status.textContent = 'Saved!'; status.style.display = 'inline'; setTimeout(() => status.style.display = 'none', 3000); }
+            state.accountRtCampaignName = rtName;
+            // Fetch fresh metrics for the new RT campaign
+            fetchAccountRtMetrics(rtName);
         } else {
             showToast(result.message || 'Failed to save', 'error');
         }
@@ -9345,7 +9429,19 @@ async function clearCampaignsAccountRt() {
         if (result.success) {
             const input = document.getElementById('campaigns-account-rt-input');
             if (input) input.value = '';
+            state.accountRtCampaignName = '';
+            state.accountRtMetrics = null;
+            const metricsRow = document.getElementById('account-rt-metrics');
+            if (metricsRow) metricsRow.style.display = 'none';
             showToast('Account RedTrack campaign cleared', 'success');
+            // Re-render LP CTR cells (will show "Link RT" buttons again)
+            document.querySelectorAll('[id^="lpctr-cell-"]').forEach(cell => {
+                const campaignId = cell.id.replace('lpctr-cell-', '');
+                if (!state.redtrackMappings[campaignId]) {
+                    delete state.redtrackLpCtrs[campaignId];
+                    cell.innerHTML = renderLpCtrCell(campaignId);
+                }
+            });
         }
     } catch (e) {
         showToast('Error clearing account RT campaign', 'error');

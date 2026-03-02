@@ -5296,6 +5296,10 @@ switch ($action) {
             'lp_ctr' => $metrics['lp_ctr'] ?? 0,
             'lp_clicks' => $metrics['lp_clicks'] ?? 0,
             'lp_views' => $metrics['lp_views'] ?? 0,
+            'conversions' => $metrics['conversions'] ?? 0,
+            'revenue' => $metrics['revenue'] ?? 0,
+            'cost' => $metrics['cost'] ?? 0,
+            'profit' => $metrics['profit'] ?? 0,
         ]);
         break;
 
