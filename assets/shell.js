@@ -215,7 +215,28 @@
         .then(result => {
             if (result.success) {
                 window.location.href = 'app-shell.php?view=campaigns';
+            } else {
+                // Fallback: try set_advertiser (simpler, no OAuth check)
+                console.warn('set_oauth_advertiser failed:', result.message, '— trying set_advertiser fallback');
+                return fetch('api.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
+                    body: JSON.stringify({ action: 'set_advertiser', advertiser_id: advertiserId })
+                })
+                .then(r2 => r2.json())
+                .then(result2 => {
+                    if (result2.success) {
+                        window.location.href = 'app-shell.php?view=campaigns';
+                    } else {
+                        console.error('Both set_oauth_advertiser and set_advertiser failed:', result2.message);
+                        if (typeof showToast === 'function') showToast('Failed to switch account: ' + (result2.message || 'Unknown error'), 'error');
+                    }
+                });
             }
+        })
+        .catch(err => {
+            console.error('switchAndReload error:', err);
+            if (typeof showToast === 'function') showToast('Error switching account. Please refresh and try again.', 'error');
         });
     }
 
