@@ -1,5 +1,7 @@
 # Environment files
 .env
+.env.local
+.env.production
 
 # Composer dependencies
 vendor/
@@ -18,7 +20,10 @@ Thumbs.db
 
 # Log files
 *.log
-app.log
+logs/
+
+# Cache files
+cache/
 
 # Temporary files
 *.tmp
@@ -27,6 +32,6 @@ app.log
 # Session files
 sessions/
 
-# Upload directory (if created)
+# Upload directory
 uploads/
 media_storage.json

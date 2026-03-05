@@ -23,8 +23,39 @@ set_exception_handler(function($exception) {
 session_start();
 header('Content-Type: application/json');
 
+require_once __DIR__ . '/includes/Security.php';
+require_once __DIR__ . '/includes/ActivityLogger.php';
 require_once __DIR__ . '/includes/optimizer-functions.php';
 require_once __DIR__ . '/database/Database.php';
+
+// CORS headers (same-origin only)
+Security::sendCorsHeaders();
+
+// Authentication check
+if (!isset($_SESSION['authenticated']) || !$_SESSION['authenticated']) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    exit;
+}
+
+// CSRF validation on state-changing requests
+if (in_array($_SERVER['REQUEST_METHOD'] ?? '', ['POST', 'PUT', 'DELETE'])) {
+    if (!Security::validateApiCSRF()) {
+        http_response_code(403);
+        ActivityLogger::log('csrf_rejected', 'api-optimizer.php', [], 'denied');
+        echo json_encode(['success' => false, 'message' => 'Invalid CSRF token']);
+        exit;
+    }
+}
+
+// Rate limiting (60 requests per minute per IP)
+$rateCheck = Security::checkApiRateLimit('api-optimizer', 60, 60);
+if (!$rateCheck['allowed']) {
+    http_response_code(429);
+    ActivityLogger::log('rate_limited', 'api-optimizer.php', [], 'denied');
+    echo json_encode(['success' => false, 'message' => 'Rate limit exceeded. Try again shortly.']);
+    exit;
+}
 
 // Load environment
 $envPath = __DIR__ . '/.env';
@@ -241,6 +272,7 @@ switch ($action) {
         $db->query("UPDATE optimizer_rules SET " . implode(', ', $updates) . " WHERE id = ?", $params);
 
         logOptimizer("Updated rule #$ruleId");
+        ActivityLogger::log('update_rule', 'api-optimizer.php', ['rule_id' => $ruleId]);
         echo json_encode(['success' => true, 'message' => 'Rule updated']);
         break;
 
@@ -301,33 +333,40 @@ switch ($action) {
             }
         }
 
-        // Check if already monitored
-        $existing = $db->fetchOne(
-            "SELECT * FROM optimizer_monitored_campaigns WHERE campaign_id = ? AND advertiser_id = ?",
-            [$campaignId, $advId]
-        );
+        try {
+            // Check if already monitored
+            $existing = $db->fetchOne(
+                "SELECT * FROM optimizer_monitored_campaigns WHERE campaign_id = ? AND advertiser_id = ?",
+                [$campaignId, $advId]
+            );
 
-        if ($existing) {
-            // Toggle off - remove from monitoring
-            $db->delete('optimizer_monitored_campaigns', 'id = ?', [$existing['id']]);
-            logOptimizer("Removed campaign $campaignId from monitoring");
-            echo json_encode(['success' => true, 'monitoring' => false, 'message' => 'Campaign removed from monitoring']);
-        } else {
-            // Toggle on - add to monitoring with chosen rule group + RedTrack campaign
-            $insertData = [
-                'campaign_id' => $campaignId,
-                'advertiser_id' => $advId,
-                'campaign_name' => $campaignName,
-                'rule_group' => $ruleGroup,
-                'redtrack_campaign_name' => $redtrackCampaignName ?: null,
-                'monitoring_enabled' => 1,
-                'paused_by_optimizer' => 0,
-            ];
-            $db->insert('optimizer_monitored_campaigns', $insertData);
-            $groupLabel = str_replace('_', ' ', ucwords($ruleGroup, '_'));
-            $rtLabel = $redtrackCampaignName ? " (RedTrack: $redtrackCampaignName)" : '';
-            logOptimizer("Added campaign $campaignId to monitoring with $ruleGroup rules$rtLabel");
-            echo json_encode(['success' => true, 'monitoring' => true, 'rule_group' => $ruleGroup, 'redtrack_campaign_name' => $redtrackCampaignName ?: null, 'message' => "Campaign monitored with $groupLabel rules$rtLabel"]);
+            if ($existing) {
+                // Toggle off - remove from monitoring
+                $db->delete('optimizer_monitored_campaigns', 'id = ?', [$existing['id']]);
+                logOptimizer("Removed campaign $campaignId from monitoring");
+                ActivityLogger::log('remove_monitoring', 'api-optimizer.php', ['campaign_id' => $campaignId]);
+                echo json_encode(['success' => true, 'monitoring' => false, 'message' => 'Campaign removed from monitoring']);
+            } else {
+                // Toggle on - add to monitoring with chosen rule group + RedTrack campaign
+                $insertData = [
+                    'campaign_id' => $campaignId,
+                    'advertiser_id' => $advId,
+                    'campaign_name' => $campaignName,
+                    'rule_group' => $ruleGroup,
+                    'redtrack_campaign_name' => $redtrackCampaignName ?: null,
+                    'monitoring_enabled' => 1,
+                    'paused_by_optimizer' => 0,
+                ];
+                $db->insert('optimizer_monitored_campaigns', $insertData);
+                $groupLabel = str_replace('_', ' ', ucwords($ruleGroup, '_'));
+                $rtLabel = $redtrackCampaignName ? " (RedTrack: $redtrackCampaignName)" : '';
+                logOptimizer("Added campaign $campaignId to monitoring with $ruleGroup rules$rtLabel");
+                ActivityLogger::log('add_monitoring', 'api-optimizer.php', ['campaign_id' => $campaignId, 'rule_group' => $ruleGroup]);
+                echo json_encode(['success' => true, 'monitoring' => true, 'rule_group' => $ruleGroup, 'redtrack_campaign_name' => $redtrackCampaignName ?: null, 'message' => "Campaign monitored with $groupLabel rules$rtLabel"]);
+            }
+        } catch (Exception $e) {
+            error_log("toggle_monitoring error: " . $e->getMessage() . " | campaign_id=$campaignId, advertiser_id=$advId, rule_group=$ruleGroup");
+            echo json_encode(['success' => false, 'message' => 'Failed to update monitoring: ' . $e->getMessage()]);
         }
         break;
 
@@ -399,19 +438,25 @@ switch ($action) {
             break;
         }
 
-        $result = pauseCampaignViaApi($advId, $campaignId, $accessToken);
+        try {
+            ActivityLogger::log('manual_pause', 'api-optimizer.php', ['campaign_id' => $campaignId, 'advertiser_id' => $advId]);
+            $result = pauseCampaignViaApi($advId, $campaignId, $accessToken);
 
-        $db->insert('optimizer_logs', [
-            'campaign_id' => $campaignId,
-            'advertiser_id' => $advId,
-            'action' => 'pause',
-            'rule_key' => 'manual',
-            'rule_details' => 'Manual pause from optimizer UI',
-            'api_response' => json_encode($result['response']),
-            'success' => $result['success'] ? 1 : 0,
-        ]);
+            $db->insert('optimizer_logs', [
+                'campaign_id' => $campaignId,
+                'advertiser_id' => $advId,
+                'action' => 'pause',
+                'rule_key' => 'manual',
+                'rule_details' => 'Manual pause from optimizer UI',
+                'api_response' => json_encode($result['response']),
+                'success' => $result['success'] ? 1 : 0,
+            ]);
 
-        echo json_encode($result);
+            echo json_encode($result);
+        } catch (Exception $e) {
+            error_log("manual_pause error: " . $e->getMessage() . " | campaign_id=$campaignId");
+            echo json_encode(['success' => false, 'message' => 'Failed to pause: ' . $e->getMessage()]);
+        }
         break;
 
     case 'manual_resume':
@@ -423,25 +468,31 @@ switch ($action) {
             break;
         }
 
-        $result = resumeCampaignViaApi($advId, $campaignId, $accessToken);
+        try {
+            ActivityLogger::log('manual_resume', 'api-optimizer.php', ['campaign_id' => $campaignId, 'advertiser_id' => $advId]);
+            $result = resumeCampaignViaApi($advId, $campaignId, $accessToken);
 
-        // Also clear optimizer pause state
-        $db->query(
-            "UPDATE optimizer_monitored_campaigns SET paused_by_optimizer = 0, paused_at = NULL, resume_at = NULL WHERE campaign_id = ? AND advertiser_id = ?",
-            [$campaignId, $advId]
-        );
+            // Also clear optimizer pause state
+            $db->query(
+                "UPDATE optimizer_monitored_campaigns SET paused_by_optimizer = 0, paused_at = NULL, resume_at = NULL WHERE campaign_id = ? AND advertiser_id = ?",
+                [$campaignId, $advId]
+            );
 
-        $db->insert('optimizer_logs', [
-            'campaign_id' => $campaignId,
-            'advertiser_id' => $advId,
-            'action' => 'resume',
-            'rule_key' => 'manual',
-            'rule_details' => 'Manual resume from optimizer UI',
-            'api_response' => json_encode($result['response']),
-            'success' => $result['success'] ? 1 : 0,
-        ]);
+            $db->insert('optimizer_logs', [
+                'campaign_id' => $campaignId,
+                'advertiser_id' => $advId,
+                'action' => 'resume',
+                'rule_key' => 'manual',
+                'rule_details' => 'Manual resume from optimizer UI',
+                'api_response' => json_encode($result['response']),
+                'success' => $result['success'] ? 1 : 0,
+            ]);
 
-        echo json_encode($result);
+            echo json_encode($result);
+        } catch (Exception $e) {
+            error_log("manual_resume error: " . $e->getMessage() . " | campaign_id=$campaignId");
+            echo json_encode(['success' => false, 'message' => 'Failed to resume: ' . $e->getMessage()]);
+        }
         break;
 
     // ============================================
@@ -454,7 +505,9 @@ switch ($action) {
             break;
         }
 
+        ActivityLogger::log('force_optimizer_check', 'api-optimizer.php');
         $stats = runOptimizerCheck($db, $accessToken);
+        ActivityLogger::log('force_optimizer_check_result', 'api-optimizer.php', $stats);
         echo json_encode(['success' => true, 'data' => $stats, 'message' => "Checked {$stats['checked']} campaigns, paused {$stats['paused']}, resumed {$stats['resumed']}"]);
         break;
 

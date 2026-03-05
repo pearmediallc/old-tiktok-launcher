@@ -1517,7 +1517,8 @@ async function createPortfolioFromSelectedCTAs(adIndex) {
         const response = await fetch('api.php?action=create_cta_portfolio', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': window.CSRF_TOKEN || ''
             },
             body: JSON.stringify({
                 portfolio_name: portfolioName,
@@ -2163,7 +2164,8 @@ async function createCTAPortfolio(adIndex) {
         const response = await fetch('api.php?action=create_cta_portfolio', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': window.CSRF_TOKEN || ''
             },
             body: JSON.stringify(requestBody)
         });
@@ -3172,6 +3174,7 @@ async function handleMediaUpload(event) {
         
         const response = await fetch(`api.php?action=${isVideo ? 'upload_video' : 'upload_image'}`, {
             method: 'POST',
+            headers: { 'X-CSRF-Token': window.CSRF_TOKEN || '' },
             body: formData
         });
 
@@ -4473,6 +4476,7 @@ async function uploadAvatarImage() {
         
         const response = await fetch('api.php', {
             method: 'POST',
+            headers: { 'X-CSRF-Token': window.CSRF_TOKEN || '' },
             body: formData
         });
         

@@ -26,10 +26,38 @@ class Security {
             ini_set('session.gc_maxlifetime', 3600); // 1 hour
             ini_set('session.use_strict_mode', '1');
 
-            // Enable secure cookies if using HTTPS
-            if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+            // Enable secure cookies if using HTTPS (check proxy header for Render.com)
+            if (self::isHttps()) {
                 ini_set('session.cookie_secure', '1');
             }
+        }
+    }
+
+    /**
+     * Check if request is over HTTPS (supports Render.com reverse proxy)
+     */
+    public static function isHttps() {
+        if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') return true;
+        if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') return true;
+        if (isset($_SERVER['HTTP_X_FORWARDED_SSL']) && $_SERVER['HTTP_X_FORWARDED_SSL'] === 'on') return true;
+        return false;
+    }
+
+    /**
+     * Enforce HTTPS - redirect if not secure. Call early in request lifecycle.
+     * Skips for CLI and localhost development.
+     */
+    public static function enforceHttps() {
+        if (php_sapi_name() === 'cli') return;
+
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        // Skip HTTPS redirect for localhost / development
+        if (in_array($host, ['localhost', '127.0.0.1']) || strpos($host, 'localhost:') === 0) return;
+
+        if (!self::isHttps()) {
+            $url = 'https://' . $host . ($_SERVER['REQUEST_URI'] ?? '/');
+            header('Location: ' . $url, true, 301);
+            exit;
         }
     }
 
@@ -175,15 +203,26 @@ class Security {
 
     /**
      * Verify password against hash
-     * For migration: if no hash exists, compare plain text and suggest update
+     * Supports bcrypt hashes and legacy plaintext with auto-rehash
      */
     public static function verifyPassword($password, $hash) {
         // Check if it's a proper hash (starts with $2y$ for bcrypt)
         if (strpos($hash, '$2y$') === 0) {
             return password_verify($password, $hash);
         }
-        // Fall back to plain text comparison for backwards compatibility
-        return $password === $hash;
+        // Legacy plaintext comparison — log warning and flag for rehash
+        if ($password === $hash) {
+            error_log("SECURITY WARNING: Plaintext password matched — password should be rehashed with bcrypt");
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Check if password needs rehashing (plaintext or weak hash)
+     */
+    public static function needsRehash($hash) {
+        return strpos($hash, '$2y$') !== 0 || password_needs_rehash($hash, PASSWORD_BCRYPT, ['cost' => 12]);
     }
 
     /**
@@ -265,6 +304,89 @@ class Security {
         }
 
         return $data;
+    }
+
+    /**
+     * Validate CSRF token for API requests (from X-CSRF-Token header or post body)
+     * Returns true if valid, false otherwise.
+     */
+    public static function validateApiCSRF() {
+        // Only validate on state-changing methods
+        if (!in_array($_SERVER['REQUEST_METHOD'] ?? '', ['POST', 'PUT', 'DELETE', 'PATCH'])) {
+            return true;
+        }
+
+        $token = $_SERVER['HTTP_X_CSRF_TOKEN']
+            ?? $_POST['csrf_token']
+            ?? '';
+
+        // Also check JSON body
+        if (empty($token)) {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $token = $input['csrf_token'] ?? '';
+        }
+
+        return self::validateCSRFToken($token);
+    }
+
+    /**
+     * Send standard CORS headers for same-origin API requests
+     */
+    public static function sendCorsHeaders() {
+        $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+
+        // Only allow same-origin requests
+        if (!empty($origin) && parse_url($origin, PHP_URL_HOST) === $host) {
+            header('Access-Control-Allow-Origin: ' . $origin);
+            header('Access-Control-Allow-Credentials: true');
+            header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+            header('Access-Control-Allow-Headers: Content-Type, X-CSRF-Token');
+        }
+
+        // Handle preflight
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+            http_response_code(204);
+            exit;
+        }
+    }
+
+    /**
+     * Check API rate limit (per-endpoint, per-IP)
+     * @param string $endpoint Endpoint name for tracking
+     * @param int $maxRequests Max requests allowed in window
+     * @param int $windowSeconds Time window
+     * @return array ['allowed' => bool, 'remaining' => int]
+     */
+    public static function checkApiRateLimit($endpoint, $maxRequests = 60, $windowSeconds = 60) {
+        $ip = self::getClientIP();
+        $data = self::getRateLimitData();
+        $now = time();
+        $key = 'api_' . md5($endpoint . '_' . $ip);
+
+        // Clean expired entries
+        foreach ($data as $k => $v) {
+            if (($v['expires'] ?? 0) < $now) {
+                unset($data[$k]);
+            }
+        }
+
+        if (!isset($data[$key]) || $data[$key]['expires'] < $now) {
+            $data[$key] = [
+                'attempts' => 0,
+                'expires' => $now + $windowSeconds,
+            ];
+        }
+
+        $data[$key]['attempts']++;
+        $remaining = $maxRequests - $data[$key]['attempts'];
+
+        self::saveRateLimitData($data);
+
+        return [
+            'allowed' => $remaining >= 0,
+            'remaining' => max(0, $remaining),
+        ];
     }
 
     /**

@@ -38,12 +38,42 @@ set_exception_handler(function($exception) {
 session_start();
 header('Content-Type: application/json');
 
+// Load Security helper for data redaction
+require_once __DIR__ . '/includes/Security.php';
+require_once __DIR__ . '/includes/ActivityLogger.php';
+
+// CORS headers (same-origin only)
+Security::sendCorsHeaders();
+
+// Authentication check
+if (!isset($_SESSION['authenticated']) || !$_SESSION['authenticated']) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    exit;
+}
+
+// CSRF validation on state-changing requests
+if (in_array($_SERVER['REQUEST_METHOD'] ?? '', ['POST', 'PUT', 'DELETE'])) {
+    if (!Security::validateApiCSRF()) {
+        http_response_code(403);
+        ActivityLogger::log('csrf_rejected', 'api-smartplus.php', [], 'denied');
+        echo json_encode(['success' => false, 'message' => 'Invalid CSRF token']);
+        exit;
+    }
+}
+
+// Rate limiting (60 requests per minute)
+$rateCheck = Security::checkApiRateLimit('api-smartplus', 60, 60);
+if (!$rateCheck['allowed']) {
+    http_response_code(429);
+    ActivityLogger::log('rate_limited', 'api-smartplus.php', [], 'denied');
+    echo json_encode(['success' => false, 'message' => 'Rate limit exceeded. Try again shortly.']);
+    exit;
+}
+
 // Load Cache system
 require_once __DIR__ . '/includes/Cache.php';
 $cache = Cache::getInstance();
-
-// Load Security helper for data redaction
-require_once __DIR__ . '/includes/Security.php';
 
 // Load Database class for portfolio storage
 require_once __DIR__ . '/database/Database.php';

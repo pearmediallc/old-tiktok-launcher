@@ -12,6 +12,7 @@ ini_set('display_errors', '0');
 
 require_once __DIR__ . '/includes/optimizer-functions.php';
 require_once __DIR__ . '/database/Database.php';
+require_once __DIR__ . '/includes/ActivityLogger.php';
 
 // Load environment
 $envPath = __DIR__ . '/.env';
@@ -34,8 +35,8 @@ function verifySlackSignature() {
     $signingSecret = getenv('SLACK_SIGNING_SECRET') ?: ($_ENV['SLACK_SIGNING_SECRET'] ?? '');
 
     if (empty($signingSecret)) {
-        logOptimizer("Slack signing secret not configured — skipping verification");
-        return true; // Allow if not configured (dev mode)
+        logOptimizer("SECURITY: Slack signing secret not configured — rejecting request");
+        return false; // NEVER allow unverified requests in production
     }
 
     $signature = $_SERVER['HTTP_X_SLACK_SIGNATURE'] ?? '';
@@ -178,9 +179,15 @@ function handleResumeCampaign($action, $responseUrl, $user) {
         $resumeTime = gmdate('g:i A') . ' UTC';
         updateSlackMessage($responseUrl, "✅ *Campaign Resumed*\n$campaignName was resumed by *$user* at $resumeTime");
         logOptimizer("Campaign $campaignId resumed via Slack by $user");
+        ActivityLogger::log('slack_resume_campaign', 'slack-actions.php', [
+            'campaign_id' => $campaignId, 'advertiser_id' => $advertiserId, 'slack_user' => $user
+        ], 'success');
     } else {
         updateSlackMessage($responseUrl, "❌ *Resume Failed*\nCould not resume $campaignName — check TikTok API logs");
         logOptimizer("Slack resume FAILED for campaign $campaignId", $result);
+        ActivityLogger::log('slack_resume_campaign', 'slack-actions.php', [
+            'campaign_id' => $campaignId, 'advertiser_id' => $advertiserId, 'slack_user' => $user, 'error' => $result['message'] ?? 'unknown'
+        ], 'error');
     }
 }
 

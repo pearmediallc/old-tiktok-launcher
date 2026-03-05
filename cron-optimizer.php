@@ -11,14 +11,21 @@
  * Note: Campaigns are NOT auto-resumed. User must click Resume in Slack.
  */
 
+// Allow CLI or HTTP with CRON_SECRET authentication
 if (php_sapi_name() !== 'cli') {
-    http_response_code(403);
-    echo "CLI only\n";
-    exit(1);
+    $cronSecret = getenv('CRON_SECRET') ?: ($_ENV['CRON_SECRET'] ?? '');
+    $providedKey = $_GET['key'] ?? $_SERVER['HTTP_X_CRON_KEY'] ?? '';
+
+    if (empty($cronSecret) || !hash_equals($cronSecret, $providedKey)) {
+        http_response_code(403);
+        echo "Unauthorized\n";
+        exit(1);
+    }
 }
 
 require_once __DIR__ . '/includes/optimizer-functions.php';
 require_once __DIR__ . '/database/Database.php';
+require_once __DIR__ . '/includes/ActivityLogger.php';
 
 // Load environment
 $envPath = __DIR__ . '/.env';
@@ -59,6 +66,28 @@ if (empty($accessToken)) {
 
 $db = Database::getInstance();
 
+// Cron locking: prevent concurrent runs
+$lockFile = __DIR__ . '/cache/optimizer_cron.lock';
+$lockDir = dirname($lockFile);
+if (!is_dir($lockDir)) mkdir($lockDir, 0755, true);
+
+if (file_exists($lockFile)) {
+    $lockAge = time() - filemtime($lockFile);
+    if ($lockAge < 240) { // Lock is less than 4 minutes old — another run is active
+        echo "Another optimizer run is still active (locked {$lockAge}s ago). Skipping.\n";
+        logOptimizer("Cron skipped: lock file exists ({$lockAge}s old)");
+        exit(0);
+    }
+    // Lock is stale (>4 min) — previous run may have crashed
+    logOptimizer("Removing stale cron lock file ({$lockAge}s old)");
+}
+file_put_contents($lockFile, date('Y-m-d H:i:s') . ' PID:' . getmypid());
+
+// Register cleanup to remove lock on exit
+register_shutdown_function(function() use ($lockFile) {
+    if (file_exists($lockFile)) @unlink($lockFile);
+});
+
 // Migration: Add review_notified column if missing
 try {
     $testMc = $db->fetchOne("SELECT * FROM optimizer_monitored_campaigns LIMIT 1");
@@ -82,6 +111,11 @@ try {
 
 echo "[" . date('Y-m-d H:i:s') . "] Running optimizer check...\n";
 
+ActivityLogger::log('cron_optimizer_start', 'cron-optimizer.php', [], 'success');
 $stats = runOptimizerCheck($db, $accessToken);
+ActivityLogger::log('cron_optimizer_complete', 'cron-optimizer.php', $stats, 'success');
 
 echo "Results: Checked {$stats['checked']}, Paused {$stats['paused']}, Resumed {$stats['resumed']}\n";
+
+// Cleanup old activity logs (keep 30 days)
+ActivityLogger::cleanup(30);

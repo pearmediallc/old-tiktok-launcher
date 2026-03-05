@@ -1,5 +1,5 @@
 -- TikTok Optimizer - Database Schema
--- 3 tables: rules config, monitored campaigns, action logs
+-- 4 tables: rules config, monitored campaigns, action logs, activity logs
 
 -- ============================================
 -- Table 1: Optimizer Rules (configurable thresholds)
@@ -60,7 +60,8 @@ CREATE TABLE IF NOT EXISTS optimizer_monitored_campaigns (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_campaign (campaign_id, advertiser_id),
     INDEX idx_monitoring (monitoring_enabled),
-    INDEX idx_paused (paused_by_optimizer, resume_at)
+    INDEX idx_paused (paused_by_optimizer, resume_at),
+    INDEX idx_advertiser (advertiser_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
@@ -76,13 +77,17 @@ CREATE TABLE IF NOT EXISTS optimizer_logs (
     metrics_snapshot JSON,
     api_response JSON,
     success TINYINT(1) NOT NULL DEFAULT 1,
+    dismissed_at TIMESTAMP NULL DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_campaign (campaign_id),
     INDEX idx_created (created_at),
-    INDEX idx_action (action)
+    INDEX idx_action (action),
+    INDEX idx_advertiser (advertiser_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- RedTrack campaign name mapping for LP CTR display
+-- ============================================
+-- Table 4: RedTrack Campaign Mapping
+-- ============================================
 CREATE TABLE IF NOT EXISTS campaign_redtrack_map (
     id INT AUTO_INCREMENT PRIMARY KEY,
     campaign_id VARCHAR(64) NOT NULL,
@@ -91,4 +96,36 @@ CREATE TABLE IF NOT EXISTS campaign_redtrack_map (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_campaign_rt (campaign_id, advertiser_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- Table 5: Optimizer Settings (account-level)
+-- ============================================
+CREATE TABLE IF NOT EXISTS optimizer_settings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    advertiser_id VARCHAR(64) NOT NULL,
+    setting_key VARCHAR(100) NOT NULL,
+    setting_value TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_adv_key (advertiser_id, setting_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- Table 6: User Activity Logs
+-- ============================================
+CREATE TABLE IF NOT EXISTS user_activity_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(100),
+    ip_address VARCHAR(45),
+    http_method VARCHAR(10),
+    action VARCHAR(100) NOT NULL,
+    endpoint VARCHAR(255),
+    advertiser_id VARCHAR(64),
+    status VARCHAR(20) DEFAULT 'success',
+    details JSON,
+    user_agent VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_ual_created (created_at),
+    INDEX idx_ual_user (username),
+    INDEX idx_ual_action (action)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -2,6 +2,7 @@
 // App Shell - Unified TikTok Campaign Launcher Interface
 require_once __DIR__ . '/includes/Security.php';
 Security::init();
+Security::enforceHttps();
 session_start();
 
 // Check authentication
@@ -58,9 +59,9 @@ if ($isConnected) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TikTok Campaign Launcher</title>
-    <link rel="stylesheet" href="assets/style.css?v=<?php echo time(); ?>">
-    <link rel="stylesheet" href="assets/smart-campaign.css?v=<?php echo time(); ?>">
-    <link rel="stylesheet" href="assets/shell.css?v=<?php echo time(); ?>">
+    <link rel="stylesheet" href="assets/style.css?v=<?php echo @filemtime(__DIR__ . '/assets/style.css'); ?>">
+    <link rel="stylesheet" href="assets/smart-campaign.css?v=<?php echo @filemtime(__DIR__ . '/assets/smart-campaign.css'); ?>">
+    <link rel="stylesheet" href="assets/shell.css?v=<?php echo @filemtime(__DIR__ . '/assets/shell.css'); ?>">
     <style>
         /* ============================================
            INLINE STYLES (from smart-campaign.php)
@@ -870,7 +871,7 @@ if ($isConnected) {
             .metrics-table { font-size: 11px; }
             .metrics-table th, .metrics-table td { padding: 8px 5px; }
             .metrics-table .col-name { min-width: 120px; }
-            .metrics-table .col-cpc, .metrics-table .col-cpr, .metrics-table .col-ctr { display: none; }
+            .metrics-table .col-cpc, .metrics-table .col-cpr, .metrics-table .col-ctr, .metrics-table .col-lpclicks, .metrics-table .col-lpviews { display: none; }
             .ad-account-selector-container { flex-direction: column; align-items: stretch; padding: 10px; }
             .date-range-picker { flex-direction: column; gap: 10px; }
             .date-input-group { width: 100%; }
@@ -896,7 +897,7 @@ if ($isConnected) {
         @media (max-width: 380px) {
             .metrics-table { font-size: 10px; }
             .metrics-table th, .metrics-table td { padding: 6px 3px; }
-            .metrics-table .col-impressions, .metrics-table .col-clicks { display: none; }
+            .metrics-table .col-impressions, .metrics-table .col-clicks, .metrics-table .col-lpctr { display: none; }
             /* Campaign filters extra-small */
             .campaign-filters { gap: 4px; }
             .campaign-filter-btn { padding: 6px 10px; font-size: 11px; gap: 4px; }
@@ -1035,22 +1036,45 @@ if ($isConnected) {
         </main>
     </div>
 
-    <!-- Pass advertiser ID to JavaScript -->
+    <!-- Pass advertiser ID and CSRF token to JavaScript -->
     <script>
         window.TIKTOK_ADVERTISER_ID = '<?php echo htmlspecialchars($currentAdvertiserId); ?>';
         window.APP_SHELL_MODE = true;
+        window.CSRF_TOKEN = '<?php echo htmlspecialchars(Security::generateCSRFToken()); ?>';
+
+        // Helper: fetch with CSRF token and response validation
+        window.apiFetch = async function(url, options = {}) {
+            const defaults = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': window.CSRF_TOKEN,
+                },
+            };
+            if (options.headers) {
+                options.headers = { ...defaults.headers, ...options.headers };
+            } else {
+                options.headers = defaults.headers;
+            }
+            const merged = { ...defaults, ...options };
+            const response = await fetch(url, merged);
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: `HTTP ${response.status}` }));
+                throw new Error(errorBody.message || `HTTP ${response.status}`);
+            }
+            return response.json();
+        };
     </script>
 
     <!-- Shell JS (always loaded) -->
-    <script src="assets/shell.js?v=<?php echo time(); ?>"></script>
+    <script src="assets/shell.js?v=<?php echo @filemtime(__DIR__ . '/assets/shell.js'); ?>"></script>
 
     <!-- View-specific JS (only loaded when connected to avoid API errors) -->
     <?php if ($isConnected && ($view === 'campaigns' || $view === 'create-smart')): ?>
-        <script src="assets/smart-campaign.js?v=<?php echo time(); ?>"></script>
+        <script src="assets/smart-campaign.js?v=<?php echo @filemtime(__DIR__ . '/assets/smart-campaign.js'); ?>"></script>
     <?php elseif ($isConnected && $view === 'create-manual'): ?>
-        <script src="assets/app.js?v=<?php echo time(); ?>"></script>
+        <script src="assets/app.js?v=<?php echo @filemtime(__DIR__ . '/assets/app.js'); ?>"></script>
     <?php elseif ($isConnected && $view === 'optimizer'): ?>
-        <script src="assets/optimizer.js?v=<?php echo time(); ?>"></script>
+        <script src="assets/optimizer.js?v=<?php echo @filemtime(__DIR__ . '/assets/optimizer.js'); ?>"></script>
     <?php endif; ?>
 </body>
 </html>

@@ -138,6 +138,8 @@
                             <th class="col-impressions">Impressions</th>
                             <th class="col-clicks">Clicks</th>
                             <th class="col-ctr">CTR</th>
+                            <th class="col-lpclicks">LP Clicks</th>
+                            <th class="col-lpviews">LP Views</th>
                             <th class="col-lpctr">LP CTR</th>
                             <th class="col-conversions">Conversions</th>
                             <th class="col-cpr">Cost/Result</th>

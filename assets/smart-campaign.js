@@ -68,7 +68,7 @@ let state = {
 
     // RedTrack LP CTR mappings
     redtrackMappings: {},        // { campaignId: 'redtrack_campaign_name' }
-    redtrackLpCtrs: {}           // { campaignId: lp_ctr_value }
+    redtrackLpCtrs: {}           // { campaignId: { lp_ctr, lp_clicks, lp_views } }
 };
 
 // ============================================
@@ -382,7 +382,7 @@ async function apiRequest(action, data = {}, useMainApi = false) {
     try {
         const response = await fetch(apiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
             body: JSON.stringify(requestBody)
         });
 
@@ -3377,6 +3377,7 @@ async function createCustomIdentity() {
 
             const uploadResponse = await fetch('api.php?action=upload_image', {
                 method: 'POST',
+                headers: { 'X-CSRF-Token': window.CSRF_TOKEN || '' },
                 body: formData
             });
 
@@ -6272,6 +6273,7 @@ async function createBulkIdentity(advertiserId) {
 
             const uploadResponse = await fetch('api.php?action=upload_image', {
                 method: 'POST',
+                headers: { 'X-CSRF-Token': window.CSRF_TOKEN || '' },
                 body: formData
             });
 
@@ -8107,7 +8109,7 @@ async function switchAdAccount(advertiserId) {
         // Call API to set the new advertiser
         const response = await fetch('api.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
             body: JSON.stringify({
                 action: 'set_advertiser',
                 advertiser_id: advertiserId
@@ -9018,6 +9020,8 @@ function renderCampaignTotals() {
                 <td style="text-align: right;">${formatNumberWithCommas(totals.clicks)}</td>
                 <td style="text-align: right;">${averages.ctr.toFixed(2)}%</td>
                 <td></td>
+                <td></td>
+                <td></td>
                 <td style="text-align: right;">${formatNumberWithCommas(totals.conversions)}</td>
                 <td style="text-align: right;">$${averages.costPerResult.toFixed(2)}</td>
                 <td style="text-align: right;">${formatNumberWithCommas(totals.results)}</td>
@@ -9118,6 +9122,8 @@ function renderCampaignTableRow(campaign) {
             <td class="col-impressions" style="text-align: right;">${formatNumber(campaign.impressions)}</td>
             <td class="col-clicks" style="text-align: right;">${formatNumber(campaign.clicks)}</td>
             <td class="col-ctr" style="text-align: right;">${formatPercent(campaign.ctr)}</td>
+            <td class="col-lpclicks" style="text-align: right;" id="lpclicks-cell-${campaign.campaign_id}">${renderLpClicksCell(campaign.campaign_id)}</td>
+            <td class="col-lpviews" style="text-align: right;" id="lpviews-cell-${campaign.campaign_id}">${renderLpViewsCell(campaign.campaign_id)}</td>
             <td class="col-lpctr" style="text-align: right;" id="lpctr-cell-${campaign.campaign_id}">${renderLpCtrCell(campaign.campaign_id)}</td>
             <td class="col-conversions" style="text-align: right;">${formatNumber(campaign.conversions)}</td>
             <td class="col-cpr" style="text-align: right;">${formatCurrency(campaign.cost_per_result)}</td>
@@ -9174,9 +9180,21 @@ function formatPercent(value) {
 // REDTRACK LP CTR FUNCTIONS
 // ============================================
 
+function renderLpClicksCell(campaignId) {
+    const data = state.redtrackLpCtrs[campaignId];
+    if (!data || data.lp_clicks === undefined) return '-';
+    return `<span style="font-weight:500;">${formatNumber(data.lp_clicks)}</span>`;
+}
+
+function renderLpViewsCell(campaignId) {
+    const data = state.redtrackLpCtrs[campaignId];
+    if (!data || data.lp_views === undefined) return '-';
+    return `<span style="font-weight:500;">${formatNumber(data.lp_views)}</span>`;
+}
+
 function renderLpCtrCell(campaignId) {
     const rtName = state.redtrackMappings[campaignId];
-    const lpCtr = state.redtrackLpCtrs[campaignId];
+    const data = state.redtrackLpCtrs[campaignId];
 
     if (!rtName) {
         return `<button onclick="showRedTrackInput('${campaignId}'); event.stopPropagation();"
@@ -9184,14 +9202,13 @@ function renderLpCtrCell(campaignId) {
                     title="Link RedTrack campaign to show LP CTR">Link RT</button>`;
     }
 
-    if (lpCtr === undefined || lpCtr === null) {
+    if (!data || data.lp_ctr === undefined || data.lp_ctr === null) {
         return `<span style="color:#94a3b8;font-size:11px;" title="${escapeHtml(rtName)}">...</span>`;
     }
 
-    const displayVal = parseFloat(lpCtr) || 0;
-    const formatted = displayVal > 1 ? displayVal.toFixed(2) + '%' : (displayVal * 100).toFixed(2) + '%';
+    const displayVal = parseFloat(data.lp_ctr) || 0;
     return `<span style="cursor:pointer;font-weight:500;" title="RT: ${escapeHtml(rtName)} (click to edit)"
-                onclick="showRedTrackInput('${campaignId}'); event.stopPropagation();">${formatted}</span>`;
+                onclick="showRedTrackInput('${campaignId}'); event.stopPropagation();">${displayVal.toFixed(2)}%</span>`;
 }
 
 function showRedTrackInput(campaignId) {
@@ -9239,20 +9256,30 @@ async function saveRedTrackMapping(campaignId, rtName) {
 }
 
 async function fetchLpCtrForCampaign(campaignId, rtName) {
-    const cell = document.getElementById('lpctr-cell-' + campaignId);
-    if (cell) cell.innerHTML = '<span style="color:#94a3b8;font-size:11px;">Loading...</span>';
+    const ctrCell = document.getElementById('lpctr-cell-' + campaignId);
+    const clicksCell = document.getElementById('lpclicks-cell-' + campaignId);
+    const viewsCell = document.getElementById('lpviews-cell-' + campaignId);
+    if (ctrCell) ctrCell.innerHTML = '<span style="color:#94a3b8;font-size:11px;">Loading...</span>';
+    if (clicksCell) clicksCell.innerHTML = '<span style="color:#94a3b8;font-size:11px;">...</span>';
+    if (viewsCell) viewsCell.innerHTML = '<span style="color:#94a3b8;font-size:11px;">...</span>';
 
     const result = await apiRequest('fetch_redtrack_lpctr', {
         redtrack_campaign_name: rtName,
     });
 
     if (result.success) {
-        state.redtrackLpCtrs[campaignId] = result.lp_ctr;
+        state.redtrackLpCtrs[campaignId] = {
+            lp_ctr: parseFloat(result.lp_ctr) || 0,
+            lp_clicks: parseInt(result.lp_clicks) || 0,
+            lp_views: parseInt(result.lp_views) || 0,
+        };
     } else {
-        state.redtrackLpCtrs[campaignId] = 0;
+        state.redtrackLpCtrs[campaignId] = { lp_ctr: 0, lp_clicks: 0, lp_views: 0 };
     }
 
-    if (cell) cell.innerHTML = renderLpCtrCell(campaignId);
+    if (ctrCell) ctrCell.innerHTML = renderLpCtrCell(campaignId);
+    if (clicksCell) clicksCell.innerHTML = renderLpClicksCell(campaignId);
+    if (viewsCell) viewsCell.innerHTML = renderLpViewsCell(campaignId);
 }
 
 async function loadRedTrackMappings() {
@@ -9271,7 +9298,11 @@ async function loadRedTrackMappings() {
             if (accountRt && rtName === accountRt) {
                 // Use the account-level metrics already fetched
                 if (state.accountRtMetrics) {
-                    state.redtrackLpCtrs[campaignId] = state.accountRtMetrics.lp_ctr || 0;
+                    state.redtrackLpCtrs[campaignId] = {
+                        lp_ctr: parseFloat(state.accountRtMetrics.lp_ctr) || 0,
+                        lp_clicks: parseInt(state.accountRtMetrics.lp_clicks) || 0,
+                        lp_views: parseInt(state.accountRtMetrics.lp_views) || 0,
+                    };
                 }
                 continue;
             }
@@ -9340,7 +9371,7 @@ async function fetchAccountRtMetrics(rtName) {
         const result = await apiRequest('fetch_redtrack_lpctr', { redtrack_campaign_name: rtName });
         if (result.success && metricsRow) {
             const lpCtr = parseFloat(result.lp_ctr) || 0;
-            const lpCtrFmt = lpCtr > 1 ? lpCtr.toFixed(2) + '%' : (lpCtr * 100).toFixed(2) + '%';
+            const lpCtrFmt = lpCtr.toFixed(2) + '%';
             const rev = parseFloat(result.revenue) || 0;
             const cost = parseFloat(result.cost) || 0;
             const profit = parseFloat(result.profit) || 0;
@@ -9363,7 +9394,7 @@ async function fetchAccountRtMetrics(rtName) {
             `;
 
             // Update all campaign LP CTR cells with account-level data
-            updateAllLpCtrFromAccount(lpCtr, rtName);
+            updateAllLpCtrFromAccount({ lp_ctr: lpCtr, lp_clicks: lpClicks, lp_views: lpViews }, rtName);
         } else if (metricsRow) {
             metricsRow.innerHTML = '<span style="color:#94a3b8;font-size:12px;">No RedTrack data found for this campaign</span>';
         }
@@ -9372,16 +9403,20 @@ async function fetchAccountRtMetrics(rtName) {
     }
 }
 
-function updateAllLpCtrFromAccount(lpCtr, rtName) {
-    // When account RT is set, apply the same LP CTR to all campaigns that don't have their own mapping
+function updateAllLpCtrFromAccount(data, rtName) {
+    // When account RT is set, apply the same LP CTR/Clicks/Views to all campaigns that don't have their own mapping
     document.querySelectorAll('[id^="lpctr-cell-"]').forEach(cell => {
         const campaignId = cell.id.replace('lpctr-cell-', '');
         // Only update if campaign doesn't have its own individual RT mapping
         if (!state.redtrackMappings[campaignId]) {
-            state.redtrackLpCtrs[campaignId] = lpCtr;
-            const displayVal = parseFloat(lpCtr) || 0;
-            const formatted = displayVal > 1 ? displayVal.toFixed(2) + '%' : (displayVal * 100).toFixed(2) + '%';
-            cell.innerHTML = `<span style="font-weight:500;color:#b45309;" title="Account RT: ${escapeHtml(rtName)}">${formatted}</span>`;
+            state.redtrackLpCtrs[campaignId] = data;
+            const displayVal = parseFloat(data.lp_ctr) || 0;
+            cell.innerHTML = `<span style="font-weight:500;color:#b45309;" title="Account RT: ${escapeHtml(rtName)}">${displayVal.toFixed(2)}%</span>`;
+            // Update LP Clicks and LP Views cells too
+            const clicksCell = document.getElementById('lpclicks-cell-' + campaignId);
+            const viewsCell = document.getElementById('lpviews-cell-' + campaignId);
+            if (clicksCell) clicksCell.innerHTML = `<span style="font-weight:500;color:#b45309;">${formatNumber(data.lp_clicks)}</span>`;
+            if (viewsCell) viewsCell.innerHTML = `<span style="font-weight:500;color:#b45309;">${formatNumber(data.lp_views)}</span>`;
         }
     });
 }
@@ -9399,7 +9434,7 @@ async function saveCampaignsAccountRt() {
     try {
         const response = await fetch('api-optimizer.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
             body: JSON.stringify({ action: 'set_account_rt_campaign', advertiser_id: advId, redtrack_campaign_name: rtName })
         });
         const result = await response.json();
@@ -9422,7 +9457,7 @@ async function clearCampaignsAccountRt() {
     try {
         const response = await fetch('api-optimizer.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
             body: JSON.stringify({ action: 'set_account_rt_campaign', advertiser_id: advId, redtrack_campaign_name: '' })
         });
         const result = await response.json();
@@ -9434,12 +9469,16 @@ async function clearCampaignsAccountRt() {
             const metricsRow = document.getElementById('account-rt-metrics');
             if (metricsRow) metricsRow.style.display = 'none';
             showToast('Account RedTrack campaign cleared', 'success');
-            // Re-render LP CTR cells (will show "Link RT" buttons again)
+            // Re-render LP CTR, LP Clicks, LP Views cells (will show "Link RT" buttons again)
             document.querySelectorAll('[id^="lpctr-cell-"]').forEach(cell => {
                 const campaignId = cell.id.replace('lpctr-cell-', '');
                 if (!state.redtrackMappings[campaignId]) {
                     delete state.redtrackLpCtrs[campaignId];
                     cell.innerHTML = renderLpCtrCell(campaignId);
+                    const clicksCell = document.getElementById('lpclicks-cell-' + campaignId);
+                    const viewsCell = document.getElementById('lpviews-cell-' + campaignId);
+                    if (clicksCell) clicksCell.innerHTML = renderLpClicksCell(campaignId);
+                    if (viewsCell) viewsCell.innerHTML = renderLpViewsCell(campaignId);
                 }
             });
         }
@@ -9624,7 +9663,7 @@ async function sendToggleMonitoring(campaignId, campaignName, ruleGroup, btn, re
 
         const response = await fetch('api-optimizer.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
             body: JSON.stringify(body)
         });
         const result = await response.json();
@@ -9758,6 +9797,9 @@ function createAdgroupTableRow(adgroup, parentCampaignId) {
         <td class="col-impressions" style="text-align: right;">${formatNumber(adgroup.impressions)}</td>
         <td class="col-clicks" style="text-align: right;">${formatNumber(adgroup.clicks)}</td>
         <td class="col-ctr" style="text-align: right;">${formatPercent(adgroup.ctr)}</td>
+        <td class="col-lpclicks" style="text-align: right;">-</td>
+        <td class="col-lpviews" style="text-align: right;">-</td>
+        <td class="col-lpctr" style="text-align: right;">-</td>
         <td class="col-conversions" style="text-align: right;">${formatNumber(adgroup.conversions)}</td>
         <td class="col-cpr" style="text-align: right;">${formatCurrency(adgroup.cost_per_result)}</td>
         <td class="col-results" style="text-align: right;">${formatNumber(adgroup.results)}</td>
@@ -9908,6 +9950,9 @@ function createAdTableRow(ad, parentAdgroupId, parentCampaignId) {
         <td class="col-impressions" style="text-align: right;">${formatNumber(ad.impressions)}</td>
         <td class="col-clicks" style="text-align: right;">${formatNumber(ad.clicks)}</td>
         <td class="col-ctr" style="text-align: right;">${formatPercent(ad.ctr)}</td>
+        <td class="col-lpclicks" style="text-align: right;">-</td>
+        <td class="col-lpviews" style="text-align: right;">-</td>
+        <td class="col-lpctr" style="text-align: right;">-</td>
         <td class="col-conversions" style="text-align: right;">${formatNumber(ad.conversions)}</td>
         <td class="col-cpr" style="text-align: right;">${formatCurrency(ad.cost_per_result)}</td>
         <td class="col-results" style="text-align: right;">${formatNumber(ad.results)}</td>
@@ -11899,6 +11944,7 @@ function openDupBulkVideoUpload(advertiserId) {
 
                 const response = await fetch('api.php?action=upload_video_to_advertiser', {
                     method: 'POST',
+                    headers: { 'X-CSRF-Token': window.CSRF_TOKEN || '' },
                     body: formData
                 });
                 const result = await response.json();
@@ -12208,6 +12254,7 @@ async function createDupBulkIdentity(advertiserId) {
 
             const uploadResponse = await fetch('api.php?action=upload_image', {
                 method: 'POST',
+                headers: { 'X-CSRF-Token': window.CSRF_TOKEN || '' },
                 body: formData
             });
 
@@ -12350,7 +12397,7 @@ async function createDupBulkPortfolio(advertiserId) {
     try {
         const response = await fetch(`api.php?action=create_portfolio&advertiser_id=${advertiserId}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
             body: JSON.stringify({
                 portfolio_name: portfolioName,
                 call_to_action: cta,
@@ -13740,6 +13787,7 @@ async function handleMultiAccountUpload(event, accounts) {
             try {
                 const response = await fetch('api.php?action=upload_video_to_advertiser', {
                     method: 'POST',
+                    headers: { 'X-CSRF-Token': window.CSRF_TOKEN || '' },
                     body: formData
                 });
                 const result = await response.json();
@@ -13880,6 +13928,7 @@ async function handleVideoModalUpload(event) {
 
         const response = await fetch('api.php?action=upload_video', {
             method: 'POST',
+            headers: { 'X-CSRF-Token': window.CSRF_TOKEN || '' },
             body: formData
         });
 

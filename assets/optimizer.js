@@ -22,6 +22,36 @@ async function loadOptimizerData() {
 }
 
 // ============================================
+// SAFE FETCH HELPERS
+// ============================================
+
+async function optGet(url) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+}
+
+async function optPost(action, data = {}) {
+    if (typeof apiFetch === 'function') {
+        return apiFetch('api-optimizer.php', {
+            method: 'POST',
+            body: JSON.stringify({ action, ...data })
+        });
+    }
+    // Fallback if apiFetch not loaded
+    const response = await fetch('api-optimizer.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': window.CSRF_TOKEN || '',
+        },
+        body: JSON.stringify({ action, ...data })
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+}
+
+// ============================================
 // TABS
 // ============================================
 
@@ -39,10 +69,9 @@ function switchOptTab(tab) {
 
 async function loadDashboardStats() {
     try {
-        const response = await fetch('api-optimizer.php?action=get_dashboard_stats');
-        const result = await response.json();
+        const result = await optGet('api-optimizer.php?action=get_dashboard_stats');
 
-        if (result.success) {
+        if (result.success && result.data) {
             const d = result.data;
             document.getElementById('opt-stat-monitored').textContent = d.monitored;
             document.getElementById('opt-stat-paused').textContent = d.paused;
@@ -62,7 +91,8 @@ async function loadDashboardStats() {
 const OPERATOR_LABELS = { gt: '>', lt: '<', gte: '>=', lte: '<=', eq: '=' };
 const METRIC_LABELS = {
     spend: 'Spend ($)', cpc: 'CPC ($)', ctr: 'CTR (%)', conversions: 'Conversions',
-    lp_ctr: 'LP CTR (%)', impressions: 'Impressions', clicks: 'Clicks',
+    lp_ctr: 'LP CTR (%)', lp_clicks: 'LP Clicks', lp_views: 'LP Views',
+    impressions: 'Impressions', clicks: 'Clicks',
 };
 const RULE_GROUP_LABELS = {
     home_insurance: 'Home Insurance',
@@ -71,10 +101,9 @@ const RULE_GROUP_LABELS = {
 
 async function loadRules() {
     try {
-        const response = await fetch('api-optimizer.php?action=get_rules');
-        const result = await response.json();
+        const result = await optGet('api-optimizer.php?action=get_rules');
 
-        if (result.success && result.data.length > 0) {
+        if (result.success && result.data && result.data.length > 0) {
             renderRules(result.data);
         } else {
             document.getElementById('opt-rules-body').innerHTML =
@@ -102,22 +131,22 @@ function renderRules(rules) {
         const groupColor = group === 'medicare' ? '#7c3aed' : '#0369a1';
 
         // Group header row
-        html += `<tr><td colspan="6" style="background:#f8fafc;padding:10px 16px;font-weight:700;font-size:13px;color:${groupColor};border-bottom:2px solid ${groupColor}20;letter-spacing:0.5px;">${groupLabel} Rules</td></tr>`;
+        html += `<tr><td colspan="6" style="background:#f8fafc;padding:10px 16px;font-weight:700;font-size:13px;color:${groupColor};border-bottom:2px solid ${groupColor}20;letter-spacing:0.5px;">${escapeHtmlOpt(groupLabel)} Rules</td></tr>`;
 
         html += groupRules.map(rule => {
             const opLabel = OPERATOR_LABELS[rule.operator] || rule.operator;
             const metricLabel = METRIC_LABELS[rule.metric_field] || rule.metric_field;
             const source = rule.metric_source;
 
-            let conditionText = `${metricLabel} ${opLabel}`;
-            let thresholdHtml = `<input type="number" class="opt-threshold-input" value="${rule.threshold}" step="0.01" onchange="updateRuleThreshold(${rule.id}, this.value)" title="Edit threshold">`;
+            let conditionText = `${escapeHtmlOpt(metricLabel)} ${opLabel}`;
+            let thresholdHtml = `<input type="number" class="opt-threshold-input" value="${parseFloat(rule.threshold)}" step="0.01" onchange="updateRuleThreshold(${parseInt(rule.id)}, this.value)" title="Edit threshold">`;
 
             // If has secondary condition
             if (rule.secondary_metric) {
                 const secMetric = METRIC_LABELS[rule.secondary_metric] || rule.secondary_metric;
                 const secOp = OPERATOR_LABELS[rule.secondary_operator] || rule.secondary_operator;
-                conditionText += ` <span style="color:#94a3b8">AND</span> ${secMetric} ${secOp}`;
-                thresholdHtml += `<br><input type="number" class="opt-threshold-input" value="${rule.secondary_threshold}" step="0.01" onchange="updateRuleSecondaryThreshold(${rule.id}, this.value)" title="Edit secondary threshold" style="margin-top:4px;">`;
+                conditionText += ` <span style="color:#94a3b8">AND</span> ${escapeHtmlOpt(secMetric)} ${secOp}`;
+                thresholdHtml += `<br><input type="number" class="opt-threshold-input" value="${parseFloat(rule.secondary_threshold)}" step="0.01" onchange="updateRuleSecondaryThreshold(${parseInt(rule.id)}, this.value)" title="Edit secondary threshold" style="margin-top:4px;">`;
             }
 
             const isOn = parseInt(rule.enabled);
@@ -125,11 +154,11 @@ function renderRules(rules) {
             return `
                 <tr>
                     <td style="font-weight:600;">${escapeHtmlOpt(rule.rule_name)}</td>
-                    <td><span class="opt-source-badge ${source}">${source === 'tiktok' ? 'TikTok' : 'RedTrack'}</span></td>
+                    <td><span class="opt-source-badge ${escapeHtmlOpt(source)}">${source === 'tiktok' ? 'TikTok' : 'RedTrack'}</span></td>
                     <td>${conditionText}</td>
                     <td>${thresholdHtml}</td>
                     <td>
-                        <div class="opt-toggle ${isOn ? 'on' : ''}" onclick="toggleRule(${rule.id})" title="${isOn ? 'Click to disable' : 'Click to enable'}">
+                        <div class="opt-toggle ${isOn ? 'on' : ''}" onclick="toggleRule(${parseInt(rule.id)})" title="${isOn ? 'Click to disable' : 'Click to enable'}">
                             <div class="opt-toggle-dot"></div>
                         </div>
                     </td>
@@ -143,12 +172,7 @@ function renderRules(rules) {
 
 async function updateRuleThreshold(ruleId, value) {
     try {
-        const response = await fetch('api-optimizer.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'update_rule', rule_id: ruleId, threshold: parseFloat(value) })
-        });
-        const result = await response.json();
+        const result = await optPost('update_rule', { rule_id: ruleId, threshold: parseFloat(value) });
         if (result.success) {
             showOptToast('Threshold updated', 'success');
         } else {
@@ -161,12 +185,7 @@ async function updateRuleThreshold(ruleId, value) {
 
 async function updateRuleSecondaryThreshold(ruleId, value) {
     try {
-        const response = await fetch('api-optimizer.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'update_rule', rule_id: ruleId, secondary_threshold: parseFloat(value) })
-        });
-        const result = await response.json();
+        const result = await optPost('update_rule', { rule_id: ruleId, secondary_threshold: parseFloat(value) });
         if (result.success) {
             showOptToast('Threshold updated', 'success');
         } else {
@@ -179,12 +198,7 @@ async function updateRuleSecondaryThreshold(ruleId, value) {
 
 async function toggleRule(ruleId) {
     try {
-        const response = await fetch('api-optimizer.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'toggle_rule', rule_id: ruleId })
-        });
-        const result = await response.json();
+        const result = await optPost('toggle_rule', { rule_id: ruleId });
         if (result.success) {
             showOptToast(`Rule ${result.data.enabled ? 'enabled' : 'disabled'}`, 'success');
             loadRules();
@@ -201,10 +215,9 @@ async function toggleRule(ruleId) {
 
 async function loadMonitoredCampaigns() {
     try {
-        const response = await fetch('api-optimizer.php?action=get_monitored_campaigns');
-        const result = await response.json();
+        const result = await optGet('api-optimizer.php?action=get_monitored_campaigns');
 
-        if (result.success && result.data.length > 0) {
+        if (result.success && result.data && result.data.length > 0) {
             renderMonitoredCampaigns(result.data);
         } else {
             document.getElementById('opt-monitored-body').innerHTML =
@@ -225,17 +238,19 @@ function renderMonitoredCampaigns(campaigns) {
         const lastChecked = mc.last_checked_at ? formatOptDate(mc.last_checked_at) : 'Never';
         const resumeAt = mc.resume_at ? formatOptDate(mc.resume_at) : '';
         const violation = mc.last_violation_rule || '-';
+        const cid = escapeHtmlOpt(mc.campaign_id);
+        const aid = escapeHtmlOpt(mc.advertiser_id);
 
         let actions = '';
         if (isPaused) {
             actions = `
-                <button class="opt-btn opt-btn-success" onclick="manualResume('${mc.campaign_id}', '${mc.advertiser_id}')">Resume Now</button>
+                <button class="opt-btn opt-btn-success" onclick="manualResume('${cid}', '${aid}')">Resume Now</button>
                 <span style="font-size:11px;color:#64748b;display:block;margin-top:4px;">Review at: ${resumeAt}</span>
             `;
         } else {
             actions = `
-                <button class="opt-btn opt-btn-danger" onclick="manualPause('${mc.campaign_id}', '${mc.advertiser_id}')">Pause</button>
-                <button class="opt-btn" onclick="removeFromMonitoring('${mc.campaign_id}', '${mc.advertiser_id}')" style="margin-left:4px;">Remove</button>
+                <button class="opt-btn opt-btn-danger" onclick="manualPause('${cid}', '${aid}')">Pause</button>
+                <button class="opt-btn" onclick="removeFromMonitoring('${cid}', '${aid}')" style="margin-left:4px;">Remove</button>
             `;
         }
 
@@ -248,13 +263,13 @@ function renderMonitoredCampaigns(campaigns) {
             <tr>
                 <td>
                     <div style="font-weight:600;">${escapeHtmlOpt(mc.campaign_name || mc.campaign_id)}</div>
-                    <div style="font-size:11px;color:#94a3b8;">${mc.campaign_id}</div>
+                    <div style="font-size:11px;color:#94a3b8;">${cid}</div>
                 </td>
-                <td><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:${groupColor}15;color:${groupColor};">${groupLabel}</span></td>
+                <td><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:${groupColor}15;color:${groupColor};">${escapeHtmlOpt(groupLabel)}</span></td>
                 <td style="font-size:12px;color:#475569;">${escapeHtmlOpt(rtCampaign)}</td>
                 <td><span class="opt-status-dot ${statusDot}"></span>${statusText}</td>
                 <td style="font-size:12px;color:#64748b;">${lastChecked}</td>
-                <td>${violation !== '-' ? `<span class="opt-severity-badge warning">${violation}</span>` : '-'}</td>
+                <td>${violation !== '-' ? `<span class="opt-severity-badge warning">${escapeHtmlOpt(violation)}</span>` : '-'}</td>
                 <td>${actions}</td>
             </tr>
         `;
@@ -265,12 +280,7 @@ async function manualPause(campaignId, advertiserId) {
     if (!confirm('Pause this campaign?')) return;
 
     try {
-        const response = await fetch('api-optimizer.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'manual_pause', campaign_id: campaignId, advertiser_id: advertiserId })
-        });
-        const result = await response.json();
+        const result = await optPost('manual_pause', { campaign_id: campaignId, advertiser_id: advertiserId });
         showOptToast(result.success ? 'Campaign paused' : (result.message || 'Failed'), result.success ? 'success' : 'error');
         loadOptimizerData();
     } catch (e) {
@@ -280,12 +290,7 @@ async function manualPause(campaignId, advertiserId) {
 
 async function manualResume(campaignId, advertiserId) {
     try {
-        const response = await fetch('api-optimizer.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'manual_resume', campaign_id: campaignId, advertiser_id: advertiserId })
-        });
-        const result = await response.json();
+        const result = await optPost('manual_resume', { campaign_id: campaignId, advertiser_id: advertiserId });
         showOptToast(result.success ? 'Campaign resumed' : (result.message || 'Failed'), result.success ? 'success' : 'error');
         loadOptimizerData();
     } catch (e) {
@@ -297,12 +302,7 @@ async function removeFromMonitoring(campaignId, advertiserId) {
     if (!confirm('Remove this campaign from monitoring?')) return;
 
     try {
-        const response = await fetch('api-optimizer.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'toggle_monitoring', campaign_id: campaignId, advertiser_id: advertiserId })
-        });
-        const result = await response.json();
+        const result = await optPost('toggle_monitoring', { campaign_id: campaignId, advertiser_id: advertiserId });
         showOptToast('Campaign removed from monitoring', 'success');
         loadOptimizerData();
     } catch (e) {
@@ -322,10 +322,9 @@ async function loadLogs(actionFilter = '') {
         const params = new URLSearchParams({ action: 'get_logs', limit: '100' });
         if (actionFilter) params.append('action_filter', actionFilter);
 
-        const response = await fetch('api-optimizer.php?' + params);
-        const result = await response.json();
+        const result = await optGet('api-optimizer.php?' + params);
 
-        if (result.success && result.data.length > 0) {
+        if (result.success && result.data && result.data.length > 0) {
             renderLogs(result.data);
         } else {
             document.getElementById('opt-logs-body').innerHTML =
@@ -345,7 +344,7 @@ function renderLogs(logs) {
 
     tbody.innerHTML = logs.map(log => {
         const time = formatOptDate(log.created_at);
-        const actionClass = log.action;
+        const actionClass = escapeHtmlOpt(log.action);
         const actionLabel = log.action === 'rule_check' ? 'Check' : log.action.charAt(0).toUpperCase() + log.action.slice(1);
         const ruleKey = log.rule_key || '-';
         const details = log.rule_details || '-';
@@ -354,8 +353,8 @@ function renderLogs(logs) {
         return `
             <tr>
                 <td style="font-size:12px;color:#64748b;white-space:nowrap;">${time}</td>
-                <td style="font-weight:500;">${log.campaign_id}</td>
-                <td><span class="opt-action-badge ${actionClass}">${actionLabel}</span></td>
+                <td style="font-weight:500;">${escapeHtmlOpt(log.campaign_id)}</td>
+                <td><span class="opt-action-badge ${actionClass}">${escapeHtmlOpt(actionLabel)}</span></td>
                 <td><span style="font-size:12px;">${escapeHtmlOpt(ruleKey)}</span></td>
                 <td style="font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtmlOpt(details)}">${escapeHtmlOpt(details)}</td>
                 <td>${success}</td>
@@ -374,12 +373,7 @@ async function forceOptimizerCheck() {
     btn.textContent = 'Checking...';
 
     try {
-        const response = await fetch('api-optimizer.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'force_check' })
-        });
-        const result = await response.json();
+        const result = await optPost('force_check');
 
         if (result.success) {
             showOptToast(result.message, 'success');
@@ -416,7 +410,7 @@ function formatOptDate(dateStr) {
 function escapeHtmlOpt(str) {
     if (!str) return '';
     const div = document.createElement('div');
-    div.textContent = str;
+    div.textContent = String(str);
     return div.innerHTML;
 }
 
@@ -436,8 +430,7 @@ async function loadAccountRtCampaign() {
     if (!advId) return;
 
     try {
-        const response = await fetch(`api-optimizer.php?action=get_account_rt_campaign&advertiser_id=${advId}`);
-        const result = await response.json();
+        const result = await optGet(`api-optimizer.php?action=get_account_rt_campaign&advertiser_id=${encodeURIComponent(advId)}`);
 
         const input = document.getElementById('opt-account-rt-input');
         if (input && result.success && result.redtrack_campaign_name) {
@@ -459,16 +452,10 @@ async function saveAccountRtCampaign() {
     }
 
     try {
-        const response = await fetch('api-optimizer.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'set_account_rt_campaign',
-                advertiser_id: advId,
-                redtrack_campaign_name: rtName
-            })
+        const result = await optPost('set_account_rt_campaign', {
+            advertiser_id: advId,
+            redtrack_campaign_name: rtName
         });
-        const result = await response.json();
 
         if (result.success) {
             showOptToast(result.message || 'Account RT campaign saved', 'success');
@@ -490,16 +477,10 @@ async function clearAccountRtCampaign() {
     const advId = getOptAdvertiserId();
 
     try {
-        const response = await fetch('api-optimizer.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'set_account_rt_campaign',
-                advertiser_id: advId,
-                redtrack_campaign_name: ''
-            })
+        const result = await optPost('set_account_rt_campaign', {
+            advertiser_id: advId,
+            redtrack_campaign_name: ''
         });
-        const result = await response.json();
 
         if (result.success) {
             const input = document.getElementById('opt-account-rt-input');

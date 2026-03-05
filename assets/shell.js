@@ -24,7 +24,7 @@
     window.shellLogout = function() {
         fetch('api.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
             body: JSON.stringify({ action: 'logout' })
         }).then(() => {
             localStorage.removeItem('tiktok_oauth_token');
@@ -73,7 +73,7 @@
         // Call API to set the advertiser in session
         fetch('api.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
             body: JSON.stringify({
                 action: 'set_oauth_advertiser',
                 advertiser_id: advertiserId,
@@ -204,7 +204,7 @@
     function switchAndReload(advertiserId) {
         fetch('api.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
             body: JSON.stringify({
                 action: 'set_oauth_advertiser',
                 advertiser_id: advertiserId,
@@ -303,7 +303,7 @@
                 const [campaignResponse, rejectedResponse] = await Promise.all([
                     fetch('api-smartplus.php', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
                         body: JSON.stringify({
                             action: 'get_campaigns_with_metrics',
                             _advertiser_id: advertiserId,
@@ -312,7 +312,7 @@
                     }).then(r => r.json()),
                     fetch('api-smartplus.php', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
                         body: JSON.stringify({
                             action: 'get_rejected_ads',
                             _advertiser_id: advertiserId
@@ -590,7 +590,7 @@
         try {
             const response = await fetch('api-smartplus.php', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
                 body: JSON.stringify({
                     action: 'update_campaign_status',
                     campaign_id: campaignId,
@@ -720,7 +720,7 @@
         try {
             const response = await fetch('api-smartplus.php', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
                 body: JSON.stringify({ action: 'get_bc_balances' })
             });
             const result = await response.json();
@@ -772,7 +772,7 @@
         try {
             const response = await fetch('api-smartplus.php', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
                 body: JSON.stringify({
                     action: 'get_account_balance',
                     _advertiser_id: advertiserId
@@ -833,7 +833,7 @@
         try {
             const response = await fetch('api-smartplus.php', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
                 body: JSON.stringify({
                     action: 'get_account_balance',
                     _advertiser_id: advertiserId
@@ -967,7 +967,7 @@
         try {
             await fetch('api-optimizer.php', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
                 body: JSON.stringify({ action: 'dismiss_notification', log_id: logId })
             });
         } catch (err) {
@@ -1015,7 +1015,7 @@
         try {
             await fetch('api-optimizer.php', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
                 body: JSON.stringify({ action: 'dismiss_notification', dismiss_all: true })
             });
         } catch (err) {

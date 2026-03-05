@@ -1,9 +1,13 @@
 <?php
 // Include security helper
 require_once __DIR__ . '/includes/Security.php';
+require_once __DIR__ . '/includes/ActivityLogger.php';
 
 // Initialize security settings
 Security::init();
+
+// Enforce HTTPS in production
+Security::enforceHttps();
 
 // Start session with secure settings
 session_start();
@@ -56,12 +60,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['login_time'] = time();
                 $_SESSION['last_activity'] = time();
 
+                ActivityLogger::log('login_success', 'index.php', ['username' => $username], 'success');
+
                 header('Location: app-shell.php');
                 exit;
             } else {
                 // Record failed attempt
                 $attempts = Security::recordFailedAttempt($clientIP);
                 $remaining = 5 - $attempts;
+                ActivityLogger::log('login_failed', 'index.php', ['username' => $username, 'attempts' => $attempts], 'denied');
 
                 if ($remaining > 0) {
                     $error = 'Invalid credentials. ' . $remaining . ' attempts remaining.';
@@ -78,6 +85,7 @@ if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
     $lastActivity = $_SESSION['last_activity'] ?? 0;
     if (time() - $lastActivity > 3600) {
         // Session expired
+        ActivityLogger::log('session_expired', 'index.php', ['username' => $_SESSION['username'] ?? 'unknown'], 'info');
         session_destroy();
         session_start();
         $error = 'Session expired. Please login again.';

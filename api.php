@@ -37,11 +37,18 @@ header('Content-Type: application/json; charset=utf-8');
 // Increase PHP limits for video uploads
 // Note: ini_set doesn't work for upload_max_filesize and post_max_size
 // Use .htaccess or php.ini file in this directory instead
-@ini_set('memory_limit', '512M');
-@ini_set('max_execution_time', '300');
-@ini_set('max_input_time', '300');
+ini_set('memory_limit', '256M');
+ini_set('max_execution_time', '120');
+ini_set('max_input_time', '120');
 
 session_start();
+
+// Load Security helper
+require_once __DIR__ . '/includes/Security.php';
+require_once __DIR__ . '/includes/ActivityLogger.php';
+
+// CORS headers (same-origin only)
+Security::sendCorsHeaders();
 
 // Check authentication
 if (!isset($_SESSION['authenticated']) || !$_SESSION['authenticated']) {
@@ -50,8 +57,24 @@ if (!isset($_SESSION['authenticated']) || !$_SESSION['authenticated']) {
     exit;
 }
 
-// Load Security helper for data redaction
-require_once __DIR__ . '/includes/Security.php';
+// CSRF validation on state-changing requests
+if (in_array($_SERVER['REQUEST_METHOD'] ?? '', ['POST', 'PUT', 'DELETE'])) {
+    if (!Security::validateApiCSRF()) {
+        http_response_code(403);
+        ActivityLogger::log('csrf_rejected', 'api.php', [], 'denied');
+        echo json_encode(['success' => false, 'message' => 'Invalid CSRF token']);
+        exit;
+    }
+}
+
+// Rate limiting (60 requests per minute)
+$rateCheck = Security::checkApiRateLimit('api', 60, 60);
+if (!$rateCheck['allowed']) {
+    http_response_code(429);
+    ActivityLogger::log('rate_limited', 'api.php', [], 'denied');
+    echo json_encode(['success' => false, 'message' => 'Rate limit exceeded. Try again shortly.']);
+    exit;
+}
 
 // Load environment variables
 if (file_exists(__DIR__ . '/.env')) {

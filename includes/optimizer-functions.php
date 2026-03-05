@@ -15,14 +15,16 @@ require_once __DIR__ . '/../database/Database.php';
 
 function logOptimizer($message, $data = null) {
     $logDir = __DIR__ . '/../logs';
-    if (!is_dir($logDir)) mkdir($logDir, 0755, true);
+    if (!is_dir($logDir)) @mkdir($logDir, 0755, true);
     $logFile = $logDir . '/optimizer_' . date('Y-m-d') . '.log';
     $timestamp = date('Y-m-d H:i:s');
     $logMessage = "[$timestamp] $message";
     if ($data !== null) {
         $logMessage .= "\n" . json_encode($data, JSON_PRETTY_PRINT);
     }
-    file_put_contents($logFile, "$logMessage\n", FILE_APPEND);
+    @file_put_contents($logFile, "$logMessage\n", FILE_APPEND);
+    // Also log to stderr for Render.com log viewer
+    @file_put_contents('php://stderr', "[optimizer] $logMessage\n");
 }
 
 // ============================================
@@ -229,15 +231,19 @@ function fetchRedTrackCampaignMetrics($campaignId, $redtrackCampaignName = null)
                 $campaign = is_array($items[0] ?? null) ? $items[0] : $items;
                 // RedTrack may use "stat" (singular) or "stats" (plural) or metrics at root level
                 $stats = $campaign['stat'] ?? $campaign['stats'] ?? $campaign;
+                $lp_clicks = intval($stats['lp_clicks'] ?? 0);
+                $lp_views = intval($stats['lp_views'] ?? 0);
+                $lp_ctr = ($lp_views > 0) ? round(($lp_clicks / $lp_views) * 100, 2) : 0;
+
                 return [
-                    'lp_ctr' => floatval($stats['lp_ctr'] ?? 0),
+                    'lp_ctr' => $lp_ctr,
                     'ctr' => floatval($stats['ctr'] ?? 0),
                     'conversions' => intval($stats['conversions'] ?? 0),
                     'revenue' => floatval($stats['revenue'] ?? 0),
                     'cost' => floatval($stats['cost'] ?? 0),
                     'profit' => floatval($stats['profit'] ?? 0),
-                    'lp_clicks' => intval($stats['lp_clicks'] ?? 0),
-                    'lp_views' => intval($stats['lp_views'] ?? 0),
+                    'lp_clicks' => $lp_clicks,
+                    'lp_views' => $lp_views,
                 ];
             }
 
@@ -490,6 +496,83 @@ function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $viola
     }
 
     logOptimizer("Slack notification sent for campaign $campaignId");
+    return true;
+}
+
+// ============================================
+// SEND SLACK PAUSE FAILURE NOTIFICATION
+// ============================================
+
+function sendSlackPauseFailureNotification($campaignName, $campaignId, $ruleKey, $violationDetails) {
+    $slackToken = getenv('SLACK_BOT_TOKEN') ?: ($_ENV['SLACK_BOT_TOKEN'] ?? '');
+    $channelId = 'C0AC3899K6C';
+
+    if (empty($slackToken)) {
+        logOptimizer("Slack failure notification skipped: SLACK_BOT_TOKEN not configured");
+        return false;
+    }
+
+    $ruleKeyDisplay = preg_replace('/^(hi|med)_/', '', $ruleKey);
+    $ruleKeyDisplay = ucwords(str_replace('_', ' ', $ruleKeyDisplay));
+
+    $fallbackText = "FAILED TO PAUSE: $campaignName ($campaignId) — Rule: $ruleKeyDisplay — TikTok API rejected the pause request. Manual action required.";
+
+    $blocks = [
+        [
+            'type' => 'header',
+            'text' => ['type' => 'plain_text', 'text' => "⚠️ PAUSE FAILED — Manual Action Required"]
+        ],
+        [
+            'type' => 'section',
+            'fields' => [
+                ['type' => 'mrkdwn', 'text' => "*Campaign:*\n$campaignName"],
+                ['type' => 'mrkdwn', 'text' => "*Campaign ID:*\n$campaignId"],
+            ]
+        ],
+        [
+            'type' => 'section',
+            'text' => ['type' => 'mrkdwn', 'text' => "*Rule Violated:*\n$ruleKeyDisplay\n\n*Details:*\n$violationDetails"]
+        ],
+        ['type' => 'divider'],
+        [
+            'type' => 'section',
+            'text' => ['type' => 'mrkdwn', 'text' => "❗ *The TikTok API failed to pause this campaign.* Please pause it manually in TikTok Ads Manager."]
+        ],
+    ];
+
+    $payload = json_encode([
+        'channel' => $channelId,
+        'text' => $fallbackText,
+        'blocks' => $blocks,
+    ]);
+
+    $ch = curl_init('https://slack.com/api/chat.postMessage');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            "Content-Type: application/json",
+            "Authorization: Bearer $slackToken",
+        ],
+        CURLOPT_TIMEOUT => 15,
+    ]);
+
+    $response = curl_exec($ch);
+    if ($response === false) {
+        logOptimizer("Slack failure notification CURL Error: " . curl_error($ch));
+        curl_close($ch);
+        return false;
+    }
+    curl_close($ch);
+
+    $result = json_decode($response, true);
+    if (empty($result['ok'])) {
+        logOptimizer("Slack failure notification API Error: " . ($result['error'] ?? 'unknown'), $result);
+        return false;
+    }
+
+    logOptimizer("Slack PAUSE FAILURE notification sent for campaign $campaignId");
     return true;
 }
 
@@ -811,7 +894,7 @@ function runOptimizerCheck($db, $accessToken) {
                 'success' => $pauseResult['success'] ? 1 : 0,
             ]);
 
-            // Send Slack notification if pause was successful
+            // Send Slack notification
             if ($pauseResult['success']) {
                 sendSlackPauseNotification(
                     $mc['campaign_name'] ?? $mc['campaign_id'],
@@ -821,9 +904,20 @@ function runOptimizerCheck($db, $accessToken) {
                     $campaignGroup,
                     $resumeAt
                 );
+                $stats['paused']++;
+            } else {
+                // Pause API failed — rollback DB state and notify
+                $db->query(
+                    "UPDATE optimizer_monitored_campaigns SET paused_by_optimizer = 0, paused_at = NULL, resume_at = NULL WHERE id = ?",
+                    [$mc['id']]
+                );
+                sendSlackPauseFailureNotification(
+                    $mc['campaign_name'] ?? $mc['campaign_id'],
+                    $mc['campaign_id'],
+                    $firstViolation['rule_key'],
+                    $violationDetails
+                );
             }
-
-            $stats['paused']++;
         } else {
             // Log the check (no violation)
             $db->insert('optimizer_logs', [

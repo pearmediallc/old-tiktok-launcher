@@ -1,5 +1,5 @@
 -- TikTok Optimizer - PostgreSQL Database Schema
--- 3 tables: rules config, monitored campaigns, action logs
+-- 6 tables: rules config, monitored campaigns, action logs, redtrack map, settings, activity logs
 
 -- ============================================
 -- Table 1: Optimizer Rules (configurable thresholds)
@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS optimizer_monitored_campaigns (
 
 CREATE INDEX IF NOT EXISTS idx_opt_mc_monitoring ON optimizer_monitored_campaigns(monitoring_enabled);
 CREATE INDEX IF NOT EXISTS idx_opt_mc_paused ON optimizer_monitored_campaigns(paused_by_optimizer, resume_at);
+CREATE INDEX IF NOT EXISTS idx_opt_mc_advertiser ON optimizer_monitored_campaigns(advertiser_id);
 
 -- ============================================
 -- Table 3: Optimizer Action Logs
@@ -77,14 +78,18 @@ CREATE TABLE IF NOT EXISTS optimizer_logs (
     metrics_snapshot JSONB,
     api_response JSONB,
     success SMALLINT NOT NULL DEFAULT 1,
+    dismissed_at TIMESTAMP NULL DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_opt_logs_campaign ON optimizer_logs(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_opt_logs_created ON optimizer_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_opt_logs_action ON optimizer_logs(action);
+CREATE INDEX IF NOT EXISTS idx_opt_logs_advertiser ON optimizer_logs(advertiser_id);
 
--- RedTrack campaign name mapping for LP CTR display
+-- ============================================
+-- Table 4: RedTrack Campaign Mapping
+-- ============================================
 CREATE TABLE IF NOT EXISTS campaign_redtrack_map (
     id SERIAL PRIMARY KEY,
     campaign_id VARCHAR(64) NOT NULL,
@@ -94,3 +99,36 @@ CREATE TABLE IF NOT EXISTS campaign_redtrack_map (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(campaign_id, advertiser_id)
 );
+
+-- ============================================
+-- Table 5: Optimizer Settings (account-level)
+-- ============================================
+CREATE TABLE IF NOT EXISTS optimizer_settings (
+    id SERIAL PRIMARY KEY,
+    advertiser_id VARCHAR(64) NOT NULL,
+    setting_key VARCHAR(100) NOT NULL,
+    setting_value TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(advertiser_id, setting_key)
+);
+
+-- ============================================
+-- Table 6: User Activity Logs
+-- ============================================
+CREATE TABLE IF NOT EXISTS user_activity_logs (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(100),
+    ip_address VARCHAR(45),
+    http_method VARCHAR(10),
+    action VARCHAR(100) NOT NULL,
+    endpoint VARCHAR(255),
+    advertiser_id VARCHAR(64),
+    status VARCHAR(20) DEFAULT 'success',
+    details JSONB,
+    user_agent VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_ual_created ON user_activity_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_ual_user ON user_activity_logs(username);
+CREATE INDEX IF NOT EXISTS idx_ual_action ON user_activity_logs(action);

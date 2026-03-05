@@ -873,21 +873,17 @@ $advertiser_details = $_SESSION['oauth_advertiser_details'] ?? [];
         let selectedAdvertiserId = null;
         let selectedCampaignType = null;
 
-        // Store OAuth tokens in browser localStorage on page load
+        // Store non-sensitive OAuth metadata in localStorage (tokens stay server-side in session)
         window.addEventListener('DOMContentLoaded', function() {
             <?php if (isset($_SESSION['oauth_access_token'])): ?>
-                const tokenData = {
-                    access_token: <?php echo json_encode($_SESSION['oauth_access_token']); ?>,
-                    refresh_token: <?php echo json_encode($_SESSION['oauth_refresh_token'] ?? ''); ?>,
-                    expires_in: <?php echo json_encode($_SESSION['oauth_expires_in'] ?? 86400); ?>,
-                    token_type: <?php echo json_encode($_SESSION['oauth_token_type'] ?? 'Bearer'); ?>,
+                const oauthMeta = {
+                    connected: true,
                     advertiser_ids: <?php echo json_encode($_SESSION['oauth_advertiser_ids'] ?? []); ?>,
                     expires_at: Date.now() + (<?php echo $_SESSION['oauth_expires_in'] ?? 86400; ?> * 1000)
                 };
-
-                // Store in localStorage for persistence across sessions
-                localStorage.setItem('tiktok_oauth_token', JSON.stringify(tokenData));
-                console.log('OAuth token stored in browser localStorage');
+                localStorage.setItem('tiktok_oauth_meta', JSON.stringify(oauthMeta));
+                // Clear any old token data from localStorage (security cleanup)
+                localStorage.removeItem('tiktok_oauth_token');
             <?php endif; ?>
         });
 
