@@ -134,6 +134,123 @@ if (!empty($_SESSION['oauth_advertiser_ids'])) {
 $_SESSION['oauth_advertiser_details'] = $advertiser_details;
 error_log("Advertiser Details: " . json_encode($advertiser_details));
 
+// Save token to database so cron job can access it
+try {
+    require_once __DIR__ . '/database/Database.php';
+    $db = Database::getInstance();
+    $driver = getenv('DB_DRIVER') ?: ($_ENV['DB_DRIVER'] ?? 'mysql');
+
+    // Auto-create users table if it doesn't exist
+    if ($driver === 'pgsql') {
+        $db->query("CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(255) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            email VARCHAR(255),
+            full_name VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login TIMESTAMP NULL,
+            status VARCHAR(20) DEFAULT 'active'
+        )");
+        $db->query("CREATE TABLE IF NOT EXISTS tiktok_connections (
+            id SERIAL PRIMARY KEY,
+            user_id INT NOT NULL,
+            access_token TEXT NOT NULL,
+            refresh_token TEXT NOT NULL,
+            token_type VARCHAR(50) DEFAULT 'Bearer',
+            expires_in INT DEFAULT 86400,
+            token_expires_at TIMESTAMP NOT NULL,
+            advertiser_id VARCHAR(255),
+            advertiser_name VARCHAR(255),
+            advertiser_ids JSONB,
+            scope TEXT,
+            connection_status VARCHAR(20) DEFAULT 'active',
+            last_sync_at TIMESTAMP NULL,
+            last_refresh_at TIMESTAMP NULL,
+            error_message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )");
+    } else {
+        $db->query("CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(255) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            email VARCHAR(255),
+            full_name VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login TIMESTAMP NULL,
+            status VARCHAR(20) DEFAULT 'active'
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $db->query("CREATE TABLE IF NOT EXISTS tiktok_connections (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            access_token TEXT NOT NULL,
+            refresh_token TEXT NOT NULL,
+            token_type VARCHAR(50) DEFAULT 'Bearer',
+            expires_in INT DEFAULT 86400,
+            token_expires_at TIMESTAMP NOT NULL,
+            advertiser_id VARCHAR(255),
+            advertiser_name VARCHAR(255),
+            advertiser_ids JSON,
+            scope TEXT,
+            connection_status VARCHAR(20) DEFAULT 'active',
+            last_sync_at TIMESTAMP NULL,
+            last_refresh_at TIMESTAMP NULL,
+            error_message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    }
+
+    // Ensure a user record exists for this session username
+    $username = $_SESSION['username'] ?? 'admin';
+    $existingUser = $db->fetchOne(
+        "SELECT id FROM users WHERE username = ?",
+        [$username]
+    );
+
+    if ($existingUser) {
+        $userId = $existingUser['id'];
+    } else {
+        // Create a user record for the authenticated user
+        $userId = $db->insert('users', [
+            'username' => $username,
+            'password_hash' => 'oauth-managed',
+            'email' => $username . '@local',
+        ]);
+    }
+
+    // Deactivate all previous connections
+    $db->query(
+        "UPDATE tiktok_connections SET connection_status = 'revoked' WHERE user_id = ? AND connection_status = 'active'",
+        [$userId]
+    );
+
+    // Insert new connection with token
+    $expiresAt = date('Y-m-d H:i:s', time() + ($_SESSION['oauth_expires_in'] ?? 86400));
+    $db->insert('tiktok_connections', [
+        'user_id' => $userId,
+        'access_token' => $access_token,
+        'refresh_token' => $_SESSION['oauth_refresh_token'] ?? '',
+        'token_type' => $_SESSION['oauth_token_type'] ?? 'Bearer',
+        'expires_in' => $_SESSION['oauth_expires_in'] ?? 86400,
+        'token_expires_at' => $expiresAt,
+        'advertiser_ids' => json_encode($_SESSION['oauth_advertiser_ids'] ?? []),
+        'connection_status' => 'active',
+        'last_refresh_at' => date('Y-m-d H:i:s'),
+    ]);
+
+    error_log("OAuth token saved to database for cron job access (user: $username)");
+} catch (Exception $e) {
+    // Don't block the OAuth flow if DB save fails
+    error_log("Failed to save OAuth token to database: " . $e->getMessage());
+}
+
 // Redirect to unified app shell (accounts shown inline, no separate selection page)
 header('Location: app-shell.php');
 exit;
