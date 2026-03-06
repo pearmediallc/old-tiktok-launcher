@@ -167,46 +167,26 @@ try {
 
 // Migration: Add dismissed_at column to optimizer_logs (for pause notifications)
 try {
-    $testLog = $db->fetchOne("SELECT * FROM optimizer_logs LIMIT 1");
-    if ($testLog && !array_key_exists('dismissed_at', $testLog)) {
-        $db->query("ALTER TABLE optimizer_logs ADD COLUMN dismissed_at TIMESTAMP NULL DEFAULT NULL");
-        logOptimizer("Migration: Added dismissed_at column to optimizer_logs");
-    }
+    $db->query("ALTER TABLE optimizer_logs ADD COLUMN dismissed_at TIMESTAMP NULL DEFAULT NULL");
+    logOptimizer("Migration: Added dismissed_at column to optimizer_logs");
 } catch (Exception $e) {
-    // Table might be empty — try ALTER directly
-    try {
-        $db->query("ALTER TABLE optimizer_logs ADD COLUMN dismissed_at TIMESTAMP NULL DEFAULT NULL");
-    } catch (Exception $ex) {
-        // Column likely already exists
-    }
+    // Column already exists — ignore
 }
 
 // Migration: Add redtrack_campaign_name column to optimizer_monitored_campaigns
 try {
-    $testMc = $db->fetchOne("SELECT * FROM optimizer_monitored_campaigns LIMIT 1");
-    if ($testMc && !array_key_exists('redtrack_campaign_name', $testMc)) {
-        $db->query("ALTER TABLE optimizer_monitored_campaigns ADD COLUMN redtrack_campaign_name VARCHAR(500) DEFAULT NULL");
-        logOptimizer("Migration: Added redtrack_campaign_name column to optimizer_monitored_campaigns");
-    }
+    $db->query("ALTER TABLE optimizer_monitored_campaigns ADD COLUMN redtrack_campaign_name VARCHAR(500) DEFAULT NULL");
+    logOptimizer("Migration: Added redtrack_campaign_name column to optimizer_monitored_campaigns");
 } catch (Exception $e) {
-    try {
-        $db->query("ALTER TABLE optimizer_monitored_campaigns ADD COLUMN redtrack_campaign_name VARCHAR(500) DEFAULT NULL");
-    } catch (Exception $ex) {
-        // Column likely already exists
-    }
+    // Column already exists — ignore
 }
 
 // Migration: Add review_notified column to optimizer_monitored_campaigns
 try {
-    $testMc2 = $db->fetchOne("SELECT * FROM optimizer_monitored_campaigns LIMIT 1");
-    if ($testMc2 && !array_key_exists('review_notified', $testMc2)) {
-        $db->query("ALTER TABLE optimizer_monitored_campaigns ADD COLUMN review_notified SMALLINT DEFAULT 0");
-        logOptimizer("Migration: Added review_notified column to optimizer_monitored_campaigns");
-    }
+    $db->query("ALTER TABLE optimizer_monitored_campaigns ADD COLUMN review_notified SMALLINT DEFAULT 0");
+    logOptimizer("Migration: Added review_notified column to optimizer_monitored_campaigns");
 } catch (Exception $e) {
-    try {
-        $db->query("ALTER TABLE optimizer_monitored_campaigns ADD COLUMN review_notified SMALLINT DEFAULT 0");
-    } catch (Exception $ex) {}
+    // Column already exists — ignore
 }
 
 // Migration: Add 'review' to optimizer_logs action enum (MySQL only)

@@ -90,12 +90,9 @@ register_shutdown_function(function() use ($lockFile) {
 
 // Migration: Add review_notified column if missing
 try {
-    $testMc = $db->fetchOne("SELECT * FROM optimizer_monitored_campaigns LIMIT 1");
-    if ($testMc && !array_key_exists('review_notified', $testMc)) {
-        $db->query("ALTER TABLE optimizer_monitored_campaigns ADD COLUMN review_notified SMALLINT DEFAULT 0");
-    }
+    $db->query("ALTER TABLE optimizer_monitored_campaigns ADD COLUMN review_notified SMALLINT DEFAULT 0");
 } catch (Exception $e) {
-    try { $db->query("ALTER TABLE optimizer_monitored_campaigns ADD COLUMN review_notified SMALLINT DEFAULT 0"); } catch (Exception $ex) {}
+    // Column already exists — ignore
 }
 
 // Migration: Add 'review' to optimizer_logs action enum
