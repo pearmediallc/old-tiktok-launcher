@@ -9168,15 +9168,10 @@ function formatNumber(value) {
 }
 
 // Format percent for display
-// TikTok API returns CTR as decimal (e.g., 0.05 for 5%), so multiply by 100
+// TikTok API returns CTR already as a percentage value (0.29 means 0.29%, NOT 29%)
 function formatPercent(value) {
     const num = parseFloat(value) || 0;
-    // If value is already > 1, it's likely already a percentage, don't multiply
-    if (num > 1) {
-        return num.toFixed(2) + '%';
-    }
-    // Otherwise multiply by 100 to convert decimal to percentage
-    return (num * 100).toFixed(2) + '%';
+    return num.toFixed(2) + '%';
 }
 
 // ============================================
