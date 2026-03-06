@@ -183,6 +183,7 @@ class Security {
      * Get rate limit data from file
      */
     private static function getRateLimitData() {
+        self::ensureRateLimitFile();
         if (!file_exists(self::$rateLimitFile)) {
             return [];
         }
@@ -194,11 +195,21 @@ class Security {
      * Save rate limit data to file
      */
     private static function saveRateLimitData($data) {
+        self::ensureRateLimitFile();
         $dir = dirname(self::$rateLimitFile);
         if (!is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
         file_put_contents(self::$rateLimitFile, json_encode($data));
+    }
+
+    /**
+     * Ensure rate limit file path is set (auto-init if init() wasn't called)
+     */
+    private static function ensureRateLimitFile() {
+        if (self::$rateLimitFile === null) {
+            self::$rateLimitFile = __DIR__ . '/../cache/rate_limits.json';
+        }
     }
 
     /**
