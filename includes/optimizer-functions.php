@@ -171,17 +171,28 @@ function lookupRedTrackCampaignId($campaignName) {
 function fetchTikTokCampaignMetrics($advertiserId, $campaignId, $accessToken) {
     $today = date('Y-m-d');
 
+    // Match the exact format used by the working campaigns view API call
+    // Key fixes: removed service_type (excluded Smart+ campaigns), fixed filter format,
+    // removed stat_time_day dimension, fixed metric name conversion vs conversions
+    $filters = [
+        [
+            'field_name' => 'campaign_ids',
+            'filter_type' => 'IN',
+            'filter_value' => json_encode([$campaignId])
+        ]
+    ];
+
     $result = optimizerTikTokApi('/report/integrated/get/', [
         'advertiser_id' => $advertiserId,
-        'service_type' => 'AUCTION',
         'report_type' => 'BASIC',
         'data_level' => 'AUCTION_CAMPAIGN',
-        'dimensions' => json_encode(['campaign_id', 'stat_time_day']),
-        'metrics' => json_encode(['spend', 'cpc', 'impressions', 'clicks', 'ctr', 'conversions', 'conversion_rate']),
+        'dimensions' => json_encode(['campaign_id']),
+        'metrics' => json_encode(['spend', 'cpc', 'impressions', 'clicks', 'ctr', 'conversion', 'conversion_rate']),
         'start_date' => $today,
         'end_date' => $today,
-        'filtering' => json_encode([['field_name' => 'campaign_ids', 'filter_type' => 'IN', 'filter_value' => [$campaignId]]]),
-        'page_size' => 10
+        'page' => 1,
+        'page_size' => 10,
+        'filters' => json_encode($filters)
     ], $accessToken, 'GET');
 
     if (($result['code'] ?? -1) != 0 || empty($result['data']['list'])) {
@@ -199,7 +210,7 @@ function fetchTikTokCampaignMetrics($advertiserId, $campaignId, $accessToken) {
         'impressions' => intval($row['impressions'] ?? 0),
         'clicks' => intval($row['clicks'] ?? 0),
         'ctr' => floatval($row['ctr'] ?? 0),
-        'conversions' => intval($row['conversions'] ?? 0),
+        'conversions' => intval($row['conversion'] ?? $row['conversions'] ?? 0),
     ];
 }
 
@@ -806,7 +817,19 @@ function runOptimizerCheck($db, $accessToken) {
 
         // Fetch fresh metrics for the review
         $tiktokMetrics = fetchTikTokCampaignMetrics($mc['advertiser_id'], $mc['campaign_id'], $accessToken);
-        $redtrackMetrics = fetchRedTrackCampaignMetrics($mc['campaign_id'], $mc['redtrack_campaign_name'] ?? null);
+
+        // Use campaign-level RT name, fall back to account-level
+        $reviewRtName = $mc['redtrack_campaign_name'] ?? null;
+        if (empty($reviewRtName)) {
+            try {
+                $accountRt = $db->fetchOne(
+                    "SELECT setting_value FROM optimizer_settings WHERE advertiser_id = ? AND setting_key = 'default_redtrack_campaign'",
+                    [$mc['advertiser_id']]
+                );
+                $reviewRtName = $accountRt['setting_value'] ?? null;
+            } catch (Exception $e) {}
+        }
+        $redtrackMetrics = fetchRedTrackCampaignMetrics($mc['campaign_id'], $reviewRtName);
 
         // Send Slack review notification with Resume button
         $sent = sendSlackReviewNotification($mc, $tiktokMetrics, $redtrackMetrics);
@@ -851,8 +874,24 @@ function runOptimizerCheck($db, $accessToken) {
         // Fetch TikTok metrics
         $tiktokMetrics = fetchTikTokCampaignMetrics($mc['advertiser_id'], $mc['campaign_id'], $accessToken);
 
-        // Fetch RedTrack metrics (use RedTrack campaign name if configured)
-        $redtrackMetrics = fetchRedTrackCampaignMetrics($mc['campaign_id'], $mc['redtrack_campaign_name'] ?? null);
+        // Fetch RedTrack metrics (use campaign-level RT name, fall back to account-level)
+        $rtCampaignName = $mc['redtrack_campaign_name'] ?? null;
+        if (empty($rtCampaignName)) {
+            // Fall back to account-level RedTrack campaign
+            try {
+                $accountRt = $db->fetchOne(
+                    "SELECT setting_value FROM optimizer_settings WHERE advertiser_id = ? AND setting_key = 'default_redtrack_campaign'",
+                    [$mc['advertiser_id']]
+                );
+                $rtCampaignName = $accountRt['setting_value'] ?? null;
+                if ($rtCampaignName) {
+                    logOptimizer("Using account-level RedTrack campaign '$rtCampaignName' for campaign {$mc['campaign_id']}");
+                }
+            } catch (Exception $e) {
+                // optimizer_settings table might not exist
+            }
+        }
+        $redtrackMetrics = fetchRedTrackCampaignMetrics($mc['campaign_id'], $rtCampaignName);
 
         // Combine for snapshot
         $metricsSnapshot = [
