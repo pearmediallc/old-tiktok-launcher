@@ -419,7 +419,7 @@ function pauseCampaignViaApi($advertiserId, $campaignId, $accessToken) {
 // SEND SLACK PAUSE NOTIFICATION
 // ============================================
 
-function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $violationDetails, $ruleGroup, $resumeAt) {
+function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $violationDetails, $ruleGroup, $resumeAt, $advertiserId = '') {
     $slackToken = getenv('SLACK_BOT_TOKEN') ?: ($_ENV['SLACK_BOT_TOKEN'] ?? '');
     $channelId = 'C0AC3899K6C';
 
@@ -440,6 +440,12 @@ function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $viola
     $ruleKeyDisplay = ucwords(str_replace('_', ' ', $ruleKeyDisplay));
 
     $fallbackText = "Campaign Paused: $campaignName ($campaignId) — Rule: $ruleKeyDisplay — $violationDetails";
+
+    // Resume button value
+    $buttonValue = json_encode([
+        'campaign_id' => $campaignId,
+        'advertiser_id' => $advertiserId,
+    ]);
 
     $blocks = [
         [
@@ -466,9 +472,27 @@ function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $viola
         ],
         ['type' => 'divider'],
         [
+            'type' => 'actions',
+            'elements' => [
+                [
+                    'type' => 'button',
+                    'text' => ['type' => 'plain_text', 'text' => '▶️ Resume Campaign'],
+                    'style' => 'primary',
+                    'action_id' => 'resume_campaign',
+                    'value' => $buttonValue,
+                    'confirm' => [
+                        'title' => ['type' => 'plain_text', 'text' => 'Resume Campaign?'],
+                        'text' => ['type' => 'mrkdwn', 'text' => "This will re-enable *$campaignName* on TikTok."],
+                        'confirm' => ['type' => 'plain_text', 'text' => 'Resume'],
+                        'deny' => ['type' => 'plain_text', 'text' => 'Cancel'],
+                    ]
+                ]
+            ]
+        ],
+        [
             'type' => 'context',
             'elements' => [
-                ['type' => 'mrkdwn', 'text' => "⏱ Metrics review at: *$resumeAt UTC* — resume manually from Slack"]
+                ['type' => 'mrkdwn', 'text' => "⏱ Full metrics review will be sent at *$resumeAt UTC*"]
             ]
         ]
     ];
@@ -965,7 +989,8 @@ function runOptimizerCheck($db, $accessToken) {
                     $firstViolation['rule_key'],
                     $violationDetails,
                     $campaignGroup,
-                    $resumeAt
+                    $resumeAt,
+                    $mc['advertiser_id']
                 );
                 $stats['paused']++;
             } else {
