@@ -818,8 +818,17 @@ function runOptimizerCheck($db, $accessToken) {
         // Fetch fresh metrics for the review
         $tiktokMetrics = fetchTikTokCampaignMetrics($mc['advertiser_id'], $mc['campaign_id'], $accessToken);
 
-        // Use campaign-level RT name, fall back to account-level
+        // Use campaign-level RT name, fall back to per-campaign map, then account-level
         $reviewRtName = $mc['redtrack_campaign_name'] ?? null;
+        if (empty($reviewRtName)) {
+            try {
+                $rtMap = $db->fetchOne(
+                    "SELECT redtrack_campaign_name FROM campaign_redtrack_map WHERE campaign_id = ? AND advertiser_id = ?",
+                    [$mc['campaign_id'], $mc['advertiser_id']]
+                );
+                $reviewRtName = $rtMap['redtrack_campaign_name'] ?? null;
+            } catch (Exception $e) {}
+        }
         if (empty($reviewRtName)) {
             try {
                 $accountRt = $db->fetchOne(
@@ -874,8 +883,23 @@ function runOptimizerCheck($db, $accessToken) {
         // Fetch TikTok metrics
         $tiktokMetrics = fetchTikTokCampaignMetrics($mc['advertiser_id'], $mc['campaign_id'], $accessToken);
 
-        // Fetch RedTrack metrics (use campaign-level RT name, fall back to account-level)
+        // Fetch RedTrack metrics (use campaign-level RT name, fall back to per-campaign map, then account-level)
         $rtCampaignName = $mc['redtrack_campaign_name'] ?? null;
+        if (empty($rtCampaignName)) {
+            // Fall back to per-campaign RedTrack mapping (from "Link RT" button in campaigns view)
+            try {
+                $rtMap = $db->fetchOne(
+                    "SELECT redtrack_campaign_name FROM campaign_redtrack_map WHERE campaign_id = ? AND advertiser_id = ?",
+                    [$mc['campaign_id'], $mc['advertiser_id']]
+                );
+                $rtCampaignName = $rtMap['redtrack_campaign_name'] ?? null;
+                if ($rtCampaignName) {
+                    logOptimizer("Using per-campaign RedTrack mapping '$rtCampaignName' for campaign {$mc['campaign_id']}");
+                }
+            } catch (Exception $e) {
+                // campaign_redtrack_map table might not exist
+            }
+        }
         if (empty($rtCampaignName)) {
             // Fall back to account-level RedTrack campaign
             try {

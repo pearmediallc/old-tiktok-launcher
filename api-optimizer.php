@@ -298,7 +298,20 @@ switch ($action) {
             break;
         }
 
-        // If no RT campaign specified, fall back to account-level default
+        // If no RT campaign specified, fall back to per-campaign mapping, then account-level default
+        if (empty($redtrackCampaignName)) {
+            try {
+                $rtMap = $db->fetchOne(
+                    "SELECT redtrack_campaign_name FROM campaign_redtrack_map WHERE campaign_id = ? AND advertiser_id = ?",
+                    [$campaignId, $advId]
+                );
+                if ($rtMap && !empty($rtMap['redtrack_campaign_name'])) {
+                    $redtrackCampaignName = $rtMap['redtrack_campaign_name'];
+                }
+            } catch (Exception $e) {
+                // campaign_redtrack_map table might not exist yet
+            }
+        }
         if (empty($redtrackCampaignName)) {
             try {
                 $defaultRt = $db->fetchOne(
