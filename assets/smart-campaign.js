@@ -8823,6 +8823,9 @@ async function loadCampaigns() {
 // Refresh campaign list
 function refreshCampaignList() {
     state.campaignsLoaded = false;
+    state._redtrackMappingsLoaded = false;
+    state.redtrackLpCtrs = {};
+    state.accountRtMetrics = null;
     loadCampaigns();
     showToast('Refreshing campaigns...', 'info');
 }
