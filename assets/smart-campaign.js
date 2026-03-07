@@ -1722,6 +1722,7 @@ async function uploadSingleMediaFile(file, index, total) {
 
         // Send request
         xhr.open('POST', `api.php?action=${isVideo ? 'upload_video' : 'upload_image'}`);
+        xhr.setRequestHeader('X-CSRF-Token', window.CSRF_TOKEN || '');
         xhr.send(formData);
     });
 }
@@ -4607,6 +4608,7 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
                 xhr.addEventListener('abort', () => { clearTimeout(timeoutId); reject(new Error('Upload timed out')); });
 
                 xhr.open('POST', 'api.php?action=upload_video_to_advertiser');
+                xhr.setRequestHeader('X-CSRF-Token', window.CSRF_TOKEN || '');
                 xhr.send(formData);
             });
 
@@ -4824,6 +4826,7 @@ async function useOriginalVideoForAccount(advertiserId) {
                 xhr.addEventListener('abort', () => { clearTimeout(timeoutId); reject(new Error('Upload timed out')); });
 
                 xhr.open('POST', 'api.php?action=upload_video_to_advertiser');
+                xhr.setRequestHeader('X-CSRF-Token', window.CSRF_TOKEN || '');
                 xhr.send(formData);
             });
 
@@ -5159,6 +5162,7 @@ async function handlePickerVideoUpload(event) {
                 xhr.addEventListener('abort', () => { clearTimeout(timeoutId); reject(new Error('Upload timed out')); });
 
                 xhr.open('POST', 'api.php?action=upload_video_to_advertiser');
+                xhr.setRequestHeader('X-CSRF-Token', window.CSRF_TOKEN || '');
                 xhr.send(formData);
             });
 
@@ -8667,6 +8671,7 @@ async function uploadMediaVideo(file, index) {
 
         // Send request
         xhr.open('POST', 'api.php?action=upload_video');
+        xhr.setRequestHeader('X-CSRF-Token', window.CSRF_TOKEN || '');
         xhr.send(formData);
     });
 }
@@ -14293,6 +14298,7 @@ async function uploadSingleVideoInBulk(file, index) {
 
         // Send request
         xhr.open('POST', 'api.php?action=upload_video');
+        xhr.setRequestHeader('X-CSRF-Token', window.CSRF_TOKEN || '');
         xhr.send(formData);
     });
 }
