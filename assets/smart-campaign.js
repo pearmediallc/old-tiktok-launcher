@@ -13733,7 +13733,7 @@ async function handleMultiAccountUpload(event, accounts) {
     const totalUploads = validFiles.length * accounts.length;
     addLog('info', `Multi-account upload: ${validFiles.length} video(s) to ${accounts.length} account(s) = ${totalUploads} uploads`);
 
-    // Show progress in the video modal
+    // Show progress - move container to main page if modal is hidden
     const progressContainer = document.getElementById('video-modal-upload-progress');
     const progressBar = document.getElementById('bulk-upload-bar');
     const progressTitle = document.getElementById('bulk-upload-title');
@@ -13741,6 +13741,12 @@ async function handleMultiAccountUpload(event, accounts) {
     const progressList = document.getElementById('bulk-upload-list');
 
     if (progressContainer) {
+        // Move to main page anchor if video selection modal is hidden
+        const modal = document.getElementById('video-selection-modal');
+        const anchor = document.getElementById('main-upload-progress-anchor');
+        if (anchor && modal && modal.style.display === 'none') {
+            anchor.appendChild(progressContainer);
+        }
         progressContainer.style.display = 'block';
         if (progressTitle) progressTitle.textContent = `Uploading ${validFiles.length} video(s) to ${accounts.length} account(s)...`;
         if (progressCount) progressCount.textContent = `0/${totalUploads}`;
@@ -13852,10 +13858,8 @@ async function handleMultiAccountUpload(event, accounts) {
     const totalEl = document.getElementById('video-modal-total');
     if (totalEl) totalEl.textContent = videos.length;
 
-    // Hide progress after delay
-    setTimeout(() => {
-        if (progressContainer) progressContainer.style.display = 'none';
-    }, 3000);
+    // Hide progress after delay and move container back to modal
+    setTimeout(() => hideUploadProgress(), 3000);
 
     // Background refresh
     setTimeout(() => loadMediaLibrary(true), 2000);
@@ -13902,6 +13906,12 @@ async function handleVideoModalUpload(event) {
     const progressList = document.getElementById('bulk-upload-list');
 
     if (progressContainer) {
+        // Move to main page anchor if video selection modal is hidden
+        const modal = document.getElementById('video-selection-modal');
+        const anchor = document.getElementById('main-upload-progress-anchor');
+        if (anchor && modal && modal.style.display === 'none') {
+            anchor.appendChild(progressContainer);
+        }
         progressContainer.style.display = 'block';
         if (progressTitle) progressTitle.textContent = `Uploading ${newFileName}...`;
         if (progressCount) progressCount.textContent = '0/1';
@@ -13985,9 +13995,7 @@ async function handleVideoModalUpload(event) {
             renderVideoSelectionGrid();
 
             // Hide progress after a moment
-            setTimeout(() => {
-                if (progressContainer) progressContainer.style.display = 'none';
-            }, 1500);
+            setTimeout(() => hideUploadProgress(), 1500);
 
             // Refresh from API in background with force refresh to get proper thumbnail/metadata
             setTimeout(async () => {
@@ -14008,13 +14016,7 @@ async function handleVideoModalUpload(event) {
             showToast('Video accepted! It will appear in your library in 1-2 minutes.', 'success');
 
             // Hide progress after a moment
-            setTimeout(() => {
-                if (progressContainer) {
-                    progressContainer.style.display = 'none';
-                    progressContainer.style.background = '#f0f9ff';
-                    progressContainer.style.borderColor = '#bae6fd';
-                }
-            }, 3000);
+            setTimeout(() => hideUploadProgress(), 3000);
 
             // Auto-refresh library after delay to catch the processed video
             setTimeout(async () => {
@@ -14041,13 +14043,7 @@ async function handleVideoModalUpload(event) {
         showToast('Upload failed: ' + error.message, 'error');
 
         // Hide progress after a moment
-        setTimeout(() => {
-            if (progressContainer) {
-                progressContainer.style.display = 'none';
-                progressContainer.style.background = '#f0f9ff';
-                progressContainer.style.borderColor = '#bae6fd';
-            }
-        }, 3000);
+        setTimeout(() => hideUploadProgress(), 3000);
     }
 
     // Reset file input
@@ -14335,12 +14331,37 @@ async function retryFailedUpload(index) {
     }
 }
 
+// Hide upload progress and move container back to modal if it was moved
+function hideUploadProgress() {
+    const container = document.getElementById('video-modal-upload-progress');
+    if (!container) return;
+    container.style.display = 'none';
+    container.style.background = '#f0f9ff';
+    container.style.borderColor = '#bae6fd';
+    // Move back to modal if it was moved to main page
+    if (container.parentElement?.id === 'main-upload-progress-anchor') {
+        const modalBody = document.querySelector('#video-selection-modal .modal-body');
+        const grid = document.getElementById('video-modal-grid');
+        if (modalBody && grid) {
+            modalBody.insertBefore(container, grid);
+        }
+    }
+}
+
 // Show bulk upload progress UI
 function showBulkUploadProgress() {
     const container = document.getElementById('video-modal-upload-progress');
     const list = document.getElementById('bulk-upload-list');
 
     if (!container || !list) return;
+
+    // If the video selection modal is hidden, move the progress container
+    // to the main page anchor so it's visible during uploads
+    const modal = document.getElementById('video-selection-modal');
+    const anchor = document.getElementById('main-upload-progress-anchor');
+    if (anchor && modal && modal.style.display === 'none') {
+        anchor.appendChild(container);
+    }
 
     container.style.display = 'block';
     document.getElementById('bulk-upload-count').textContent = `0/${bulkUploadState.total}`;
@@ -14435,11 +14456,8 @@ function finishBulkUpload() {
     // Also update Step 3 video grid
     renderVideoSelectionGrid();
 
-    // Hide progress after delay
-    setTimeout(() => {
-        const container = document.getElementById('video-modal-upload-progress');
-        if (container) container.style.display = 'none';
-    }, 3000);
+    // Hide progress after delay and move container back to modal
+    setTimeout(() => hideUploadProgress(), 3000);
 
     // Background refresh with force_refresh to get proper thumbnails
     setTimeout(() => loadMediaLibrary(true), 2000);

@@ -396,6 +396,9 @@
                         </div>
                     </div>
 
+                    <!-- Upload Progress Anchor (progress container moves here when modal isn't open) -->
+                    <div id="main-upload-progress-anchor"></div>
+
                     <!-- Videos Section -->
                     <div style="margin-bottom: 20px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
