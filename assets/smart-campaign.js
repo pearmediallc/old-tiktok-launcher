@@ -1150,7 +1150,7 @@ async function createLearnMorePortfolio() {
         const result = await apiRequest('create_cta_portfolio', {
             portfolio_name: 'Learn_More',
             portfolio_content: [
-                { asset_content: 'LEARN_MORE', asset_ids: ["0"] }
+                { asset_content: 'LEARN_MORE', call_to_action: 'LEARN_MORE', asset_ids: ["0"] }
             ]
         });
 
@@ -1211,7 +1211,8 @@ async function createCtaPortfolio() {
     document.querySelectorAll('.portfolio-cta-checkbox:checked').forEach(cb => {
         selectedCTAs.push({
             asset_content: cb.value,
-            asset_ids: ["0"]  // Must be string per TikTok API requirement
+            call_to_action: cb.value,  // CTA enum value per TikTok SDK model
+            asset_ids: ["0"]  // Placeholder — backend enriches with real IDs from /creative/cta/recommend/
         });
     });
 
@@ -6090,7 +6091,8 @@ async function createBulkPortfolio(advertiserId) {
     document.querySelectorAll('#bulk-portfolio-modal .cta-checkbox input:checked').forEach(checkbox => {
         selectedCTAs.push({
             asset_content: checkbox.value,
-            asset_ids: ["0"]
+            call_to_action: checkbox.value,  // CTA enum value per TikTok SDK model
+            asset_ids: ["0"]  // Placeholder — backend enriches with real IDs from /creative/cta/recommend/
         });
     });
 
