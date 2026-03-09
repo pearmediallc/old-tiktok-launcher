@@ -419,7 +419,7 @@ function pauseCampaignViaApi($advertiserId, $campaignId, $accessToken) {
 // SEND SLACK PAUSE NOTIFICATION
 // ============================================
 
-function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $violationDetails, $ruleGroup, $resumeAt, $advertiserId = '') {
+function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $violationDetails, $ruleGroup, $resumeAt, $advertiserId = '', $metricsSnapshot = null) {
     $slackToken = getenv('SLACK_BOT_TOKEN') ?: ($_ENV['SLACK_BOT_TOKEN'] ?? '');
     $channelId = 'C0AC3899K6C';
 
@@ -435,17 +435,43 @@ function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $viola
         default => ucwords(str_replace('_', ' ', $ruleGroup))
     };
 
-    // Format rule key for display
-    $ruleKeyDisplay = preg_replace('/^(hi|med)_/', '', $ruleKey);
-    $ruleKeyDisplay = ucwords(str_replace('_', ' ', $ruleKeyDisplay));
+    // Format phase for display
+    $phase = $metricsSnapshot['phase'] ?? 'phase1';
+    $phaseDisplay = ($phase === 'phase2') ? 'Phase 2 (Profitability)' : 'Phase 1 (Qualification)';
 
-    $fallbackText = "Campaign Paused: $campaignName ($campaignId) — Rule: $ruleKeyDisplay — $violationDetails";
+    // Format rule key for display
+    $ruleKeyDisplay = match($ruleKey) {
+        'phase1_no_conversion' => 'No Conversion + High CPC',
+        'phase2_loss_limit' => 'Loss Limit Reached (-$30)',
+        default => ucwords(str_replace('_', ' ', preg_replace('/^(hi|med)_/', '', $ruleKey)))
+    };
+
+    $fallbackText = "Campaign Paused: $campaignName ($campaignId) — $phaseDisplay — $violationDetails";
 
     // Resume button value
     $buttonValue = json_encode([
         'campaign_id' => $campaignId,
         'advertiser_id' => $advertiserId,
     ]);
+
+    // Build metrics display from snapshot
+    $metricsText = '';
+    if ($metricsSnapshot) {
+        $tt = $metricsSnapshot['tiktok'] ?? [];
+        $rt = $metricsSnapshot['redtrack'] ?? [];
+        $profit = $metricsSnapshot['profit'] ?? 0;
+        $profitFormatted = number_format($profit, 2);
+        $profitEmoji = $profit >= 0 ? '🟢' : '🔴';
+
+        $metricsText = "*📊 Campaign Metrics:*\n"
+            . "• Spend: *\$" . number_format(floatval($tt['spend'] ?? 0), 2) . "*\n"
+            . "• CPC: *\$" . number_format(floatval($tt['cpc'] ?? 0), 2) . "*\n"
+            . "• CTR: *" . number_format(floatval($tt['ctr'] ?? 0), 2) . "%*\n"
+            . "• Clicks: *" . intval($tt['clicks'] ?? 0) . "*\n"
+            . "• Conversions (TikTok): *" . intval($tt['conversions'] ?? 0) . "*\n"
+            . "• Revenue (RedTrack): *\$" . number_format(floatval($rt['revenue'] ?? 0), 2) . "*\n"
+            . "• $profitEmoji Profit: *\${$profitFormatted}*";
+    }
 
     $blocks = [
         [
@@ -462,38 +488,47 @@ function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $viola
         [
             'type' => 'section',
             'fields' => [
-                ['type' => 'mrkdwn', 'text' => "*Rule Group:*\n$ruleGroupDisplay"],
+                ['type' => 'mrkdwn', 'text' => "*Phase:*\n$phaseDisplay"],
                 ['type' => 'mrkdwn', 'text' => "*Rule Violated:*\n$ruleKeyDisplay"],
             ]
         ],
         [
             'type' => 'section',
-            'text' => ['type' => 'mrkdwn', 'text' => "*Details:*\n$violationDetails"]
+            'text' => ['type' => 'mrkdwn', 'text' => "*Reason:*\n$violationDetails"]
         ],
-        ['type' => 'divider'],
-        [
-            'type' => 'actions',
-            'elements' => [
-                [
-                    'type' => 'button',
-                    'text' => ['type' => 'plain_text', 'text' => '▶️ Resume Campaign'],
-                    'style' => 'primary',
-                    'action_id' => 'resume_campaign',
-                    'value' => $buttonValue,
-                    'confirm' => [
-                        'title' => ['type' => 'plain_text', 'text' => 'Resume Campaign?'],
-                        'text' => ['type' => 'mrkdwn', 'text' => "This will re-enable *$campaignName* on TikTok."],
-                        'confirm' => ['type' => 'plain_text', 'text' => 'Resume'],
-                        'deny' => ['type' => 'plain_text', 'text' => 'Cancel'],
-                    ]
+    ];
+
+    // Add metrics block if available
+    if (!empty($metricsText)) {
+        $blocks[] = [
+            'type' => 'section',
+            'text' => ['type' => 'mrkdwn', 'text' => $metricsText]
+        ];
+    }
+
+    $blocks[] = ['type' => 'divider'];
+    $blocks[] = [
+        'type' => 'actions',
+        'elements' => [
+            [
+                'type' => 'button',
+                'text' => ['type' => 'plain_text', 'text' => '▶️ Resume Campaign'],
+                'style' => 'primary',
+                'action_id' => 'resume_campaign',
+                'value' => $buttonValue,
+                'confirm' => [
+                    'title' => ['type' => 'plain_text', 'text' => 'Resume Campaign?'],
+                    'text' => ['type' => 'mrkdwn', 'text' => "This will re-enable *$campaignName* on TikTok."],
+                    'confirm' => ['type' => 'plain_text', 'text' => 'Resume'],
+                    'deny' => ['type' => 'plain_text', 'text' => 'Cancel'],
                 ]
             ]
-        ],
-        [
-            'type' => 'context',
-            'elements' => [
-                ['type' => 'mrkdwn', 'text' => "⏱ Full metrics review will be sent at *$resumeAt UTC*"]
-            ]
+        ]
+    ];
+    $blocks[] = [
+        'type' => 'context',
+        'elements' => [
+            ['type' => 'mrkdwn', 'text' => "⏱ Review notification will be sent at *$resumeAt UTC*"]
         ]
     ];
 
@@ -982,7 +1017,7 @@ function runOptimizerCheck($db, $accessToken) {
                 ]);
 
                 if ($pauseResult['success']) {
-                    sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $details, $campaignGroup, $resumeAt, $advertiserId);
+                    sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $details, $campaignGroup, $resumeAt, $advertiserId, $metricsSnapshot);
                     $stats['paused']++;
                 } else {
                     $db->query("UPDATE optimizer_monitored_campaigns SET paused_by_optimizer = 0, paused_at = NULL, resume_at = NULL WHERE id = ?", [$mc['id']]);
@@ -1043,7 +1078,7 @@ function runOptimizerCheck($db, $accessToken) {
                 ]);
 
                 if ($pauseResult['success']) {
-                    sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $details, $campaignGroup, $resumeAt, $advertiserId);
+                    sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $details, $campaignGroup, $resumeAt, $advertiserId, $metricsSnapshot);
                     $stats['paused']++;
                 } else {
                     $db->query("UPDATE optimizer_monitored_campaigns SET paused_by_optimizer = 0, paused_at = NULL, resume_at = NULL WHERE id = ?", [$mc['id']]);
