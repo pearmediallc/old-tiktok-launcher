@@ -947,6 +947,24 @@ function runOptimizerCheck($db, $accessToken) {
             'redtrack' => $redtrackMetrics,
         ];
 
+        // MINIMUM SPEND THRESHOLD: Skip rule evaluation until campaign has spent at least $30
+        // No rules should trigger until the campaign has enough data (spend >= $30)
+        $currentSpend = floatval($tiktokMetrics['spend'] ?? 0);
+        if ($currentSpend < 30) {
+            logOptimizer("Campaign {$mc['campaign_id']} spend \${$currentSpend} < \$30 minimum — skipping rule evaluation");
+            $db->query("UPDATE optimizer_monitored_campaigns SET last_checked_at = NOW() WHERE id = ?", [$mc['id']]);
+            $db->insert('optimizer_logs', [
+                'campaign_id' => $mc['campaign_id'],
+                'advertiser_id' => $mc['advertiser_id'],
+                'action' => 'rule_check',
+                'rule_key' => null,
+                'rule_details' => "Spend \${$currentSpend} below \$30 minimum — rules not evaluated",
+                'metrics_snapshot' => json_encode($metricsSnapshot),
+                'success' => 1,
+            ]);
+            continue;
+        }
+
         // Evaluate rules for this campaign's group only
         $violations = evaluateCampaignRules($tiktokMetrics, $redtrackMetrics, $rules);
 
