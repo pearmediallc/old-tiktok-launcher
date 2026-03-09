@@ -283,6 +283,33 @@ switch ($action) {
         $monitored = $db->fetchAll(
             "SELECT * FROM optimizer_monitored_campaigns ORDER BY created_at DESC"
         );
+
+        // Enrich each campaign with latest profit data from most recent log
+        foreach ($monitored as &$mc) {
+            $mc['optimizer_phase'] = $mc['optimizer_phase'] ?? 'phase1';
+            $mc['profit'] = null;
+            $mc['revenue'] = null;
+            $mc['spend'] = null;
+
+            try {
+                $latestLog = $db->fetchOne(
+                    "SELECT metrics_snapshot FROM optimizer_logs WHERE campaign_id = ? AND advertiser_id = ? AND action = 'rule_check' ORDER BY created_at DESC LIMIT 1",
+                    [$mc['campaign_id'], $mc['advertiser_id']]
+                );
+                if ($latestLog && !empty($latestLog['metrics_snapshot'])) {
+                    $snapshot = json_decode($latestLog['metrics_snapshot'], true);
+                    $spend = floatval($snapshot['tiktok']['spend'] ?? 0);
+                    $revenue = floatval($snapshot['redtrack']['revenue'] ?? 0);
+                    $mc['spend'] = $spend;
+                    $mc['revenue'] = $revenue;
+                    $mc['profit'] = $revenue - $spend;
+                }
+            } catch (Exception $e) {
+                // Ignore — profit will show as null
+            }
+        }
+        unset($mc);
+
         echo json_encode(['success' => true, 'data' => $monitored]);
         break;
 
@@ -465,9 +492,9 @@ switch ($action) {
             ActivityLogger::log('manual_resume', 'api-optimizer.php', ['campaign_id' => $campaignId, 'advertiser_id' => $advId]);
             $result = resumeCampaignViaApi($advId, $campaignId, $accessToken);
 
-            // Also clear optimizer pause state
+            // Clear optimizer pause state and reset review flag for next cycle
             $db->query(
-                "UPDATE optimizer_monitored_campaigns SET paused_by_optimizer = 0, paused_at = NULL, resume_at = NULL WHERE campaign_id = ? AND advertiser_id = ?",
+                "UPDATE optimizer_monitored_campaigns SET paused_by_optimizer = 0, paused_at = NULL, resume_at = NULL, review_notified = 0 WHERE campaign_id = ? AND advertiser_id = ?",
                 [$campaignId, $advId]
             );
 

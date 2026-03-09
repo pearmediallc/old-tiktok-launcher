@@ -221,7 +221,7 @@ async function loadMonitoredCampaigns() {
             renderMonitoredCampaigns(result.data);
         } else {
             document.getElementById('opt-monitored-body').innerHTML =
-                '<tr><td colspan="6" class="opt-empty"><div class="opt-empty-icon">No campaigns being monitored</div><p>Go to View Campaigns and click the shield icon to start monitoring.</p></td></tr>';
+                '<tr><td colspan="8" class="opt-empty"><div class="opt-empty-icon">No campaigns being monitored</div><p>Go to View Campaigns and click the shield icon to start monitoring.</p></td></tr>';
         }
     } catch (e) {
         console.error('Error loading monitored campaigns:', e);
@@ -254,10 +254,28 @@ function renderMonitoredCampaigns(campaigns) {
             `;
         }
 
-        const ruleGroup = mc.rule_group || 'home_insurance';
-        const groupLabel = ruleGroup === 'medicare' ? 'Medicare' : 'Home Insurance';
-        const groupColor = ruleGroup === 'medicare' ? '#7c3aed' : '#0369a1';
         const rtCampaign = mc.redtrack_campaign_name || '-';
+
+        // Phase badge
+        const phase = mc.optimizer_phase || 'phase1';
+        const phaseLabel = phase === 'phase2' ? 'Phase 2' : 'Phase 1';
+        const phaseColor = phase === 'phase2' ? '#7c3aed' : '#0369a1';
+        let phaseDetail = '';
+        if (phase === 'phase1' && mc.spend !== null && mc.spend !== undefined) {
+            phaseDetail = `<div style="font-size:10px;color:#64748b;">$${parseFloat(mc.spend).toFixed(2)} / $30</div>`;
+        }
+
+        // Profit cell
+        let profitCell = '-';
+        if (mc.profit !== null && mc.profit !== undefined) {
+            const profitVal = parseFloat(mc.profit);
+            const profitColor = profitVal >= 0 ? '#16a34a' : '#dc2626';
+            const profitSign = profitVal >= 0 ? '+' : '';
+            profitCell = `<span style="font-weight:700;color:${profitColor};">${profitSign}$${profitVal.toFixed(2)}</span>`;
+            if (mc.revenue !== null && mc.spend !== null) {
+                profitCell += `<div style="font-size:10px;color:#64748b;">Rev $${parseFloat(mc.revenue).toFixed(2)} - Cost $${parseFloat(mc.spend).toFixed(2)}</div>`;
+            }
+        }
 
         return `
             <tr>
@@ -265,7 +283,8 @@ function renderMonitoredCampaigns(campaigns) {
                     <div style="font-weight:600;">${escapeHtmlOpt(mc.campaign_name || mc.campaign_id)}</div>
                     <div style="font-size:11px;color:#94a3b8;">${cid}</div>
                 </td>
-                <td><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:${groupColor}15;color:${groupColor};">${escapeHtmlOpt(groupLabel)}</span></td>
+                <td><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:${phaseColor}15;color:${phaseColor};">${phaseLabel}</span>${phaseDetail}</td>
+                <td>${profitCell}</td>
                 <td style="font-size:12px;color:#475569;">${escapeHtmlOpt(rtCampaign)}</td>
                 <td><span class="opt-status-dot ${statusDot}"></span>${statusText}</td>
                 <td style="font-size:12px;color:#64748b;">${lastChecked}</td>

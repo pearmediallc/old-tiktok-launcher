@@ -812,20 +812,14 @@ function resumeCampaignViaApi($advertiserId, $campaignId, $accessToken) {
 // ============================================
 
 function runOptimizerCheck($db, $accessToken) {
-    logOptimizer("=== Starting optimizer check ===");
+    logOptimizer("=== Starting optimizer check (Two-Phase System) ===");
 
-    // Get all enabled rules grouped by rule_group
-    $allRules = $db->fetchAll("SELECT * FROM optimizer_rules WHERE enabled = 1");
-    if (empty($allRules)) {
-        logOptimizer("No enabled rules, skipping");
-        return ['checked' => 0, 'paused' => 0, 'resumed' => 0];
-    }
-
-    // Index rules by rule_group for fast lookup
-    $rulesByGroup = [];
-    foreach ($allRules as $rule) {
-        $group = $rule['rule_group'] ?? 'home_insurance';
-        $rulesByGroup[$group][] = $rule;
+    // Auto-add optimizer_phase column if it doesn't exist
+    try {
+        $db->query("ALTER TABLE optimizer_monitored_campaigns ADD COLUMN optimizer_phase VARCHAR(20) DEFAULT 'phase1'");
+        logOptimizer("Added optimizer_phase column to optimizer_monitored_campaigns");
+    } catch (Exception $e) {
+        // Column already exists — ignore
     }
 
     $stats = ['checked' => 0, 'paused' => 0, 'resumed' => 0];
@@ -887,154 +881,191 @@ function runOptimizerCheck($db, $accessToken) {
         $stats['reviewed'] = ($stats['reviewed'] ?? 0) + 1;
     }
 
-    // 2. Check active monitored campaigns against their assigned rule group
+    // 2. Check active monitored campaigns using TWO-PHASE system
+    // Phase 1: Wait until $30 spent → check conversions + CPC → pause or promote to Phase 2
+    // Phase 2: Track profit (Revenue - Cost) → pause if loss reaches -$30
     $monitored = $db->fetchAll(
         "SELECT * FROM optimizer_monitored_campaigns WHERE monitoring_enabled = 1 AND paused_by_optimizer = 0"
     );
 
     foreach ($monitored as $mc) {
         $stats['checked']++;
-
-        // Get rules for this campaign's rule_group
+        $campaignId = $mc['campaign_id'];
+        $advertiserId = $mc['advertiser_id'];
+        $campaignName = $mc['campaign_name'] ?? $campaignId;
+        $phase = $mc['optimizer_phase'] ?? 'phase1';
         $campaignGroup = $mc['rule_group'] ?? 'home_insurance';
-        $rules = $rulesByGroup[$campaignGroup] ?? [];
-
-        if (empty($rules)) {
-            logOptimizer("No enabled rules for group '$campaignGroup', skipping campaign {$mc['campaign_id']}");
-            continue;
-        }
 
         // Fetch TikTok metrics
-        $tiktokMetrics = fetchTikTokCampaignMetrics($mc['advertiser_id'], $mc['campaign_id'], $accessToken);
+        $tiktokMetrics = fetchTikTokCampaignMetrics($advertiserId, $campaignId, $accessToken);
 
         // Fetch RedTrack metrics (use campaign-level RT name, fall back to per-campaign map, then account-level)
         $rtCampaignName = $mc['redtrack_campaign_name'] ?? null;
         if (empty($rtCampaignName)) {
-            // Fall back to per-campaign RedTrack mapping (from "Link RT" button in campaigns view)
             try {
                 $rtMap = $db->fetchOne(
                     "SELECT redtrack_campaign_name FROM campaign_redtrack_map WHERE campaign_id = ? AND advertiser_id = ?",
-                    [$mc['campaign_id'], $mc['advertiser_id']]
+                    [$campaignId, $advertiserId]
                 );
                 $rtCampaignName = $rtMap['redtrack_campaign_name'] ?? null;
-                if ($rtCampaignName) {
-                    logOptimizer("Using per-campaign RedTrack mapping '$rtCampaignName' for campaign {$mc['campaign_id']}");
-                }
-            } catch (Exception $e) {
-                // campaign_redtrack_map table might not exist
-            }
+            } catch (Exception $e) {}
         }
         if (empty($rtCampaignName)) {
-            // Fall back to account-level RedTrack campaign
             try {
                 $accountRt = $db->fetchOne(
                     "SELECT setting_value FROM optimizer_settings WHERE advertiser_id = ? AND setting_key = 'default_redtrack_campaign'",
-                    [$mc['advertiser_id']]
+                    [$advertiserId]
                 );
                 $rtCampaignName = $accountRt['setting_value'] ?? null;
-                if ($rtCampaignName) {
-                    logOptimizer("Using account-level RedTrack campaign '$rtCampaignName' for campaign {$mc['campaign_id']}");
-                }
-            } catch (Exception $e) {
-                // optimizer_settings table might not exist
-            }
+            } catch (Exception $e) {}
         }
-        $redtrackMetrics = fetchRedTrackCampaignMetrics($mc['campaign_id'], $rtCampaignName);
+        $redtrackMetrics = fetchRedTrackCampaignMetrics($campaignId, $rtCampaignName);
 
-        // Combine for snapshot
+        $currentSpend = floatval($tiktokMetrics['spend'] ?? 0);
+        $currentCpc = floatval($tiktokMetrics['cpc'] ?? 0);
+        $tiktokConversions = intval($tiktokMetrics['conversions'] ?? 0);
+        $revenue = floatval($redtrackMetrics['revenue'] ?? 0);
+        $profit = $revenue - $currentSpend;
+
         $metricsSnapshot = [
             'tiktok' => $tiktokMetrics,
             'redtrack' => $redtrackMetrics,
+            'profit' => $profit,
+            'phase' => $phase,
         ];
 
-        // MINIMUM SPEND THRESHOLD: Skip rule evaluation until campaign has spent at least $30
-        // No rules should trigger until the campaign has enough data (spend >= $30)
-        $currentSpend = floatval($tiktokMetrics['spend'] ?? 0);
-        if ($currentSpend < 30) {
-            logOptimizer("Campaign {$mc['campaign_id']} spend \${$currentSpend} < \$30 minimum — skipping rule evaluation");
-            $db->query("UPDATE optimizer_monitored_campaigns SET last_checked_at = NOW() WHERE id = ?", [$mc['id']]);
-            $db->insert('optimizer_logs', [
-                'campaign_id' => $mc['campaign_id'],
-                'advertiser_id' => $mc['advertiser_id'],
-                'action' => 'rule_check',
-                'rule_key' => null,
-                'rule_details' => "Spend \${$currentSpend} below \$30 minimum — rules not evaluated",
-                'metrics_snapshot' => json_encode($metricsSnapshot),
-                'success' => 1,
-            ]);
+        // ========================================
+        // PHASE 1: Qualification ($30 spend gate)
+        // ========================================
+        if ($phase === 'phase1') {
+
+            if ($currentSpend < 30) {
+                // Not enough spend yet — skip evaluation
+                logOptimizer("[$campaignId] Phase 1: Spend \${$currentSpend} < \$30 — waiting");
+                $db->query("UPDATE optimizer_monitored_campaigns SET last_checked_at = NOW() WHERE id = ?", [$mc['id']]);
+                $db->insert('optimizer_logs', [
+                    'campaign_id' => $campaignId,
+                    'advertiser_id' => $advertiserId,
+                    'action' => 'rule_check',
+                    'rule_key' => null,
+                    'rule_details' => "Phase 1: Spend \${$currentSpend} / \$30 — waiting for \$30 threshold",
+                    'metrics_snapshot' => json_encode($metricsSnapshot),
+                    'success' => 1,
+                ]);
+                continue;
+            }
+
+            // $30+ spent — evaluate Phase 1 gate
+            // PAUSE if: 0 conversions AND CPC > $0.80 (both conditions must be true)
+            if ($tiktokConversions == 0 && $currentCpc > 0.80) {
+                $ruleKey = 'phase1_no_conversion';
+                $details = "Phase 1 FAIL: \${$currentSpend} spent, 0 conversions, CPC \${$currentCpc} > \$0.80";
+                logOptimizer("[$campaignId] $details");
+
+                $pauseResult = pauseCampaignViaApi($advertiserId, $campaignId, $accessToken);
+                $resumeAt = date('Y-m-d H:i:s', strtotime('+30 minutes'));
+
+                $db->query(
+                    "UPDATE optimizer_monitored_campaigns SET paused_by_optimizer = 1, paused_at = NOW(), resume_at = ?, last_violation_rule = ?, last_checked_at = NOW() WHERE id = ?",
+                    [$resumeAt, $ruleKey, $mc['id']]
+                );
+
+                $db->insert('optimizer_logs', [
+                    'campaign_id' => $campaignId,
+                    'advertiser_id' => $advertiserId,
+                    'action' => 'pause',
+                    'rule_key' => $ruleKey,
+                    'rule_details' => $details,
+                    'metrics_snapshot' => json_encode($metricsSnapshot),
+                    'api_response' => json_encode($pauseResult['response']),
+                    'success' => $pauseResult['success'] ? 1 : 0,
+                ]);
+
+                if ($pauseResult['success']) {
+                    sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $details, $campaignGroup, $resumeAt, $advertiserId);
+                    $stats['paused']++;
+                } else {
+                    $db->query("UPDATE optimizer_monitored_campaigns SET paused_by_optimizer = 0, paused_at = NULL, resume_at = NULL WHERE id = ?", [$mc['id']]);
+                    sendSlackPauseFailureNotification($campaignName, $campaignId, $ruleKey, $details);
+                }
+            } else {
+                // Phase 1 passed — promote to Phase 2
+                logOptimizer("[$campaignId] Phase 1 PASSED: \${$currentSpend} spent, {$tiktokConversions} conversions, CPC \${$currentCpc} — promoting to Phase 2");
+
+                $db->query(
+                    "UPDATE optimizer_monitored_campaigns SET optimizer_phase = 'phase2', last_checked_at = NOW() WHERE id = ?",
+                    [$mc['id']]
+                );
+
+                $db->insert('optimizer_logs', [
+                    'campaign_id' => $campaignId,
+                    'advertiser_id' => $advertiserId,
+                    'action' => 'rule_check',
+                    'rule_key' => null,
+                    'rule_details' => "Phase 1 PASSED → Phase 2: {$tiktokConversions} conversions, CPC \${$currentCpc}, Spend \${$currentSpend}",
+                    'metrics_snapshot' => json_encode($metricsSnapshot),
+                    'success' => 1,
+                ]);
+            }
             continue;
         }
 
-        // Evaluate rules for this campaign's group only
-        $violations = evaluateCampaignRules($tiktokMetrics, $redtrackMetrics, $rules);
+        // ========================================
+        // PHASE 2: Profitability (loss limit -$30)
+        // ========================================
+        if ($phase === 'phase2') {
+            $profitFormatted = number_format($profit, 2);
+            $revenueFormatted = number_format($revenue, 2);
+            $spendFormatted = number_format($currentSpend, 2);
 
-        // Update last checked
-        $db->query("UPDATE optimizer_monitored_campaigns SET last_checked_at = NOW() WHERE id = ?", [$mc['id']]);
+            if ($profit <= -30) {
+                $ruleKey = 'phase2_loss_limit';
+                $details = "Phase 2 FAIL: Profit \${$profitFormatted} (Revenue \${$revenueFormatted} - Cost \${$spendFormatted}) <= -\$30";
+                logOptimizer("[$campaignId] $details");
 
-        if (!empty($violations)) {
-            $firstViolation = $violations[0];
-            logOptimizer("Campaign {$mc['campaign_id']} [$campaignGroup] violated rule: {$firstViolation['rule_key']}", $violations);
+                $pauseResult = pauseCampaignViaApi($advertiserId, $campaignId, $accessToken);
+                $resumeAt = date('Y-m-d H:i:s', strtotime('+30 minutes'));
 
-            // Pause the campaign
-            $pauseResult = pauseCampaignViaApi($mc['advertiser_id'], $mc['campaign_id'], $accessToken);
-
-            // Set resume_at = now + 30 min
-            $resumeAt = date('Y-m-d H:i:s', strtotime('+30 minutes'));
-
-            $db->query(
-                "UPDATE optimizer_monitored_campaigns SET paused_by_optimizer = 1, paused_at = NOW(), resume_at = ?, last_violation_rule = ? WHERE id = ?",
-                [$resumeAt, $firstViolation['rule_key'], $mc['id']]
-            );
-
-            // Log the pause
-            $violationDetails = implode('; ', array_map(fn($v) => $v['details'], $violations));
-            $db->insert('optimizer_logs', [
-                'campaign_id' => $mc['campaign_id'],
-                'advertiser_id' => $mc['advertiser_id'],
-                'action' => 'pause',
-                'rule_key' => $firstViolation['rule_key'],
-                'rule_details' => $violationDetails,
-                'metrics_snapshot' => json_encode($metricsSnapshot),
-                'api_response' => json_encode($pauseResult['response']),
-                'success' => $pauseResult['success'] ? 1 : 0,
-            ]);
-
-            // Send Slack notification
-            if ($pauseResult['success']) {
-                sendSlackPauseNotification(
-                    $mc['campaign_name'] ?? $mc['campaign_id'],
-                    $mc['campaign_id'],
-                    $firstViolation['rule_key'],
-                    $violationDetails,
-                    $campaignGroup,
-                    $resumeAt,
-                    $mc['advertiser_id']
-                );
-                $stats['paused']++;
-            } else {
-                // Pause API failed — rollback DB state and notify
                 $db->query(
-                    "UPDATE optimizer_monitored_campaigns SET paused_by_optimizer = 0, paused_at = NULL, resume_at = NULL WHERE id = ?",
-                    [$mc['id']]
+                    "UPDATE optimizer_monitored_campaigns SET paused_by_optimizer = 1, paused_at = NOW(), resume_at = ?, last_violation_rule = ?, last_checked_at = NOW() WHERE id = ?",
+                    [$resumeAt, $ruleKey, $mc['id']]
                 );
-                sendSlackPauseFailureNotification(
-                    $mc['campaign_name'] ?? $mc['campaign_id'],
-                    $mc['campaign_id'],
-                    $firstViolation['rule_key'],
-                    $violationDetails
-                );
+
+                $db->insert('optimizer_logs', [
+                    'campaign_id' => $campaignId,
+                    'advertiser_id' => $advertiserId,
+                    'action' => 'pause',
+                    'rule_key' => $ruleKey,
+                    'rule_details' => $details,
+                    'metrics_snapshot' => json_encode($metricsSnapshot),
+                    'api_response' => json_encode($pauseResult['response']),
+                    'success' => $pauseResult['success'] ? 1 : 0,
+                ]);
+
+                if ($pauseResult['success']) {
+                    sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $details, $campaignGroup, $resumeAt, $advertiserId);
+                    $stats['paused']++;
+                } else {
+                    $db->query("UPDATE optimizer_monitored_campaigns SET paused_by_optimizer = 0, paused_at = NULL, resume_at = NULL WHERE id = ?", [$mc['id']]);
+                    sendSlackPauseFailureNotification($campaignName, $campaignId, $ruleKey, $details);
+                }
+            } else {
+                // Phase 2 OK — campaign still profitable enough
+                logOptimizer("[$campaignId] Phase 2 OK: Profit \${$profitFormatted} (Revenue \${$revenueFormatted} - Cost \${$spendFormatted})");
+
+                $db->query("UPDATE optimizer_monitored_campaigns SET last_checked_at = NOW() WHERE id = ?", [$mc['id']]);
+
+                $db->insert('optimizer_logs', [
+                    'campaign_id' => $campaignId,
+                    'advertiser_id' => $advertiserId,
+                    'action' => 'rule_check',
+                    'rule_key' => null,
+                    'rule_details' => "Phase 2 OK: Profit \${$profitFormatted} (Revenue \${$revenueFormatted} - Cost \${$spendFormatted})",
+                    'metrics_snapshot' => json_encode($metricsSnapshot),
+                    'success' => 1,
+                ]);
             }
-        } else {
-            // Log the check (no violation)
-            $db->insert('optimizer_logs', [
-                'campaign_id' => $mc['campaign_id'],
-                'advertiser_id' => $mc['advertiser_id'],
-                'action' => 'rule_check',
-                'rule_key' => null,
-                'rule_details' => "All $campaignGroup rules passed",
-                'metrics_snapshot' => json_encode($metricsSnapshot),
-                'success' => 1,
-            ]);
+            continue;
         }
     }
 
