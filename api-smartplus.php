@@ -1642,6 +1642,33 @@ switch ($action) {
 
         logSmartPlus("Using call_to_action_id (portfolio): $callToActionId");
 
+        // Fetch actual CTA values from portfolio to populate call_to_action_list
+        // Smart+ ads need BOTH: call_to_action_id in ad_configuration AND call_to_action_list at top level
+        $callToActionList = [];
+        try {
+            require_once __DIR__ . '/database/Database.php';
+            $db = Database::getInstance();
+            $portfolioRow = $db->fetchOne(
+                "SELECT portfolio_content FROM tool_portfolios WHERE creative_portfolio_id = ? AND advertiser_id = ?",
+                [$callToActionId, $advertiserId]
+            );
+            if ($portfolioRow && !empty($portfolioRow['portfolio_content'])) {
+                $portfolioContent = json_decode($portfolioRow['portfolio_content'], true);
+                if (is_array($portfolioContent)) {
+                    foreach ($portfolioContent as $item) {
+                        if (!empty($item['asset_content'])) {
+                            $callToActionList[] = ['call_to_action' => $item['asset_content']];
+                        }
+                    }
+                }
+                logSmartPlus("Fetched CTA values from portfolio: " . json_encode($callToActionList));
+            } else {
+                logSmartPlus("WARNING: Portfolio $callToActionId not found in database, call_to_action_list will be empty");
+            }
+        } catch (Exception $e) {
+            logSmartPlus("WARNING: Failed to fetch portfolio content: " . $e->getMessage());
+        }
+
         // Build ad_text_list - DEDUPLICATE to avoid "duplicate titles" error
         // Option 1: Use ad_texts array if provided (from new UI with single text field)
         // Option 2: Extract unique texts from creatives (fallback for compatibility)
@@ -1713,9 +1740,13 @@ switch ($action) {
 
         $adParams['ad_configuration'] = $adConfig;
 
-        // Per TikTok docs: when using call_to_action_id (portfolio), call_to_action_list should NOT be passed.
-        // Docs say: call_to_action_id = "Specify a valid value", call_to_action_list = "Not passed"
-        logSmartPlus("Using call_to_action_id in ad_configuration (portfolio: $callToActionId). NOT sending call_to_action_list per TikTok API docs.");
+        // Smart+ ads need call_to_action_list at top level alongside call_to_action_id in ad_configuration
+        if (!empty($callToActionList)) {
+            $adParams['call_to_action_list'] = $callToActionList;
+            logSmartPlus("Using call_to_action_id in ad_configuration (portfolio: $callToActionId) AND call_to_action_list: " . json_encode($callToActionList));
+        } else {
+            logSmartPlus("WARNING: No CTA values found for portfolio $callToActionId — call_to_action_list not sent");
+        }
 
         logSmartPlus("Ad params: " . json_encode($adParams));
         logSmartPlus("=== SENDING TO TIKTOK API ===");
@@ -2053,9 +2084,34 @@ switch ($action) {
 
         $adParams['ad_configuration'] = $adConfig;
 
-        // Per TikTok docs: when using call_to_action_id (portfolio), call_to_action_list should NOT be passed.
-        // Docs say: call_to_action_id = "Specify a valid value", call_to_action_list = "Not passed"
-        logSmartPlus("Using call_to_action_id in ad_configuration (portfolio: $callToActionId). NOT sending call_to_action_list per TikTok API docs.");
+        // Smart+ ads need call_to_action_list at top level alongside call_to_action_id in ad_configuration
+        $fullCtaList = [];
+        try {
+            require_once __DIR__ . '/database/Database.php';
+            $dbCta = Database::getInstance();
+            $portfolioRow = $dbCta->fetchOne(
+                "SELECT portfolio_content FROM tool_portfolios WHERE creative_portfolio_id = ? AND advertiser_id = ?",
+                [$callToActionId, $advertiserId]
+            );
+            if ($portfolioRow && !empty($portfolioRow['portfolio_content'])) {
+                $portfolioContent = json_decode($portfolioRow['portfolio_content'], true);
+                if (is_array($portfolioContent)) {
+                    foreach ($portfolioContent as $item) {
+                        if (!empty($item['asset_content'])) {
+                            $fullCtaList[] = ['call_to_action' => $item['asset_content']];
+                        }
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            logSmartPlus("WARNING: Failed to fetch portfolio content for full campaign: " . $e->getMessage());
+        }
+        if (!empty($fullCtaList)) {
+            $adParams['call_to_action_list'] = $fullCtaList;
+            logSmartPlus("Using call_to_action_id (portfolio: $callToActionId) AND call_to_action_list: " . json_encode($fullCtaList));
+        } else {
+            logSmartPlus("WARNING: No CTA values found for portfolio $callToActionId in full campaign");
+        }
 
         logSmartPlus("Ad params: " . json_encode($adParams));
 
@@ -3388,8 +3444,32 @@ switch ($action) {
                     'ad_configuration' => $adConfig
                 ];
 
-                // Per TikTok docs: when using call_to_action_id (portfolio), call_to_action_list should NOT be passed.
-                logSmartPlus("Using call_to_action_id in ad_configuration (portfolio: $ctaPortfolioId). NOT sending call_to_action_list per TikTok API docs.");
+                // Smart+ ads need call_to_action_list at top level alongside call_to_action_id in ad_configuration
+                $bulkCtaList = [];
+                try {
+                    $portfolioRow = $db->fetchOne(
+                        "SELECT portfolio_content FROM tool_portfolios WHERE creative_portfolio_id = ? AND advertiser_id = ?",
+                        [$ctaPortfolioId, $targetAdvertiserId]
+                    );
+                    if ($portfolioRow && !empty($portfolioRow['portfolio_content'])) {
+                        $portfolioContent = json_decode($portfolioRow['portfolio_content'], true);
+                        if (is_array($portfolioContent)) {
+                            foreach ($portfolioContent as $item) {
+                                if (!empty($item['asset_content'])) {
+                                    $bulkCtaList[] = ['call_to_action' => $item['asset_content']];
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception $e) {
+                    logSmartPlus("WARNING: Failed to fetch portfolio content for bulk launch: " . $e->getMessage());
+                }
+                if (!empty($bulkCtaList)) {
+                    $adParams['call_to_action_list'] = $bulkCtaList;
+                    logSmartPlus("Using call_to_action_id (portfolio: $ctaPortfolioId) AND call_to_action_list: " . json_encode($bulkCtaList));
+                } else {
+                    logSmartPlus("WARNING: No CTA values found for portfolio $ctaPortfolioId in bulk launch");
+                }
 
                 $adResult = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);
 
@@ -3739,8 +3819,32 @@ switch ($action) {
                 'ad_configuration' => $adConfig
             ];
 
-            // Per TikTok docs: when using call_to_action_id (portfolio), call_to_action_list should NOT be passed.
-            logSmartPlus("Using call_to_action_id in ad_configuration (portfolio: $ctaPortfolioId). NOT sending call_to_action_list per TikTok API docs.");
+            // Smart+ ads need call_to_action_list at top level alongside call_to_action_id in ad_configuration
+            $dupCtaList = [];
+            try {
+                $portfolioRow = $db->fetchOne(
+                    "SELECT portfolio_content FROM tool_portfolios WHERE creative_portfolio_id = ? AND advertiser_id = ?",
+                    [$ctaPortfolioId, $advertiserId]
+                );
+                if ($portfolioRow && !empty($portfolioRow['portfolio_content'])) {
+                    $portfolioContent = json_decode($portfolioRow['portfolio_content'], true);
+                    if (is_array($portfolioContent)) {
+                        foreach ($portfolioContent as $item) {
+                            if (!empty($item['asset_content'])) {
+                                $dupCtaList[] = ['call_to_action' => $item['asset_content']];
+                            }
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                logSmartPlus("WARNING: Failed to fetch portfolio content for duplicate: " . $e->getMessage());
+            }
+            if (!empty($dupCtaList)) {
+                $adParams['call_to_action_list'] = $dupCtaList;
+                logSmartPlus("Using call_to_action_id (portfolio: $ctaPortfolioId) AND call_to_action_list: " . json_encode($dupCtaList));
+            } else {
+                logSmartPlus("WARNING: No CTA values found for portfolio $ctaPortfolioId in duplicate");
+            }
 
             logSmartPlus("Creating Smart+ ad: " . json_encode($adParams));
             $adResult = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);
