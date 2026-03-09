@@ -8985,6 +8985,15 @@ function renderCampaignTotals() {
 
     // Calculate totals for each group
     const calculateTotals = (campaigns) => {
+        let totalRevenue = 0;
+        let totalProfit = 0;
+        campaigns.forEach(c => {
+            const rtData = state.redtrackLpCtrs[c.campaign_id];
+            if (rtData) {
+                totalRevenue += parseFloat(rtData.revenue) || 0;
+                totalProfit += parseFloat(rtData.profit) || 0;
+            }
+        });
         return {
             count: campaigns.length,
             budget: campaigns.reduce((sum, c) => sum + (parseFloat(c.budget) || 0), 0),
@@ -8992,7 +9001,9 @@ function renderCampaignTotals() {
             impressions: campaigns.reduce((sum, c) => sum + (parseInt(c.impressions) || 0), 0),
             clicks: campaigns.reduce((sum, c) => sum + (parseInt(c.clicks) || 0), 0),
             conversions: campaigns.reduce((sum, c) => sum + (parseInt(c.conversions) || 0), 0),
-            results: campaigns.reduce((sum, c) => sum + (parseInt(c.results) || 0), 0)
+            results: campaigns.reduce((sum, c) => sum + (parseInt(c.results) || 0), 0),
+            revenue: totalRevenue,
+            profit: totalProfit
         };
     };
 
@@ -9035,6 +9046,8 @@ function renderCampaignTotals() {
                 <td style="text-align: right;">${formatNumberWithCommas(totals.conversions)}</td>
                 <td style="text-align: right;">$${averages.costPerResult.toFixed(2)}</td>
                 <td style="text-align: right;">${formatNumberWithCommas(totals.results)}</td>
+                <td style="text-align: right; font-weight: 600;">$${totals.revenue.toFixed(2)}</td>
+                <td style="text-align: right; font-weight: 600; color: ${totals.profit >= 0 ? '#16a34a' : '#dc2626'};">$${totals.profit.toFixed(2)}</td>
                 <td></td>
             </tr>
         `;
@@ -9138,6 +9151,8 @@ function renderCampaignTableRow(campaign) {
             <td class="col-conversions" style="text-align: right;">${formatNumber(campaign.conversions)}</td>
             <td class="col-cpr" style="text-align: right;">${formatCurrency(campaign.cost_per_result)}</td>
             <td class="col-results" style="text-align: right;">${formatNumber(campaign.results)}</td>
+            <td class="col-revenue" style="text-align: right;" id="revenue-cell-${campaign.campaign_id}">${renderRevenueCell(campaign.campaign_id)}</td>
+            <td class="col-profit" style="text-align: right;" id="profit-cell-${campaign.campaign_id}">${renderProfitCell(campaign.campaign_id)}</td>
             <td class="col-actions" style="display:flex;gap:4px;align-items:center;">
                 <button class="action-btn-table duplicate-btn"
                         onclick="openDuplicateCampaignModal('${campaign.campaign_id}', '${escapeHtml(campaign.campaign_name).replace(/'/g, "\\'")}'); event.stopPropagation();"
@@ -9195,6 +9210,21 @@ function renderLpViewsCell(campaignId) {
     const data = state.redtrackLpCtrs[campaignId];
     if (!data || data.lp_views === undefined) return '-';
     return `<span style="font-weight:500;">${formatNumber(data.lp_views)}</span>`;
+}
+
+function renderRevenueCell(campaignId) {
+    const data = state.redtrackLpCtrs[campaignId];
+    if (!data || data.revenue === undefined) return '-';
+    const rev = parseFloat(data.revenue) || 0;
+    return `<span style="font-weight:500;">$${rev.toFixed(2)}</span>`;
+}
+
+function renderProfitCell(campaignId) {
+    const data = state.redtrackLpCtrs[campaignId];
+    if (!data || data.profit === undefined) return '-';
+    const profit = parseFloat(data.profit) || 0;
+    const color = profit >= 0 ? '#16a34a' : '#dc2626';
+    return `<span style="font-weight:600;color:${color};">$${profit.toFixed(2)}</span>`;
 }
 
 function renderLpCtrCell(campaignId) {
@@ -9277,14 +9307,22 @@ async function fetchLpCtrForCampaign(campaignId, rtName) {
             lp_ctr: parseFloat(result.lp_ctr) || 0,
             lp_clicks: parseInt(result.lp_clicks) || 0,
             lp_views: parseInt(result.lp_views) || 0,
+            revenue: parseFloat(result.revenue) || 0,
+            profit: parseFloat(result.profit) || 0,
         };
     } else {
-        state.redtrackLpCtrs[campaignId] = { lp_ctr: 0, lp_clicks: 0, lp_views: 0 };
+        state.redtrackLpCtrs[campaignId] = { lp_ctr: 0, lp_clicks: 0, lp_views: 0, revenue: 0, profit: 0 };
     }
 
     if (ctrCell) ctrCell.innerHTML = renderLpCtrCell(campaignId);
     if (clicksCell) clicksCell.innerHTML = renderLpClicksCell(campaignId);
     if (viewsCell) viewsCell.innerHTML = renderLpViewsCell(campaignId);
+
+    // Update revenue and profit cells
+    const revenueCell = document.getElementById('revenue-cell-' + campaignId);
+    const profitCell = document.getElementById('profit-cell-' + campaignId);
+    if (revenueCell) revenueCell.innerHTML = renderRevenueCell(campaignId);
+    if (profitCell) profitCell.innerHTML = renderProfitCell(campaignId);
 }
 
 async function loadRedTrackMappings() {
@@ -9307,6 +9345,8 @@ async function loadRedTrackMappings() {
                         lp_ctr: parseFloat(state.accountRtMetrics.lp_ctr) || 0,
                         lp_clicks: parseInt(state.accountRtMetrics.lp_clicks) || 0,
                         lp_views: parseInt(state.accountRtMetrics.lp_views) || 0,
+                        revenue: parseFloat(state.accountRtMetrics.revenue) || 0,
+                        profit: parseFloat(state.accountRtMetrics.profit) || 0,
                     };
                 }
                 continue;
@@ -9399,7 +9439,7 @@ async function fetchAccountRtMetrics(rtName) {
             `;
 
             // Update all campaign LP CTR cells with account-level data
-            updateAllLpCtrFromAccount({ lp_ctr: lpCtr, lp_clicks: lpClicks, lp_views: lpViews }, rtName);
+            updateAllLpCtrFromAccount({ lp_ctr: lpCtr, lp_clicks: lpClicks, lp_views: lpViews, revenue: rev, profit: profit }, rtName);
         } else if (metricsRow) {
             metricsRow.innerHTML = '<span style="color:#94a3b8;font-size:12px;">No RedTrack data found for this campaign</span>';
         }
@@ -9409,7 +9449,7 @@ async function fetchAccountRtMetrics(rtName) {
 }
 
 function updateAllLpCtrFromAccount(data, rtName) {
-    // When account RT is set, apply the same LP CTR/Clicks/Views to all campaigns that don't have their own mapping
+    // When account RT is set, apply the same LP CTR/Clicks/Views/Revenue/Profit to all campaigns that don't have their own mapping
     document.querySelectorAll('[id^="lpctr-cell-"]').forEach(cell => {
         const campaignId = cell.id.replace('lpctr-cell-', '');
         // Only update if campaign doesn't have its own individual RT mapping
@@ -9422,6 +9462,11 @@ function updateAllLpCtrFromAccount(data, rtName) {
             const viewsCell = document.getElementById('lpviews-cell-' + campaignId);
             if (clicksCell) clicksCell.innerHTML = `<span style="font-weight:500;color:#b45309;">${formatNumber(data.lp_clicks)}</span>`;
             if (viewsCell) viewsCell.innerHTML = `<span style="font-weight:500;color:#b45309;">${formatNumber(data.lp_views)}</span>`;
+            // Update Revenue and Profit cells
+            const revenueCell = document.getElementById('revenue-cell-' + campaignId);
+            const profitCell = document.getElementById('profit-cell-' + campaignId);
+            if (revenueCell) revenueCell.innerHTML = renderRevenueCell(campaignId);
+            if (profitCell) profitCell.innerHTML = renderProfitCell(campaignId);
         }
     });
 }
@@ -9808,6 +9853,8 @@ function createAdgroupTableRow(adgroup, parentCampaignId) {
         <td class="col-conversions" style="text-align: right;">${formatNumber(adgroup.conversions)}</td>
         <td class="col-cpr" style="text-align: right;">${formatCurrency(adgroup.cost_per_result)}</td>
         <td class="col-results" style="text-align: right;">${formatNumber(adgroup.results)}</td>
+        <td class="col-revenue" style="text-align: right;">-</td>
+        <td class="col-profit" style="text-align: right;">-</td>
         <td class="col-actions"></td>
     `;
 
@@ -9961,6 +10008,8 @@ function createAdTableRow(ad, parentAdgroupId, parentCampaignId) {
         <td class="col-conversions" style="text-align: right;">${formatNumber(ad.conversions)}</td>
         <td class="col-cpr" style="text-align: right;">${formatCurrency(ad.cost_per_result)}</td>
         <td class="col-results" style="text-align: right;">${formatNumber(ad.results)}</td>
+        <td class="col-revenue" style="text-align: right;">-</td>
+        <td class="col-profit" style="text-align: right;">-</td>
         <td class="col-actions">${appealBtnHtml}</td>
     `;
 

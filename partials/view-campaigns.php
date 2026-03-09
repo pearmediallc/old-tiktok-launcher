@@ -144,6 +144,8 @@
                             <th class="col-conversions">Conversions</th>
                             <th class="col-cpr">Cost/Result</th>
                             <th class="col-results">Results</th>
+                            <th class="col-revenue">Revenue</th>
+                            <th class="col-profit">Profit</th>
                             <th class="col-actions" style="min-width:120px;">Actions</th>
                         </tr>
                     </thead>
