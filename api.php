@@ -161,27 +161,21 @@ function getUTCDateTime($modifier = null) {
     return $dt->format('Y-m-d H:i:s');
 }
 
-// Convert user's scheduled time to UTC
-// User enters time thinking in EST, we calculate offset from now and apply to UTC
-// This matches the "Start Immediately" approach which works correctly
+// Convert user time to UTC for TikTok API
+// Uses fixed UTC-5 offset (NOT DST-aware America/New_York)
+// TikTok account timezone uses fixed offset and does NOT adjust for daylight saving time
+// Using America/New_York would cause 1-hour shift during DST (EDT = UTC-4 vs TikTok's fixed UTC-5)
 function convertScheduledTimeToUTC($scheduledTimeString) {
-    $est = new DateTimeZone('America/New_York');
+    $fixedTz = new DateTimeZone('-05:00'); // Fixed UTC-5 to match TikTok account timezone
     $utc = new DateTimeZone('UTC');
 
-    // Get current time in EST (user's perspective)
-    $nowEST = new DateTime('now', $est);
+    // Parse the time using fixed UTC-5 offset
+    $time = new DateTime($scheduledTimeString, $fixedTz);
 
-    // Parse scheduled time as EST
-    $scheduledEST = new DateTime($scheduledTimeString, $est);
+    // Convert to UTC
+    $time->setTimezone($utc);
 
-    // Calculate the difference in seconds from now
-    $diffSeconds = $scheduledEST->getTimestamp() - $nowEST->getTimestamp();
-
-    // Apply the same offset to current UTC time
-    $utcTime = new DateTime('now', $utc);
-    $utcTime->modify("+{$diffSeconds} seconds");
-
-    return $utcTime->format('Y-m-d H:i:s');
+    return $time->format('Y-m-d H:i:s');
 }
 
 // Legacy function - kept for backwards compatibility

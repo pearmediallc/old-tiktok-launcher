@@ -142,20 +142,22 @@ function getUTCDateTime($modifier = null) {
     return $dt->format('Y-m-d H:i:s');
 }
 
-// Convert EST time to UTC for TikTok API
-// All schedule times are entered in EST (America/New_York)
+// Convert user time to UTC for TikTok API
+// Uses fixed UTC-5 offset (NOT DST-aware America/New_York)
+// TikTok account timezone uses fixed offset and does NOT adjust for daylight saving time
+// Using America/New_York would cause 1-hour shift during DST (EDT = UTC-4 vs TikTok's fixed UTC-5)
 function convertScheduledTimeToUTC($scheduledTimeString) {
-    $est = new DateTimeZone('America/New_York');
+    $fixedTz = new DateTimeZone('-05:00'); // Fixed UTC-5 to match TikTok account timezone
     $utc = new DateTimeZone('UTC');
 
-    // Parse the time in EST
-    $estTime = new DateTime($scheduledTimeString, $est);
+    // Parse the time using fixed UTC-5 offset
+    $time = new DateTime($scheduledTimeString, $fixedTz);
 
     // Convert to UTC
-    $estTime->setTimezone($utc);
-    $result = $estTime->format('Y-m-d H:i:s');
+    $time->setTimezone($utc);
+    $result = $time->format('Y-m-d H:i:s');
 
-    logSmartPlus("Schedule conversion: Input: $scheduledTimeString (EST) -> UTC: $result");
+    logSmartPlus("Schedule conversion: Input: $scheduledTimeString (UTC-5 fixed) -> UTC: $result");
 
     return $result;
 }
@@ -734,27 +736,15 @@ switch ($action) {
             $timezone = $advertiserData['timezone'] ?? 'UTC';
             $timezoneOffset = 0;
 
-            // Parse timezone to get offset
-            // TikTok returns timezone in various formats, try to determine offset
-            $tzMap = [
-                'UTC' => 0,
-                'America/New_York' => -5,
-                'America/Chicago' => -6,
-                'America/Denver' => -7,
-                'America/Los_Angeles' => -8,
-                'America/Bogota' => -5,
-                'America/Lima' => -5,
-                'America/Mexico_City' => -6,
-                'Europe/London' => 0,
-                'Europe/Paris' => 1,
-                'Asia/Shanghai' => 8,
-                'Asia/Tokyo' => 9,
-            ];
-
-            if (isset($tzMap[$timezone])) {
-                $timezoneOffset = $tzMap[$timezone];
-            } elseif (preg_match('/UTC([+-]\d+)/', $timezone, $matches)) {
-                $timezoneOffset = intval($matches[1]);
+            // Calculate timezone offset dynamically (handles DST correctly)
+            try {
+                $tz = new DateTimeZone($timezone);
+                $now = new DateTime('now', $tz);
+                $timezoneOffset = $now->getOffset() / 3600; // seconds to hours
+            } catch (Exception $e) {
+                if (preg_match('/UTC([+-]\d+)/', $timezone, $matches)) {
+                    $timezoneOffset = intval($matches[1]);
+                }
             }
 
             logSmartPlus("Advertiser timezone: $timezone (offset: $timezoneOffset)");
