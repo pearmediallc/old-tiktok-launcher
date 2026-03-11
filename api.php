@@ -37,9 +37,9 @@ header('Content-Type: application/json; charset=utf-8');
 // Increase PHP limits for video uploads
 // Note: ini_set doesn't work for upload_max_filesize and post_max_size
 // Use .htaccess or php.ini file in this directory instead
-ini_set('memory_limit', '256M');
-ini_set('max_execution_time', '120');
-ini_set('max_input_time', '120');
+ini_set('memory_limit', '512M');
+ini_set('max_execution_time', '600');
+ini_set('max_input_time', '600');
 
 session_start();
 
@@ -2317,15 +2317,60 @@ try {
                 logToFile("Video Upload - Signature: " . $videoSignature);
                 logToFile("Video Upload - Access Token Present: " . (!empty($config['access_token']) ? 'Yes' : 'No'));
 
-                // Use direct cURL for more reliable upload
-                $url = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/upload/';
+                // UPLOAD_BY_URL: Save file locally, give TikTok a URL to pull from
+                // This eliminates the slow server→TikTok file transfer from the user's wait time
+                $videosDir = __DIR__ . '/uploads/videos';
+                if (!is_dir($videosDir)) {
+                    mkdir($videosDir, 0755, true);
+                }
 
-                $postData = [
-                    'advertiser_id' => $upload_advertiser_id,
-                    'upload_type' => 'UPLOAD_BY_FILE',
-                    'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
-                    'video_signature' => $videoSignature
+                // Save with unique name to prevent collisions
+                $fileExt = pathinfo($fileName, PATHINFO_EXTENSION) ?: 'mp4';
+                $uniqueName = 'vid_' . uniqid('', true) . '.' . $fileExt;
+                $permanentPath = $videosDir . '/' . $uniqueName;
+
+                if (!move_uploaded_file($tmpPath, $permanentPath)) {
+                    throw new Exception('Failed to save uploaded video');
+                }
+                logToFile("Video saved to: $permanentPath");
+
+                // Generate token for serve-video.php
+                $token = bin2hex(random_bytes(32));
+                $cacheDir = __DIR__ . '/cache';
+                if (!is_dir($cacheDir)) mkdir($cacheDir, 0755, true);
+                $tokenFile = $cacheDir . '/video_tokens.json';
+                $tokens = file_exists($tokenFile) ? (json_decode(file_get_contents($tokenFile), true) ?? []) : [];
+
+                // Cleanup expired tokens and files
+                foreach ($tokens as $t => $info) {
+                    if (isset($info['expires']) && $info['expires'] < time()) {
+                        $expiredFile = $videosDir . '/' . ($info['file'] ?? '');
+                        if (file_exists($expiredFile)) @unlink($expiredFile);
+                        unset($tokens[$t]);
+                    }
+                }
+
+                $tokens[$token] = [
+                    'file' => $uniqueName,
+                    'created' => time(),
+                    'expires' => time() + 1800 // 30 minutes
                 ];
+                file_put_contents($tokenFile, json_encode($tokens));
+
+                // Construct the public URL for TikTok to pull from
+                $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                $host = $_SERVER['HTTP_HOST'];
+                $videoUrl = "{$scheme}://{$host}/serve-video.php?token={$token}&file={$uniqueName}";
+                logToFile("UPLOAD_BY_URL - Video URL: $videoUrl");
+
+                // Call TikTok API with UPLOAD_BY_URL (lightweight JSON POST, no file transfer)
+                $url = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/upload/';
+                $postData = json_encode([
+                    'advertiser_id' => $upload_advertiser_id,
+                    'upload_type' => 'UPLOAD_BY_URL',
+                    'video_url' => $videoUrl,
+                    'file_name' => $fileName
+                ]);
 
                 $ch = curl_init();
                 curl_setopt_array($ch, [
@@ -2334,10 +2379,11 @@ try {
                     CURLOPT_POST => true,
                     CURLOPT_POSTFIELDS => $postData,
                     CURLOPT_HTTPHEADER => [
-                        'Access-Token: ' . $config['access_token']
+                        'Access-Token: ' . $config['access_token'],
+                        'Content-Type: application/json'
                     ],
-                    CURLOPT_TIMEOUT => 300,
-                    CURLOPT_CONNECTTIMEOUT => 30,
+                    CURLOPT_TIMEOUT => 30, // Much shorter — just an API call, no file transfer
+                    CURLOPT_CONNECTTIMEOUT => 15,
                     CURLOPT_SSL_VERIFYPEER => true,
                     CURLOPT_SSL_VERIFYHOST => 2
                 ]);
@@ -2662,15 +2708,50 @@ try {
 
                 logToFile("Video Upload to $targetAdvertiserId - File: $fileName, Size: $fileSize bytes");
 
-                // Upload to TikTok
-                $url = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/upload/';
+                // UPLOAD_BY_URL: Save file locally, give TikTok a URL to pull from
+                $videosDir = __DIR__ . '/uploads/videos';
+                if (!is_dir($videosDir)) mkdir($videosDir, 0755, true);
 
-                $postData = [
+                $fileExt = pathinfo($fileName, PATHINFO_EXTENSION) ?: 'mp4';
+                $uniqueName = 'vid_' . uniqid('', true) . '.' . $fileExt;
+                $permanentPath = $videosDir . '/' . $uniqueName;
+
+                if (!move_uploaded_file($tmpPath, $permanentPath)) {
+                    throw new Exception('Failed to save uploaded video');
+                }
+
+                // Generate token for serve-video.php
+                $token = bin2hex(random_bytes(32));
+                $cacheDir = __DIR__ . '/cache';
+                if (!is_dir($cacheDir)) mkdir($cacheDir, 0755, true);
+                $tokenFile = $cacheDir . '/video_tokens.json';
+                $tokens = file_exists($tokenFile) ? (json_decode(file_get_contents($tokenFile), true) ?? []) : [];
+
+                // Cleanup expired tokens/files
+                foreach ($tokens as $t => $info) {
+                    if (isset($info['expires']) && $info['expires'] < time()) {
+                        $expiredFile = $videosDir . '/' . ($info['file'] ?? '');
+                        if (file_exists($expiredFile)) @unlink($expiredFile);
+                        unset($tokens[$t]);
+                    }
+                }
+
+                $tokens[$token] = ['file' => $uniqueName, 'created' => time(), 'expires' => time() + 1800];
+                file_put_contents($tokenFile, json_encode($tokens));
+
+                $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                $host = $_SERVER['HTTP_HOST'];
+                $videoUrl = "{$scheme}://{$host}/serve-video.php?token={$token}&file={$uniqueName}";
+                logToFile("UPLOAD_BY_URL to $targetAdvertiserId - Video URL: $videoUrl");
+
+                // Call TikTok API with UPLOAD_BY_URL (lightweight JSON POST)
+                $url = 'https://business-api.tiktok.com/open_api/v1.3/file/video/ad/upload/';
+                $postData = json_encode([
                     'advertiser_id' => $targetAdvertiserId,
-                    'upload_type' => 'UPLOAD_BY_FILE',
-                    'video_file' => new CURLFile($tmpPath, $mimeType, $fileName),
-                    'video_signature' => $videoSignature
-                ];
+                    'upload_type' => 'UPLOAD_BY_URL',
+                    'video_url' => $videoUrl,
+                    'file_name' => $fileName
+                ]);
 
                 $ch = curl_init();
                 curl_setopt_array($ch, [
@@ -2679,10 +2760,11 @@ try {
                     CURLOPT_POST => true,
                     CURLOPT_POSTFIELDS => $postData,
                     CURLOPT_HTTPHEADER => [
-                        'Access-Token: ' . $config['access_token']
+                        'Access-Token: ' . $config['access_token'],
+                        'Content-Type: application/json'
                     ],
-                    CURLOPT_TIMEOUT => 300,
-                    CURLOPT_CONNECTTIMEOUT => 30,
+                    CURLOPT_TIMEOUT => 30,
+                    CURLOPT_CONNECTTIMEOUT => 15,
                     CURLOPT_SSL_VERIFYPEER => true,
                     CURLOPT_SSL_VERIFYHOST => 2
                 ]);

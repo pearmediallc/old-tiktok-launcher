@@ -3164,72 +3164,80 @@ async function handleMediaUpload(event) {
 
     document.getElementById('upload-progress').style.display = 'block';
     document.getElementById('upload-area').style.display = 'none';
-    
-    // Add upload status message
+
+    // Show file size and estimated time
+    const fileSizeMB = (file.size / 1024 / 1024).toFixed(1);
+    const estimatedSec = Math.ceil(file.size / (2 * 1024 * 1024)); // ~2 MB/s average
     const progressDiv = document.getElementById('upload-progress');
-    progressDiv.innerHTML = `<p>Uploading ${file.name}...</p><div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>`;
+    progressDiv.innerHTML = `
+        <p>Uploading ${file.name} (${fileSizeMB} MB)</p>
+        <p style="font-size:12px;color:#64748b;">Estimated: ~${estimatedSec > 60 ? Math.ceil(estimatedSec/60) + ' min' : estimatedSec + 's'}</p>
+        <div class="progress-bar"><div class="progress-fill" id="upload-progress-fill" style="width: 0%"></div></div>
+        <p id="upload-percent" style="font-size:12px;color:#475569;margin-top:4px;">0%</p>
+    `;
+
+    addLog('request', `Uploading ${isVideo ? 'video' : 'image'}: ${file.name} (${fileSizeMB} MB)`);
+
+    // Use XHR for real-time upload progress tracking
+    const uploadTimeout = isVideo ? 600000 : 120000; // 10 min video, 2 min image
 
     try {
-        addLog('request', `Uploading ${isVideo ? 'video' : 'image'}: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
-        
-        const response = await fetch(`api.php?action=${isVideo ? 'upload_video' : 'upload_image'}`, {
-            method: 'POST',
-            headers: { 'X-CSRF-Token': window.CSRF_TOKEN || '' },
-            body: formData
+        const result = await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            const timeoutId = setTimeout(() => { xhr.abort(); reject(new Error('Upload timed out')); }, uploadTimeout);
+
+            // Real-time progress tracking
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    const fill = document.getElementById('upload-progress-fill');
+                    const pct = document.getElementById('upload-percent');
+                    if (fill) fill.style.width = percent + '%';
+                    if (pct) pct.textContent = percent === 100 ? 'Processing...' : percent + '%';
+                }
+            });
+
+            xhr.addEventListener('load', () => {
+                clearTimeout(timeoutId);
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        resolve(JSON.parse(xhr.responseText));
+                    } catch (e) {
+                        reject(new Error('Invalid JSON response from server'));
+                    }
+                } else {
+                    reject(new Error(`HTTP ${xhr.status}: ${xhr.statusText}`));
+                }
+            });
+
+            xhr.addEventListener('error', () => { clearTimeout(timeoutId); reject(new Error('Network error during upload')); });
+            xhr.addEventListener('abort', () => { clearTimeout(timeoutId); reject(new Error('Upload was cancelled')); });
+
+            xhr.open('POST', `api.php?action=${isVideo ? 'upload_video' : 'upload_image'}`);
+            xhr.setRequestHeader('X-CSRF-Token', window.CSRF_TOKEN || '');
+            xhr.send(formData);
         });
 
-        // Check if response is ok first
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        // Get response text first to handle empty responses
-        const responseText = await response.text();
-        
-        if (!responseText || responseText.trim() === '') {
-            throw new Error('Empty response from server');
-        }
-
-        let result;
-        try {
-            result = JSON.parse(responseText);
-        } catch (parseError) {
-            console.error('JSON Parse Error:', parseError);
-            console.error('Response Text:', responseText);
-            throw new Error('Invalid JSON response from server');
-        }
-        
         addLog(result.success ? 'response' : 'error', `Upload ${result.success ? 'successful' : 'failed'}`, result);
 
         if (result.success) {
-            // Show enhanced success message with file details
             const fileName = file.name;
-            const fileSize = (file.size / 1024 / 1024).toFixed(2);
 
-            // Update progress area with success message before switching
             progressDiv.innerHTML = `
                 <div style="text-align: center; padding: 20px;">
                     <div style="font-size: 50px; margin-bottom: 10px;">✅</div>
                     <p style="font-weight: 600; color: #2e7d32; margin: 0;">Upload Successful!</p>
-                    <p style="color: #666; font-size: 13px; margin: 5px 0 0 0;">${fileName} (${fileSize} MB)</p>
+                    <p style="color: #666; font-size: 13px; margin: 5px 0 0 0;">${fileName} (${fileSizeMB} MB)</p>
                 </div>
             `;
 
-            showToast(`✅ ${isVideo ? 'Video' : 'Image'} "${fileName}" uploaded successfully!`, 'success');
+            showToast(`${isVideo ? 'Video' : 'Image'} "${fileName}" uploaded successfully!`, 'success');
 
-            // Wait a moment to show success, then reload
             await new Promise(resolve => setTimeout(resolve, 1500));
-
-            // Reload media library to show the new upload
             await loadMediaLibrary();
-
-            // Switch to library tab to show the uploaded file
             document.querySelector('.tab-btn[onclick*="library"]').click();
-
-            // Reset upload form
             event.target.value = '';
 
-            // Store the newly uploaded file info to highlight it
             state.lastUploadedFile = {
                 name: fileName,
                 type: isVideo ? 'video' : 'image',

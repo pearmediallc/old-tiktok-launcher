@@ -1555,7 +1555,7 @@ async function uploadSingleMediaFile(file, index, total) {
     const itemId = `smart-upload-item-${index}`;
     const progressBarId = `smart-progress-bar-${index}`;
     const isVideo = file.type.startsWith('video/');
-    const uploadTimeout = isVideo ? 300000 : 120000; // 5 min for video, 2 min for image
+    const uploadTimeout = isVideo ? 600000 : 120000; // 10 min for video, 2 min for image
 
     // Pre-generate thumbnail for instant preview (if video)
     let previewUrl = '';
@@ -4583,7 +4583,7 @@ async function handleBulkAccountVideoUpload(event, advertiserId) {
             // Use XMLHttpRequest for real-time progress tracking
             const result = await new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
-                const timeoutId = setTimeout(() => xhr.abort(), 300000);
+                const timeoutId = setTimeout(() => xhr.abort(), 600000);
 
                 xhr.upload.addEventListener('progress', (e) => {
                     if (e.lengthComputable) {
@@ -4802,7 +4802,7 @@ async function useOriginalVideoForAccount(advertiserId) {
 
             const uploadResult = await new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
-                const timeoutId = setTimeout(() => xhr.abort(), 300000);
+                const timeoutId = setTimeout(() => xhr.abort(), 600000);
 
                 xhr.upload.addEventListener('progress', (e) => {
                     if (e.lengthComputable) {
@@ -5137,7 +5137,7 @@ async function handlePickerVideoUpload(event) {
             // Use XMLHttpRequest for real-time progress tracking
             const result = await new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
-                const timeoutId = setTimeout(() => xhr.abort(), 300000); // 5 min timeout
+                const timeoutId = setTimeout(() => xhr.abort(), 600000); // 5 min timeout
 
                 xhr.upload.addEventListener('progress', (e) => {
                     if (e.lengthComputable) {
@@ -8538,7 +8538,7 @@ async function uploadMediaVideo(file, index) {
 
     return new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
-        const uploadTimeout = 300000; // 5 minutes timeout
+        const uploadTimeout = 600000; // 10 minutes timeout
         let timeoutId;
         let uploadComplete = false;
 
@@ -14202,7 +14202,7 @@ async function handleBulkVideoUpload(event) {
 // Upload a single video as part of bulk upload - NO AUTO-RETRY to prevent duplicates
 async function uploadSingleVideoInBulk(file, index) {
     const itemId = `upload-item-${index}`;
-    const uploadTimeout = 300000; // 5 minutes timeout for large videos
+    const uploadTimeout = 600000; // 10 minutes timeout for large videos
 
     updateUploadItemStatus(itemId, 'uploading', 'Uploading...', 0);
 
