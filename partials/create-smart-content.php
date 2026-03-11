@@ -1763,6 +1763,14 @@
                         </button>
                     </div>
                 </div>
+                <div onclick="openExternalUpload()" style="display: flex; align-items: center; gap: 15px; padding: 16px; background: #fdf4ff; border: 2px solid #e9d5ff; border-radius: 10px; cursor: pointer; margin-top: 12px; transition: all 0.2s;"
+                     onmouseover="this.style.borderColor='#a855f7'" onmouseout="this.style.borderColor='#e9d5ff'">
+                    <div style="width: 44px; height: 44px; background: #a855f7; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; flex-shrink: 0;">⚡</div>
+                    <div>
+                        <div style="font-weight: 700; font-size: 15px; color: #6b21a8;">External Upload (Smart Fix)</div>
+                        <div style="font-size: 13px; color: #c084fc;">Fast upload with auto-fix for disapproved videos</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

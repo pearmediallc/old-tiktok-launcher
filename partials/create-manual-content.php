@@ -404,6 +404,11 @@
                             </div>
                             <p id="upload-status">Uploading...</p>
                         </div>
+                        <div style="text-align: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e2e8f0;">
+                            <a href="#" onclick="openExternalUploadManual(event)" style="color: #7c3aed; font-size: 13px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+                                ⚡ Use Smart Fix Upload (faster, auto-fixes disapproved videos)
+                            </a>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">

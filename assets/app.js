@@ -3139,6 +3139,17 @@ function updateAdWithMedia(adIndex, selectedMedia) {
     }
 }
 
+// Open external Smart Fix upload in new tab (manual campaign)
+function openExternalUploadManual(e) {
+    e.preventDefault();
+    const advertiserId = window.TIKTOK_ADVERTISER_ID;
+    if (!advertiserId) {
+        alert('No advertiser ID found');
+        return;
+    }
+    window.open(`https://smart-fix-fz56.onrender.com?advertiser_id=${advertiserId}`, '_blank');
+}
+
 // Handle media upload
 async function handleMediaUpload(event) {
     const file = event.target.files[0];
