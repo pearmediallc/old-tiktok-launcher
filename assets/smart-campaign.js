@@ -13732,17 +13732,6 @@ function closeUploadOptions() {
     if (modal) modal.style.display = 'none';
 }
 
-// User chose "External Upload (Smart Fix)" - open in new tab
-function openExternalUpload() {
-    const advertiserId = state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID;
-    if (!advertiserId) {
-        showToast('No advertiser ID found', 'error');
-        return;
-    }
-    closeUploadOptions();
-    window.open(`https://smart-fix-fz56.onrender.com?advertiser_id=${advertiserId}`, '_blank');
-}
-
 // User chose "Single Account" upload
 function uploadSingleAccount() {
     closeUploadOptions();
