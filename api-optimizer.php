@@ -449,6 +449,24 @@ switch ($action) {
     // MANUAL ACTIONS
     // ============================================
 
+    case 'set_phase':
+        $campaignId = $input['campaign_id'] ?? '';
+        $advId = $input['advertiser_id'] ?? '';
+        $phase = $input['phase'] ?? '';
+
+        if (!$campaignId || !$advId || !in_array($phase, ['phase1', 'phase2'])) {
+            echo json_encode(['success' => false, 'message' => 'Invalid parameters']);
+            break;
+        }
+
+        $db->query(
+            "UPDATE optimizer_monitored_campaigns SET optimizer_phase = ?, last_checked_at = NOW() WHERE campaign_id = ? AND advertiser_id = ?",
+            [$phase, $campaignId, $advId]
+        );
+
+        echo json_encode(['success' => true, 'phase' => $phase]);
+        break;
+
     case 'manual_pause':
         $campaignId = $input['campaign_id'] ?? '';
         $advId = $input['advertiser_id'] ?? $advertiserId;

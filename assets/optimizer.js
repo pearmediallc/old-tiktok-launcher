@@ -283,7 +283,7 @@ function renderMonitoredCampaigns(campaigns) {
                     <div style="font-weight:600;">${escapeHtmlOpt(mc.campaign_name || mc.campaign_id)}</div>
                     <div style="font-size:11px;color:#94a3b8;">${cid}</div>
                 </td>
-                <td><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:${phaseColor}15;color:${phaseColor};">${phaseLabel}</span>${phaseDetail}</td>
+                <td><span onclick="togglePhase('${cid}', '${aid}', '${phase}')" style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:${phaseColor}15;color:${phaseColor};cursor:pointer;" title="Click to switch phase">${phaseLabel}</span>${phaseDetail}</td>
                 <td>${profitCell}</td>
                 <td style="font-size:12px;color:#475569;">${escapeHtmlOpt(rtCampaign)}</td>
                 <td><span class="opt-status-dot ${statusDot}"></span>${statusText}</td>
@@ -293,6 +293,20 @@ function renderMonitoredCampaigns(campaigns) {
             </tr>
         `;
     }).join('');
+}
+
+async function togglePhase(campaignId, advertiserId, currentPhase) {
+    const newPhase = currentPhase === 'phase2' ? 'phase1' : 'phase2';
+    const label = newPhase === 'phase2' ? 'Phase 2 (Profitability)' : 'Phase 1 (Qualification)';
+    if (!confirm(`Switch this campaign to ${label}?`)) return;
+
+    try {
+        const result = await optPost('set_phase', { campaign_id: campaignId, advertiser_id: advertiserId, phase: newPhase });
+        showOptToast(result.success ? `Switched to ${label}` : (result.message || 'Failed'), result.success ? 'success' : 'error');
+        loadOptimizerData();
+    } catch (e) {
+        showOptToast('Error switching phase', 'error');
+    }
 }
 
 async function manualPause(campaignId, advertiserId) {
