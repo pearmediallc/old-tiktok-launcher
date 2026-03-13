@@ -259,7 +259,6 @@ function renderMonitoredCampaigns(campaigns) {
         // Phase badge
         const phase = mc.optimizer_phase || 'phase1';
         const phaseLabel = phase === 'phase2' ? 'Phase 2' : 'Phase 1';
-        const phaseColor = phase === 'phase2' ? '#7c3aed' : '#0369a1';
         let phaseDetail = '';
         if (phase === 'phase1' && mc.spend !== null && mc.spend !== undefined) {
             phaseDetail = `<div style="font-size:10px;color:#64748b;">$${parseFloat(mc.spend).toFixed(2)} / $30</div>`;
@@ -283,7 +282,22 @@ function renderMonitoredCampaigns(campaigns) {
                     <div style="font-weight:600;">${escapeHtmlOpt(mc.campaign_name || mc.campaign_id)}</div>
                     <div style="font-size:11px;color:#94a3b8;">${cid}</div>
                 </td>
-                <td><span onclick="togglePhase('${cid}', '${aid}', '${phase}')" style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:${phaseColor}15;color:${phaseColor};cursor:pointer;" title="Click to switch phase">${phaseLabel}</span>${phaseDetail}</td>
+                <td style="position:relative;">
+                    <span class="phase-badge ${phase}" onclick="showPhaseDropdown(event, '${cid}', '${aid}', '${phase}')">${phaseLabel}</span>
+                    ${phaseDetail}
+                    <div class="phase-dropdown" id="phase-dd-${cid}">
+                        <div class="phase-option ${phase === 'phase1' ? 'selected' : ''}" onclick="setPhase('${cid}', '${aid}', 'phase1')">
+                            <div class="phase-opt-title"><span style="color:#0369a1;">●</span> Phase 1 — Qualification</div>
+                            <div class="phase-opt-desc">Waits for $30 spend, then checks performance</div>
+                            <div class="phase-opt-rules">Rules: 0 conversions + CPC > $0.80 → Pause</div>
+                        </div>
+                        <div class="phase-option ${phase === 'phase2' ? 'selected' : ''}" onclick="setPhase('${cid}', '${aid}', 'phase2')">
+                            <div class="phase-opt-title"><span style="color:#7c3aed;">●</span> Phase 2 — Profitability</div>
+                            <div class="phase-opt-desc">Tracks revenue vs cost from RedTrack</div>
+                            <div class="phase-opt-rules">Rules: Profit ≤ -$30 → Pause</div>
+                        </div>
+                    </div>
+                </td>
                 <td>${profitCell}</td>
                 <td style="font-size:12px;color:#475569;">${escapeHtmlOpt(rtCampaign)}</td>
                 <td><span class="opt-status-dot ${statusDot}"></span>${statusText}</td>
@@ -295,11 +309,24 @@ function renderMonitoredCampaigns(campaigns) {
     }).join('');
 }
 
-async function togglePhase(campaignId, advertiserId, currentPhase) {
-    const newPhase = currentPhase === 'phase2' ? 'phase1' : 'phase2';
-    const label = newPhase === 'phase2' ? 'Phase 2 (Profitability)' : 'Phase 1 (Qualification)';
-    if (!confirm(`Switch this campaign to ${label}?`)) return;
+function showPhaseDropdown(e, campaignId, advertiserId, currentPhase) {
+    e.stopPropagation();
+    // Close any other open dropdowns
+    document.querySelectorAll('.phase-dropdown.show').forEach(dd => dd.classList.remove('show'));
+    const dd = document.getElementById(`phase-dd-${campaignId}`);
+    if (dd) dd.classList.toggle('show');
+}
 
+// Close phase dropdown when clicking outside
+document.addEventListener('click', function() {
+    document.querySelectorAll('.phase-dropdown.show').forEach(dd => dd.classList.remove('show'));
+});
+
+async function setPhase(campaignId, advertiserId, newPhase) {
+    // Close dropdown
+    document.querySelectorAll('.phase-dropdown.show').forEach(dd => dd.classList.remove('show'));
+
+    const label = newPhase === 'phase2' ? 'Phase 2 (Profitability)' : 'Phase 1 (Qualification)';
     try {
         const result = await optPost('set_phase', { campaign_id: campaignId, advertiser_id: advertiserId, phase: newPhase });
         showOptToast(result.success ? `Switched to ${label}` : (result.message || 'Failed'), result.success ? 'success' : 'error');

@@ -80,6 +80,23 @@
     .opt-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .opt-info-banner { padding: 12px 16px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #0369a1; display: flex; align-items: center; gap: 8px; }
+
+    /* Phase badge */
+    .phase-badge { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; position: relative; transition: all 0.2s; }
+    .phase-badge:hover { transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+    .phase-badge.phase1 { background: #e0f2fe; color: #0369a1; }
+    .phase-badge.phase2 { background: #f3e8ff; color: #7c3aed; }
+
+    /* Phase dropdown */
+    .phase-dropdown { position: absolute; top: calc(100% + 6px); left: 0; z-index: 100; background: white; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); width: 280px; overflow: hidden; display: none; }
+    .phase-dropdown.show { display: block; }
+    .phase-option { padding: 12px 14px; cursor: pointer; transition: background 0.15s; border-bottom: 1px solid #f1f5f9; }
+    .phase-option:last-child { border-bottom: none; }
+    .phase-option:hover { background: #f8fafc; }
+    .phase-option.selected { background: #f0fdf4; }
+    .phase-option .phase-opt-title { font-weight: 700; font-size: 13px; margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
+    .phase-option .phase-opt-desc { font-size: 11px; color: #64748b; line-height: 1.4; }
+    .phase-option .phase-opt-rules { font-size: 10px; color: #94a3b8; margin-top: 4px; }
 </style>
 
 <div id="optimizer-view">
