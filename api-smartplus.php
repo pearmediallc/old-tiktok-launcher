@@ -642,9 +642,14 @@ function enrichPortfolioContentWithRealIds($portfolioContent, $advertiserId, $ac
 // Build call_to_action_list from portfolio content for Smart+ ad creation
 // TikTok Smart+ API requires call_to_action_list at the top level (array of {call_to_action: "LEARN_MORE"})
 // This is separate from call_to_action_id in ad_configuration (portfolio ID)
-function buildCtaListFromPortfolio($portfolioId, $advertiserId) {
-    if (empty($portfolioId)) return [];
+// Three-tier fallback: 1) DB lookup → 2) TikTok API portfolio fetch → 3) Default LEARN_MORE
+function buildCtaListFromPortfolio($portfolioId, $advertiserId, $accessToken = null) {
+    if (empty($portfolioId)) {
+        logSmartPlus("buildCtaListFromPortfolio: No portfolio ID, using default");
+        return [['call_to_action' => 'LEARN_MORE']];
+    }
 
+    // Tier 1: Look up portfolio content from local database
     try {
         require_once __DIR__ . '/database/Database.php';
         $db = Database::getInstance();
@@ -663,26 +668,70 @@ function buildCtaListFromPortfolio($portfolioId, $advertiserId) {
                         $ctaList[] = ['call_to_action' => $ctaValue];
                     }
                 }
-                // TikTok Smart+ API allows maxItems: 3 for call_to_action_list
                 $ctaList = array_slice($ctaList, 0, 3);
                 if (!empty($ctaList)) {
-                    logSmartPlus("Built call_to_action_list from DB portfolio: " . json_encode($ctaList));
+                    logSmartPlus("buildCtaListFromPortfolio: Found in DB: " . json_encode($ctaList));
                     return $ctaList;
                 }
             }
         }
+        logSmartPlus("buildCtaListFromPortfolio: Portfolio $portfolioId not found in DB or content empty");
     } catch (Exception $e) {
-        logSmartPlus("Warning: Could not look up portfolio content from DB: " . $e->getMessage());
+        logSmartPlus("buildCtaListFromPortfolio: DB lookup failed: " . $e->getMessage());
     }
 
-    // Fallback: return default CTAs so ads always have CTA values
-    // TikTok Smart+ API allows maxItems: 3 for call_to_action_list
-    logSmartPlus("Using default call_to_action_list (portfolio content not found in DB)");
-    return [
-        ['call_to_action' => 'LEARN_MORE'],
-        ['call_to_action' => 'SIGN_UP'],
-        ['call_to_action' => 'CONTACT_US']
-    ];
+    // Tier 2: Fetch portfolio content from TikTok API
+    if (!empty($accessToken)) {
+        try {
+            $apiResult = makeApiCall('/creative/portfolio/get/', [
+                'advertiser_id' => $advertiserId,
+                'creative_portfolio_ids' => [$portfolioId]
+            ], $accessToken, 'GET');
+
+            if ($apiResult['code'] == 0 && !empty($apiResult['data']['portfolios'])) {
+                $apiPortfolio = $apiResult['data']['portfolios'][0];
+                $apiContent = $apiPortfolio['portfolio_content'] ?? [];
+                if (is_array($apiContent) && !empty($apiContent)) {
+                    $ctaList = [];
+                    foreach ($apiContent as $item) {
+                        $ctaValue = $item['asset_content'] ?? $item['call_to_action'] ?? null;
+                        if (!empty($ctaValue)) {
+                            $ctaList[] = ['call_to_action' => $ctaValue];
+                        }
+                    }
+                    $ctaList = array_slice($ctaList, 0, 3);
+                    if (!empty($ctaList)) {
+                        logSmartPlus("buildCtaListFromPortfolio: Fetched from TikTok API: " . json_encode($ctaList));
+
+                        // Save to DB for future lookups
+                        try {
+                            $db = Database::getInstance();
+                            $db->upsert('tool_portfolios', [
+                                'advertiser_id' => $advertiserId,
+                                'creative_portfolio_id' => $portfolioId,
+                                'portfolio_name' => $apiPortfolio['portfolio_name'] ?? 'CTA Portfolio',
+                                'portfolio_type' => 'CTA',
+                                'portfolio_content' => json_encode($apiContent),
+                                'created_by_tool' => 1
+                            ], ['advertiser_id', 'creative_portfolio_id']);
+                            logSmartPlus("buildCtaListFromPortfolio: Saved TikTok portfolio to DB for future use");
+                        } catch (Exception $e) {
+                            logSmartPlus("buildCtaListFromPortfolio: Could not save to DB: " . $e->getMessage());
+                        }
+
+                        return $ctaList;
+                    }
+                }
+            }
+            logSmartPlus("buildCtaListFromPortfolio: TikTok API returned no content for portfolio $portfolioId");
+        } catch (Exception $e) {
+            logSmartPlus("buildCtaListFromPortfolio: TikTok API fetch failed: " . $e->getMessage());
+        }
+    }
+
+    // Tier 3: Default fallback — always return at least LEARN_MORE
+    logSmartPlus("buildCtaListFromPortfolio: Using default LEARN_MORE fallback");
+    return [['call_to_action' => 'LEARN_MORE']];
 }
 
 // Build call_to_action_list directly from portfolio content array (no DB lookup needed)
@@ -1697,31 +1746,8 @@ switch ($action) {
 
         // Fetch actual CTA values from portfolio to populate call_to_action_list
         // Smart+ ads need BOTH: call_to_action_id in ad_configuration AND call_to_action_list at top level
-        $callToActionList = [];
-        try {
-            require_once __DIR__ . '/database/Database.php';
-            $db = Database::getInstance();
-            $portfolioRow = $db->fetchOne(
-                "SELECT portfolio_content FROM tool_portfolios WHERE creative_portfolio_id = ? AND advertiser_id = ?",
-                [$callToActionId, $advertiserId]
-            );
-            if ($portfolioRow && !empty($portfolioRow['portfolio_content'])) {
-                $portfolioContent = json_decode($portfolioRow['portfolio_content'], true);
-                if (is_array($portfolioContent)) {
-                    foreach ($portfolioContent as $item) {
-                        $ctaValue = $item['asset_content'] ?? $item['call_to_action'] ?? null;
-                        if (!empty($ctaValue)) {
-                            $callToActionList[] = ['call_to_action' => $ctaValue];
-                        }
-                    }
-                }
-                logSmartPlus("Fetched CTA values from portfolio: " . json_encode($callToActionList));
-            } else {
-                logSmartPlus("WARNING: Portfolio $callToActionId not found in database, call_to_action_list will be empty");
-            }
-        } catch (Exception $e) {
-            logSmartPlus("WARNING: Failed to fetch portfolio content: " . $e->getMessage());
-        }
+        // Uses 3-tier fallback: DB → TikTok API → default LEARN_MORE
+        $callToActionList = buildCtaListFromPortfolio($callToActionId, $advertiserId, $accessToken);
 
         // Build ad_text_list - DEDUPLICATE to avoid "duplicate titles" error
         // Option 1: Use ad_texts array if provided (from new UI with single text field)
@@ -1795,12 +1821,9 @@ switch ($action) {
         $adParams['ad_configuration'] = $adConfig;
 
         // Smart+ ads need call_to_action_list at top level alongside call_to_action_id in ad_configuration
-        if (!empty($callToActionList)) {
-            $adParams['call_to_action_list'] = $callToActionList;
-            logSmartPlus("Using call_to_action_id in ad_configuration (portfolio: $callToActionId) AND call_to_action_list: " . json_encode($callToActionList));
-        } else {
-            logSmartPlus("WARNING: No CTA values found for portfolio $callToActionId — call_to_action_list not sent");
-        }
+        // Always send — buildCtaListFromPortfolio() guarantees at least a default CTA
+        $adParams['call_to_action_list'] = $callToActionList;
+        logSmartPlus("Using call_to_action_id (portfolio: $callToActionId) AND call_to_action_list: " . json_encode($callToActionList));
 
         logSmartPlus("Ad params: " . json_encode($adParams));
         logSmartPlus("=== SENDING TO TIKTOK API ===");
@@ -2139,34 +2162,10 @@ switch ($action) {
         $adParams['ad_configuration'] = $adConfig;
 
         // Smart+ ads need call_to_action_list at top level alongside call_to_action_id in ad_configuration
-        $fullCtaList = [];
-        try {
-            require_once __DIR__ . '/database/Database.php';
-            $dbCta = Database::getInstance();
-            $portfolioRow = $dbCta->fetchOne(
-                "SELECT portfolio_content FROM tool_portfolios WHERE creative_portfolio_id = ? AND advertiser_id = ?",
-                [$callToActionId, $advertiserId]
-            );
-            if ($portfolioRow && !empty($portfolioRow['portfolio_content'])) {
-                $portfolioContent = json_decode($portfolioRow['portfolio_content'], true);
-                if (is_array($portfolioContent)) {
-                    foreach ($portfolioContent as $item) {
-                        $ctaValue = $item['asset_content'] ?? $item['call_to_action'] ?? null;
-                        if (!empty($ctaValue)) {
-                            $fullCtaList[] = ['call_to_action' => $ctaValue];
-                        }
-                    }
-                }
-            }
-        } catch (Exception $e) {
-            logSmartPlus("WARNING: Failed to fetch portfolio content for full campaign: " . $e->getMessage());
-        }
-        if (!empty($fullCtaList)) {
-            $adParams['call_to_action_list'] = $fullCtaList;
-            logSmartPlus("Using call_to_action_id (portfolio: $callToActionId) AND call_to_action_list: " . json_encode($fullCtaList));
-        } else {
-            logSmartPlus("WARNING: No CTA values found for portfolio $callToActionId in full campaign");
-        }
+        // Uses 3-tier fallback: DB → TikTok API → default LEARN_MORE
+        $fullCtaList = buildCtaListFromPortfolio($callToActionId, $advertiserId, $accessToken);
+        $adParams['call_to_action_list'] = $fullCtaList;
+        logSmartPlus("Using call_to_action_id (portfolio: $callToActionId) AND call_to_action_list: " . json_encode($fullCtaList));
 
         logSmartPlus("Ad params: " . json_encode($adParams));
 
@@ -3515,32 +3514,10 @@ switch ($action) {
                 ];
 
                 // Smart+ ads need call_to_action_list at top level alongside call_to_action_id in ad_configuration
-                $bulkCtaList = [];
-                try {
-                    $portfolioRow = $db->fetchOne(
-                        "SELECT portfolio_content FROM tool_portfolios WHERE creative_portfolio_id = ? AND advertiser_id = ?",
-                        [$ctaPortfolioId, $targetAdvertiserId]
-                    );
-                    if ($portfolioRow && !empty($portfolioRow['portfolio_content'])) {
-                        $portfolioContent = json_decode($portfolioRow['portfolio_content'], true);
-                        if (is_array($portfolioContent)) {
-                            foreach ($portfolioContent as $item) {
-                                $ctaValue = $item['asset_content'] ?? $item['call_to_action'] ?? null;
-                                if (!empty($ctaValue)) {
-                                    $bulkCtaList[] = ['call_to_action' => $ctaValue];
-                                }
-                            }
-                        }
-                    }
-                } catch (Exception $e) {
-                    logSmartPlus("WARNING: Failed to fetch portfolio content for bulk launch: " . $e->getMessage());
-                }
-                if (!empty($bulkCtaList)) {
-                    $adParams['call_to_action_list'] = $bulkCtaList;
-                    logSmartPlus("Using call_to_action_id (portfolio: $ctaPortfolioId) AND call_to_action_list: " . json_encode($bulkCtaList));
-                } else {
-                    logSmartPlus("WARNING: No CTA values found for portfolio $ctaPortfolioId in bulk launch");
-                }
+                // Uses 3-tier fallback: DB → TikTok API → default LEARN_MORE
+                $bulkCtaList = buildCtaListFromPortfolio($ctaPortfolioId, $targetAdvertiserId, $accessToken);
+                $adParams['call_to_action_list'] = $bulkCtaList;
+                logSmartPlus("Using call_to_action_id (portfolio: $ctaPortfolioId) AND call_to_action_list: " . json_encode($bulkCtaList));
 
                 $adResult = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);
 
@@ -3894,32 +3871,10 @@ switch ($action) {
             ];
 
             // Smart+ ads need call_to_action_list at top level alongside call_to_action_id in ad_configuration
-            $dupCtaList = [];
-            try {
-                $portfolioRow = $db->fetchOne(
-                    "SELECT portfolio_content FROM tool_portfolios WHERE creative_portfolio_id = ? AND advertiser_id = ?",
-                    [$ctaPortfolioId, $advertiserId]
-                );
-                if ($portfolioRow && !empty($portfolioRow['portfolio_content'])) {
-                    $portfolioContent = json_decode($portfolioRow['portfolio_content'], true);
-                    if (is_array($portfolioContent)) {
-                        foreach ($portfolioContent as $item) {
-                            $ctaValue = $item['asset_content'] ?? $item['call_to_action'] ?? null;
-                            if (!empty($ctaValue)) {
-                                $dupCtaList[] = ['call_to_action' => $ctaValue];
-                            }
-                        }
-                    }
-                }
-            } catch (Exception $e) {
-                logSmartPlus("WARNING: Failed to fetch portfolio content for duplicate: " . $e->getMessage());
-            }
-            if (!empty($dupCtaList)) {
-                $adParams['call_to_action_list'] = $dupCtaList;
-                logSmartPlus("Using call_to_action_id (portfolio: $ctaPortfolioId) AND call_to_action_list: " . json_encode($dupCtaList));
-            } else {
-                logSmartPlus("WARNING: No CTA values found for portfolio $ctaPortfolioId in duplicate");
-            }
+            // Uses 3-tier fallback: DB → TikTok API → default LEARN_MORE
+            $dupCtaList = buildCtaListFromPortfolio($ctaPortfolioId, $advertiserId, $accessToken);
+            $adParams['call_to_action_list'] = $dupCtaList;
+            logSmartPlus("Using call_to_action_id (portfolio: $ctaPortfolioId) AND call_to_action_list: " . json_encode($dupCtaList));
 
             logSmartPlus("Creating Smart+ ad: " . json_encode($adParams));
             $adResult = makeApiCall('/smart_plus/ad/create/', $adParams, $accessToken);
