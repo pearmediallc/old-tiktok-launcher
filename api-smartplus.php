@@ -578,6 +578,63 @@ function makeApiCall($endpoint, $params, $accessToken, $method = 'POST') {
     return $result ?? ['code' => -1, 'message' => 'Empty response', 'data' => null];
 }
 
+// Fetch real CTA asset IDs from TikTok using the recommended new_version approach
+// Uses objective_type + promotion_type instead of legacy content_type
+function fetchCtaRecommendations($advertiserId, $accessToken) {
+    logSmartPlus("=== Fetching CTA recommendations (new_version) ===");
+
+    $result = makeApiCall('/creative/cta/recommend/', [
+        'advertiser_id' => $advertiserId,
+        'new_version' => true,
+        'objective_type' => 'LEAD_GENERATION',
+        'promotion_type' => 'LEAD_GENERATION'
+    ], $accessToken, 'GET');
+
+    $ctaMap = []; // Maps CTA enum (e.g. "LEARN_MORE") → asset_ids array
+
+    if (isset($result['data']['recommend_assets']) && is_array($result['data']['recommend_assets'])) {
+        foreach ($result['data']['recommend_assets'] as $asset) {
+            if (!empty($asset['asset_content']) && !empty($asset['asset_ids'])) {
+                // Normalize to uppercase enum: "Learn more" → "LEARN_MORE"
+                $normalized = strtoupper(str_replace(' ', '_', trim($asset['asset_content'])));
+                $ctaMap[$normalized] = array_map('strval', $asset['asset_ids']);
+            }
+        }
+        logSmartPlus("Fetched " . count($ctaMap) . " CTA recommendations: " . json_encode(array_keys($ctaMap)));
+    } else {
+        logSmartPlus("WARNING: Could not fetch CTA recommendations: " . ($result['message'] ?? json_encode($result)));
+    }
+
+    return $ctaMap;
+}
+
+// Enrich portfolio_content with real asset IDs from /creative/cta/recommend/
+// Replaces placeholder asset_ids (like ["0"]) with actual TikTok CTA asset IDs
+function enrichPortfolioContent($portfolioContent, $advertiserId, $accessToken) {
+    $ctaMap = fetchCtaRecommendations($advertiserId, $accessToken);
+
+    if (empty($ctaMap)) {
+        logSmartPlus("No CTA recommendations available, keeping original asset_ids");
+        return $portfolioContent;
+    }
+
+    foreach ($portfolioContent as &$item) {
+        $ctaEnum = $item['asset_content'] ?? '';
+        // Normalize to uppercase enum format
+        $normalized = strtoupper(str_replace(' ', '_', trim($ctaEnum)));
+
+        if (isset($ctaMap[$normalized])) {
+            $item['asset_ids'] = $ctaMap[$normalized];
+            logSmartPlus("Mapped CTA '$ctaEnum' → asset_ids: " . json_encode($ctaMap[$normalized]));
+        } else {
+            logSmartPlus("WARNING: No recommendation for '$ctaEnum', keeping existing asset_ids");
+        }
+    }
+    unset($item);
+
+    return $portfolioContent;
+}
+
 // Handle request
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
 $action = $input['action'] ?? '';
@@ -2106,6 +2163,10 @@ switch ($action) {
             exit;
         }
 
+        // Enrich with real asset IDs from TikTok CTA recommendations
+        $portfolioContent = enrichPortfolioContent($portfolioContent, $advertiserId, $accessToken);
+        logSmartPlus("Enriched portfolio content: " . json_encode($portfolioContent));
+
         $params = [
             'advertiser_id' => $advertiserId,
             'creative_portfolio_type' => 'CTA',
@@ -2213,6 +2274,9 @@ switch ($action) {
             $frequentlyUsedCTAs = [
                 ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]]
             ];
+
+            // Enrich with real asset IDs from TikTok CTA recommendations
+            $frequentlyUsedCTAs = enrichPortfolioContent($frequentlyUsedCTAs, $advertiserId, $accessToken);
 
             $params = [
                 'advertiser_id' => $advertiserId,
@@ -2705,6 +2769,9 @@ switch ($action) {
         }
 
         try {
+            // Enrich with real asset IDs from TikTok CTA recommendations
+            $portfolioContent = enrichPortfolioContent($portfolioContent, $targetAdvertiserId, $accessToken);
+
             $createParams = [
                 'advertiser_id' => $targetAdvertiserId,
                 'creative_portfolio_type' => 'CTA',
@@ -3010,6 +3077,9 @@ switch ($action) {
                             ];
                             logSmartPlus("No CTA selections provided, defaulting to LEARN_MORE only");
                         }
+
+                        // Enrich with real asset IDs from TikTok CTA recommendations
+                        $frequentlyUsedCTAs = enrichPortfolioContent($frequentlyUsedCTAs, $targetAdvertiserId, $accessToken);
 
                         $portfolioResult = makeApiCall('/creative/portfolio/create/', [
                             'advertiser_id' => $targetAdvertiserId,
@@ -3440,6 +3510,9 @@ switch ($action) {
                     $frequentlyUsedCTAs = [
                         ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]]
                     ];
+
+                    // Enrich with real asset IDs from TikTok CTA recommendations
+                    $frequentlyUsedCTAs = enrichPortfolioContent($frequentlyUsedCTAs, $advertiserId, $accessToken);
 
                     $portfolioResult = makeApiCall('/creative/portfolio/create/', [
                         'advertiser_id' => $advertiserId,
@@ -4959,6 +5032,9 @@ switch ($action) {
                     $frequentlyUsedCTAs = [
                         ['asset_content' => 'LEARN_MORE', 'asset_ids' => ["0"]]
                     ];
+
+                    // Enrich with real asset IDs from TikTok CTA recommendations
+                    $frequentlyUsedCTAs = enrichPortfolioContent($frequentlyUsedCTAs, $advertiserId, $accessToken);
 
                     $createParams = [
                         'advertiser_id' => $advertiserId,
