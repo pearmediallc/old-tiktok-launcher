@@ -7681,9 +7681,12 @@ async function startBulkVideoUpload() {
                     throw new Error('No video URL available');
                 }
 
-                // Add uploading status
+                // Add uploading status with indeterminate progress bar
                 const statusId = `upload-status-${advertiserId}-${video.id}`;
-                detailsDiv.innerHTML += `<div id="${statusId}" style="margin-left: 15px; color: #666;">⏳ Uploading: ${video.name || 'Video'}...</div>`;
+                detailsDiv.innerHTML += `<div id="${statusId}" style="margin-left: 15px; margin-bottom: 6px;">
+                    <div style="color: #666; font-size: 12px; margin-bottom: 3px;">⏳ ${video.name || 'Video'}</div>
+                    <div style="background: #e0e0e0; border-radius: 4px; height: 5px; overflow: hidden;"><div class="upload-progress-indeterminate"></div></div>
+                </div>`;
                 detailsDiv.scrollTop = detailsDiv.scrollHeight;
 
                 // Call API to upload video
@@ -7698,10 +7701,10 @@ async function startBulkVideoUpload() {
                     videoUploadState.uploadedVideos[advertiserId][video.id] = result.data.video_id;
                     videoUploadState.completedUploads++;
 
-                    // Update status
+                    // Update status: replace bar with success line
                     const statusEl = document.getElementById(statusId);
                     if (statusEl) {
-                        statusEl.innerHTML = `<span style="color: #22c55e;">✓</span> ${video.name || 'Video'} → ${result.data.video_id}`;
+                        statusEl.innerHTML = `<span style="color: #22c55e; font-size: 12px;">✓ ${video.name || 'Video'}</span> <span style="color: #999; font-size: 11px;">→ ${result.data.video_id}</span>`;
                     }
 
                     addLog('info', `Uploaded video "${video.name}" to ${accountName}: ${result.data.video_id}`);
@@ -7711,11 +7714,11 @@ async function startBulkVideoUpload() {
             } catch (error) {
                 videoUploadState.failedUploads++;
 
-                // Update status with error
+                // Update status: replace bar with error line
                 const statusId = `upload-status-${advertiserId}-${video.id}`;
                 const statusEl = document.getElementById(statusId);
                 if (statusEl) {
-                    statusEl.innerHTML = `<span style="color: #ef4444;">✗</span> ${video.name || 'Video'}: ${error.message}`;
+                    statusEl.innerHTML = `<span style="color: #ef4444; font-size: 12px;">✗ ${video.name || 'Video'}: ${error.message}</span>`;
                 }
 
                 addLog('error', `Failed to upload video "${video.name}" to ${accountName}: ${error.message}`);

@@ -2850,16 +2850,27 @@ switch ($action) {
             $targetVideos = $videoResult['data']['list'];
         }
 
-        // Build filename to video_id map for target account
+        // Strip trailing _XXXXXXXXXX timestamp (10-digit unix) before extension
+        $stripTimestamp = function($name) {
+            return preg_replace('/_\d{10}(\.\w+)$/', '$1', $name);
+        };
+
+        // Build filename maps for target account: exact and timestamp-stripped
         $targetVideoMap = [];
+        $targetVideoMapStripped = [];
         foreach ($targetVideos as $video) {
             $fileName = $video['file_name'] ?? '';
             if ($fileName) {
                 $targetVideoMap[$fileName] = $video;
+                $stripped = $stripTimestamp($fileName);
+                // Only add stripped entry if it differs (i.e. had a timestamp)
+                if ($stripped !== $fileName && !isset($targetVideoMapStripped[$stripped])) {
+                    $targetVideoMapStripped[$stripped] = $video;
+                }
             }
         }
 
-        // Match source videos to target videos
+        // Match source videos to target videos (exact first, then timestamp-stripped)
         $matched = [];
         $unmatched = [];
 
@@ -2868,6 +2879,7 @@ switch ($action) {
             $sourceVideoId = $sourceVideo['video_id'] ?? '';
 
             if (isset($targetVideoMap[$sourceFileName])) {
+                // Exact match
                 $targetVideo = $targetVideoMap[$sourceFileName];
                 $matched[] = [
                     'source_video_id' => $sourceVideoId,
@@ -2876,10 +2888,22 @@ switch ($action) {
                     'target_file_name' => $targetVideo['file_name']
                 ];
             } else {
-                $unmatched[] = [
-                    'source_video_id' => $sourceVideoId,
-                    'source_file_name' => $sourceFileName
-                ];
+                // Fallback: strip timestamps from both sides and compare
+                $sourceStripped = $stripTimestamp($sourceFileName);
+                if (isset($targetVideoMapStripped[$sourceStripped])) {
+                    $targetVideo = $targetVideoMapStripped[$sourceStripped];
+                    $matched[] = [
+                        'source_video_id' => $sourceVideoId,
+                        'source_file_name' => $sourceFileName,
+                        'target_video_id' => $targetVideo['video_id'],
+                        'target_file_name' => $targetVideo['file_name']
+                    ];
+                } else {
+                    $unmatched[] = [
+                        'source_video_id' => $sourceVideoId,
+                        'source_file_name' => $sourceFileName
+                    ];
+                }
             }
         }
 
