@@ -2850,9 +2850,9 @@ switch ($action) {
             $targetVideos = $videoResult['data']['list'];
         }
 
-        // Strip trailing _XXXXXXXXXX timestamp (10-digit unix) before extension
+        // Strip trailing timestamp (_XXXXXXXXXX unix 10-digit or _YYYYMMDDHHMMSS 14-digit) before extension
         $stripTimestamp = function($name) {
-            return preg_replace('/_\d{10}(\.\w+)$/', '$1', $name);
+            return preg_replace('/_\d{10,14}(\.\w+)$/', '$1', $name);
         };
 
         // Build filename maps for target account: exact and timestamp-stripped

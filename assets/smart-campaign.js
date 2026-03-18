@@ -3847,13 +3847,23 @@ async function renderBulkAccountsInModal() {
         container.appendChild(card);
     }
 
+    // Sort: video-upload accounts first, then the rest (current account already rendered)
+    const uploadedIds = bulkLaunchState.videoUploadAccountIds || [];
+    const otherAccounts = bulkLaunchState.accounts.filter(a => !a.is_current);
+    otherAccounts.sort((a, b) => {
+        const aUploaded = uploadedIds.includes(a.advertiser_id) ? 0 : 1;
+        const bUploaded = uploadedIds.includes(b.advertiser_id) ? 0 : 1;
+        return aUploaded - bUploaded;
+    });
+
     // Render other accounts
-    for (const account of bulkLaunchState.accounts) {
+    for (const account of otherAccounts) {
         // Skip current account (already rendered above)
         if (account.is_current) continue;
 
         const isSelected = bulkLaunchState.selectedAccounts.some(a => a.advertiser_id === account.advertiser_id);
         const assets = bulkLaunchState.accountAssets[account.advertiser_id] || null;
+        const wasVideoUploaded = uploadedIds.includes(account.advertiser_id);
 
         const card = document.createElement('div');
         card.className = `bulk-account-card ${isSelected ? 'selected' : ''}`;
@@ -3871,6 +3881,7 @@ async function renderBulkAccountsInModal() {
                 <div class="bulk-account-info">
                     <span class="bulk-account-name">${account.advertiser_name}</span>
                     <span class="bulk-account-id">${account.advertiser_id}</span>
+                    ${wasVideoUploaded ? '<span style="font-size:11px;background:#dbeafe;color:#1d4ed8;padding:1px 7px;border-radius:10px;font-weight:600;">📤 Videos Uploaded</span>' : ''}
                 </div>
                 <div class="bulk-account-header-actions">
                     <button type="button" class="btn-load-assets" onclick="loadAccountAssets('${account.advertiser_id}')"
@@ -13693,6 +13704,10 @@ function showUploadOptions() {
         return;
     }
 
+    // Clear search input
+    const searchInput = document.getElementById('upload-account-search');
+    if (searchInput) searchInput.value = '';
+
     // Load accounts if not already loaded
     if (bulkLaunchState.accounts.length === 0) {
         loadBulkAccounts().then(() => renderUploadAccountList());
@@ -13728,6 +13743,16 @@ function renderUploadAccountList() {
     `).join('');
 }
 
+// Filter upload account list by search query
+function filterUploadAccounts(query) {
+    const q = query.trim().toLowerCase();
+    document.querySelectorAll('#upload-account-list label').forEach(label => {
+        const name = (label.querySelector('input')?.dataset.name || '').toLowerCase();
+        const id   = (label.querySelector('input')?.value || '').toLowerCase();
+        label.style.display = (!q || name.includes(q) || id.includes(q)) ? '' : 'none';
+    });
+}
+
 // Select/deselect all upload accounts
 function toggleAllUploadAccounts(selectAll) {
     document.querySelectorAll('.upload-account-checkbox').forEach(cb => {
@@ -13760,8 +13785,9 @@ function uploadMultipleAccounts() {
         name: cb.dataset.name
     }));
 
-    // Store selected accounts for use after file selection
+    // Store selected accounts for use after file selection and for bulk launch prioritisation
     window._multiUploadAccounts = selectedAccounts;
+    bulkLaunchState.videoUploadAccountIds = selectedAccounts.map(a => a.advertiser_id);
     closeUploadOptions();
 
     // Create a temporary file input for multi-account upload
@@ -13813,12 +13839,33 @@ async function handleMultiAccountUpload(event, accounts) {
         if (progressBar) progressBar.style.width = '0%';
     }
 
-    // Build per-account progress items
+    // Build per-account collapsible sections with per-video progress bars
     if (progressList) {
         progressList.innerHTML = accounts.map((acc, idx) => `
-            <div class="upload-item" id="multi-upload-acc-${idx}" style="margin-bottom: 6px;">
-                <span class="upload-item-name" style="font-weight: 600;">${acc.name}</span>
-                <span class="upload-item-status uploading" id="multi-upload-status-${idx}">0/${validFiles.length}</span>
+            <div class="mup-acc-section">
+                <div class="mup-acc-header" onclick="
+                    var b = document.getElementById('mup-body-${idx}');
+                    var t = document.getElementById('mup-toggle-${idx}');
+                    if (b.style.display === 'none') { b.style.display = ''; t.textContent = '▼'; }
+                    else { b.style.display = 'none'; t.textContent = '▶'; }
+                ">
+                    <span>📁 ${acc.name}</span>
+                    <span style="display:flex;align-items:center;gap:8px;">
+                        <span id="mup-acc-count-${idx}" style="font-size:11px;color:#64748b;font-weight:400;">0 / ${validFiles.length}</span>
+                        <span id="mup-toggle-${idx}" style="font-size:10px;color:#94a3b8;">▼</span>
+                    </span>
+                </div>
+                <div id="mup-body-${idx}" class="mup-acc-body">
+                    ${validFiles.map((f, fi) => `
+                        <div class="mup-video-item">
+                            <div class="mup-video-name">📹 ${f.name}</div>
+                            <div class="mup-video-row">
+                                <div class="mup-bar-wrap"><div id="mup-bar-${idx}-${fi}" class="mup-bar"></div></div>
+                                <span id="mup-pct-${idx}-${fi}" class="mup-pct">0%</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
             </div>
         `).join('');
     }
@@ -13840,7 +13887,9 @@ async function handleMultiAccountUpload(event, accounts) {
 
         addLog('info', `Uploading to ${account.name} (${account.advertiser_id})...`);
 
-        for (const file of validFiles) {
+        for (let fileIdx = 0; fileIdx < validFiles.length; fileIdx++) {
+            const file = validFiles[fileIdx];
+
             // Rename with timestamp
             const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
             const originalName = file.name;
@@ -13853,17 +13902,45 @@ async function handleMultiAccountUpload(event, accounts) {
             formData.append('video', file, newFileName);
             formData.append('target_advertiser_id', account.advertiser_id);
 
+            const fillEl = () => document.getElementById(`mup-bar-${accIdx}-${fileIdx}`);
+            const pctEl  = () => document.getElementById(`mup-pct-${accIdx}-${fileIdx}`);
+
             try {
-                const response = await fetch('api.php?action=upload_video_to_advertiser', {
-                    method: 'POST',
-                    headers: { 'X-CSRF-Token': window.CSRF_TOKEN || '' },
-                    body: formData
+                const result = await new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+
+                    xhr.upload.addEventListener('progress', (e) => {
+                        if (e.lengthComputable) {
+                            const pct = Math.round((e.loaded / e.total) * 100);
+                            const fill = fillEl(), pctSpan = pctEl();
+                            if (fill) fill.style.width = pct + '%';
+                            if (pctSpan) pctSpan.textContent = pct >= 100 ? 'Processing...' : pct + '%';
+                        }
+                    });
+
+                    xhr.addEventListener('load', () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try { resolve(JSON.parse(xhr.responseText)); }
+                            catch (e) { reject(new Error('Invalid JSON response')); }
+                        } else {
+                            reject(new Error(`HTTP ${xhr.status}`));
+                        }
+                    });
+                    xhr.addEventListener('error', () => reject(new Error('Network error')));
+                    xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
+
+                    xhr.open('POST', 'api.php?action=upload_video_to_advertiser');
+                    xhr.setRequestHeader('X-CSRF-Token', window.CSRF_TOKEN || '');
+                    xhr.send(formData);
                 });
-                const result = await response.json();
 
                 if (result.success) {
                     accCompleted++;
                     completed++;
+
+                    const fill = fillEl(), pctSpan = pctEl();
+                    if (fill) { fill.style.width = '100%'; fill.style.background = '#22c55e'; }
+                    if (pctSpan) { pctSpan.textContent = '✓ Done'; pctSpan.style.color = '#16a34a'; }
 
                     // Add to media library if it's the current account
                     const currentAccId = state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID;
@@ -13879,26 +13956,31 @@ async function handleMultiAccountUpload(event, accounts) {
                     }
                 } else {
                     failed++;
+                    const fill = fillEl(), pctSpan = pctEl();
+                    if (fill) { fill.style.width = '100%'; fill.style.background = '#ef4444'; }
+                    if (pctSpan) { pctSpan.textContent = '✗ Failed'; pctSpan.style.color = '#dc2626'; }
                     addLog('error', `Failed ${file.name} -> ${account.name}: ${result.message}`);
                 }
             } catch (e) {
                 failed++;
+                const fill = fillEl(), pctSpan = pctEl();
+                if (fill) { fill.style.width = '100%'; fill.style.background = '#ef4444'; }
+                if (pctSpan) { pctSpan.textContent = '✗ Error'; pctSpan.style.color = '#dc2626'; }
                 addLog('error', `Error ${file.name} -> ${account.name}: ${e.message}`);
             }
 
-            // Update progress
-            const statusEl = document.getElementById(`multi-upload-status-${accIdx}`);
-            if (statusEl) statusEl.textContent = `${accCompleted}/${validFiles.length}`;
-            if (progressCount) progressCount.textContent = `${completed + failed}/${totalUploads}`;
+            // Update overall counts
+            const accCountEl = document.getElementById(`mup-acc-count-${accIdx}`);
+            if (accCountEl) accCountEl.textContent = `${accCompleted} / ${validFiles.length}`;
+            if (progressCount) progressCount.textContent = `${completed + failed} / ${totalUploads}`;
             if (progressBar) progressBar.style.width = `${((completed + failed) / totalUploads) * 100}%`;
         }
 
-        // Mark account as done
-        const statusEl = document.getElementById(`multi-upload-status-${accIdx}`);
-        if (statusEl) {
-            statusEl.textContent = `Done (${accCompleted}/${validFiles.length})`;
-            statusEl.className = 'upload-item-status success';
-        }
+        // Collapse this account's section once done
+        const body = document.getElementById(`mup-body-${accIdx}`);
+        const toggle = document.getElementById(`mup-toggle-${accIdx}`);
+        if (body) body.style.display = 'none';
+        if (toggle) toggle.textContent = '▶';
 
         // Small delay between accounts
         if (accIdx < accounts.length - 1) {

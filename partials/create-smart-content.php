@@ -1750,6 +1750,11 @@
                             <div style="font-size: 13px; color: #60a5fa;">Upload same videos to multiple ad accounts</div>
                         </div>
                     </div>
+                    <input type="text" id="upload-account-search"
+                           placeholder="🔍 Search accounts..."
+                           oninput="filterUploadAccounts(this.value)"
+                           style="width:100%;padding:7px 10px;font-size:13px;border:1px solid #e2e8f0;border-radius:6px;box-sizing:border-box;outline:none;margin-bottom:8px;transition:border-color 0.2s;"
+                           onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e2e8f0'">
                     <div style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;" id="upload-account-list">
                         <p style="color: #94a3b8; text-align: center; padding: 15px;">Loading accounts...</p>
                     </div>
