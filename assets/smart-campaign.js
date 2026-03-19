@@ -1495,8 +1495,8 @@ async function handleSmartMediaUpload(event) {
     let completed = 0;
     let failed = 0;
 
-    // Upload files in PARALLEL BATCHES of 2 for reliability
-    const BATCH_SIZE = 2;
+    // Upload files in PARALLEL BATCHES of 3 for reliability
+    const BATCH_SIZE = 3;
     const totalBatches = Math.ceil(validFiles.length / BATCH_SIZE);
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
@@ -7670,91 +7670,87 @@ async function startBulkVideoUpload() {
     progressText.textContent = `0 / ${totalUploads}`;
     detailsDiv.innerHTML = '';
 
-    addLog('info', `Starting video upload: ${videos.length} videos to ${accounts.length} accounts (${totalUploads} total)`);
+    addLog('info', `Starting video upload: ${videos.length} videos to ${accounts.length} accounts (${totalUploads} total) — parallel`);
 
-    // Upload videos to each account
-    for (const account of accounts) {
+    // Pre-initialise upload maps and build the full UI before any uploads start
+    // (avoids innerHTML += conflicts when accounts run in parallel)
+    accounts.forEach(account => {
+        videoUploadState.uploadedVideos[account.advertiser_id] = {};
+    });
+
+    detailsDiv.innerHTML = accounts.map(account => `
+        <div class="upload-account-header" style="font-weight:600;margin-top:10px;color:#333;">📁 ${account.advertiser_name}</div>
+        ${videos.map(video => `
+            <div id="upload-status-${account.advertiser_id}-${video.id}" style="margin-left:15px;margin-bottom:6px;">
+                <div style="color:#666;font-size:12px;margin-bottom:3px;">⏳ ${video.name || 'Video'}</div>
+                <div style="background:#e0e0e0;border-radius:4px;height:5px;overflow:hidden;"><div class="upload-progress-indeterminate"></div></div>
+            </div>
+        `).join('')}
+    `).join('');
+
+    const UPLOAD_BATCH_SIZE = 3;
+
+    // All accounts upload simultaneously; within each account videos upload in batches of 3
+    await Promise.all(accounts.map(async (account) => {
         const advertiserId = account.advertiser_id;
         const accountName = account.advertiser_name;
 
-        // Initialize upload map for this account
-        videoUploadState.uploadedVideos[advertiserId] = {};
+        addLog('info', `Uploading to ${accountName} (${advertiserId})...`);
 
-        // Add account header to details
-        detailsDiv.innerHTML += `<div class="upload-account-header" style="font-weight: 600; margin-top: 10px; color: #333;">📁 ${accountName}</div>`;
+        for (let batchStart = 0; batchStart < videos.length; batchStart += UPLOAD_BATCH_SIZE) {
+            const batch = videos.slice(batchStart, batchStart + UPLOAD_BATCH_SIZE);
 
-        for (const video of videos) {
-            try {
-                // Get the video URL for upload
-                const videoUrl = video.video_url || video.url;
-
-                if (!videoUrl) {
-                    throw new Error('No video URL available');
-                }
-
-                // Add uploading status with indeterminate progress bar
+            await Promise.all(batch.map(async (video) => {
                 const statusId = `upload-status-${advertiserId}-${video.id}`;
-                detailsDiv.innerHTML += `<div id="${statusId}" style="margin-left: 15px; margin-bottom: 6px;">
-                    <div style="color: #666; font-size: 12px; margin-bottom: 3px;">⏳ ${video.name || 'Video'}</div>
-                    <div style="background: #e0e0e0; border-radius: 4px; height: 5px; overflow: hidden;"><div class="upload-progress-indeterminate"></div></div>
-                </div>`;
-                detailsDiv.scrollTop = detailsDiv.scrollHeight;
+                try {
+                    const videoUrl = video.video_url || video.url;
+                    if (!videoUrl) throw new Error('No video URL available');
 
-                // Call API to upload video
-                const result = await apiRequest('upload_video_to_account', {
-                    target_advertiser_id: advertiserId,
-                    video_url: videoUrl,
-                    file_name: video.name || `video_${video.id}`
-                });
+                    const result = await apiRequest('upload_video_to_account', {
+                        target_advertiser_id: advertiserId,
+                        video_url: videoUrl,
+                        file_name: video.name || `video_${video.id}`
+                    });
 
-                if (result.success && result.data?.video_id) {
-                    // Store the mapping
-                    videoUploadState.uploadedVideos[advertiserId][video.id] = result.data.video_id;
-                    videoUploadState.completedUploads++;
+                    if (result.success && result.data?.video_id) {
+                        videoUploadState.uploadedVideos[advertiserId][video.id] = result.data.video_id;
+                        videoUploadState.completedUploads++;
 
-                    // Update status: replace bar with success line
-                    const statusEl = document.getElementById(statusId);
-                    if (statusEl) {
-                        statusEl.innerHTML = `<span style="color: #22c55e; font-size: 12px;">✓ ${video.name || 'Video'}</span> <span style="color: #999; font-size: 11px;">→ ${result.data.video_id}</span>`;
+                        const statusEl = document.getElementById(statusId);
+                        if (statusEl) statusEl.innerHTML = `<span style="color:#22c55e;font-size:12px;">✓ ${video.name || 'Video'}</span> <span style="color:#999;font-size:11px;">→ ${result.data.video_id}</span>`;
+
+                        addLog('info', `Uploaded "${video.name}" to ${accountName}: ${result.data.video_id}`);
+                    } else {
+                        throw new Error(result.message || 'Upload failed');
                     }
-
-                    addLog('info', `Uploaded video "${video.name}" to ${accountName}: ${result.data.video_id}`);
-                } else {
-                    throw new Error(result.message || 'Upload failed');
-                }
-            } catch (error) {
-                videoUploadState.failedUploads++;
-
-                // Update status: replace bar with error line
-                const statusId = `upload-status-${advertiserId}-${video.id}`;
-                const statusEl = document.getElementById(statusId);
-                if (statusEl) {
-                    statusEl.innerHTML = `<span style="color: #ef4444; font-size: 12px;">✗ ${video.name || 'Video'}: ${error.message}</span>`;
+                } catch (error) {
+                    videoUploadState.failedUploads++;
+                    const statusEl = document.getElementById(statusId);
+                    if (statusEl) statusEl.innerHTML = `<span style="color:#ef4444;font-size:12px;">✗ ${video.name || 'Video'}: ${error.message}</span>`;
+                    addLog('error', `Failed "${video.name}" to ${accountName}: ${error.message}`);
                 }
 
-                addLog('error', `Failed to upload video "${video.name}" to ${accountName}: ${error.message}`);
+                // Update overall progress (JS single-threaded — no race condition)
+                const done = videoUploadState.completedUploads + videoUploadState.failedUploads;
+                progressBar.style.width = `${Math.round((done / totalUploads) * 100)}%`;
+                progressText.textContent = `${done} / ${totalUploads}`;
+            }));
+
+            // Brief pause between batches within an account
+            if (batchStart + UPLOAD_BATCH_SIZE < videos.length) {
+                await new Promise(r => setTimeout(r, 300));
             }
-
-            // Update progress
-            const completed = videoUploadState.completedUploads + videoUploadState.failedUploads;
-            const progress = Math.round((completed / totalUploads) * 100);
-            progressBar.style.width = `${progress}%`;
-            progressText.textContent = `${completed} / ${totalUploads}`;
         }
 
-        // Update account's video mapping in bulkLaunchState
+        // Store video mapping for this account once all its uploads are done
         if (Object.keys(videoUploadState.uploadedVideos[advertiserId]).length > 0) {
             const selectedAccount = bulkLaunchState.selectedAccounts.find(a => a.advertiser_id === advertiserId);
             if (selectedAccount) {
                 selectedAccount.video_mapping = videoUploadState.uploadedVideos[advertiserId];
             }
-
-            // Initialize accountAssets if needed and update videoMatch
             if (!bulkLaunchState.accountAssets[advertiserId]) {
                 bulkLaunchState.accountAssets[advertiserId] = {};
             }
-
-            // Mark videos as matched
             const uploadedCount = Object.keys(videoUploadState.uploadedVideos[advertiserId]).length;
             bulkLaunchState.accountAssets[advertiserId].videoMatch = {
                 matched: Object.entries(videoUploadState.uploadedVideos[advertiserId]).map(([srcId, tgtId]) => ({
@@ -7765,7 +7761,7 @@ async function startBulkVideoUpload() {
                 match_rate: Math.round((uploadedCount / videos.length) * 100)
             };
         }
-    }
+    }));
 
     // Upload complete
     videoUploadState.isUploading = false;
@@ -8477,8 +8473,8 @@ async function handleMediaLibraryUpload(event) {
     // Show progress UI
     showMediaUploadProgress();
 
-    // Upload files in PARALLEL BATCHES of 2 for reliability
-    const BATCH_SIZE = 2;
+    // Upload files in PARALLEL BATCHES of 3 for reliability
+    const BATCH_SIZE = 3;
     const totalBatches = Math.ceil(validFiles.length / BATCH_SIZE);
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
@@ -12079,8 +12075,8 @@ function openDupBulkVideoUpload(advertiserId) {
             }
         };
 
-        // Upload in PARALLEL BATCHES of 2 for reliability
-        const BATCH_SIZE = 2;
+        // Upload in PARALLEL BATCHES of 3 for reliability
+        const BATCH_SIZE = 3;
         const totalBatches = Math.ceil(validFiles.length / BATCH_SIZE);
 
         for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
@@ -13880,113 +13876,118 @@ async function handleMultiAccountUpload(event, accounts) {
         thumbnails.set(file, thumb);
     }
 
-    // Upload to each account sequentially (to avoid rate limits)
-    for (let accIdx = 0; accIdx < accounts.length; accIdx++) {
-        const account = accounts[accIdx];
+    const MUP_BATCH_SIZE = 3;
+
+    // All accounts upload simultaneously; within each account videos upload in batches of 3
+    await Promise.all(accounts.map(async (account, accIdx) => {
         let accCompleted = 0;
 
         addLog('info', `Uploading to ${account.name} (${account.advertiser_id})...`);
 
-        for (let fileIdx = 0; fileIdx < validFiles.length; fileIdx++) {
-            const file = validFiles[fileIdx];
+        for (let batchStart = 0; batchStart < validFiles.length; batchStart += MUP_BATCH_SIZE) {
+            const batch = validFiles.slice(batchStart, batchStart + MUP_BATCH_SIZE);
 
-            // Rename with timestamp
-            const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
-            const originalName = file.name;
-            const lastDot = originalName.lastIndexOf('.');
-            const baseName = lastDot > 0 ? originalName.slice(0, lastDot) : originalName;
-            const ext = lastDot > 0 ? originalName.slice(lastDot) : '';
-            const newFileName = `${baseName}_${timestamp}${ext}`;
+            await Promise.all(batch.map(async (file, batchOffset) => {
+                const fileIdx = batchStart + batchOffset;
 
-            const formData = new FormData();
-            formData.append('video', file, newFileName);
-            formData.append('target_advertiser_id', account.advertiser_id);
+                // Rename with timestamp
+                const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+                const originalName = file.name;
+                const lastDot = originalName.lastIndexOf('.');
+                const baseName = lastDot > 0 ? originalName.slice(0, lastDot) : originalName;
+                const ext = lastDot > 0 ? originalName.slice(lastDot) : '';
+                const newFileName = `${baseName}_${timestamp}${ext}`;
 
-            const fillEl = () => document.getElementById(`mup-bar-${accIdx}-${fileIdx}`);
-            const pctEl  = () => document.getElementById(`mup-pct-${accIdx}-${fileIdx}`);
+                const formData = new FormData();
+                formData.append('video', file, newFileName);
+                formData.append('target_advertiser_id', account.advertiser_id);
 
-            try {
-                const result = await new Promise((resolve, reject) => {
-                    const xhr = new XMLHttpRequest();
+                const fillEl = () => document.getElementById(`mup-bar-${accIdx}-${fileIdx}`);
+                const pctEl  = () => document.getElementById(`mup-pct-${accIdx}-${fileIdx}`);
 
-                    xhr.upload.addEventListener('progress', (e) => {
-                        if (e.lengthComputable) {
-                            const pct = Math.round((e.loaded / e.total) * 100);
-                            const fill = fillEl(), pctSpan = pctEl();
-                            if (fill) fill.style.width = pct + '%';
-                            if (pctSpan) pctSpan.textContent = pct >= 100 ? 'Processing...' : pct + '%';
-                        }
-                    });
+                try {
+                    const result = await new Promise((resolve, reject) => {
+                        const xhr = new XMLHttpRequest();
 
-                    xhr.addEventListener('load', () => {
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                            try { resolve(JSON.parse(xhr.responseText)); }
-                            catch (e) { reject(new Error('Invalid JSON response')); }
-                        } else {
-                            reject(new Error(`HTTP ${xhr.status}`));
-                        }
-                    });
-                    xhr.addEventListener('error', () => reject(new Error('Network error')));
-                    xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
-
-                    xhr.open('POST', 'api.php?action=upload_video_to_advertiser');
-                    xhr.setRequestHeader('X-CSRF-Token', window.CSRF_TOKEN || '');
-                    xhr.send(formData);
-                });
-
-                if (result.success) {
-                    accCompleted++;
-                    completed++;
-
-                    const fill = fillEl(), pctSpan = pctEl();
-                    if (fill) { fill.style.width = '100%'; fill.style.background = '#22c55e'; }
-                    if (pctSpan) { pctSpan.textContent = '✓ Done'; pctSpan.style.color = '#16a34a'; }
-
-                    // Add to media library if it's the current account
-                    const currentAccId = state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID;
-                    if (account.advertiser_id === currentAccId && result.data?.video_id) {
-                        const thumbUrl = thumbnails.get(file) || '';
-                        state.mediaLibrary.unshift({
-                            type: 'video',
-                            id: result.data.video_id,
-                            url: thumbUrl,
-                            name: newFileName,
-                            is_new: true
+                        xhr.upload.addEventListener('progress', (e) => {
+                            if (e.lengthComputable) {
+                                const pct = Math.round((e.loaded / e.total) * 100);
+                                const fill = fillEl(), pctSpan = pctEl();
+                                if (fill) fill.style.width = pct + '%';
+                                if (pctSpan) pctSpan.textContent = pct >= 100 ? 'Processing...' : pct + '%';
+                            }
                         });
+
+                        xhr.addEventListener('load', () => {
+                            if (xhr.status >= 200 && xhr.status < 300) {
+                                try { resolve(JSON.parse(xhr.responseText)); }
+                                catch (e) { reject(new Error('Invalid JSON response')); }
+                            } else {
+                                reject(new Error(`HTTP ${xhr.status}`));
+                            }
+                        });
+                        xhr.addEventListener('error', () => reject(new Error('Network error')));
+                        xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
+
+                        xhr.open('POST', 'api.php?action=upload_video_to_advertiser');
+                        xhr.setRequestHeader('X-CSRF-Token', window.CSRF_TOKEN || '');
+                        xhr.send(formData);
+                    });
+
+                    if (result.success) {
+                        accCompleted++;
+                        completed++;
+
+                        const fill = fillEl(), pctSpan = pctEl();
+                        if (fill) { fill.style.width = '100%'; fill.style.background = '#22c55e'; }
+                        if (pctSpan) { pctSpan.textContent = '✓ Done'; pctSpan.style.color = '#16a34a'; }
+
+                        // Add to media library if it's the current account
+                        const currentAccId = state.currentAdvertiserId || window.TIKTOK_ADVERTISER_ID;
+                        if (account.advertiser_id === currentAccId && result.data?.video_id) {
+                            const thumbUrl = thumbnails.get(file) || '';
+                            state.mediaLibrary.unshift({
+                                type: 'video',
+                                id: result.data.video_id,
+                                url: thumbUrl,
+                                name: newFileName,
+                                is_new: true
+                            });
+                        }
+                    } else {
+                        failed++;
+                        const fill = fillEl(), pctSpan = pctEl();
+                        if (fill) { fill.style.width = '100%'; fill.style.background = '#ef4444'; }
+                        if (pctSpan) { pctSpan.textContent = '✗ Failed'; pctSpan.style.color = '#dc2626'; }
+                        addLog('error', `Failed ${file.name} -> ${account.name}: ${result.message}`);
                     }
-                } else {
+                } catch (e) {
                     failed++;
                     const fill = fillEl(), pctSpan = pctEl();
                     if (fill) { fill.style.width = '100%'; fill.style.background = '#ef4444'; }
-                    if (pctSpan) { pctSpan.textContent = '✗ Failed'; pctSpan.style.color = '#dc2626'; }
-                    addLog('error', `Failed ${file.name} -> ${account.name}: ${result.message}`);
+                    if (pctSpan) { pctSpan.textContent = '✗ Error'; pctSpan.style.color = '#dc2626'; }
+                    addLog('error', `Error ${file.name} -> ${account.name}: ${e.message}`);
                 }
-            } catch (e) {
-                failed++;
-                const fill = fillEl(), pctSpan = pctEl();
-                if (fill) { fill.style.width = '100%'; fill.style.background = '#ef4444'; }
-                if (pctSpan) { pctSpan.textContent = '✗ Error'; pctSpan.style.color = '#dc2626'; }
-                addLog('error', `Error ${file.name} -> ${account.name}: ${e.message}`);
-            }
 
-            // Update overall counts
-            const accCountEl = document.getElementById(`mup-acc-count-${accIdx}`);
-            if (accCountEl) accCountEl.textContent = `${accCompleted} / ${validFiles.length}`;
-            if (progressCount) progressCount.textContent = `${completed + failed} / ${totalUploads}`;
-            if (progressBar) progressBar.style.width = `${((completed + failed) / totalUploads) * 100}%`;
+                // Update overall counts (JS single-threaded — no race condition on shared vars)
+                const accCountEl = document.getElementById(`mup-acc-count-${accIdx}`);
+                if (accCountEl) accCountEl.textContent = `${accCompleted} / ${validFiles.length}`;
+                if (progressCount) progressCount.textContent = `${completed + failed} / ${totalUploads}`;
+                if (progressBar) progressBar.style.width = `${((completed + failed) / totalUploads) * 100}%`;
+            }));
+
+            // Brief pause between batches within an account
+            if (batchStart + MUP_BATCH_SIZE < validFiles.length) {
+                await new Promise(r => setTimeout(r, 300));
+            }
         }
 
-        // Collapse this account's section once done
+        // Collapse this account's section once all its videos are done
         const body = document.getElementById(`mup-body-${accIdx}`);
         const toggle = document.getElementById(`mup-toggle-${accIdx}`);
         if (body) body.style.display = 'none';
         if (toggle) toggle.textContent = '▶';
-
-        // Small delay between accounts
-        if (accIdx < accounts.length - 1) {
-            await new Promise(r => setTimeout(r, 500));
-        }
-    }
+    }));
 
     // Final status
     if (progressTitle) progressTitle.textContent = `Upload complete! ${completed} succeeded, ${failed} failed`;
@@ -14256,13 +14257,13 @@ async function handleBulkVideoUpload(event) {
         thumbnails: thumbnails  // Store thumbnails for use during upload
     };
 
-    addLog('info', `Starting bulk upload of ${validFiles.length} videos (parallel batches of 2)`);
+    addLog('info', `Starting bulk upload of ${validFiles.length} videos (parallel batches of 3)`);
 
     // Show progress UI
     showBulkUploadProgress();
 
-    // Upload files in PARALLEL BATCHES of 2 for reliability
-    const BATCH_SIZE = 2;
+    // Upload files in PARALLEL BATCHES of 3 for reliability
+    const BATCH_SIZE = 3;
     const totalBatches = Math.ceil(validFiles.length / BATCH_SIZE);
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
