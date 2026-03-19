@@ -302,6 +302,8 @@ function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
 // ── Users ────────────────────────────────────────────────
+let _usersData = [];
+
 async function loadUsers() {
     document.getElementById('users-loading').style.display = 'block';
     document.getElementById('users-table').style.display = 'none';
@@ -309,25 +311,39 @@ async function loadUsers() {
     const data = await res.json();
     document.getElementById('users-loading').style.display = 'none';
     if (!data.success) return;
+    _usersData = data.users;
     const tbody = document.getElementById('users-tbody');
-    tbody.innerHTML = data.users.map(u => `
+    tbody.innerHTML = data.users.map((u, i) => `
         <tr>
             <td>${u.id}</td>
             <td><strong>${esc(u.username)}</strong></td>
             <td>${esc(u.full_name || '—')}</td>
             <td>${esc(u.email || '—')}</td>
             <td><span class="badge badge-${u.role}">${u.role === 'admin' ? 'Admin' : 'Media Buyer'}</span></td>
-            <td><span class="badge badge-${u.status}">${u.status}</span></td>
+            <td><span class="badge badge-${u.status}">${esc(u.status)}</span></td>
             <td style="font-size:12px;">${u.last_login ? u.last_login.substring(0,16) : 'Never'}</td>
             <td style="display:flex;gap:6px;flex-wrap:wrap;">
-                <button class="btn-sm btn-secondary" onclick="openEditUser(${u.id},'${esc(u.full_name||'')}','${esc(u.email||'')}','${u.role}','${u.status}')">Edit</button>
-                <button class="btn-sm btn-secondary" onclick="openResetPw(${u.id},'${esc(u.username)}')">Reset PW</button>
-                <button class="btn-sm btn-danger" onclick="confirmDelete(${u.id},'${esc(u.username)}')">Delete</button>
+                <button class="btn-sm btn-secondary" data-action="edit" data-idx="${i}">Edit</button>
+                <button class="btn-sm btn-secondary" data-action="resetpw" data-idx="${i}">Reset PW</button>
+                <button class="btn-sm btn-danger" data-action="delete" data-idx="${i}">Delete</button>
             </td>
         </tr>
     `).join('');
     document.getElementById('users-table').style.display = 'table';
 }
+
+// Single delegated event listener — handles all user table buttons
+document.addEventListener('click', function(e) {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.idx);
+    const u = _usersData[idx];
+    if (!u) return;
+    const action = btn.dataset.action;
+    if (action === 'edit')    openEditUser(u.id, u.full_name || '', u.email || '', u.role, u.status);
+    if (action === 'resetpw') openResetPw(u.id, u.username);
+    if (action === 'delete')  confirmDelete(u.id, u.username);
+});
 
 function openCreateUser() {
     document.getElementById('new-username').value = '';
