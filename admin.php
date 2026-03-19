@@ -51,6 +51,7 @@ $tab = $_GET['tab'] ?? 'users';
         .badge { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
         .badge-admin { background: #fef3c7; color: #92400e; }
         .badge-user { background: #dbeafe; color: #1e40af; }
+        .badge-media_buyer { background: #dbeafe; color: #1e40af; }
         .badge-active { background: #dcfce7; color: #166534; }
         .badge-inactive, .badge-suspended { background: #fee2e2; color: #991b1b; }
         .badge-success { background: #dcfce7; color: #166534; }
@@ -202,7 +203,7 @@ $tab = $_GET['tab'] ?? 'users';
         <div class="form-group">
             <label>Role</label>
             <select id="new-role">
-                <option value="user">User</option>
+                <option value="user">Media Buyer</option>
                 <option value="admin">Admin</option>
             </select>
         </div>
@@ -224,7 +225,7 @@ $tab = $_GET['tab'] ?? 'users';
         <div class="form-group">
             <label>Role</label>
             <select id="edit-role">
-                <option value="user">User</option>
+                <option value="user">Media Buyer</option>
                 <option value="admin">Admin</option>
             </select>
         </div>
@@ -254,6 +255,20 @@ $tab = $_GET['tab'] ?? 'users';
         <div class="modal-actions">
             <button class="btn-sm btn-secondary" onclick="closeModal('reset-pw-modal')">Cancel</button>
             <button class="btn-sm btn-primary" onclick="resetPassword()">Reset Password</button>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="modal-overlay" id="delete-user-modal">
+    <div class="modal" style="max-width:380px;">
+        <h3 style="color:var(--destructive);">Delete User</h3>
+        <input type="hidden" id="delete-user-id">
+        <p style="font-size:14px;margin-bottom:20px;">Are you sure you want to delete <strong id="delete-user-name"></strong>? This cannot be undone.</p>
+        <div id="delete-user-error" style="color:var(--destructive);font-size:13px;display:none;margin-bottom:10px;"></div>
+        <div class="modal-actions">
+            <button class="btn-sm btn-secondary" onclick="closeModal('delete-user-modal')">Cancel</button>
+            <button class="btn-sm btn-danger" onclick="deleteUser()">Delete</button>
         </div>
     </div>
 </div>
@@ -301,13 +316,13 @@ async function loadUsers() {
             <td><strong>${esc(u.username)}</strong></td>
             <td>${esc(u.full_name || '—')}</td>
             <td>${esc(u.email || '—')}</td>
-            <td><span class="badge badge-${u.role}">${u.role}</span></td>
+            <td><span class="badge badge-${u.role}">${u.role === 'admin' ? 'Admin' : 'Media Buyer'}</span></td>
             <td><span class="badge badge-${u.status}">${u.status}</span></td>
             <td style="font-size:12px;">${u.last_login ? u.last_login.substring(0,16) : 'Never'}</td>
             <td style="display:flex;gap:6px;flex-wrap:wrap;">
                 <button class="btn-sm btn-secondary" onclick="openEditUser(${u.id},'${esc(u.full_name||'')}','${esc(u.email||'')}','${u.role}','${u.status}')">Edit</button>
                 <button class="btn-sm btn-secondary" onclick="openResetPw(${u.id},'${esc(u.username)}')">Reset PW</button>
-                <button class="btn-sm btn-danger" onclick="deleteUser(${u.id},'${esc(u.username)}')">Delete</button>
+                <button class="btn-sm btn-danger" onclick="confirmDelete(${u.id},'${esc(u.username)}')">Delete</button>
             </td>
         </tr>
     `).join('');
@@ -386,15 +401,29 @@ async function resetPassword() {
     alert('Password reset successfully.');
 }
 
-async function deleteUser(id, username) {
-    if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+function confirmDelete(id, username) {
+    document.getElementById('delete-user-id').value = id;
+    document.getElementById('delete-user-name').textContent = username;
+    document.getElementById('delete-user-error').style.display = 'none';
+    openModal('delete-user-modal');
+}
+
+async function deleteUser() {
+    const errEl = document.getElementById('delete-user-error');
+    const id = document.getElementById('delete-user-id').value;
     const body = new FormData();
     body.append('action', 'delete_user');
     body.append('user_id', id);
-    const res = await fetch('api-admin.php', { method: 'POST', body });
-    const data = await res.json();
-    if (data.error) { alert(data.error); return; }
-    loadUsers();
+    try {
+        const res = await fetch('api-admin.php', { method: 'POST', body });
+        const data = await res.json();
+        if (data.error) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+        closeModal('delete-user-modal');
+        loadUsers();
+    } catch(e) {
+        errEl.textContent = 'Network error: ' + e.message;
+        errEl.style.display = 'block';
+    }
 }
 
 // ── Logs ─────────────────────────────────────────────────
