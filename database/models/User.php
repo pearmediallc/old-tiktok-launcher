@@ -15,7 +15,7 @@ class User {
     /**
      * Create a new user
      */
-    public function create($username, $password, $email = null, $fullName = null) {
+    public function create($username, $password, $email = null, $fullName = null, $role = 'user') {
         $passwordHash = password_hash($password, PASSWORD_BCRYPT);
 
         try {
@@ -24,6 +24,7 @@ class User {
                 'password_hash' => $passwordHash,
                 'email' => $email,
                 'full_name' => $fullName,
+                'role' => in_array($role, ['admin', 'user']) ? $role : 'user',
                 'status' => 'active'
             ]);
 
@@ -63,7 +64,7 @@ class User {
      */
     public function getById($id) {
         return $this->db->fetchOne(
-            "SELECT id, username, email, full_name, created_at, last_login, status FROM users WHERE id = :id",
+            "SELECT id, username, email, full_name, role, created_at, last_login, status FROM users WHERE id = :id",
             ['id' => $id]
         );
     }
@@ -73,9 +74,25 @@ class User {
      */
     public function getByUsername($username) {
         return $this->db->fetchOne(
-            "SELECT id, username, email, full_name, created_at, last_login, status FROM users WHERE username = :username",
+            "SELECT id, username, email, full_name, role, created_at, last_login, status FROM users WHERE username = :username",
             ['username' => $username]
         );
+    }
+
+    /**
+     * Get all users (admin only)
+     */
+    public function getAll() {
+        return $this->db->fetchAll(
+            "SELECT id, username, email, full_name, role, created_at, last_login, status FROM users ORDER BY created_at DESC"
+        );
+    }
+
+    /**
+     * Delete user
+     */
+    public function delete($id) {
+        return $this->db->delete('users', 'id = :id', ['id' => $id]);
     }
 
     /**

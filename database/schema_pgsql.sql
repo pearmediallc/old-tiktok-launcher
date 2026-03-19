@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE,
     full_name VARCHAR(255),
+    role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('admin', 'user')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_login TIMESTAMP NULL,
@@ -170,9 +171,44 @@ CREATE INDEX IF NOT EXISTS idx_tool_portfolios_created_at ON tool_portfolios(cre
 -- Create default admin user
 -- ============================================
 -- Password is 'Developer' hashed with bcrypt
-INSERT INTO users (username, password_hash, email, full_name, status)
-VALUES ('Sunny', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'sunny@example.com', 'Sunny Developer', 'active')
+INSERT INTO users (username, password_hash, email, full_name, role, status)
+VALUES ('Sunny', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'sunny@example.com', 'Sunny Developer', 'admin', 'active')
 ON CONFLICT (username) DO NOTHING;
+
+-- Migrate existing users without role to 'user' (admin must be set manually)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('admin', 'user'));
+
+-- remember_me_tokens for persistent 7-day sessions
+CREATE TABLE IF NOT EXISTS remember_me_tokens (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    token_hash VARCHAR(255) NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_rmt_token ON remember_me_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS idx_rmt_user ON remember_me_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_rmt_expires ON remember_me_tokens(expires_at);
+
+-- Per-user Slack connections
+CREATE TABLE IF NOT EXISTS user_slack_connections (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL UNIQUE,
+    team_id VARCHAR(100),
+    team_name VARCHAR(255),
+    webhook_url TEXT NOT NULL,
+    channel VARCHAR(255),
+    channel_id VARCHAR(100),
+    bot_user_id VARCHAR(100),
+    scope TEXT,
+    authed_user_id VARCHAR(100),
+    access_token TEXT,
+    connected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_usc_user_id ON user_slack_connections(user_id);
 
 -- ============================================
 -- Views for easy querying

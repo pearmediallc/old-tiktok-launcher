@@ -59,6 +59,22 @@
         </a>
     </div>
 
+    <?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section-label">Admin</div>
+    <a href="admin.php" class="sidebar-item <?php echo basename($_SERVER['PHP_SELF']) === 'admin.php' ? 'active' : ''; ?>">
+        <span class="sidebar-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+        </span>
+        <span class="sidebar-label">Admin Panel</span>
+    </a>
+    <?php endif; ?>
+
     <div class="sidebar-footer">
         TikTok Launcher v2.0
     </div>

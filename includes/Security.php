@@ -23,7 +23,7 @@ class Security {
         if (session_status() === PHP_SESSION_NONE) {
             ini_set('session.cookie_httponly', '1');
             ini_set('session.cookie_samesite', 'Lax');
-            ini_set('session.gc_maxlifetime', 3600); // 1 hour
+            ini_set('session.gc_maxlifetime', 604800); // 7 days
             ini_set('session.use_strict_mode', '1');
 
             // Enable secure cookies if using HTTPS (check proxy header for Render.com)

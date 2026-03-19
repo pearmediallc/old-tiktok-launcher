@@ -10,6 +10,97 @@
 require_once __DIR__ . '/../database/Database.php';
 
 // ============================================
+// PER-USER SLACK HELPER
+// ============================================
+
+/**
+ * Get the Slack webhook URL for the user who owns the given advertiser account.
+ * Falls back to the global SLACK_BOT_TOKEN / channel if no per-user webhook found.
+ *
+ * Returns array: ['type' => 'webhook'|'bot', 'webhook_url' => string, 'token' => string, 'channel' => string]
+ */
+function getSlackConfigForAdvertiser($advertiserId) {
+    if (!empty($advertiserId)) {
+        try {
+            $db = Database::getInstance();
+            $row = $db->fetchOne(
+                "SELECT usc.webhook_url
+                 FROM user_slack_connections usc
+                 JOIN tiktok_connections tc ON tc.user_id = usc.user_id
+                 WHERE tc.advertiser_id = :aid
+                 LIMIT 1",
+                ['aid' => $advertiserId]
+            );
+            if ($row && !empty($row['webhook_url'])) {
+                return ['type' => 'webhook', 'webhook_url' => $row['webhook_url']];
+            }
+        } catch (Exception $e) {
+            logOptimizer("getSlackConfigForAdvertiser DB error: " . $e->getMessage());
+        }
+    }
+    // Fall back to global bot token
+    $token = getenv('SLACK_BOT_TOKEN') ?: ($_ENV['SLACK_BOT_TOKEN'] ?? '');
+    return ['type' => 'bot', 'token' => $token, 'channel' => 'C0AC3899K6C'];
+}
+
+/**
+ * Send a Slack message using either an Incoming Webhook URL or the Bot Token API.
+ * $slackConfig: result of getSlackConfigForAdvertiser()
+ * $payload: array with 'text', optionally 'blocks'
+ */
+function sendSlackMessage($slackConfig, $payload) {
+    if ($slackConfig['type'] === 'webhook') {
+        $webhookUrl = $slackConfig['webhook_url'];
+        $ch = curl_init($webhookUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => json_encode($payload),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+            CURLOPT_TIMEOUT        => 15,
+        ]);
+        $response = curl_exec($ch);
+        if ($response === false) {
+            $err = curl_error($ch); curl_close($ch);
+            logOptimizer("Slack webhook CURL error: $err");
+            return false;
+        }
+        curl_close($ch);
+        // Slack webhooks return "ok" on success
+        return trim($response) === 'ok';
+    }
+
+    // Bot token path
+    $token = $slackConfig['token'] ?? '';
+    if (empty($token)) {
+        logOptimizer("Slack notification skipped: no token and no webhook");
+        return false;
+    }
+    $payload['channel'] = $slackConfig['channel'];
+    $ch = curl_init('https://slack.com/api/chat.postMessage');
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => json_encode($payload),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json', "Authorization: Bearer $token"],
+        CURLOPT_TIMEOUT        => 15,
+    ]);
+    $response = curl_exec($ch);
+    if ($response === false) {
+        $err = curl_error($ch); curl_close($ch);
+        logOptimizer("Slack bot CURL error: $err");
+        return false;
+    }
+    curl_close($ch);
+    $result = json_decode($response, true);
+    if (empty($result['ok'])) {
+        logOptimizer("Slack API error: " . ($result['error'] ?? 'unknown'), $result);
+        return false;
+    }
+    return true;
+}
+
+// ============================================
 // LOGGING
 // ============================================
 
@@ -420,11 +511,9 @@ function pauseCampaignViaApi($advertiserId, $campaignId, $accessToken) {
 // ============================================
 
 function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $violationDetails, $ruleGroup, $resumeAt, $advertiserId = '', $metricsSnapshot = null) {
-    $slackToken = getenv('SLACK_BOT_TOKEN') ?: ($_ENV['SLACK_BOT_TOKEN'] ?? '');
-    $channelId = 'C0AC3899K6C';
-
-    if (empty($slackToken)) {
-        logOptimizer("Slack notification skipped: SLACK_BOT_TOKEN not configured");
+    $slackConfig = getSlackConfigForAdvertiser($advertiserId);
+    if ($slackConfig['type'] === 'bot' && empty($slackConfig['token'])) {
+        logOptimizer("Slack notification skipped: no Slack integration configured");
         return false;
     }
 
@@ -532,52 +621,18 @@ function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $viola
         ]
     ];
 
-    $payload = json_encode([
-        'channel' => $channelId,
-        'text' => $fallbackText,
-        'blocks' => $blocks,
-    ]);
-
-    $ch = curl_init('https://slack.com/api/chat.postMessage');
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $payload,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [
-            "Content-Type: application/json",
-            "Authorization: Bearer $slackToken",
-        ],
-        CURLOPT_TIMEOUT => 15,
-    ]);
-
-    $response = curl_exec($ch);
-    if ($response === false) {
-        $err = curl_error($ch);
-        curl_close($ch);
-        logOptimizer("Slack CURL Error: $err");
-        return false;
-    }
-    curl_close($ch);
-
-    $result = json_decode($response, true);
-    if (empty($result['ok'])) {
-        logOptimizer("Slack API Error: " . ($result['error'] ?? 'unknown'), $result);
-        return false;
-    }
-
-    logOptimizer("Slack notification sent for campaign $campaignId");
-    return true;
+    $sent = sendSlackMessage($slackConfig, ['text' => $fallbackText, 'blocks' => $blocks]);
+    if ($sent) logOptimizer("Slack pause notification sent for campaign $campaignId");
+    return $sent;
 }
 
 // ============================================
 // SEND SLACK PAUSE FAILURE NOTIFICATION
 // ============================================
 
-function sendSlackPauseFailureNotification($campaignName, $campaignId, $ruleKey, $violationDetails) {
-    $slackToken = getenv('SLACK_BOT_TOKEN') ?: ($_ENV['SLACK_BOT_TOKEN'] ?? '');
-    $channelId = 'C0AC3899K6C';
-
-    if (empty($slackToken)) {
+function sendSlackPauseFailureNotification($campaignName, $campaignId, $ruleKey, $violationDetails, $advertiserId = '') {
+    $slackConfig = getSlackConfigForAdvertiser($advertiserId);
+    if ($slackConfig['type'] === 'bot' && empty($slackConfig['token'])) {
         logOptimizer("Slack failure notification skipped: SLACK_BOT_TOKEN not configured");
         return false;
     }
@@ -610,40 +665,9 @@ function sendSlackPauseFailureNotification($campaignName, $campaignId, $ruleKey,
         ],
     ];
 
-    $payload = json_encode([
-        'channel' => $channelId,
-        'text' => $fallbackText,
-        'blocks' => $blocks,
-    ]);
-
-    $ch = curl_init('https://slack.com/api/chat.postMessage');
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $payload,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [
-            "Content-Type: application/json",
-            "Authorization: Bearer $slackToken",
-        ],
-        CURLOPT_TIMEOUT => 15,
-    ]);
-
-    $response = curl_exec($ch);
-    if ($response === false) {
-        logOptimizer("Slack failure notification CURL Error: " . curl_error($ch));
-        curl_close($ch);
-        return false;
-    }
-    curl_close($ch);
-
-    $result = json_decode($response, true);
-    if (empty($result['ok'])) {
-        logOptimizer("Slack failure notification API Error: " . ($result['error'] ?? 'unknown'), $result);
-        return false;
-    }
-
-    logOptimizer("Slack PAUSE FAILURE notification sent for campaign $campaignId");
-    return true;
+    $sent = sendSlackMessage($slackConfig, ['text' => $fallbackText, 'blocks' => $blocks]);
+    if ($sent) logOptimizer("Slack PAUSE FAILURE notification sent for campaign $campaignId");
+    return $sent;
 }
 
 // ============================================
@@ -652,13 +676,6 @@ function sendSlackPauseFailureNotification($campaignName, $campaignId, $ruleKey,
 // ============================================
 
 function sendSlackReviewNotification($campaign, $tiktokMetrics, $redtrackMetrics) {
-    $slackToken = getenv('SLACK_BOT_TOKEN') ?: ($_ENV['SLACK_BOT_TOKEN'] ?? '');
-    $channelId = 'C0AC3899K6C';
-
-    if (empty($slackToken)) {
-        logOptimizer("Slack review notification skipped: SLACK_BOT_TOKEN not configured");
-        return false;
-    }
 
     $campaignName = $campaign['campaign_name'] ?? $campaign['campaign_id'];
     $campaignId = $campaign['campaign_id'];
@@ -788,42 +805,14 @@ function sendSlackReviewNotification($campaign, $tiktokMetrics, $redtrackMetrics
     ];
 
     $fallbackText = "Campaign Review: $campaignName — Spend: \$$spend, CPC: \$$cpc, CTR: {$ctr}%, Conv: $conversions — Click to resume";
-
-    $payload = json_encode([
-        'channel' => $channelId,
-        'text' => $fallbackText,
-        'blocks' => $blocks,
-    ]);
-
-    $ch = curl_init('https://slack.com/api/chat.postMessage');
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $payload,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [
-            "Content-Type: application/json",
-            "Authorization: Bearer $slackToken",
-        ],
-        CURLOPT_TIMEOUT => 15,
-    ]);
-
-    $response = curl_exec($ch);
-    if ($response === false) {
-        $err = curl_error($ch);
-        curl_close($ch);
-        logOptimizer("Slack review CURL Error: $err");
+    $slackConfig = getSlackConfigForAdvertiser($advertiserId);
+    if ($slackConfig['type'] === 'bot' && empty($slackConfig['token'])) {
+        logOptimizer("Slack review notification skipped: no Slack integration configured");
         return false;
     }
-    curl_close($ch);
-
-    $result = json_decode($response, true);
-    if (empty($result['ok'])) {
-        logOptimizer("Slack review API Error: " . ($result['error'] ?? 'unknown'), $result);
-        return false;
-    }
-
-    logOptimizer("Slack review notification sent for campaign $campaignId");
-    return true;
+    $sent = sendSlackMessage($slackConfig, ['text' => $fallbackText, 'blocks' => $blocks]);
+    if ($sent) logOptimizer("Slack review notification sent for campaign $campaignId");
+    return $sent;
 }
 
 // ============================================

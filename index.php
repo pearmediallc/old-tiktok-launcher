@@ -2,6 +2,8 @@
 // Include security helper
 require_once __DIR__ . '/includes/Security.php';
 require_once __DIR__ . '/includes/ActivityLogger.php';
+require_once __DIR__ . '/database/Database.php';
+require_once __DIR__ . '/database/models/User.php';
 
 // Initialize security settings
 Security::init();
@@ -41,14 +43,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$rateLimit['allowed']) {
             $rateLimitError = 'Too many login attempts. Please try again in ' . Security::formatTimeRemaining($rateLimit['reset_in']) . '.';
         } else {
-            $username = $_POST['username'] ?? '';
+            $username = trim($_POST['username'] ?? '');
             $password = $_POST['password'] ?? '';
+            $rememberMe = !empty($_POST['remember_me']);
 
-            // Verify credentials
-            $validUsername = $username === ($_ENV['AUTH_USERNAME'] ?? '');
-            $validPassword = Security::verifyPassword($password, $_ENV['AUTH_PASSWORD'] ?? '');
+            // Verify credentials against DB
+            $userModel = new User();
+            $user = $userModel->authenticate($username, $password);
 
-            if ($validUsername && $validPassword) {
+            if ($user) {
                 // Clear rate limit on successful login
                 Security::clearRateLimit($clientIP);
 
@@ -56,9 +59,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 Security::regenerateSession();
 
                 $_SESSION['authenticated'] = true;
-                $_SESSION['username'] = $username;
+                $_SESSION['username'] = $user['username'];
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['role'] = $user['role'] ?? 'user';
                 $_SESSION['login_time'] = time();
                 $_SESSION['last_activity'] = time();
+
+                // Set 7-day remember-me cookie if requested
+                if ($rememberMe) {
+                    $token = bin2hex(random_bytes(32));
+                    $tokenHash = hash('sha256', $token);
+                    $expiresAt = date('Y-m-d H:i:s', time() + 604800);
+                    try {
+                        $db = Database::getInstance();
+                        // Clean old tokens for this user
+                        $db->query("DELETE FROM remember_me_tokens WHERE user_id = :uid OR expires_at < NOW()", ['uid' => $user['id']]);
+                        $db->insert('remember_me_tokens', [
+                            'user_id' => $user['id'],
+                            'token_hash' => $tokenHash,
+                            'expires_at' => $expiresAt
+                        ]);
+                        setcookie('remember_me', $token, [
+                            'expires' => time() + 604800,
+                            'path' => '/',
+                            'httponly' => true,
+                            'samesite' => 'Lax',
+                            'secure' => Security::isHttps()
+                        ]);
+                    } catch (Exception $e) {
+                        error_log("remember_me token error: " . $e->getMessage());
+                    }
+                }
 
                 ActivityLogger::log('login_success', 'index.php', ['username' => $username], 'success');
 
@@ -80,21 +111,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Check session timeout (1 hour of inactivity)
+// Check active session
 if (isset($_SESSION['authenticated']) && $_SESSION['authenticated']) {
     $lastActivity = $_SESSION['last_activity'] ?? 0;
-    if (time() - $lastActivity > 3600) {
-        // Session expired
+    if (time() - $lastActivity > 604800) {
+        // Session expired after 7 days
         ActivityLogger::log('session_expired', 'index.php', ['username' => $_SESSION['username'] ?? 'unknown'], 'info');
         session_destroy();
         session_start();
         $error = 'Session expired. Please login again.';
     } else {
-        // Update last activity and redirect
         $_SESSION['last_activity'] = time();
         header('Location: app-shell.php');
         exit;
     }
+}
+
+// Check remember-me cookie for auto-login
+if (!isset($_SESSION['authenticated']) && !empty($_COOKIE['remember_me'])) {
+    $token = $_COOKIE['remember_me'];
+    $tokenHash = hash('sha256', $token);
+    try {
+        $db = Database::getInstance();
+        $row = $db->fetchOne(
+            "SELECT rmt.user_id, rmt.expires_at, u.username, u.role, u.status
+             FROM remember_me_tokens rmt
+             JOIN users u ON u.id = rmt.user_id
+             WHERE rmt.token_hash = :hash AND rmt.expires_at > NOW()",
+            ['hash' => $tokenHash]
+        );
+        if ($row && $row['status'] === 'active') {
+            Security::regenerateSession();
+            $_SESSION['authenticated'] = true;
+            $_SESSION['username'] = $row['username'];
+            $_SESSION['user_id'] = $row['user_id'];
+            $_SESSION['role'] = $row['role'] ?? 'user';
+            $_SESSION['login_time'] = time();
+            $_SESSION['last_activity'] = time();
+            ActivityLogger::log('auto_login', 'index.php', ['username' => $row['username'], 'via' => 'remember_me'], 'success');
+            header('Location: app-shell.php');
+            exit;
+        }
+    } catch (Exception $e) {
+        error_log("remember_me check error: " . $e->getMessage());
+    }
+    // Invalid/expired cookie — clear it
+    setcookie('remember_me', '', ['expires' => time() - 3600, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax']);
 }
 
 // Generate CSRF token for form
@@ -432,6 +494,12 @@ $csrfToken = Security::generateCSRFToken();
                 <label for="password">Password</label>
                 <input type="password" id="password" name="password" required
                        autocomplete="current-password" <?php echo $rateLimitError ? 'disabled' : ''; ?>>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+                <input type="checkbox" id="remember_me" name="remember_me" value="1"
+                       style="width:16px;height:16px;cursor:pointer;accent-color:rgb(30,157,241);">
+                <label for="remember_me" style="font-size:14px;color:rgb(15,20,25);cursor:pointer;margin:0;">Keep me logged in for 7 days</label>
             </div>
 
             <button type="submit" class="btn-login" <?php echo $rateLimitError ? 'disabled' : ''; ?>>

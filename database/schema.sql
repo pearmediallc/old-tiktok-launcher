@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE,
     full_name VARCHAR(255),
+    role ENUM('admin', 'user') DEFAULT 'user',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     last_login TIMESTAMP NULL,
@@ -303,3 +304,39 @@ CREATE TABLE IF NOT EXISTS bulk_campaign_results (
     FOREIGN KEY (job_id) REFERENCES bulk_campaign_jobs(job_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT='Per-account results for bulk campaign launches';
+
+-- ============================================
+-- Table: remember_me_tokens (persistent sessions)
+-- ============================================
+CREATE TABLE IF NOT EXISTS remember_me_tokens (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    token_hash VARCHAR(255) NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_rmt_token (token_hash),
+    INDEX idx_rmt_user (user_id),
+    INDEX idx_rmt_expires (expires_at),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- Table: user_slack_connections (per-user Slack)
+-- ============================================
+CREATE TABLE IF NOT EXISTS user_slack_connections (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL UNIQUE,
+    team_id VARCHAR(100),
+    team_name VARCHAR(255),
+    webhook_url TEXT NOT NULL,
+    channel VARCHAR(255),
+    channel_id VARCHAR(100),
+    bot_user_id VARCHAR(100),
+    scope TEXT,
+    authed_user_id VARCHAR(100),
+    access_token TEXT,
+    connected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_usc_user_id (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

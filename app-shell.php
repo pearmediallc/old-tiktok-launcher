@@ -11,9 +11,9 @@ if (!isset($_SESSION['authenticated']) || !$_SESSION['authenticated']) {
     exit;
 }
 
-// Check session timeout (1 hour of inactivity)
+// Check session timeout (7 days of inactivity)
 $lastActivity = $_SESSION['last_activity'] ?? 0;
-if (time() - $lastActivity > 3600) {
+if (time() - $lastActivity > 604800) {
     session_destroy();
     session_start();
     header('Location: index.php');
@@ -32,6 +32,27 @@ $validViews = ['campaigns', 'create-smart', 'create-manual', 'optimizer'];
 $view = $_GET['view'] ?? 'campaigns';
 if (!in_array($view, $validViews)) {
     $view = 'campaigns';
+}
+
+// Check per-user Slack connection
+$slackConnected = false;
+$slackTeamName = '';
+$slackChannel = '';
+$shellUserId = intval($_SESSION['user_id'] ?? 0);
+if ($shellUserId) {
+    try {
+        require_once __DIR__ . '/database/Database.php';
+        $dbShell = Database::getInstance();
+        $slackRow = $dbShell->fetchOne(
+            "SELECT team_name, channel FROM user_slack_connections WHERE user_id = :uid",
+            ['uid' => $shellUserId]
+        );
+        if ($slackRow) {
+            $slackConnected = true;
+            $slackTeamName  = $slackRow['team_name'] ?? '';
+            $slackChannel   = $slackRow['channel']   ?? '';
+        }
+    } catch (Exception $e) { /* table may not exist yet */ }
 }
 
 // Check for undismissed optimizer pause notifications (for sidebar badge)
@@ -969,9 +990,31 @@ if ($isConnected) {
         }
     </style>
 </head>
+<?php
+// Show Slack connection status toast
+$slackMsg = null;
+if (!empty($_GET['slack'])) {
+    if ($_GET['slack'] === 'connected') {
+        $slackMsg = ['type'=>'success','text'=>'Slack connected: ' . ($_GET['team']??'') . ' / ' . ($_GET['channel']??'')];
+    } elseif ($_GET['slack'] === 'disconnected') {
+        $slackMsg = ['type'=>'info','text'=>'Slack disconnected.'];
+    } elseif ($_GET['slack'] === 'error') {
+        $slackMsg = ['type'=>'error','text'=>'Slack error: ' . ($_GET['msg']??'unknown')];
+    }
+}
+?>
 <body class="app-shell">
     <!-- Header -->
     <?php include __DIR__ . '/partials/header.php'; ?>
+    <?php if ($slackMsg): ?>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof showToast === 'function') {
+            showToast(<?php echo json_encode($slackMsg['text']); ?>, <?php echo json_encode($slackMsg['type']); ?>);
+        }
+    });
+    </script>
+    <?php endif; ?>
 
     <div class="app-layout">
         <!-- Sidebar -->
