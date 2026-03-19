@@ -47,11 +47,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $password = $_POST['password'] ?? '';
             $rememberMe = !empty($_POST['remember_me']);
 
-            // Verify credentials against DB
-            $userModel = new User();
-            $user = $userModel->authenticate($username, $password);
+            // 1. Check against AUTH_USERNAME / AUTH_PASSWORD env vars (admin)
+            $envUsername = $_ENV['AUTH_USERNAME'] ?? '';
+            $envPassword = $_ENV['AUTH_PASSWORD'] ?? '';
+            $isEnvAdmin  = ($username === $envUsername) && Security::verifyPassword($password, $envPassword);
 
-            if ($user) {
+            // 2. Fall back to DB for regular users
+            $user = null;
+            if (!$isEnvAdmin) {
+                $userModel = new User();
+                $user = $userModel->authenticate($username, $password);
+            }
+
+            $authenticated = $isEnvAdmin || ($user !== false && $user !== null);
+
+            if ($authenticated) {
                 // Clear rate limit on successful login
                 Security::clearRateLimit($clientIP);
 
@@ -59,14 +69,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 Security::regenerateSession();
 
                 $_SESSION['authenticated'] = true;
-                $_SESSION['username'] = $user['username'];
-                $_SESSION['user_id'] = $user['id'];
-                $_SESSION['role'] = $user['role'] ?? 'user';
-                $_SESSION['login_time'] = time();
+                $_SESSION['username']      = $username;
+                $_SESSION['user_id']       = $user['id'] ?? 0;
+                $_SESSION['role']          = $isEnvAdmin ? 'admin' : ($user['role'] ?? 'user');
+                $_SESSION['login_time']    = time();
                 $_SESSION['last_activity'] = time();
 
-                // Set 7-day remember-me cookie if requested
-                if ($rememberMe) {
+                // Set 7-day remember-me cookie if requested (only for DB users)
+                if ($rememberMe && !$isEnvAdmin && !empty($user['id'])) {
                     $token = bin2hex(random_bytes(32));
                     $tokenHash = hash('sha256', $token);
                     $expiresAt = date('Y-m-d H:i:s', time() + 604800);
