@@ -524,7 +524,8 @@
                 : '';
 
             return `
-                <tr class="row-campaign" data-campaign-id="${escapeAttr(campaign.campaign_id)}">
+                <tr class="row-campaign" data-campaign-id="${escapeAttr(campaign.campaign_id)}" data-advertiser-id="${escapeAttr(advertiserId)}">
+                    <td class="col-checkbox"></td>
                     <td class="col-toggle">
                         <div class="toggle-multi ${toggleClass}"
                              data-campaign-id="${escapeAttr(campaign.campaign_id)}"
@@ -537,6 +538,9 @@
                     </td>
                     <td class="col-name">
                         <div class="name-cell">
+                            <button class="expand-btn"
+                                    onclick="toggleCampaignExpandMulti('${escapeAttr(campaign.campaign_id)}', '${escapeAttr(advertiserId)}')"
+                                    title="Expand to see ad groups">▶</button>
                             <span class="entity-icon">📢</span>
                             <span class="entity-name">${escapeHtml(campaign.campaign_name)}</span>
                             ${smartPlusBadge}
@@ -551,18 +555,26 @@
                     <td class="col-impressions" style="text-align: right;">${formatShellNumber(campaign.impressions)}</td>
                     <td class="col-clicks" style="text-align: right;">${formatShellNumber(campaign.clicks)}</td>
                     <td class="col-ctr" style="text-align: right;">${formatShellPercent(campaign.ctr)}</td>
+                    <td class="col-lpclicks" style="text-align: right;">-</td>
+                    <td class="col-lpviews" style="text-align: right;">-</td>
+                    <td class="col-lpctr" style="text-align: right;">-</td>
                     <td class="col-conversions" style="text-align: right;">${formatShellNumber(campaign.conversions)}</td>
                     <td class="col-cpr" style="text-align: right;">$${(parseFloat(campaign.cost_per_result) || 0).toFixed(2)}</td>
+                    <td class="col-results" style="text-align: right;">${formatShellNumber(campaign.results || campaign.conversions)}</td>
+                    <td class="col-revenue" style="text-align: right;">-</td>
+                    <td class="col-profit" style="text-align: right;">-</td>
+                    <td class="col-actions"></td>
                 </tr>
             `;
         }).join('');
 
         return `
-            <div class="metrics-table-wrapper" style="display:block;">
+            <div class="metrics-table-wrapper" style="display:block;overflow-x:auto;">
                 <table class="metrics-table">
                     <thead>
                         <tr>
-                            <th class="col-toggle">ON/OFF</th>
+                            <th class="col-checkbox"></th>
+                            <th class="col-toggle">On/Off</th>
                             <th class="col-name">Name</th>
                             <th class="col-status">Status</th>
                             <th class="col-budget">Budget</th>
@@ -571,8 +583,15 @@
                             <th class="col-impressions">Impressions</th>
                             <th class="col-clicks">Clicks</th>
                             <th class="col-ctr">CTR</th>
+                            <th class="col-lpclicks">LP Clicks</th>
+                            <th class="col-lpviews">LP Views</th>
+                            <th class="col-lpctr">LP CTR</th>
                             <th class="col-conversions">Conversions</th>
                             <th class="col-cpr">Cost/Result</th>
+                            <th class="col-results">Results</th>
+                            <th class="col-revenue">Revenue</th>
+                            <th class="col-profit">Profit</th>
+                            <th class="col-actions">Actions</th>
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
@@ -707,6 +726,209 @@
             if (typeof showToast === 'function') showToast('Failed to refresh: ' + err.message, 'error');
         }
     };
+
+    // ============================================
+    // MULTI-ACCOUNT: Expand campaign → ad groups → ads
+    // ============================================
+    window.toggleCampaignExpandMulti = async function(campaignId, advertiserId) {
+        const campaignRow = document.querySelector(`tr[data-campaign-id="${campaignId}"][data-advertiser-id="${advertiserId}"]`);
+        if (!campaignRow) return;
+        const expandBtn = campaignRow.querySelector('.expand-btn');
+        const isExpanded = expandBtn && expandBtn.classList.contains('expanded');
+
+        if (isExpanded) {
+            // Collapse: remove child rows
+            if (expandBtn) expandBtn.classList.remove('expanded');
+            document.querySelectorAll(`tr[data-parent-campaign="${campaignId}"][data-multi-adv="${advertiserId}"]`).forEach(r => r.remove());
+            document.querySelectorAll(`tr[data-grandparent-campaign="${campaignId}"][data-multi-adv="${advertiserId}"]`).forEach(r => r.remove());
+            return;
+        }
+
+        // Expand
+        if (expandBtn) expandBtn.classList.add('expanded');
+        const colCount = campaignRow.querySelectorAll('td').length;
+
+        // Loading row
+        const loadingRow = document.createElement('tr');
+        loadingRow.setAttribute('data-parent-campaign', campaignId);
+        loadingRow.setAttribute('data-multi-adv', advertiserId);
+        loadingRow.innerHTML = `<td colspan="${colCount}" style="padding:10px 20px 10px 52px;color:#64748b;"><span class="mini-spinner"></span> Loading ad groups...</td>`;
+        campaignRow.after(loadingRow);
+
+        try {
+            const dateRange = typeof getCurrentDateRange === 'function' ? getCurrentDateRange() : { start_date: new Date().toISOString().split('T')[0], end_date: new Date().toISOString().split('T')[0] };
+            const response = await fetch('api-smartplus.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
+                body: JSON.stringify({ action: 'get_adgroups_for_campaign', campaign_id: campaignId, _advertiser_id: advertiserId, ...dateRange })
+            });
+            const result = await response.json();
+            loadingRow.remove();
+
+            if (result.success && result.adgroups && result.adgroups.length > 0) {
+                let insertAfter = campaignRow;
+                result.adgroups.forEach(adgroup => {
+                    const row = createMultiAdgroupRow(adgroup, campaignId, advertiserId, colCount);
+                    insertAfter.after(row);
+                    insertAfter = row;
+                });
+            } else {
+                const emptyRow = document.createElement('tr');
+                emptyRow.setAttribute('data-parent-campaign', campaignId);
+                emptyRow.setAttribute('data-multi-adv', advertiserId);
+                emptyRow.innerHTML = `<td colspan="${colCount}" style="padding:10px 20px 10px 52px;color:#94a3b8;font-style:italic;">No ad groups found</td>`;
+                campaignRow.after(emptyRow);
+            }
+        } catch (err) {
+            loadingRow.remove();
+            if (typeof showToast === 'function') showToast('Failed to load ad groups: ' + err.message, 'error');
+        }
+    };
+
+    function createMultiAdgroupRow(adgroup, parentCampaignId, advertiserId, colCount) {
+        const isActive = adgroup.operation_status === 'ENABLE';
+        const statusClass = isActive ? 'active' : 'inactive';
+        const statusLabel = isActive ? 'Active' : 'Paused';
+        const row = document.createElement('tr');
+        row.className = 'row-adgroup';
+        row.setAttribute('data-adgroup-id', adgroup.adgroup_id);
+        row.setAttribute('data-parent-campaign', parentCampaignId);
+        row.setAttribute('data-multi-adv', advertiserId);
+        row.innerHTML = `
+            <td class="col-checkbox"></td>
+            <td class="col-toggle"></td>
+            <td class="col-name indent-1">
+                <div class="name-cell">
+                    <button class="expand-btn" onclick="toggleAdgroupExpandMulti('${escapeAttr(adgroup.adgroup_id)}', '${escapeAttr(parentCampaignId)}', '${escapeAttr(advertiserId)}')" title="Expand to see ads">▶</button>
+                    <span class="entity-icon">📁</span>
+                    <span class="entity-name">${escapeHtml(adgroup.adgroup_name || 'Ad Group')}</span>
+                </div>
+            </td>
+            <td class="col-status"><span class="status-badge-table ${statusClass}">${statusLabel}</span></td>
+            <td class="col-budget" style="text-align:right;">${adgroup.budget ? '$' + parseFloat(adgroup.budget).toFixed(2) : '-'}</td>
+            <td class="col-spend" style="text-align:right;">$${(parseFloat(adgroup.spend) || 0).toFixed(2)}</td>
+            <td class="col-cpc" style="text-align:right;">$${(parseFloat(adgroup.cpc) || 0).toFixed(2)}</td>
+            <td class="col-impressions" style="text-align:right;">${formatShellNumber(adgroup.impressions)}</td>
+            <td class="col-clicks" style="text-align:right;">${formatShellNumber(adgroup.clicks)}</td>
+            <td class="col-ctr" style="text-align:right;">${formatShellPercent(adgroup.ctr)}</td>
+            <td style="text-align:right;">-</td><td style="text-align:right;">-</td><td style="text-align:right;">-</td>
+            <td class="col-conversions" style="text-align:right;">${formatShellNumber(adgroup.conversions)}</td>
+            <td class="col-cpr" style="text-align:right;">$${(parseFloat(adgroup.cost_per_conversion) || 0).toFixed(2)}</td>
+            <td style="text-align:right;">${formatShellNumber(adgroup.conversions)}</td>
+            <td style="text-align:right;">-</td><td style="text-align:right;">-</td>
+            <td class="col-actions"></td>
+        `;
+        return row;
+    }
+
+    window.toggleAdgroupExpandMulti = async function(adgroupId, parentCampaignId, advertiserId) {
+        const adgroupRow = document.querySelector(`tr[data-adgroup-id="${adgroupId}"][data-multi-adv="${advertiserId}"]`);
+        if (!adgroupRow) return;
+        const expandBtn = adgroupRow.querySelector('.expand-btn');
+        const isExpanded = expandBtn && expandBtn.classList.contains('expanded');
+
+        if (isExpanded) {
+            if (expandBtn) expandBtn.classList.remove('expanded');
+            document.querySelectorAll(`tr[data-parent-adgroup="${adgroupId}"][data-multi-adv="${advertiserId}"]`).forEach(r => r.remove());
+            return;
+        }
+
+        if (expandBtn) expandBtn.classList.add('expanded');
+        const colCount = adgroupRow.querySelectorAll('td').length;
+
+        const loadingRow = document.createElement('tr');
+        loadingRow.setAttribute('data-parent-adgroup', adgroupId);
+        loadingRow.setAttribute('data-grandparent-campaign', parentCampaignId);
+        loadingRow.setAttribute('data-multi-adv', advertiserId);
+        loadingRow.innerHTML = `<td colspan="${colCount}" style="padding:10px 20px 10px 76px;color:#64748b;"><span class="mini-spinner"></span> Loading ads...</td>`;
+        adgroupRow.after(loadingRow);
+
+        try {
+            const dateRange = typeof getCurrentDateRange === 'function' ? getCurrentDateRange() : { start_date: new Date().toISOString().split('T')[0], end_date: new Date().toISOString().split('T')[0] };
+            const response = await fetch('api-smartplus.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
+                body: JSON.stringify({ action: 'get_ads_for_adgroup', adgroup_id: adgroupId, _advertiser_id: advertiserId, ...dateRange })
+            });
+            const result = await response.json();
+            loadingRow.remove();
+
+            if (result.success && result.ads && result.ads.length > 0) {
+                let insertAfter = adgroupRow;
+                result.ads.forEach(ad => {
+                    const row = createMultiAdRow(ad, adgroupId, parentCampaignId, advertiserId, colCount);
+                    insertAfter.after(row);
+                    insertAfter = row;
+                });
+            } else {
+                const emptyRow = document.createElement('tr');
+                emptyRow.setAttribute('data-parent-adgroup', adgroupId);
+                emptyRow.setAttribute('data-grandparent-campaign', parentCampaignId);
+                emptyRow.setAttribute('data-multi-adv', advertiserId);
+                emptyRow.innerHTML = `<td colspan="${colCount}" style="padding:10px 20px 10px 76px;color:#94a3b8;font-style:italic;">No ads found</td>`;
+                adgroupRow.after(emptyRow);
+            }
+        } catch (err) {
+            loadingRow.remove();
+            if (typeof showToast === 'function') showToast('Failed to load ads: ' + err.message, 'error');
+        }
+    };
+
+    function createMultiAdRow(ad, parentAdgroupId, parentCampaignId, advertiserId, colCount) {
+        const isActive = ad.operation_status === 'ENABLE';
+        const ps = ad.primary_status || '';
+        let deliveryLabel, deliveryClass;
+        if (ps === 'STATUS_DELIVERY_OK') { deliveryLabel = 'Delivering'; deliveryClass = 'delivering'; }
+        else if (ps === 'STATUS_AUDIT_DENY') { deliveryLabel = 'Rejected'; deliveryClass = 'rejected'; }
+        else if (ps === 'STATUS_PENDING_REVIEW') { deliveryLabel = 'Under Review'; deliveryClass = 'under-review'; }
+        else if (ps === 'STATUS_DISABLE') { deliveryLabel = 'Disabled'; deliveryClass = 'inactive'; }
+        else if (isActive) { deliveryLabel = 'Active'; deliveryClass = 'active'; }
+        else { deliveryLabel = 'Paused'; deliveryClass = 'inactive'; }
+
+        const thumbHtml = ad.video_cover_url
+            ? `<img class="ad-thumbnail" src="${escapeHtml(ad.video_cover_url)}" alt="" onerror="this.style.display='none'">`
+            : '<span class="entity-icon">🎬</span>';
+        const adTextsHtml = ad.ad_texts && ad.ad_texts.length > 0
+            ? `<div class="ad-detail-row"><span class="ad-texts" title="${escapeHtml(ad.ad_texts.join(' | '))}">${escapeHtml(ad.ad_texts.join(' | '))}</span></div>`
+            : '';
+        const rejectHtml = ps === 'STATUS_AUDIT_DENY' && ad.reject_reason
+            ? `<div class="ad-detail-row"><span class="reject-reason">Reject: ${escapeHtml(ad.reject_reason)}</span></div>`
+            : '';
+
+        const row = document.createElement('tr');
+        row.className = 'row-ad';
+        row.setAttribute('data-ad-id', ad.ad_id);
+        row.setAttribute('data-parent-adgroup', parentAdgroupId);
+        row.setAttribute('data-grandparent-campaign', parentCampaignId);
+        row.setAttribute('data-multi-adv', advertiserId);
+        row.innerHTML = `
+            <td class="col-checkbox"></td>
+            <td class="col-toggle"></td>
+            <td class="col-name indent-2">
+                <div class="name-cell">
+                    ${thumbHtml}
+                    <div>
+                        <span class="entity-name">${escapeHtml(ad.ad_name)}</span>
+                        ${adTextsHtml}${rejectHtml}
+                    </div>
+                </div>
+            </td>
+            <td class="col-status"><span class="ad-delivery-badge ${deliveryClass}">${deliveryLabel}</span></td>
+            <td style="text-align:right;">-</td>
+            <td class="col-spend" style="text-align:right;">$${(parseFloat(ad.spend) || 0).toFixed(2)}</td>
+            <td class="col-cpc" style="text-align:right;">$${(parseFloat(ad.cpc) || 0).toFixed(2)}</td>
+            <td class="col-impressions" style="text-align:right;">${formatShellNumber(ad.impressions)}</td>
+            <td class="col-clicks" style="text-align:right;">${formatShellNumber(ad.clicks)}</td>
+            <td class="col-ctr" style="text-align:right;">${formatShellPercent(ad.ctr)}</td>
+            <td style="text-align:right;">-</td><td style="text-align:right;">-</td><td style="text-align:right;">-</td>
+            <td class="col-conversions" style="text-align:right;">${formatShellNumber(ad.conversions)}</td>
+            <td class="col-cpr" style="text-align:right;">$${(parseFloat(ad.cost_per_result) || 0).toFixed(2)}</td>
+            <td style="text-align:right;">${formatShellNumber(ad.conversions)}</td>
+            <td style="text-align:right;">-</td><td style="text-align:right;">-</td>
+            <td class="col-actions"></td>
+        `;
+        return row;
+    }
 
     // ============================================
     // MULTI-ACCOUNT: Toggle individual campaign ON/OFF
