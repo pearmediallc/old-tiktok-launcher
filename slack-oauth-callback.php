@@ -124,6 +124,45 @@ try {
     $db = Database::getInstance();
     $driver = getenv('DB_DRIVER') ?: ($_ENV['DB_DRIVER'] ?? 'mysql');
 
+    // Auto-create table if it doesn't exist
+    if ($driver === 'pgsql') {
+        $db->query("CREATE TABLE IF NOT EXISTS user_slack_connections (
+            id SERIAL PRIMARY KEY,
+            user_id INT NOT NULL UNIQUE,
+            team_id VARCHAR(100),
+            team_name VARCHAR(255),
+            webhook_url TEXT DEFAULT '',
+            channel VARCHAR(255),
+            channel_id VARCHAR(100),
+            bot_user_id VARCHAR(100),
+            scope TEXT,
+            authed_user_id VARCHAR(100),
+            access_token TEXT,
+            connected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )");
+        $db->query("CREATE INDEX IF NOT EXISTS idx_usc_user_id ON user_slack_connections(user_id)");
+    } else {
+        $db->query("CREATE TABLE IF NOT EXISTS user_slack_connections (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            user_id INT NOT NULL UNIQUE,
+            team_id VARCHAR(100),
+            team_name VARCHAR(255),
+            webhook_url TEXT,
+            channel VARCHAR(255),
+            channel_id VARCHAR(100),
+            bot_user_id VARCHAR(100),
+            scope TEXT,
+            authed_user_id VARCHAR(100),
+            access_token TEXT,
+            connected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_usc_user_id (user_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    }
+
     if ($driver === 'pgsql') {
         $db->query(
             "INSERT INTO user_slack_connections

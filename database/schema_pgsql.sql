@@ -197,7 +197,7 @@ CREATE TABLE IF NOT EXISTS user_slack_connections (
     user_id INT NOT NULL UNIQUE,
     team_id VARCHAR(100),
     team_name VARCHAR(255),
-    webhook_url TEXT NOT NULL,
+    webhook_url TEXT DEFAULT '',
     channel VARCHAR(255),
     channel_id VARCHAR(100),
     bot_user_id VARCHAR(100),
