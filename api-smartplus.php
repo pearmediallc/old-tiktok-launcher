@@ -4109,58 +4109,6 @@ switch ($action) {
         logSmartPlus("=== FETCHING CAMPAIGNS WITH METRICS ===");
         logSmartPlus("Advertiser ID: $advertiserId");
 
-        // Check advertiser account status (soft check — doesn't block if API fails)
-        $accountStatus = 'STATUS_ENABLE';
-        $accountStatusLabel = 'Active';
-        try {
-            $advInfoResult = makeApiCall('/advertiser/info/', [
-                'advertiser_ids' => json_encode([$advertiserId])
-            ], $accessToken, 'GET');
-
-            if (isset($advInfoResult['code']) && $advInfoResult['code'] == 0 && isset($advInfoResult['data'])) {
-                $d = $advInfoResult['data'];
-                $advData = null;
-                // Handle 3 response formats (same as get_account_balance)
-                if (isset($d['list'][0])) {
-                    $advData = $d['list'][0];
-                } elseif (isset($d['status'])) {
-                    $advData = $d;
-                } elseif (is_array($d) && isset($d[0])) {
-                    $advData = $d[0];
-                }
-
-                if ($advData && !empty($advData['status'])) {
-                    $accountStatus = $advData['status'];
-                    $statusLabels = [
-                        'STATUS_ENABLE' => 'Active',
-                        'STATUS_DISABLE' => 'Suspended',
-                        'STATUS_PENDING_CONFIRM' => 'Pending Confirmation',
-                        'STATUS_PENDING_REVIEW' => 'Under Review',
-                        'STATUS_LIMIT' => 'Limited',
-                        'STATUS_SELF_SERVICE_UNACTIVATED' => 'Not Activated',
-                        'CONTRACT_PENDING' => 'Contract Pending',
-                        'STATUS_PUNISH' => 'Punished',
-                    ];
-                    $accountStatusLabel = $statusLabels[$accountStatus] ?? $accountStatus;
-                    logSmartPlus("Account status: $accountStatus ($accountStatusLabel)");
-
-                    if ($accountStatus !== 'STATUS_ENABLE') {
-                        logSmartPlus("Account is NOT active — status: $accountStatus");
-                        echo json_encode([
-                            'success' => false,
-                            'message' => "Ad account is $accountStatusLabel. Please check TikTok Ads Manager for details.",
-                            'account_status' => $accountStatus,
-                            'account_status_label' => $accountStatusLabel,
-                            'campaigns' => []
-                        ]);
-                        break;
-                    }
-                }
-            }
-        } catch (Exception $e) {
-            logSmartPlus("Account status check failed (non-blocking): " . $e->getMessage());
-        }
-
         // Get date range from request (default to today)
         $startDate = $input['start_date'] ?? date('Y-m-d');
         $endDate = $input['end_date'] ?? date('Y-m-d');
@@ -4493,6 +4441,29 @@ switch ($action) {
             }
         }
 
+        // Batch-fetch video info for thumbnails
+        $videoIds = [];
+        foreach ($ads as $ad) {
+            $vid = $ad['video_id'] ?? $ad['creatives'][0]['video_id'] ?? '';
+            if (!empty($vid)) $videoIds[] = $vid;
+        }
+        $videoInfoMap = [];
+        if (!empty($videoIds)) {
+            $videoIds = array_unique($videoIds);
+            logSmartPlus("Fetching video info for " . count($videoIds) . " video IDs");
+            $vidResult = makeApiCall('/file/video/ad/info/', [
+                'advertiser_id' => $advertiserId,
+                'video_ids' => json_encode(array_values($videoIds))
+            ], $accessToken, 'GET');
+            if (($vidResult['code'] ?? -1) == 0 && !empty($vidResult['data']['list'])) {
+                foreach ($vidResult['data']['list'] as $v) {
+                    $vid = $v['video_id'] ?? '';
+                    if ($vid) $videoInfoMap[$vid] = $v;
+                }
+                logSmartPlus("Got video info for " . count($videoInfoMap) . " videos");
+            }
+        }
+
         // Format ads with metrics
         $formattedAds = [];
         foreach ($ads as $ad) {
@@ -4502,19 +4473,33 @@ switch ($action) {
             // Log first ad's keys for debugging (only first ad)
             if (empty($formattedAds)) {
                 logSmartPlus("First ad full keys: " . implode(', ', array_keys($ad)));
-                // Log creative-related nested keys
-                foreach (['creatives', 'creative', 'creative_material_mode', 'smart_creative_request', 'tiktok_item_info'] as $ck) {
-                    if (!empty($ad[$ck])) logSmartPlus("Ad has key '$ck': " . (is_array($ad[$ck]) ? json_encode(array_slice($ad[$ck], 0, 1)) : substr(json_encode($ad[$ck]), 0, 200)));
+                foreach (['creatives', 'creative', 'creative_material_mode', 'smart_creative_request', 'tiktok_item_info', 'ad_texts', 'ad_text_list', 'ad_text', 'video_id'] as $ck) {
+                    if (!empty($ad[$ck])) logSmartPlus("Ad has key '$ck': " . (is_array($ad[$ck]) ? json_encode(array_slice(is_array($ad[$ck][0] ?? null) ? $ad[$ck] : [$ad[$ck]], 0, 2)) : substr(json_encode($ad[$ck]), 0, 300)));
                 }
             }
 
             // Extract ad texts from creative data — try ALL known field locations
             $adTexts = [];
-            // 1. Smart+ ad_texts array: [{text: "..."}, ...]
+            // 1. Smart+ ad_texts array: [{ad_text: "..."}, ...] or [{text: "..."}, ...]
             if (!empty($ad['ad_texts'])) {
                 foreach ((array)$ad['ad_texts'] as $textObj) {
-                    if (is_array($textObj) && !empty($textObj['text'])) $adTexts[] = $textObj['text'];
-                    elseif (is_string($textObj) && !empty($textObj)) $adTexts[] = $textObj;
+                    if (is_array($textObj)) {
+                        $t = $textObj['ad_text'] ?? $textObj['text'] ?? '';
+                        if (!empty($t)) $adTexts[] = $t;
+                    } elseif (is_string($textObj) && !empty($textObj)) {
+                        $adTexts[] = $textObj;
+                    }
+                }
+            }
+            // 1b. ad_text_list field (Smart+ creation format)
+            if (empty($adTexts) && !empty($ad['ad_text_list'])) {
+                foreach ((array)$ad['ad_text_list'] as $textObj) {
+                    if (is_array($textObj)) {
+                        $t = $textObj['ad_text'] ?? $textObj['text'] ?? '';
+                        if (!empty($t)) $adTexts[] = $t;
+                    } elseif (is_string($textObj) && !empty($textObj)) {
+                        $adTexts[] = $textObj;
+                    }
                 }
             }
             // 2. Standard ad_text string
@@ -4529,10 +4514,16 @@ switch ($action) {
                 }
             }
             // 4. Smart+ creative request
-            if (empty($adTexts) && !empty($ad['smart_creative_request']['ad_texts'])) {
-                foreach ((array)$ad['smart_creative_request']['ad_texts'] as $textObj) {
-                    if (is_array($textObj) && !empty($textObj['text'])) $adTexts[] = $textObj['text'];
-                    elseif (is_string($textObj)) $adTexts[] = $textObj;
+            if (empty($adTexts) && !empty($ad['smart_creative_request'])) {
+                $scr = $ad['smart_creative_request'];
+                $scrTexts = $scr['ad_texts'] ?? $scr['ad_text_list'] ?? $scr['text_list'] ?? [];
+                foreach ((array)$scrTexts as $textObj) {
+                    if (is_array($textObj)) {
+                        $t = $textObj['ad_text'] ?? $textObj['text'] ?? '';
+                        if (!empty($t)) $adTexts[] = $t;
+                    } elseif (is_string($textObj) && !empty($textObj)) {
+                        $adTexts[] = $textObj;
+                    }
                 }
             }
             // 5. TikTok item info title
@@ -4541,38 +4532,22 @@ switch ($action) {
             }
             // 6. Ad name as last resort display (not ad_text but at least shows something useful)
 
-            // Extract video cover URL — try ALL known field locations
+            // Extract video cover URL
             $videoCoverUrl = '';
-            // Direct fields
-            if (!empty($ad['image_info']['url'])) {
-                $videoCoverUrl = $ad['image_info']['url'];
-            } elseif (!empty($ad['video_info']['poster_url'])) {
-                $videoCoverUrl = $ad['video_info']['poster_url'];
-            } elseif (!empty($ad['video_info']['video_cover_url'])) {
-                $videoCoverUrl = $ad['video_info']['video_cover_url'];
-            } elseif (!empty($ad['video_info']['preview_url'])) {
-                $videoCoverUrl = $ad['video_info']['preview_url'];
+            // PRIMARY: Use batch-fetched video info (most reliable)
+            $adVideoId = $ad['video_id'] ?? $ad['creatives'][0]['video_id'] ?? '';
+            if (!empty($adVideoId) && !empty($videoInfoMap[$adVideoId])) {
+                $vi = $videoInfoMap[$adVideoId];
+                $videoCoverUrl = $vi['video_cover_url'] ?? $vi['poster_url'] ?? $vi['preview_url'] ?? $vi['cover_image_url'] ?? '';
             }
-            // Top-level fields
-            if (empty($videoCoverUrl) && !empty($ad['video_cover_url'])) {
-                $videoCoverUrl = $ad['video_cover_url'];
-            }
-            if (empty($videoCoverUrl) && !empty($ad['poster_url'])) {
-                $videoCoverUrl = $ad['poster_url'];
-            }
-            if (empty($videoCoverUrl) && !empty($ad['cover_image_url'])) {
-                $videoCoverUrl = $ad['cover_image_url'];
-            }
-            if (empty($videoCoverUrl) && !empty($ad['preview_url'])) {
-                $videoCoverUrl = $ad['preview_url'];
-            }
-            if (empty($videoCoverUrl) && !empty($ad['avatar_icon_web_uri'])) {
-                $videoCoverUrl = $ad['avatar_icon_web_uri'];
-            }
-            // Creative-level
-            if (empty($videoCoverUrl) && !empty($ad['creatives'][0])) {
-                $cr = $ad['creatives'][0];
-                $videoCoverUrl = $cr['video_cover_url'] ?? $cr['poster_url'] ?? $cr['image_url'] ?? '';
+            // FALLBACK: Fields from ad object itself
+            if (empty($videoCoverUrl)) {
+                $videoCoverUrl = $ad['image_info']['url']
+                    ?? $ad['video_info']['poster_url'] ?? $ad['video_info']['video_cover_url']
+                    ?? $ad['video_cover_url'] ?? $ad['poster_url'] ?? $ad['cover_image_url']
+                    ?? $ad['avatar_icon_web_uri']
+                    ?? $ad['creatives'][0]['video_cover_url'] ?? $ad['creatives'][0]['image_url']
+                    ?? '';
             }
 
             $formattedAds[] = [
