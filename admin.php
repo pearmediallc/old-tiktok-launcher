@@ -64,8 +64,8 @@ $tab = $_GET['tab'] ?? 'users';
         .btn-sm:hover { opacity: 0.85; }
         .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
         .modal-overlay.open { display: flex; }
-        .modal { background: var(--card); border-radius: var(--radius); padding: 28px; width: 420px; max-width: 95vw; }
-        .modal h3 { font-size: 18px; margin-bottom: 20px; font-weight: 600; }
+        .admin-dialog-box { background: var(--card); border-radius: var(--radius); padding: 28px; width: 420px; max-width: 95vw; }
+        .admin-dialog-box h3 { font-size: 18px; margin-bottom: 20px; font-weight: 600; }
         .form-group { margin-bottom: 14px; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; color: var(--muted-foreground); }
         .form-group input, .form-group select { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); color: var(--foreground); font-size: 14px; }
@@ -194,7 +194,7 @@ $tab = $_GET['tab'] ?? 'users';
 
 <!-- Create User Modal -->
 <div class="modal-overlay" id="create-user-modal">
-    <div class="modal">
+    <div class="admin-dialog-box">
         <h3>Add New User</h3>
         <div class="form-group"><label>Username *</label><input type="text" id="new-username" placeholder="username"></div>
         <div class="form-group"><label>Password *</label><input type="password" id="new-password" placeholder="min 6 characters"></div>
@@ -217,7 +217,7 @@ $tab = $_GET['tab'] ?? 'users';
 
 <!-- Edit User Modal -->
 <div class="modal-overlay" id="edit-user-modal">
-    <div class="modal">
+    <div class="admin-dialog-box">
         <h3>Edit User</h3>
         <input type="hidden" id="edit-user-id">
         <div class="form-group"><label>Full Name</label><input type="text" id="edit-fullname"></div>
@@ -246,7 +246,7 @@ $tab = $_GET['tab'] ?? 'users';
 
 <!-- Reset Password Modal -->
 <div class="modal-overlay" id="reset-pw-modal">
-    <div class="modal">
+    <div class="admin-dialog-box">
         <h3>Reset Password</h3>
         <input type="hidden" id="reset-pw-user-id">
         <p style="font-size:14px;margin-bottom:16px;">Set a new password for <strong id="reset-pw-username"></strong></p>
@@ -261,7 +261,7 @@ $tab = $_GET['tab'] ?? 'users';
 
 <!-- Delete Confirm Modal -->
 <div class="modal-overlay" id="delete-user-modal">
-    <div class="modal" style="max-width:380px;">
+    <div class="admin-dialog-box" style="max-width:380px;">
         <h3 style="color:var(--destructive);">Delete User</h3>
         <input type="hidden" id="delete-user-id">
         <p style="font-size:14px;margin-bottom:20px;">Are you sure you want to delete <strong id="delete-user-name"></strong>? This cannot be undone.</p>
@@ -275,7 +275,7 @@ $tab = $_GET['tab'] ?? 'users';
 
 <!-- Job Results Modal -->
 <div class="modal-overlay" id="job-results-modal">
-    <div class="modal" style="width:700px;max-height:80vh;overflow-y:auto;">
+    <div class="admin-dialog-box" style="width:700px;max-height:80vh;overflow-y:auto;">
         <h3 id="job-results-title">Job Results</h3>
         <div id="job-results-body"></div>
         <div class="modal-actions">
