@@ -184,11 +184,34 @@
             }
         } else if (selectedIds.length > 1) {
             // Multi-account mode
+            const wasSingleMode = !window.shellState.multiAccountMode;
             window.shellState.multiAccountMode = true;
             const singleContainer = document.getElementById('single-account-campaigns');
             const multiContainer = document.getElementById('multi-account-campaigns-container');
             if (singleContainer) singleContainer.style.display = 'none';
             if (multiContainer) multiContainer.style.display = 'block';
+
+            // If switching from single to multi, cache the current single-account data
+            // so it doesn't get re-fetched
+            if (wasSingleMode) {
+                const currentAdvId = window.TIKTOK_ADVERTISER_ID || '';
+                if (currentAdvId && typeof state !== 'undefined' && state.campaignsList && state.campaignsList.length > 0
+                    && !window.shellState.campaignCache[currentAdvId]) {
+                    window.shellState.campaignCache[currentAdvId] = {
+                        advertiserId: currentAdvId,
+                        accountName: getAccountName(currentAdvId),
+                        campaigns: state.campaignsList,
+                        error: null,
+                        rejectedAds: state.rejectedAds || [],
+                        rejectedAdsCount: state.rejectedAdsCount || 0
+                    };
+                    // Set cache date range to current
+                    const dateRange = typeof getCurrentDateRange === 'function' ? getCurrentDateRange() : null;
+                    if (dateRange) {
+                        window.shellState.campaignCacheDateRange = dateRange.start_date + '|' + dateRange.end_date;
+                    }
+                }
+            }
 
             loadMultiAccountCampaigns();
         } else {
@@ -345,6 +368,8 @@
                     accountName: getAccountName(advertiserId),
                     campaigns: campaignResponse.success ? (campaignResponse.campaigns || []) : [],
                     error: campaignResponse.success ? null : (campaignResponse.message || 'Failed to load'),
+                    accountStatus: campaignResponse.account_status || null,
+                    accountStatusLabel: campaignResponse.account_status_label || null,
                     rejectedAds: rejectedResponse.success ? (rejectedResponse.ads || []) : [],
                     rejectedAdsCount: rejectedResponse.success ? (rejectedResponse.count || 0) : 0
                 };
@@ -354,6 +379,8 @@
                     accountName: getAccountName(advertiserId),
                     campaigns: [],
                     error: err.message,
+                    accountStatus: null,
+                    accountStatusLabel: null,
                     rejectedAds: [],
                     rejectedAdsCount: 0
                 };
@@ -438,6 +465,11 @@
                 ? `<span class="agb-item agb-rejected" onclick="showRejectedAdsForAccount('${escapeAttr(account.advertiserId)}')" style="cursor:pointer;">Rejected: ${rejCount}</span>`
                 : '';
 
+            // Account status
+            const acctStatusHtml = account.accountStatus && account.accountStatus !== 'STATUS_ENABLE'
+                ? `<span class="agb-item" style="background:#fee2e2;color:#991b1b;">Account: ${escapeHtml(account.accountStatusLabel || account.accountStatus)}</span>`
+                : '';
+
             // Render group
             return `
                 <div class="account-group" data-advertiser-id="${escapeAttr(account.advertiserId)}">
@@ -445,12 +477,18 @@
                         <h3 class="account-group-name">${escapeHtml(account.accountName)}</h3>
                         <div class="account-group-meta">
                             ${balanceHtml}
+                            ${acctStatusHtml}
                             ${rejBadgeHtml}
                             <span class="account-group-count">${campaigns.length} campaign${campaigns.length !== 1 ? 's' : ''}</span>
+                            <button class="btn-refresh-account" onclick="refreshSingleAccount('${escapeAttr(account.advertiserId)}')" title="Refresh this account">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                            </button>
                         </div>
                     </div>
                     <div class="account-group-body">
-                        ${account.error ? `<div style="padding:20px;color:#dc2626;text-align:center;">Error: ${escapeHtml(account.error)}</div>` : ''}
+                        ${account.accountStatus && account.accountStatus !== 'STATUS_ENABLE'
+                            ? `<div class="account-suspended-banner"><strong>Account ${escapeHtml(account.accountStatusLabel || 'Suspended')}</strong><br>This ad account is ${escapeHtml(account.accountStatusLabel || 'not active')}. Please check TikTok Ads Manager for details.</div>`
+                            : account.error ? `<div style="padding:20px;color:#dc2626;text-align:center;">Error: ${escapeHtml(account.error)}</div>` : ''}
                         ${campaigns.length === 0 && !account.error
                             ? `<div style="padding:30px;text-align:center;color:#94a3b8;">No campaigns found</div>`
                             : campaigns.length > 0
@@ -594,6 +632,73 @@
             state.rejectedAdsLoaded = true;
         }
         if (typeof showRejectedAds === 'function') showRejectedAds();
+    };
+
+    // ============================================
+    // MULTI-ACCOUNT: Refresh single account
+    // ============================================
+    window.refreshSingleAccount = async function(advertiserId) {
+        // Remove from cache to force re-fetch
+        delete window.shellState.campaignCache[advertiserId];
+
+        // Show loading spinner in that account's group
+        const groupEl = document.querySelector(`.account-group[data-advertiser-id="${advertiserId}"]`);
+        if (groupEl) {
+            const body = groupEl.querySelector('.account-group-body');
+            if (body) body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:30px;"><div class="spinner"></div><p style="margin-top:10px;color:#64748b;">Refreshing...</p></div>';
+            // Spin the refresh button
+            const btn = groupEl.querySelector('.btn-refresh-account');
+            if (btn) btn.classList.add('spinning');
+        }
+
+        // Re-fetch just this account
+        const dateRange = typeof getCurrentDateRange === 'function' ? getCurrentDateRange() : { start_date: new Date().toISOString().split('T')[0], end_date: new Date().toISOString().split('T')[0] };
+        try {
+            const [campaignResponse, rejectedResponse] = await Promise.all([
+                fetch('api-smartplus.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
+                    body: JSON.stringify({ action: 'get_campaigns_with_metrics', _advertiser_id: advertiserId, ...dateRange })
+                }).then(r => r.json()),
+                fetch('api-smartplus.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN || '' },
+                    body: JSON.stringify({ action: 'get_rejected_ads', _advertiser_id: advertiserId })
+                }).then(r => r.json()).catch(() => ({ success: false }))
+            ]);
+
+            const result = {
+                advertiserId,
+                accountName: getAccountName(advertiserId),
+                campaigns: campaignResponse.success ? (campaignResponse.campaigns || []) : [],
+                error: campaignResponse.success ? null : (campaignResponse.message || 'Failed to load'),
+                rejectedAds: rejectedResponse.success ? (rejectedResponse.ads || []) : [],
+                rejectedAdsCount: rejectedResponse.success ? (rejectedResponse.count || 0) : 0
+            };
+
+            // Update cache
+            window.shellState.campaignCache[advertiserId] = result;
+
+            // Also refresh balance
+            const bal = await fetchAccountBalance(advertiserId);
+            if (bal) {
+                window.shellState.accountBalances = window.shellState.accountBalances || {};
+                window.shellState.accountBalances[advertiserId] = bal;
+            }
+
+            // Re-render all accounts from cache
+            const selectedIds = window.shellState.selectedAccountIds;
+            const allResults = selectedIds.map(id => window.shellState.campaignCache[id]).filter(Boolean);
+            window.shellState.multiAccountCampaigns = allResults;
+            const statusFilter = (typeof state !== 'undefined' && state.campaignFilter) ? state.campaignFilter : 'all';
+            const searchQuery = (typeof state !== 'undefined' && state.campaignSearchQuery) ? state.campaignSearchQuery : '';
+            renderMultiAccountCampaigns(allResults, statusFilter, searchQuery);
+
+            if (typeof showToast === 'function') showToast('Refreshed ' + getAccountName(advertiserId), 'success');
+        } catch (err) {
+            console.error('refreshSingleAccount error:', err);
+            if (typeof showToast === 'function') showToast('Failed to refresh: ' + err.message, 'error');
+        }
     };
 
     // ============================================

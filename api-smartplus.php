@@ -4109,6 +4109,42 @@ switch ($action) {
         logSmartPlus("=== FETCHING CAMPAIGNS WITH METRICS ===");
         logSmartPlus("Advertiser ID: $advertiserId");
 
+        // Check advertiser account status first
+        $accountStatus = 'STATUS_ENABLE';
+        $accountStatusLabel = 'Active';
+        $advInfoResult = makeApiCall('/advertiser/info/', ['advertiser_id' => $advertiserId], $accessToken, 'GET');
+        if ($advInfoResult['code'] == 0 && !empty($advInfoResult['data'])) {
+            $advData = is_array($advInfoResult['data']) && isset($advInfoResult['data'][0])
+                ? $advInfoResult['data'][0]
+                : $advInfoResult['data'];
+            $accountStatus = $advData['status'] ?? 'STATUS_ENABLE';
+            // Map status to user-friendly label
+            $statusLabels = [
+                'STATUS_ENABLE' => 'Active',
+                'STATUS_DISABLE' => 'Suspended',
+                'STATUS_PENDING_CONFIRM' => 'Pending Confirmation',
+                'STATUS_PENDING_REVIEW' => 'Under Review',
+                'STATUS_LIMIT' => 'Limited',
+                'STATUS_SELF_SERVICE_UNACTIVATED' => 'Not Activated',
+                'CONTRACT_PENDING' => 'Contract Pending',
+                'STATUS_PUNISH' => 'Punished',
+            ];
+            $accountStatusLabel = $statusLabels[$accountStatus] ?? $accountStatus;
+            logSmartPlus("Account status: $accountStatus ($accountStatusLabel)");
+
+            if ($accountStatus !== 'STATUS_ENABLE') {
+                logSmartPlus("Account is NOT active — status: $accountStatus");
+                echo json_encode([
+                    'success' => false,
+                    'message' => "Ad account is $accountStatusLabel. Please check TikTok Ads Manager for details.",
+                    'account_status' => $accountStatus,
+                    'account_status_label' => $accountStatusLabel,
+                    'campaigns' => []
+                ]);
+                break;
+            }
+        }
+
         // Get date range from request (default to today)
         $startDate = $input['start_date'] ?? date('Y-m-d');
         $endDate = $input['end_date'] ?? date('Y-m-d');
@@ -4447,6 +4483,38 @@ switch ($action) {
             $adId = $ad['ad_id'] ?? '';
             $metrics = $metricsData[$adId] ?? [];
 
+            // Extract ad texts from creative data
+            $adTexts = [];
+            // Smart+ ads store texts in ad_texts array
+            if (!empty($ad['ad_texts'])) {
+                foreach ($ad['ad_texts'] as $textObj) {
+                    if (!empty($textObj['text'])) $adTexts[] = $textObj['text'];
+                }
+            }
+            // Standard ads store text in ad_text field
+            if (empty($adTexts) && !empty($ad['ad_text'])) {
+                $adTexts[] = $ad['ad_text'];
+            }
+            // Also check creative material for text
+            if (empty($adTexts) && !empty($ad['creatives'])) {
+                foreach ($ad['creatives'] as $creative) {
+                    if (!empty($creative['ad_text'])) $adTexts[] = $creative['ad_text'];
+                    if (!empty($creative['title'])) $adTexts[] = $creative['title'];
+                }
+            }
+
+            // Extract video cover URL / image URL for thumbnail
+            $videoCoverUrl = '';
+            if (!empty($ad['image_info']['url'])) {
+                $videoCoverUrl = $ad['image_info']['url'];
+            } elseif (!empty($ad['video_info']['poster_url'])) {
+                $videoCoverUrl = $ad['video_info']['poster_url'];
+            } elseif (!empty($ad['video_info']['video_cover_url'])) {
+                $videoCoverUrl = $ad['video_info']['video_cover_url'];
+            } elseif (!empty($ad['avatar_icon_web_uri'])) {
+                $videoCoverUrl = $ad['avatar_icon_web_uri'];
+            }
+
             $formattedAds[] = [
                 'ad_id' => $adId,
                 'smart_plus_ad_id' => $ad['smart_plus_ad_id'] ?? '',
@@ -4457,6 +4525,8 @@ switch ($action) {
                 'primary_status' => $ad['primary_status'] ?? '',
                 'secondary_status' => $ad['secondary_status'] ?? '',
                 'reject_reason' => $ad['reject_reason'] ?? '',
+                'ad_texts' => $adTexts,
+                'video_cover_url' => $videoCoverUrl,
                 // Metrics
                 'spend' => $metrics['spend'] ?? '0.00',
                 'impressions' => $metrics['impressions'] ?? '0',

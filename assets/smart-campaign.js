@@ -10010,8 +10010,12 @@ function createAdTableRow(ad, parentAdgroupId, parentCampaignId) {
         </td>
         <td class="col-name indent-2">
             <div class="name-cell">
-                <span class="entity-icon">🎬</span>
-                <span class="entity-name">${escapeHtml(ad.ad_name)}</span>
+                ${ad.video_cover_url ? `<img class="ad-thumbnail" src="${escapeHtml(ad.video_cover_url)}" alt="" onerror="this.style.display='none'">` : '<span class="entity-icon">🎬</span>'}
+                <div>
+                    <span class="entity-name">${escapeHtml(ad.ad_name)}</span>
+                    ${ad.ad_texts && ad.ad_texts.length > 0 ? `<div class="ad-detail-row"><span class="ad-texts" title="${escapeHtml(ad.ad_texts.join(' | '))}">${escapeHtml(ad.ad_texts.join(' | '))}</span></div>` : ''}
+                    ${ps === 'STATUS_AUDIT_DENY' && ad.reject_reason ? `<div class="ad-detail-row"><span class="reject-reason">Reject reason: ${escapeHtml(ad.reject_reason)}</span></div>` : ''}
+                </div>
             </div>
         </td>
         <td class="col-status">

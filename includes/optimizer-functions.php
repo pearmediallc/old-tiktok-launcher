@@ -50,6 +50,82 @@ function getSlackConfigForAdvertiser($advertiserId) {
 }
 
 /**
+ * Get ALL Slack configs for an advertiser — both per-user and global.
+ * Returns array of config arrays. Sends to both the user's Slack AND the global channel.
+ */
+function getAllSlackConfigsForAdvertiser($advertiserId) {
+    $configs = [];
+    $defaultChannel = getenv('SLACK_CHANNEL') ?: ($_ENV['SLACK_CHANNEL'] ?? '');
+    $globalToken = getenv('SLACK_BOT_TOKEN') ?: ($_ENV['SLACK_BOT_TOKEN'] ?? '');
+
+    // 1. Per-user config
+    if (!empty($advertiserId)) {
+        try {
+            $db = Database::getInstance();
+            $row = $db->fetchOne(
+                "SELECT usc.access_token, usc.channel
+                 FROM user_slack_connections usc
+                 JOIN tiktok_connections tc ON tc.user_id = usc.user_id
+                 WHERE tc.advertiser_id = :aid
+                 LIMIT 1",
+                ['aid' => $advertiserId]
+            );
+            if ($row && !empty($row['access_token'])) {
+                $userChannel = $row['channel'] ?: $defaultChannel;
+                $configs[] = [
+                    'type'    => 'bot',
+                    'token'   => $row['access_token'],
+                    'channel' => $userChannel,
+                    'source'  => 'per-user',
+                ];
+            }
+        } catch (Exception $e) {
+            logOptimizer("getAllSlackConfigsForAdvertiser DB error: " . $e->getMessage());
+        }
+    }
+
+    // 2. Global config (only if different from per-user to avoid duplicate messages)
+    if (!empty($globalToken) && !empty($defaultChannel)) {
+        $isDuplicate = false;
+        foreach ($configs as $c) {
+            if ($c['token'] === $globalToken && $c['channel'] === $defaultChannel) {
+                $isDuplicate = true;
+                break;
+            }
+        }
+        if (!$isDuplicate) {
+            $configs[] = [
+                'type'    => 'bot',
+                'token'   => $globalToken,
+                'channel' => $defaultChannel,
+                'source'  => 'global',
+            ];
+        }
+    }
+
+    return $configs;
+}
+
+/**
+ * Send a Slack message to ALL configs (per-user + global channel).
+ * Returns true if at least one send succeeded.
+ */
+function sendSlackToAll($advertiserId, $payload) {
+    $configs = getAllSlackConfigsForAdvertiser($advertiserId);
+    if (empty($configs)) {
+        logOptimizer("Slack notification skipped: no Slack configs found");
+        return false;
+    }
+    $anySuccess = false;
+    foreach ($configs as $config) {
+        $sent = sendSlackMessage($config, $payload);
+        if ($sent) $anySuccess = true;
+        else logOptimizer("Slack send failed for " . ($config['source'] ?? 'unknown') . " config");
+    }
+    return $anySuccess;
+}
+
+/**
  * Send a Slack message using the Bot Token API (chat.postMessage).
  * $slackConfig: result of getSlackConfigForAdvertiser()
  * $payload: array with 'text', optionally 'blocks'
@@ -500,8 +576,9 @@ function pauseCampaignViaApi($advertiserId, $campaignId, $accessToken) {
 // ============================================
 
 function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $violationDetails, $ruleGroup, $resumeAt, $advertiserId = '', $metricsSnapshot = null) {
-    $slackConfig = getSlackConfigForAdvertiser($advertiserId);
-    if (empty($slackConfig['token'])) {
+    // Check if any Slack config exists
+    $allConfigs = getAllSlackConfigsForAdvertiser($advertiserId);
+    if (empty($allConfigs)) {
         logOptimizer("Slack notification skipped: no bot token configured");
         return false;
     }
@@ -610,7 +687,7 @@ function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $viola
         ]
     ];
 
-    $sent = sendSlackMessage($slackConfig, ['text' => $fallbackText, 'blocks' => $blocks]);
+    $sent = sendSlackToAll($advertiserId, ['text' => $fallbackText, 'blocks' => $blocks]);
     if ($sent) logOptimizer("Slack pause notification sent for campaign $campaignId");
     return $sent;
 }
@@ -620,8 +697,8 @@ function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $viola
 // ============================================
 
 function sendSlackPauseFailureNotification($campaignName, $campaignId, $ruleKey, $violationDetails, $advertiserId = '') {
-    $slackConfig = getSlackConfigForAdvertiser($advertiserId);
-    if (empty($slackConfig['token'])) {
+    $allConfigs = getAllSlackConfigsForAdvertiser($advertiserId);
+    if (empty($allConfigs)) {
         logOptimizer("Slack failure notification skipped: no bot token configured");
         return false;
     }
@@ -654,7 +731,7 @@ function sendSlackPauseFailureNotification($campaignName, $campaignId, $ruleKey,
         ],
     ];
 
-    $sent = sendSlackMessage($slackConfig, ['text' => $fallbackText, 'blocks' => $blocks]);
+    $sent = sendSlackToAll($advertiserId, ['text' => $fallbackText, 'blocks' => $blocks]);
     if ($sent) logOptimizer("Slack PAUSE FAILURE notification sent for campaign $campaignId");
     return $sent;
 }
@@ -794,12 +871,12 @@ function sendSlackReviewNotification($campaign, $tiktokMetrics, $redtrackMetrics
     ];
 
     $fallbackText = "Campaign Review: $campaignName — Spend: \$$spend, CPC: \$$cpc, CTR: {$ctr}%, Conv: $conversions — Click to resume";
-    $slackConfig = getSlackConfigForAdvertiser($advertiserId);
-    if (empty($slackConfig['token'])) {
+    $allConfigs = getAllSlackConfigsForAdvertiser($advertiserId);
+    if (empty($allConfigs)) {
         logOptimizer("Slack review notification skipped: no bot token configured");
         return false;
     }
-    $sent = sendSlackMessage($slackConfig, ['text' => $fallbackText, 'blocks' => $blocks]);
+    $sent = sendSlackToAll($advertiserId, ['text' => $fallbackText, 'blocks' => $blocks]);
     if ($sent) logOptimizer("Slack review notification sent for campaign $campaignId");
     return $sent;
 }
