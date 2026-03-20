@@ -42,17 +42,26 @@ if (!empty($signingSecret)) {
 }
 
 // ── Parse slash command payload ──────────────────────────────
-// Slack sends slash commands as application/x-www-form-urlencoded
 parse_str($rawBody, $payload);
 
-$command   = trim($payload['command'] ?? '');       // e.g. "/campaigns"
-$text      = strtolower(trim($payload['text'] ?? ''));  // e.g. "active"
-$slackUser = $payload['user_id'] ?? '';             // Slack user ID
-$userName  = $payload['user_name'] ?? '';
+$command     = trim($payload['command'] ?? '');
+$text        = strtolower(trim($payload['text'] ?? ''));
+$slackUser   = $payload['user_id'] ?? '';
+$userName    = $payload['user_name'] ?? '';
+$responseUrl = $payload['response_url'] ?? '';
 
 if (empty($slackUser)) {
     header('Content-Type: application/json');
     echo json_encode(['response_type' => 'ephemeral', 'text' => 'Error: Could not identify Slack user.']);
+    exit;
+}
+
+// ── Quick commands (no API calls, respond immediately) ──────
+$subCommand = explode(' ', $text)[0] ?? '';
+
+if ($subCommand === 'help') {
+    header('Content-Type: application/json');
+    echo json_encode(handleHelp());
     exit;
 }
 
@@ -68,38 +77,37 @@ if (!$userId) {
     exit;
 }
 
-// ── Route sub-command ────────────────────────────────────────
-// Respond immediately with 200 (Slack requires response within 3 seconds)
-// For heavy commands, we send the response directly since it's ephemeral
+// ── For data commands: respond immediately, then send data via response_url
+// Slack requires a response within 3 seconds. TikTok API calls may take longer.
 header('Content-Type: application/json');
+echo json_encode(['response_type' => 'ephemeral', 'text' => "Fetching campaign data... one moment."]);
 
-$subCommand = explode(' ', $text)[0] ?? '';
+// Flush the response to Slack immediately
+if (function_exists('fastcgi_finish_request')) {
+    fastcgi_finish_request();
+} else {
+    ob_end_flush();
+    flush();
+}
 
+// ── Now fetch data (after Slack got the 200 response) ────────
 switch ($subCommand) {
     case 'active':
-    case '':  // Default: show active campaigns
+    case '':
         $response = handleActiveCampaigns($userId);
         break;
-
     case 'paused':
     case 'inactive':
         $response = handlePausedCampaigns($userId);
         break;
-
     case 'spend':
     case 'summary':
         $response = handleSpendSummary($userId);
         break;
-
     case 'top':
     case 'best':
         $response = handleTopCampaigns($userId);
         break;
-
-    case 'help':
-        $response = handleHelp();
-        break;
-
     default:
         $response = [
             'response_type' => 'ephemeral',
@@ -108,4 +116,16 @@ switch ($subCommand) {
         break;
 }
 
-echo json_encode($response);
+// ── Send the real response via response_url ──────────────────
+if (!empty($responseUrl)) {
+    $ch = curl_init($responseUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => json_encode($response),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_TIMEOUT        => 30,
+    ]);
+    curl_exec($ch);
+    curl_close($ch);
+}

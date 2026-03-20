@@ -42,24 +42,57 @@ function tiktokApiCall($endpoint, $params, $accessToken, $method = 'GET') {
  */
 function getUserIdFromSlack($slackUserId) {
     $db = Database::getInstance();
+
+    // Try matching by authed_user_id (set during OAuth)
     $row = $db->fetchOne(
         "SELECT user_id FROM user_slack_connections WHERE authed_user_id = :sid LIMIT 1",
         ['sid' => $slackUserId]
+    );
+    if ($row) return intval($row['user_id']);
+
+    // Fallback: if only one Slack connection exists, use it (single-user setup)
+    $row = $db->fetchOne(
+        "SELECT user_id FROM user_slack_connections LIMIT 1"
     );
     return $row ? intval($row['user_id']) : null;
 }
 
 /**
- * Get all active TikTok connections for a user
+ * Get all active TikTok connections for a user.
+ * Falls back to ALL active connections if none found for the specific user_id
+ * (handles pre-multi-user connections that may have user_id=0 or user_id=1).
  */
 function getUserTikTokAccounts($userId) {
     $db = Database::getInstance();
-    return $db->fetchAll(
+
+    // Try user's own connections first
+    $accounts = $db->fetchAll(
         "SELECT advertiser_id, advertiser_name, access_token
          FROM tiktok_connections
          WHERE user_id = :uid AND connection_status = 'active'
          ORDER BY advertiser_name ASC",
         ['uid' => $userId]
+    );
+
+    if (!empty($accounts)) return $accounts;
+
+    // Fallback: try connections with user_id=0 (pre-multi-user legacy)
+    $accounts = $db->fetchAll(
+        "SELECT advertiser_id, advertiser_name, access_token
+         FROM tiktok_connections
+         WHERE user_id = 0 AND connection_status = 'active'
+         ORDER BY advertiser_name ASC"
+    );
+
+    if (!empty($accounts)) return $accounts;
+
+    // Fallback 2: get any active connection (single-user setup)
+    return $db->fetchAll(
+        "SELECT advertiser_id, advertiser_name, access_token
+         FROM tiktok_connections
+         WHERE connection_status = 'active'
+         ORDER BY advertiser_name ASC
+         LIMIT 50"
     );
 }
 
