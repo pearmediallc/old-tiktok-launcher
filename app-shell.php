@@ -50,7 +50,8 @@ if ($shellUserId) {
         if ($slackRow) {
             $slackConnected = true;
             $slackTeamName  = $slackRow['team_name'] ?? '';
-            $slackChannel   = $slackRow['channel']   ?? '';
+            // Channel comes from DB (set during OAuth) or falls back to SLACK_CHANNEL env var
+            $slackChannel   = $slackRow['channel'] ?: (getenv('SLACK_CHANNEL') ?: ($_ENV['SLACK_CHANNEL'] ?? ''));
         }
     } catch (Exception $e) { /* table may not exist yet */ }
 }

@@ -14,25 +14,31 @@ require_once __DIR__ . '/../database/Database.php';
 // ============================================
 
 /**
- * Get the Slack webhook URL for the user who owns the given advertiser account.
- * Falls back to the global SLACK_BOT_TOKEN / channel if no per-user webhook found.
+ * Get the Slack bot token for the user who owns the given advertiser account.
+ * Falls back to the global SLACK_BOT_TOKEN / SLACK_CHANNEL if no per-user connection found.
  *
- * Returns array: ['type' => 'webhook'|'bot', 'webhook_url' => string, 'token' => string, 'channel' => string]
+ * Returns array: ['type' => 'bot', 'token' => string, 'channel' => string]
  */
 function getSlackConfigForAdvertiser($advertiserId) {
+    $defaultChannel = getenv('SLACK_CHANNEL') ?: ($_ENV['SLACK_CHANNEL'] ?? '');
+
     if (!empty($advertiserId)) {
         try {
             $db = Database::getInstance();
             $row = $db->fetchOne(
-                "SELECT usc.webhook_url
+                "SELECT usc.access_token, usc.channel
                  FROM user_slack_connections usc
                  JOIN tiktok_connections tc ON tc.user_id = usc.user_id
                  WHERE tc.advertiser_id = :aid
                  LIMIT 1",
                 ['aid' => $advertiserId]
             );
-            if ($row && !empty($row['webhook_url'])) {
-                return ['type' => 'webhook', 'webhook_url' => $row['webhook_url']];
+            if ($row && !empty($row['access_token'])) {
+                return [
+                    'type'    => 'bot',
+                    'token'   => $row['access_token'],
+                    'channel' => $row['channel'] ?: $defaultChannel,
+                ];
             }
         } catch (Exception $e) {
             logOptimizer("getSlackConfigForAdvertiser DB error: " . $e->getMessage());
@@ -40,43 +46,26 @@ function getSlackConfigForAdvertiser($advertiserId) {
     }
     // Fall back to global bot token
     $token = getenv('SLACK_BOT_TOKEN') ?: ($_ENV['SLACK_BOT_TOKEN'] ?? '');
-    return ['type' => 'bot', 'token' => $token, 'channel' => 'C0AC3899K6C'];
+    return ['type' => 'bot', 'token' => $token, 'channel' => $defaultChannel];
 }
 
 /**
- * Send a Slack message using either an Incoming Webhook URL or the Bot Token API.
+ * Send a Slack message using the Bot Token API (chat.postMessage).
  * $slackConfig: result of getSlackConfigForAdvertiser()
  * $payload: array with 'text', optionally 'blocks'
  */
 function sendSlackMessage($slackConfig, $payload) {
-    if ($slackConfig['type'] === 'webhook') {
-        $webhookUrl = $slackConfig['webhook_url'];
-        $ch = curl_init($webhookUrl);
-        curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => json_encode($payload),
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-            CURLOPT_TIMEOUT        => 15,
-        ]);
-        $response = curl_exec($ch);
-        if ($response === false) {
-            $err = curl_error($ch); curl_close($ch);
-            logOptimizer("Slack webhook CURL error: $err");
-            return false;
-        }
-        curl_close($ch);
-        // Slack webhooks return "ok" on success
-        return trim($response) === 'ok';
-    }
-
-    // Bot token path
     $token = $slackConfig['token'] ?? '';
     if (empty($token)) {
-        logOptimizer("Slack notification skipped: no token and no webhook");
+        logOptimizer("Slack notification skipped: no bot token configured");
         return false;
     }
-    $payload['channel'] = $slackConfig['channel'];
+    $channel = $slackConfig['channel'] ?? '';
+    if (empty($channel)) {
+        logOptimizer("Slack notification skipped: no channel configured (set SLACK_CHANNEL env var)");
+        return false;
+    }
+    $payload['channel'] = $channel;
     $ch = curl_init('https://slack.com/api/chat.postMessage');
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
@@ -512,8 +501,8 @@ function pauseCampaignViaApi($advertiserId, $campaignId, $accessToken) {
 
 function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $violationDetails, $ruleGroup, $resumeAt, $advertiserId = '', $metricsSnapshot = null) {
     $slackConfig = getSlackConfigForAdvertiser($advertiserId);
-    if ($slackConfig['type'] === 'bot' && empty($slackConfig['token'])) {
-        logOptimizer("Slack notification skipped: no Slack integration configured");
+    if (empty($slackConfig['token'])) {
+        logOptimizer("Slack notification skipped: no bot token configured");
         return false;
     }
 
@@ -632,8 +621,8 @@ function sendSlackPauseNotification($campaignName, $campaignId, $ruleKey, $viola
 
 function sendSlackPauseFailureNotification($campaignName, $campaignId, $ruleKey, $violationDetails, $advertiserId = '') {
     $slackConfig = getSlackConfigForAdvertiser($advertiserId);
-    if ($slackConfig['type'] === 'bot' && empty($slackConfig['token'])) {
-        logOptimizer("Slack failure notification skipped: SLACK_BOT_TOKEN not configured");
+    if (empty($slackConfig['token'])) {
+        logOptimizer("Slack failure notification skipped: no bot token configured");
         return false;
     }
 
@@ -806,8 +795,8 @@ function sendSlackReviewNotification($campaign, $tiktokMetrics, $redtrackMetrics
 
     $fallbackText = "Campaign Review: $campaignName — Spend: \$$spend, CPC: \$$cpc, CTR: {$ctr}%, Conv: $conversions — Click to resume";
     $slackConfig = getSlackConfigForAdvertiser($advertiserId);
-    if ($slackConfig['type'] === 'bot' && empty($slackConfig['token'])) {
-        logOptimizer("Slack review notification skipped: no Slack integration configured");
+    if (empty($slackConfig['token'])) {
+        logOptimizer("Slack review notification skipped: no bot token configured");
         return false;
     }
     $sent = sendSlackMessage($slackConfig, ['text' => $fallbackText, 'blocks' => $blocks]);

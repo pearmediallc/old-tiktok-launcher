@@ -1,12 +1,13 @@
 <?php
 /**
- * Slack OAuth Callback — per-user Slack integration
- * Stores incoming webhook URL in user_slack_connections table
+ * Slack OAuth Callback — per-user Slack bot integration
+ * Uses bot token (chat:write) so the bot can post to any channel.
+ * No channel picker during OAuth — channel is set via SLACK_CHANNEL env var.
  *
  * Slack app setup:
- *  - Scopes: incoming-webhook
+ *  - Bot Token Scopes: chat:write
  *  - Redirect URI: https://yourdomain.com/slack-oauth-callback.php
- *  - Env vars: SLACK_CLIENT_ID, SLACK_CLIENT_SECRET
+ *  - Env vars: SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_CHANNEL
  */
 require_once __DIR__ . '/includes/Security.php';
 Security::init();
@@ -52,7 +53,7 @@ if (empty($_GET['code'])) {
     $redirectUri = (Security::isHttps() ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . '/slack-oauth-callback.php';
     $params = http_build_query([
         'client_id'    => $clientId,
-        'scope'        => 'incoming-webhook',
+        'scope'        => 'chat:write',
         'redirect_uri' => $redirectUri,
         'state'        => $state,
     ]);
@@ -76,7 +77,7 @@ if (empty($clientId) || empty($clientSecret)) {
 
 $redirectUri = (Security::isHttps() ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . '/slack-oauth-callback.php';
 
-// Exchange code for access token
+// Exchange code for bot access token
 $ch = curl_init('https://slack.com/api/oauth.v2.access');
 curl_setopt_array($ch, [
     CURLOPT_POST           => true,
@@ -101,19 +102,20 @@ if (empty($data['ok'])) {
     exit;
 }
 
-$webhookUrl  = $data['incoming_webhook']['url']          ?? '';
-$channel     = $data['incoming_webhook']['channel']      ?? '';
-$channelId   = $data['incoming_webhook']['channel_id']   ?? '';
+// Bot token flow — access_token is the bot token
+$accessToken = $data['access_token']                     ?? '';
 $teamId      = $data['team']['id']                       ?? '';
 $teamName    = $data['team']['name']                     ?? '';
 $botUserId   = $data['bot_user_id']                      ?? '';
 $scope       = $data['scope']                            ?? '';
 $authedUser  = $data['authed_user']['id']                ?? '';
-$accessToken = $data['access_token']                     ?? '';
 
-if (empty($webhookUrl)) {
-    ActivityLogger::log('slack_connect_failed', 'slack-oauth-callback.php', ['error' => 'no_webhook_url'], 'error');
-    header('Location: app-shell.php?slack=error&msg=no_webhook_url');
+// Channel from env var (bot posts to this channel)
+$channel     = getenv('SLACK_CHANNEL') ?: ($_ENV['SLACK_CHANNEL'] ?? '');
+
+if (empty($accessToken)) {
+    ActivityLogger::log('slack_connect_failed', 'slack-oauth-callback.php', ['error' => 'no_access_token'], 'error');
+    header('Location: app-shell.php?slack=error&msg=no_access_token');
     exit;
 }
 
@@ -133,8 +135,8 @@ try {
                 channel_id=EXCLUDED.channel_id, bot_user_id=EXCLUDED.bot_user_id,
                 scope=EXCLUDED.scope, authed_user_id=EXCLUDED.authed_user_id,
                 access_token=EXCLUDED.access_token, updated_at=CURRENT_TIMESTAMP",
-            ['uid'=>$userId,'tid'=>$teamId,'tn'=>$teamName,'wh'=>$webhookUrl,
-             'ch'=>$channel,'chid'=>$channelId,'buid'=>$botUserId,
+            ['uid'=>$userId,'tid'=>$teamId,'tn'=>$teamName,'wh'=>'',
+             'ch'=>$channel,'chid'=>'','buid'=>$botUserId,
              'sc'=>$scope,'auid'=>$authedUser,'at'=>$accessToken]
         );
     } else {
@@ -148,12 +150,12 @@ try {
                 channel_id=VALUES(channel_id), bot_user_id=VALUES(bot_user_id),
                 scope=VALUES(scope), authed_user_id=VALUES(authed_user_id),
                 access_token=VALUES(access_token), updated_at=CURRENT_TIMESTAMP",
-            ['uid'=>$userId,'tid'=>$teamId,'tn'=>$teamName,'wh'=>$webhookUrl,
-             'ch'=>$channel,'chid'=>$channelId,'buid'=>$botUserId,
+            ['uid'=>$userId,'tid'=>$teamId,'tn'=>$teamName,'wh'=>'',
+             'ch'=>$channel,'chid'=>'','buid'=>$botUserId,
              'sc'=>$scope,'auid'=>$authedUser,'at'=>$accessToken]
         );
     }
-    ActivityLogger::log('slack_connected', 'slack-oauth-callback.php', ['team' => $teamName, 'channel' => $channel], 'success');
+    ActivityLogger::log('slack_connected', 'slack-oauth-callback.php', ['team' => $teamName], 'success');
 } catch (Exception $e) {
     error_log("Slack DB save error: " . $e->getMessage());
     ActivityLogger::log('slack_connect_failed', 'slack-oauth-callback.php', ['error' => $e->getMessage()], 'error');
@@ -161,5 +163,5 @@ try {
     exit;
 }
 
-header('Location: app-shell.php?slack=connected&team=' . urlencode($teamName) . '&channel=' . urlencode($channel));
+header('Location: app-shell.php?slack=connected&team=' . urlencode($teamName));
 exit;
