@@ -759,6 +759,7 @@ function removeAccountAlerts() {
 // Load Pixels
 async function loadPixels() {
     const select = document.getElementById('pixel-select');
+    if (!select) return; // Element doesn't exist on this page
 
     try {
         // Log the advertiser ID being used
@@ -804,9 +805,11 @@ async function loadPixels() {
 
 // Load Identities (Custom Identities + TikTok Pages)
 async function loadIdentities() {
+    const select = document.getElementById('global-identity');
+    if (!select) return; // Element doesn't exist on this page
+
     try {
         const result = await apiRequest('get_identities', {}, true);
-        const select = document.getElementById('global-identity');
 
         if (result.success && result.data) {
             // Get both custom identities and TikTok Pages (BC_AUTH_TT)
@@ -1045,9 +1048,11 @@ async function refreshDupBulkIdentities(advertiserId) {
 
 // Load CTA Portfolios
 async function loadCtaPortfolios() {
+    const select = document.getElementById('cta-portfolio-select');
+    if (!select) return; // Element doesn't exist on this page
+
     try {
         const result = await apiRequest('get_cta_portfolios');
-        const select = document.getElementById('cta-portfolio-select');
 
         if (result.success && result.data && result.data.portfolios) {
             state.ctaPortfolios = result.data.portfolios;
