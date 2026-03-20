@@ -70,7 +70,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $_SESSION['authenticated'] = true;
                 $_SESSION['username']      = $username;
-                $_SESSION['user_id']       = $user['id'] ?? 0;
+
+                // For env admin: ensure a DB user record exists so user_id is valid
+                // (needed for Slack connections, activity logs, etc.)
+                if ($isEnvAdmin) {
+                    $userModel = new User();
+                    $dbUser = $userModel->getByUsername($username);
+                    if ($dbUser) {
+                        $_SESSION['user_id'] = $dbUser['id'];
+                    } else {
+                        // Create a DB record for the env admin
+                        $newId = $userModel->create($username, bin2hex(random_bytes(32)), null, null, 'admin');
+                        $_SESSION['user_id'] = $newId ?: 0;
+                    }
+                } else {
+                    $_SESSION['user_id'] = $user['id'] ?? 0;
+                }
+
                 $_SESSION['role']          = $isEnvAdmin ? 'admin' : ($user['role'] ?? 'user');
                 $_SESSION['login_time']    = time();
                 $_SESSION['last_activity'] = time();
