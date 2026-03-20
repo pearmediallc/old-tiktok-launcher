@@ -102,11 +102,8 @@ function getUserTikTokAccounts($userId) {
 function fetchCampaignsForAdvertiser($advertiserId, $accessToken, $statusFilter = null) {
     $today = date('Y-m-d');
 
-    // Get campaigns
+    // Get ALL campaigns (filter in PHP — TikTok filtering format varies)
     $params = ['advertiser_id' => $advertiserId, 'page' => 1, 'page_size' => 100];
-    if ($statusFilter) {
-        $params['filtering'] = json_encode(['operation_status' => $statusFilter]);
-    }
     $result = tiktokApiCall('/campaign/get/', $params, $accessToken, 'GET');
     if (!$result || ($result['code'] ?? -1) != 0) return [];
 
@@ -160,6 +157,12 @@ function fetchCampaignsForAdvertiser($advertiserId, $accessToken, $statusFilter 
         ];
     }
 
+    // Filter by status in PHP if requested
+    if ($statusFilter) {
+        $formatted = array_filter($formatted, fn($c) => $c['status'] === $statusFilter);
+        $formatted = array_values($formatted);
+    }
+
     // Sort by spend descending
     usort($formatted, fn($a, $b) => $b['spend'] <=> $a['spend']);
     return $formatted;
@@ -175,7 +178,7 @@ function fetchCampaignsForAdvertiser($advertiserId, $accessToken, $statusFilter 
 function handleActiveCampaigns($userId) {
     $accounts = getUserTikTokAccounts($userId);
     if (empty($accounts)) {
-        return buildTextResponse("You don't have any TikTok ad accounts connected. Please connect in the launcher first.");
+        return buildTextResponse("No TikTok ad accounts found for your user (ID: {$userId}). Please connect a TikTok account in the launcher first.");
     }
 
     $blocks = [
@@ -189,8 +192,12 @@ function handleActiveCampaigns($userId) {
         $campaigns = fetchCampaignsForAdvertiser($account['advertiser_id'], $account['access_token'], 'ENABLE');
         $acctName = $account['advertiser_name'] ?: $account['advertiser_id'];
 
+        // Also fetch ALL campaigns to show total count
+        $allCampaigns = fetchCampaignsForAdvertiser($account['advertiser_id'], $account['access_token']);
+        $totalCount = count($allCampaigns);
+
         if (empty($campaigns)) {
-            $blocks[] = ['type' => 'section', 'text' => ['type' => 'mrkdwn', 'text' => "*{$acctName}*\nNo active campaigns"]];
+            $blocks[] = ['type' => 'section', 'text' => ['type' => 'mrkdwn', 'text' => "*{$acctName}*\nNo active campaigns ({$totalCount} total campaigns found)"]];
             $blocks[] = ['type' => 'divider'];
             continue;
         }

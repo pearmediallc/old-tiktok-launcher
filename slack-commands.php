@@ -83,10 +83,11 @@ header('Content-Type: application/json');
 echo json_encode(['response_type' => 'ephemeral', 'text' => "Fetching campaign data... one moment."]);
 
 // Flush the response to Slack immediately
+ignore_user_abort(true);
 if (function_exists('fastcgi_finish_request')) {
     fastcgi_finish_request();
 } else {
-    ob_end_flush();
+    if (ob_get_level()) ob_end_flush();
     flush();
 }
 
