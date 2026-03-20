@@ -312,12 +312,17 @@
             return;
         }
 
-        // Show loading only for uncached accounts, show cached data immediately
-        container.innerHTML = selectedIds.map(id => {
-            if (cache[id] && !forceRefresh) {
-                // Already have data — will be rendered after fetch completes
-                return '';
-            }
+        // Render cached accounts immediately + show loading for uncached ones
+        // First render cached accounts right away so user sees them
+        const cachedResults = cachedIds.map(id => cache[id]).filter(Boolean);
+        if (cachedResults.length > 0) {
+            const statusFilterNow = (typeof state !== 'undefined' && state.campaignFilter) ? state.campaignFilter : 'all';
+            const searchQueryNow = (typeof state !== 'undefined' && state.campaignSearchQuery) ? state.campaignSearchQuery : '';
+            renderMultiAccountCampaigns(cachedResults, statusFilterNow, searchQueryNow);
+        }
+
+        // Append loading placeholders for uncached accounts
+        const loadingHtml = uncachedIds.map(id => {
             const name = getAccountName(id);
             return `
                 <div class="account-group" data-advertiser-id="${escapeAttr(id)}">
@@ -336,6 +341,8 @@
                 </div>
             `;
         }).join('');
+        // Append loading HTML after any cached content
+        container.insertAdjacentHTML('beforeend', loadingHtml);
 
         // Get current filter and search state
         const statusFilter = (typeof state !== 'undefined' && state.campaignFilter) ? state.campaignFilter : 'all';

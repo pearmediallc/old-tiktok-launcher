@@ -4109,40 +4109,56 @@ switch ($action) {
         logSmartPlus("=== FETCHING CAMPAIGNS WITH METRICS ===");
         logSmartPlus("Advertiser ID: $advertiserId");
 
-        // Check advertiser account status first
+        // Check advertiser account status (soft check — doesn't block if API fails)
         $accountStatus = 'STATUS_ENABLE';
         $accountStatusLabel = 'Active';
-        $advInfoResult = makeApiCall('/advertiser/info/', ['advertiser_id' => $advertiserId], $accessToken, 'GET');
-        if ($advInfoResult['code'] == 0 && !empty($advInfoResult['data'])) {
-            $advData = is_array($advInfoResult['data']) && isset($advInfoResult['data'][0])
-                ? $advInfoResult['data'][0]
-                : $advInfoResult['data'];
-            $accountStatus = $advData['status'] ?? 'STATUS_ENABLE';
-            // Map status to user-friendly label
-            $statusLabels = [
-                'STATUS_ENABLE' => 'Active',
-                'STATUS_DISABLE' => 'Suspended',
-                'STATUS_PENDING_CONFIRM' => 'Pending Confirmation',
-                'STATUS_PENDING_REVIEW' => 'Under Review',
-                'STATUS_LIMIT' => 'Limited',
-                'STATUS_SELF_SERVICE_UNACTIVATED' => 'Not Activated',
-                'CONTRACT_PENDING' => 'Contract Pending',
-                'STATUS_PUNISH' => 'Punished',
-            ];
-            $accountStatusLabel = $statusLabels[$accountStatus] ?? $accountStatus;
-            logSmartPlus("Account status: $accountStatus ($accountStatusLabel)");
+        try {
+            $advInfoResult = makeApiCall('/advertiser/info/', [
+                'advertiser_ids' => json_encode([$advertiserId])
+            ], $accessToken, 'GET');
 
-            if ($accountStatus !== 'STATUS_ENABLE') {
-                logSmartPlus("Account is NOT active — status: $accountStatus");
-                echo json_encode([
-                    'success' => false,
-                    'message' => "Ad account is $accountStatusLabel. Please check TikTok Ads Manager for details.",
-                    'account_status' => $accountStatus,
-                    'account_status_label' => $accountStatusLabel,
-                    'campaigns' => []
-                ]);
-                break;
+            if (isset($advInfoResult['code']) && $advInfoResult['code'] == 0 && isset($advInfoResult['data'])) {
+                $d = $advInfoResult['data'];
+                $advData = null;
+                // Handle 3 response formats (same as get_account_balance)
+                if (isset($d['list'][0])) {
+                    $advData = $d['list'][0];
+                } elseif (isset($d['status'])) {
+                    $advData = $d;
+                } elseif (is_array($d) && isset($d[0])) {
+                    $advData = $d[0];
+                }
+
+                if ($advData && !empty($advData['status'])) {
+                    $accountStatus = $advData['status'];
+                    $statusLabels = [
+                        'STATUS_ENABLE' => 'Active',
+                        'STATUS_DISABLE' => 'Suspended',
+                        'STATUS_PENDING_CONFIRM' => 'Pending Confirmation',
+                        'STATUS_PENDING_REVIEW' => 'Under Review',
+                        'STATUS_LIMIT' => 'Limited',
+                        'STATUS_SELF_SERVICE_UNACTIVATED' => 'Not Activated',
+                        'CONTRACT_PENDING' => 'Contract Pending',
+                        'STATUS_PUNISH' => 'Punished',
+                    ];
+                    $accountStatusLabel = $statusLabels[$accountStatus] ?? $accountStatus;
+                    logSmartPlus("Account status: $accountStatus ($accountStatusLabel)");
+
+                    if ($accountStatus !== 'STATUS_ENABLE') {
+                        logSmartPlus("Account is NOT active — status: $accountStatus");
+                        echo json_encode([
+                            'success' => false,
+                            'message' => "Ad account is $accountStatusLabel. Please check TikTok Ads Manager for details.",
+                            'account_status' => $accountStatus,
+                            'account_status_label' => $accountStatusLabel,
+                            'campaigns' => []
+                        ]);
+                        break;
+                    }
+                }
             }
+        } catch (Exception $e) {
+            logSmartPlus("Account status check failed (non-blocking): " . $e->getMessage());
         }
 
         // Get date range from request (default to today)
@@ -4483,36 +4499,80 @@ switch ($action) {
             $adId = $ad['ad_id'] ?? '';
             $metrics = $metricsData[$adId] ?? [];
 
-            // Extract ad texts from creative data
-            $adTexts = [];
-            // Smart+ ads store texts in ad_texts array
-            if (!empty($ad['ad_texts'])) {
-                foreach ($ad['ad_texts'] as $textObj) {
-                    if (!empty($textObj['text'])) $adTexts[] = $textObj['text'];
+            // Log first ad's keys for debugging (only first ad)
+            if (empty($formattedAds)) {
+                logSmartPlus("First ad full keys: " . implode(', ', array_keys($ad)));
+                // Log creative-related nested keys
+                foreach (['creatives', 'creative', 'creative_material_mode', 'smart_creative_request', 'tiktok_item_info'] as $ck) {
+                    if (!empty($ad[$ck])) logSmartPlus("Ad has key '$ck': " . (is_array($ad[$ck]) ? json_encode(array_slice($ad[$ck], 0, 1)) : substr(json_encode($ad[$ck]), 0, 200)));
                 }
             }
-            // Standard ads store text in ad_text field
+
+            // Extract ad texts from creative data — try ALL known field locations
+            $adTexts = [];
+            // 1. Smart+ ad_texts array: [{text: "..."}, ...]
+            if (!empty($ad['ad_texts'])) {
+                foreach ((array)$ad['ad_texts'] as $textObj) {
+                    if (is_array($textObj) && !empty($textObj['text'])) $adTexts[] = $textObj['text'];
+                    elseif (is_string($textObj) && !empty($textObj)) $adTexts[] = $textObj;
+                }
+            }
+            // 2. Standard ad_text string
             if (empty($adTexts) && !empty($ad['ad_text'])) {
                 $adTexts[] = $ad['ad_text'];
             }
-            // Also check creative material for text
+            // 3. Creative array
             if (empty($adTexts) && !empty($ad['creatives'])) {
                 foreach ($ad['creatives'] as $creative) {
                     if (!empty($creative['ad_text'])) $adTexts[] = $creative['ad_text'];
                     if (!empty($creative['title'])) $adTexts[] = $creative['title'];
                 }
             }
+            // 4. Smart+ creative request
+            if (empty($adTexts) && !empty($ad['smart_creative_request']['ad_texts'])) {
+                foreach ((array)$ad['smart_creative_request']['ad_texts'] as $textObj) {
+                    if (is_array($textObj) && !empty($textObj['text'])) $adTexts[] = $textObj['text'];
+                    elseif (is_string($textObj)) $adTexts[] = $textObj;
+                }
+            }
+            // 5. TikTok item info title
+            if (empty($adTexts) && !empty($ad['tiktok_item_info']['text'])) {
+                $adTexts[] = $ad['tiktok_item_info']['text'];
+            }
+            // 6. Ad name as last resort display (not ad_text but at least shows something useful)
 
-            // Extract video cover URL / image URL for thumbnail
+            // Extract video cover URL — try ALL known field locations
             $videoCoverUrl = '';
+            // Direct fields
             if (!empty($ad['image_info']['url'])) {
                 $videoCoverUrl = $ad['image_info']['url'];
             } elseif (!empty($ad['video_info']['poster_url'])) {
                 $videoCoverUrl = $ad['video_info']['poster_url'];
             } elseif (!empty($ad['video_info']['video_cover_url'])) {
                 $videoCoverUrl = $ad['video_info']['video_cover_url'];
-            } elseif (!empty($ad['avatar_icon_web_uri'])) {
+            } elseif (!empty($ad['video_info']['preview_url'])) {
+                $videoCoverUrl = $ad['video_info']['preview_url'];
+            }
+            // Top-level fields
+            if (empty($videoCoverUrl) && !empty($ad['video_cover_url'])) {
+                $videoCoverUrl = $ad['video_cover_url'];
+            }
+            if (empty($videoCoverUrl) && !empty($ad['poster_url'])) {
+                $videoCoverUrl = $ad['poster_url'];
+            }
+            if (empty($videoCoverUrl) && !empty($ad['cover_image_url'])) {
+                $videoCoverUrl = $ad['cover_image_url'];
+            }
+            if (empty($videoCoverUrl) && !empty($ad['preview_url'])) {
+                $videoCoverUrl = $ad['preview_url'];
+            }
+            if (empty($videoCoverUrl) && !empty($ad['avatar_icon_web_uri'])) {
                 $videoCoverUrl = $ad['avatar_icon_web_uri'];
+            }
+            // Creative-level
+            if (empty($videoCoverUrl) && !empty($ad['creatives'][0])) {
+                $cr = $ad['creatives'][0];
+                $videoCoverUrl = $cr['video_cover_url'] ?? $cr['poster_url'] ?? $cr['image_url'] ?? '';
             }
 
             $formattedAds[] = [
